@@ -141,6 +141,9 @@ export const validateData = (locationRows, dataRows) => {
         );
         const rackLocation = (row['Rack Location'] || row['Location'] || '').trim();
 
+        // ດຶງຊື່ສິນຄ້າຈາກ Location Sheet
+        const itemName = (row['Item Name'] || row['item_name'] || row['ITEM NAME'] || '').trim();
+
         // ດຶງຂໍ້ມູນ Category ໂດຍເຊັກລະອຽດ (ຖ້າເປັນ 0 ຕ້ອງໄດ້ 0)
         const getRaw = (key) => {
             const val = row[key];
@@ -244,6 +247,7 @@ export const validateData = (locationRows, dataRows) => {
             id: row.id, // Preserve ID for potential database updates
             rowIndex: index + 1,
             barcode,
+            itemName, // Item name from Location sheet
             rackLocation,
             category1,
             category2,
@@ -256,8 +260,10 @@ export const validateData = (locationRows, dataRows) => {
             masterCategory2: masterData?.category2 || '',
             masterQty: masterData?.qty || 0,
             masterItemName: masterData?.itemName || '',
-            updatedAt: masterData?.updatedAt || '',
-            updatedBy: masterData?.updatedBy || '',
+            masterUpdatedAt: masterData?.updatedAt || '', // Renamed to keep separate
+            masterUpdatedBy: masterData?.updatedBy || '', // Renamed to keep separate
+            updatedAt: '', // Keep empty initially for counts
+            updatedBy: '', // Keep empty initially for counts
             originalRow: row
         });
     });

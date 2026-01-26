@@ -25,9 +25,11 @@ export const syncMasterDataToSupabase = async (masterDataArray) => {
 
             const barcode = String(row['Barcode No.'] || row.barcode || row.Barcode || row.BARCODE || '').trim();
             if (barcode) {
+                const itemNameValue = getVal(['Product Name(LA)', 'Item Name', 'product_name_la', 'Product Name', 'ລາຍການ', 'ITEM NAME']);
                 uniqueMap.set(barcode, {
                     barcode: barcode,
-                    product_name_la: getVal(['product_name_la', 'Item Name', 'Product Name', 'ລາຍການ', 'ITEM NAME']),
+                    product_name_la: itemNameValue,
+                    item_name: itemNameValue, // Add item_name field
                     category_1: getVal(['category_1', 'category1', 'CATEGORIES 1', 'Category 1', 'Category-1']),
                     category_2: getVal(['category_2', 'category2', 'CATEGORIES 2', 'Category 2', 'Category-2']),
                     qty: Number(row.qty || row.Qty || row.QTY || 0)

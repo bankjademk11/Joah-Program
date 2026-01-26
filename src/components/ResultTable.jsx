@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
-import { syncLocationResultsToSupabase, syncMasterDataToSupabase } from '../utils/supabaseSync';
-import { readExcelFromUrl, sheetToJSON } from '../utils/excelProcessor';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase } from '../utils/supabaseSync';
+import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProcessor';
 import databaseUrl from '../assets/DataBaseJoah.xlsx';
 
 const ResultTable = ({
@@ -257,53 +257,83 @@ const ResultTable = ({
         setIsExporting(true);
         try {
             const workbook = new ExcelJS.Workbook();
-            
+
             if (dbSource === 'supabase') {
                 // Cloud Mode: Build a new workbook from scratch
-                const locationSheet = workbook.addWorksheet('Location');
-                const dataSheet = workbook.addWorksheet('DATA');
+                const locationSheet = workbook.addWorksheet('Location Inventory');
+                const dataSheet = workbook.addWorksheet('Master Data Reference');
 
-                // Populate Location Sheet Headers
+                // Populate Location Sheet Headers ( Standardized )
                 locationSheet.getRow(1).values = [
-                    'Barcode', 'Rack Location', 'Category-1', 'Category-2', 'QTY', 'Item Name',
-                    'QTY (Cloud)', 'Status', 'Remarks', 'Last Updated', 'Updated By'
+                    'Barcode No.',
+                    'Item Name (ຊື່ສິນຄ້າ)',
+                    'Rack Location',
+                    'Category-1',
+                    'Category-2',
+                    'Actual QTY (ນັບໄດ້)',
+                    'System QTY (ໃນລະບົບ)',
+                    'Status (ສະຖານະ)',
+                    'Remarks (ໝາຍເຫດ)',
+                    'Verifier (ຜູ້ກວດ)',
+                    'Last Update (ວັນທີ)'
                 ];
-                
+
+                // Style Header
+                locationSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                locationSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEA580C' } }; // Orange Brand
+
                 // Populate Location Sheet Rows
                 results.forEach(res => {
                     const row = locationSheet.addRow([
                         res.barcode,
+                        res.masterItemName || res.itemName || '',
                         res.rackLocation,
                         res.category1,
                         res.category2,
-                        res.qty,
-                        res.masterItemName,
-                        res.masterQty || 0,
+                        Number(res.qty || 0),        // Actual Count
+                        Number(res.masterQty || 0),  // System Count
                         res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ',
-                        res.status === 'passed' ? 'ຂໍ້ມູນຖືກຕ້ອງ' : (res.reason || 'ກວດສອບພົບຂໍ້ຜິດພາດ'),
-                        res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '-',
-                        res.updatedBy || '-'
+                        res.status === 'passed' ? 'Complete' : (res.reason || '-'),
+                        res.updatedBy || '', // Only show if user edited
+                        res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '' // Only show if user edited
                     ]);
 
-                    // Apply coloring to the status cell in Location sheet
+                    // Coloring
                     const statusCell = row.getCell(8);
-                    let bgColor = null;
-                    if (res.status === 'passed') bgColor = 'CCE3F6E3';
-                    if (res.status === 'mismatch') bgColor = 'CCF9DADA';
-                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'CCD1E9F6';
-                    if (bgColor) {
+                    let bgColor = 'FFFFFFFF';
+                    if (res.status === 'passed') bgColor = 'FFDCFCE7'; // Green
+                    if (res.status === 'mismatch') bgColor = 'FFFEE2E2'; // Red
+                    if (res.status === 'missing') bgColor = 'FFEOF2FE'; // Blue
+
+                    if (res.status !== 'passed' || bgColor !== 'FFFFFFFF') {
                         statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
                     }
                 });
-                
-                // Populate DATA Sheet
-                if (masterData && masterData.length > 0) {
-                    const headers = Object.keys(masterData[0]);
-                    dataSheet.getRow(1).values = headers;
-                    masterData.forEach(row => {
-                        const values = headers.map(header => row[header]);
-                        dataSheet.addRow(values);
+
+                // Fetch and Populate Master Data Sheet from Supabase
+                console.log('📊 Fetching Master Data from Supabase for export...');
+                const cloudMaster = await fetchMasterFromSupabase();
+
+                if (cloudMaster && cloudMaster.length > 0) {
+                    const forcedDisplayHeaders = ['Barcode', 'Item Name', 'CATEGORIES 1', 'CATEGORIES 2', 'Qty'];
+
+                    dataSheet.getRow(1).values = forcedDisplayHeaders;
+                    dataSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                    dataSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+
+                    cloudMaster.forEach(mRow => {
+                        const vals = [
+                            mRow.barcode || '',
+                            mRow.item_name || mRow.product_name_la || '', // Fallback to product_name_la
+                            mRow.category_1 || '',
+                            mRow.category_2 || '',
+                            mRow.qty || 0
+                        ];
+                        dataSheet.addRow(vals);
                     });
+                    console.log(`✅ Exported ${cloudMaster.length} Master Data records`);
+                } else {
+                    console.warn('⚠️ No Master Data found in Supabase');
                 }
 
             } else {
@@ -321,30 +351,34 @@ const ResultTable = ({
                     const newSheet = workbook.addWorksheet(oldSheet.name);
                     oldSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
                         const newRow = newSheet.getRow(rowNumber);
-                        // Simple 1-to-1 copy
+                        // Simple 1-to-1 copy with styles
                         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                             newRow.getCell(colNumber).value = cell.value;
+                            newRow.getCell(colNumber).style = cell.style; // Copy styles
                         });
                     });
                 });
-                
+
                 const worksheet = workbook.getWorksheet(locationSheetName);
                 if (!worksheet) throw new Error(`Sheet "${locationSheetName}" not found`);
 
+                // Define Columns (Starting from Col H)
                 const qtyCol = 7;
-                const statusCol = 8;
-                const remarkCol = 9;
-                const dateCol = 10;
-                const userCol = 11;
+                const sysQtyCol = 8;
+                const statusCol = 9;
+                const remarkCol = 10;
+                const dateCol = 11;
+                const userCol = 12;
 
                 const headerRow = worksheet.getRow(1);
-                headerRow.getCell(qtyCol).value = 'ຈຳນວນ (QTY Cloud)';
-                headerRow.getCell(statusCol).value = 'ສະຖານະກວດສອບ';
-                headerRow.getCell(remarkCol).value = 'ໝາຍເຫດ (Remarks)';
-                headerRow.getCell(dateCol).value = 'ວັນທີແກ້ໄຂ';
-                headerRow.getCell(userCol).value = 'ຜູ້ແກ້ໄຂ (User)';
+                headerRow.getCell(qtyCol).value = 'Actual QTY (ນັບໄດ້)';
+                headerRow.getCell(sysQtyCol).value = 'System QTY (ໃນລະບົບ)';
+                headerRow.getCell(statusCol).value = 'Status (ສະຖານະ)';
+                headerRow.getCell(remarkCol).value = 'Remarks (ໝາຍເຫດ)';
+                headerRow.getCell(dateCol).value = 'Update Date';
+                headerRow.getCell(userCol).value = 'Verifier';
 
-                [qtyCol, statusCol, remarkCol, dateCol, userCol].forEach(colIndex => {
+                [qtyCol, sysQtyCol, statusCol, remarkCol, dateCol, userCol].forEach(colIndex => {
                     const cell = headerRow.getCell(colIndex);
                     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
@@ -358,17 +392,25 @@ const ResultTable = ({
                     const row = worksheet.getRow(excelRowNumber);
                     if (!row) return;
 
-                    row.getCell(qtyCol).value = res.masterQty || 0;
+                    // 1. Update the Actual Qty with what is in the app (edited value)
+                    row.getCell(qtyCol).value = Number(res.qty || 0);
+
+                    // 2. Add System Qty for reference
+                    row.getCell(sysQtyCol).value = Number(res.masterQty || 0);
+
+                    // 3. Status & Info
                     const statusCell = row.getCell(statusCol);
                     statusCell.value = res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ';
-                    row.getCell(remarkCol).value = res.status === 'passed' ? 'ຂໍ້ມູນຖືກຕ້ອງ' : (res.reason || 'ກວດສອບພົບຂໍ້ຜິດພາດ');
-                    row.getCell(dateCol).value = res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '-';
-                    row.getCell(userCol).value = res.updatedBy || '-';
+                    row.getCell(remarkCol).value = res.status === 'passed' ? 'Complete' : (res.reason || '-');
+
+                    // Only show update date/user if specifically edited in this session
+                    row.getCell(dateCol).value = res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '';
+                    row.getCell(userCol).value = res.updatedBy || '';
 
                     let bgColor = null;
-                    if (res.status === 'passed') bgColor = 'CCE3F6E3';
-                    if (res.status === 'mismatch') bgColor = 'CCF9DADA';
-                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'CCD1E9F6';
+                    if (res.status === 'passed') bgColor = 'FFDCFCE7';
+                    if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
+                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'FFEOF2FE';
 
                     if (bgColor) {
                         statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
@@ -470,7 +512,8 @@ const ResultTable = ({
                     <thead>
                         <tr className="bg-slate-50/50 dark:bg-slate-800/20">
                             <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '80px' }}>ID</th>
-                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Barcode / Item</th>
+                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Barcode</th>
+                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Item Name (ຊື່ສິນຄ້າ)</th>
                             <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Location</th>
                             <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '120px' }}>QTY (Actual / Sys)</th>
                             <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 hidden xl:table-cell">Categories</th>
@@ -481,7 +524,7 @@ const ResultTable = ({
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                         {currentResults.length === 0 ? (
                             <tr>
-                                <td colSpan="7" className="py-32 text-center text-slate-300 dark:text-slate-700">
+                                <td colSpan="8" className="py-32 text-center text-slate-300 dark:text-slate-700">
                                     <div className="flex flex-col items-center gap-4">
                                         <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-700">
                                             <Search size={32} />
@@ -501,11 +544,11 @@ const ResultTable = ({
                             >
                                 <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
                                 <td className="px-6 py-6">
-                                    <div className="space-y-1">
-                                        <div className="font-mono text-sm font-black text-slate-800 dark:text-white leading-none">{row.barcode}</div>
-                                        <div className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
-                                            {row.masterItemName || 'ລໍຖ້າການລະບຸຊື່ສິນຄ້າ'}
-                                        </div>
+                                    <div className="font-mono text-sm font-black text-slate-800 dark:text-white leading-none">{row.barcode}</div>
+                                </td>
+                                <td className="px-6 py-6">
+                                    <div className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[300px]" title={row.masterItemName || row.itemName || row.product_name_la || ''}>
+                                        {row.masterItemName || row.itemName || row.product_name_la || <span className="text-slate-400 italic">ຍັງບໍ່ມີຊື່ສິນຄ້າ</span>}
                                     </div>
                                 </td>
                                 <td className="px-6 py-6">
