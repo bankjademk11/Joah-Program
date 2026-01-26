@@ -1,0 +1,289 @@
+import * as XLSX from 'xlsx';
+
+/**
+ * อ่านไฟล์ Excel และแปลงเป็น Workbook
+ */
+export const readExcelFile = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                resolve(workbook);
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+    });
+};
+
+/**
+ * ອ່ານໄຟລ໌ Excel ຈາກ URL (ສຳລັບຖານຂໍ້ມູນພາຍໃນ)
+ */
+export const readExcelFromUrl = async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('ບໍ່ສາມາດໂຫຼດໄຟລ໌ຖານຂໍ້ມູນໄດ້');
+    const arrayBuffer = await response.arrayBuffer();
+    const data = new Uint8Array(arrayBuffer);
+    const workbook = XLSX.read(data, { type: 'array' });
+    return workbook;
+};
+
+/**
+ * ดึงชื่อ Sheet ทั้งหมดจาก Workbook
+ */
+export const getSheetNames = (workbook) => {
+    return workbook.SheetNames;
+};
+
+/**
+ * แปลง Sheet เป็น JSON โดยใช้ Header จากแถวแรก
+ */
+export const sheetToJSON = (workbook, sheetName) => {
+    const worksheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json(worksheet, {
+        raw: false, // แปลงทุกอย่างเป็น string เพื่อป้องกัน Scientific Notation
+        defval: '' // ค่า default สำหรับ cell ว่าง
+    });
+};
+
+/**
+ * Normalize ข้อมูล Barcode (Trim และแปลงเป็น String)
+ */
+const normalizeBarcode = (barcode) => {
+    if (barcode === null || barcode === undefined) return '';
+    return String(barcode).trim();
+};
+
+/**
+ * Normalize value for comparison (Handles '01' vs '1', and trims)
+ */
+const normalizeForComparison = (val) => {
+    if (val === 0 || val === '0' || val === null || val === undefined) return '';
+
+    let s = String(val).trim();
+
+    // Treat visual placeholders as empty for logic comparison
+    if (s === '' || s === 'Empty' || s === 'ບໍ່ມີຂໍ້ມູນ') return '';
+
+    // Remove leading zeros only if it's a pure number string (Excel style)
+    if (/^\d+$/.test(s)) {
+        return String(Number(s));
+    }
+    return s;
+};
+
+/**
+ * สร้าง Hash Map จากข้อมูล DATA Sheet เพื่อ O(1) lookup
+ */
+const createMasterDataMap = (dataRows) => {
+    const map = new Map();
+
+    dataRows.forEach((row) => {
+        const barcode = normalizeBarcode(row['Barcode No.'] || row['Barcode'] || row['BARCODE'] || row['barcode']);
+
+        if (barcode) {
+            // ฟังก์ชันช่วยดึงค่าแบบรักษาเลข 0
+            const safeGet = (keys) => {
+                for (const key of keys) {
+                    const val = row[key];
+                    if (val !== undefined && val !== null && String(val).trim() !== '') {
+                        return String(val).trim();
+                    }
+                    if (val === 0 || val === '0') return '0';
+                }
+                return '';
+            };
+
+            map.set(barcode, {
+                category1: safeGet(['category_1', 'CATEGORIES 1', 'Category 1', 'Category-1']),
+                category2: safeGet(['category_2', 'CATEGORIES 2', 'Category 2', 'Category-2']),
+                itemName: safeGet(['product_name_la', 'Item Name', 'Product Name', 'ລາຍການ', 'ITEM NAME']),
+                qty: Number(row.qty || row.Qty || row.QTY || row['Quantity'] || 0),
+                updatedBy: row.updated_by,
+                updatedAt: row.updated_at
+            });
+        }
+    });
+
+    return map;
+};
+
+/**
+ * ตรวจสอบและ Validate ข้อมูล Location กับ DATA
+ * 
+ * Logic:
+ * - สีฟ้า: Barcode ไม่พบใน DATA หรือ Categories ใน DATA เป็นค่าว่าง
+ * - สีแดง: Categories ไม่ตรงกัน
+ * - ปกติ: ข้อมูลถูกต้องทั้งหมด
+ */
+export const validateData = (locationRows, dataRows) => {
+    const masterMap = createMasterDataMap(dataRows);
+    const results = [];
+    let stats = {
+        total: 0,
+        passed: 0,
+        mismatch: 0, // สีแดง
+        missing: 0,  // สีฟ้า
+    };
+
+    locationRows.forEach((row, index) => {
+        // Debug: พิมพ์ข้อมูลแถวแรกออกมาดู structure
+        if (index === 0) console.log('First Row Data:', row);
+
+        const barcode = normalizeBarcode(
+            row['Barcode No.'] || row['Barcode'] || row['BARCODE'] || row['barcode']
+        );
+        const rackLocation = (row['Rack Location'] || row['Location'] || '').trim();
+
+        // ດຶງຂໍ້ມູນ Category ໂດຍເຊັກລະອຽດ (ຖ້າເປັນ 0 ຕ້ອງໄດ້ 0)
+        const getRaw = (key) => {
+            const val = row[key];
+            if (val === 0 || val === '0') return '0';
+            return (val !== undefined && val !== null) ? String(val).trim() : '';
+        };
+        const category1 = getRaw('Category-1') || getRaw('Category 1') || getRaw('CATEGORIES 1') || '';
+        const category2 = getRaw('Category-2') || getRaw('Category 2') || getRaw('CATEGORIES 2') || '';
+
+        // พยายามดึง QTY จากหลายๆ ชื่อที่เป็นไปได้
+        // หรือถ้าข้อมูลมาเป็น __EMPTY_x (กรณีไม่มี Header) ก็ต้องเดา
+        let qty = 0;
+        const possibleQtyKeys = ['QTY', 'Qty', 'qty', 'Quantity', 'quantity', 'จํานวน', 'จำนวน', 'Total'];
+
+        for (const key of Object.keys(row)) {
+            if (possibleQtyKeys.includes(key) || key.toUpperCase() === 'QTY') {
+                qty = row[key];
+                break;
+            }
+        }
+
+        // 2. ถ้าไม่เจอ ให้ลองดึงจาก Column Index ที่ 6 (Column G)
+        if (!qty) {
+            const values = Object.values(row);
+            // ถ้า keys เรียงตาม A, B, C... ค่าที่ 7 (index 6) น่าจะเป็น G
+            if (values.length > 6) {
+                const valAtG = values[6];
+                if (!isNaN(parseFloat(valAtG))) {
+                    qty = valAtG;
+                }
+            }
+            // Fallback: เช็ค __EMPTY_6 (เผื่อมี)
+            if (!qty && row['__EMPTY_6']) qty = row['__EMPTY_6'];
+        }
+
+        // ดึงข้อมูล Date (Column H)
+        let inputDate = '';
+        const possibleDateKeys = ['Date', 'date', 'Time', 'time', 'วันที', 'วันที่', 'Last Update'];
+
+        // 1. หาตามชื่อ Key
+        for (const key of Object.keys(row)) {
+            if (possibleDateKeys.includes(key) || key.toUpperCase() === 'DATE') {
+                inputDate = row[key];
+                break;
+            }
+        }
+
+        // 2. ถ้าไม่เจอ ให้ลองดึงจาก Column Index ที่ 7 (Column H)
+        if (!inputDate) {
+            const values = Object.values(row);
+            if (values.length > 7) {
+                inputDate = values[7]; // Index 7 = Column H
+            }
+            // Fallback: เช็ค __EMPTY_7
+            if (!inputDate && row['__EMPTY_7']) inputDate = row['__EMPTY_7'];
+        }
+
+        let status = 'normal';
+        let color = null;
+        let reason = '';
+
+        stats.total++;
+
+        const masterData = masterMap.get(barcode);
+
+        if (!masterData) {
+            // ไม่พบ Barcode ใน DATA
+            status = 'missing';
+            color = 'blue';
+            reason = 'ບໍ່ພົບ Barcode ໃນຖານຂໍ້ມູນອ້າງອີງ';
+            stats.missing++;
+        } else {
+            const cat1Match = normalizeForComparison(category1) === normalizeForComparison(masterData.category1);
+            const cat2Match = normalizeForComparison(category2) === normalizeForComparison(masterData.category2);
+
+            if (!masterData.category1 || !masterData.category2) {
+                // Categories ใน DATA เป็นค่าว่าง
+                status = 'incomplete';
+                color = 'blue';
+                reason = 'ຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນບໍ່ຄົບຖ້ວນ';
+                stats.missing++;
+            } else if (!cat1Match || !cat2Match) {
+                // ถ้าอย่างใดอย่างหนึ่งไม่ตรง -> Mismatch (สีแดง)
+                status = 'mismatch';
+                color = 'red';
+
+                let mismatchReason = [];
+                if (!cat1Match) mismatchReason.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1 || 'ປ່ຽນແປງ'})`);
+                if (!cat2Match) mismatchReason.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2 || 'ປ່ຽນແປງ'})`);
+
+                reason = mismatchReason.join(' | ');
+                stats.mismatch++;
+            } else {
+                // ตรงกันทั้งหมด
+                status = 'passed';
+                stats.passed++;
+            }
+        }
+
+        results.push({
+            rowIndex: index + 1,
+            barcode,
+            rackLocation,
+            category1,
+            category2,
+            qty,
+            inputDate,
+            status,
+            color,
+            reason,
+            masterCategory1: masterData?.category1 || '',
+            masterCategory2: masterData?.category2 || '',
+            masterQty: masterData?.qty || 0,
+            masterItemName: masterData?.itemName || '',
+            updatedAt: masterData?.updatedAt || '',
+            updatedBy: masterData?.updatedBy || '',
+            originalRow: row
+        });
+    });
+
+    return { results, stats };
+};
+
+/**
+ * ตรวจสอบและแนะนำชื่อ Sheet ที่เหมาะสม
+ */
+export const suggestSheetMapping = (sheetNames) => {
+    const suggestions = {
+        locationSheet: null,
+        dataSheet: null,
+    };
+
+    sheetNames.forEach((name) => {
+        const lowerName = name.toLowerCase();
+
+        if (lowerName.includes('location') || lowerName.includes('loc')) {
+            suggestions.locationSheet = name;
+        }
+
+        if (lowerName.includes('data') || lowerName.includes('master')) {
+            suggestions.dataSheet = name;
+        }
+    });
+
+    return suggestions;
+};
