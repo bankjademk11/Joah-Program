@@ -241,6 +241,7 @@ export const validateData = (locationRows, dataRows) => {
         }
 
         results.push({
+            id: row.id, // Preserve ID for potential database updates
             rowIndex: index + 1,
             barcode,
             rackLocation,

@@ -66,6 +66,7 @@ export const fetchMasterFromSupabase = async () => {
             const { data, error } = await supabase
                 .from('master_data')
                 .select('*')
+                .order('barcode', { ascending: true }) // Ensure stable order
                 .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
 
             if (error) throw error;
@@ -77,7 +78,6 @@ export const fetchMasterFromSupabase = async () => {
                 hasMore = false;
             }
 
-            // Safety break 
             if (curPage > 100) break;
         }
 
@@ -93,10 +93,12 @@ export const fetchMasterFromSupabase = async () => {
  */
 export const syncLocationResultsToSupabase = async (validatedResults) => {
     try {
-        console.log('Saving results to location_inventory...', validatedResults.length, 'records');
+        console.log('🚀 Starting Full Sync to location_inventory...', validatedResults.length, 'records');
 
+        // 1. Clear old location data (No filtering anymore!)
         await supabase.from('location_inventory').delete().not('id', 'is', null);
 
+        // 2. Prepare Data for ALL items
         const dataToInsert = validatedResults.map(res => ({
             barcode_no: res.barcode,
             item_name: res.masterItemName || res.itemName || '',
@@ -104,19 +106,62 @@ export const syncLocationResultsToSupabase = async (validatedResults) => {
             category_1_actual: res.category1,
             category_2_actual: res.category2,
             qty: Number(res.qty || 0),
-            validation_status: res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ',
+            validation_status: res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : (res.status === 'missing' || res.status === 'incomplete' ? 'ບໍ່ຄົບຖ້ວນ' : 'ປົກກະຕິ'),
             remarks: res.reason || ''
         }));
 
-        const chunkSize = 200;
+        // 3. Batch Insert (Chunked for performance with 12k+ records)
+        const chunkSize = 500;
         for (let i = 0; i < dataToInsert.length; i += chunkSize) {
             const { error: insertError } = await supabase.from('location_inventory').insert(dataToInsert.slice(i, i + chunkSize));
             if (insertError) throw insertError;
         }
 
-        return { success: true };
+        console.log('✅ Sync Complete: All records saved.');
+
+        return {
+            success: true,
+            synced: dataToInsert.length,
+            skipped: 0
+        };
     } catch (error) {
         console.error('Location Sync Error:', error);
         return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Fetch ALL Location counting data from Supabase
+ */
+export const fetchLocationFromSupabase = async () => {
+    try {
+        let allData = [];
+        let curPage = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('location_inventory')
+                .select('*')
+                .order('id', { ascending: true }) // Keep rows in fixed order
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                curPage++;
+            } else {
+                hasMore = false;
+            }
+
+            if (curPage > 100) break;
+        }
+
+        return allData;
+    } catch (error) {
+        console.error('Fetch Location Error:', error);
+        return null;
     }
 };

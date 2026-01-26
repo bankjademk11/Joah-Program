@@ -12,7 +12,7 @@ import {
   suggestSheetMapping
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
-import { fetchMasterFromSupabase, syncMasterDataToSupabase } from './utils/supabaseSync';
+import { fetchMasterFromSupabase, syncMasterDataToSupabase, fetchLocationFromSupabase } from './utils/supabaseSync';
 import { RefreshCw, Database, Cloud, CloudUpload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
@@ -25,6 +25,7 @@ function App() {
   const [locationSheetName, setLocationSheetName] = useState('');
   const [suggestions, setSuggestions] = useState({});
   const [validationResults, setValidationResults] = useState([]);
+  const [masterData, setMasterData] = useState([]);
   const [stats, setStats] = useState({ total: 0, passed: 0, mismatch: 0, missing: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -65,34 +66,42 @@ function App() {
   const handleDatabaseLoad = async () => {
     setIsProcessing(true);
     try {
-      const supabaseData = await fetchMasterFromSupabase();
-      if (supabaseData && supabaseData.length > 0) {
+      // 1. Check if Cloud Master Data exists
+      const cloudMaster = await fetchMasterFromSupabase();
+
+      if (cloudMaster && cloudMaster.length > 0) {
         setDbSource('supabase');
         setDataSourceLabel('Cloud Mode (Supabase)');
+
+        // 2. Proactively try to load Cloud Results immediately
+        // Pass 'supabase' explicitly to avoid state race condition
+        await handleValidate({
+          locationSheet: 'Cloud Database',
+          pSource: 'supabase'
+        });
+        return; // Exit early as handleValidate handles the rest
       } else {
+        // Fallback to Local/Asset mode if Cloud is empty
         setDbSource('excel');
         setDataSourceLabel('Pre-built Mode (Local Assets)');
+        alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud. ລະບົບຈະໂຫຼດຂໍ້ມູນຕົວຢ່າງຈາກໄຟລ໌ພາຍໃນແທນ.');
       }
 
       const wb = await readExcelFromUrl(databaseUrl);
-      const response = await fetch(databaseUrl);
-      const blob = await response.blob();
-      const dummyFile = new File([blob], "DataBaseJoah.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-
-      setRawFile(dummyFile);
-      setLoadedFileName('DataBaseJoah.xlsx');
-
-      // Load workbook metadata but don't jump to next step automatically
-      // This allows the user to see the "Active" status and click "Start"
       const names = getSheetNames(wb);
       const suggested = suggestSheetMapping(names);
+
+      setRawFile(new File([], "DataBaseJoah.xlsx")); // Placeholder
+      setLoadedFileName('DataBaseJoah.xlsx');
       setWorkbook(wb);
       setSheetNames(names);
       setSuggestions(suggested);
       if (suggested.location) setLocationSheetName(suggested.location);
+
+      setStep('mapping'); // Go to mapping if Cloud was empty
     } catch (error) {
       console.error(error);
-      alert('ບໍ່ສາມາດໂຫຼດຖານຂໍ້ມູນໄດ້: ' + error.message);
+      alert('⚠️ ບໍ່ສາມາດຕິດຕໍ່ Cloud ໄດ້: ' + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -162,15 +171,23 @@ function App() {
     setStep('mapping');
   };
 
-  const handleValidate = async ({ locationSheet, dataSheet }) => {
+  const handleValidate = async ({ locationSheet, dataSheet, pSource }) => {
     setIsProcessing(true);
-    setLocationSheetName(locationSheet);
+    const activeSource = pSource || dbSource;
+    setLocationSheetName(locationSheet || 'Cloud Database');
     try {
       let dataRows = [];
-      if (dbSource === 'supabase') {
-        const cloudData = await fetchMasterFromSupabase();
-        console.log('DEBUG: Fetched data from Supabase:', cloudData?.length, 'records');
-        dataRows = cloudData.map(d => ({
+      let locationRows = [];
+
+      if (activeSource === 'supabase') {
+        console.log('🚀 Starting Cloud Validation...');
+        // 1. Fetch Master Data
+        const cloudMaster = await fetchMasterFromSupabase();
+        if (!cloudMaster || cloudMaster.length === 0) {
+          throw new Error("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud. ກະລຸນາ Sync ຂໍ້ມູນ Master ກ່ອນ.");
+        }
+
+        dataRows = cloudMaster.map(d => ({
           'CATEGORIES 1': d.category_1,
           'CATEGORIES 2': d.category_2,
           'Barcode': d.barcode,
@@ -179,21 +196,46 @@ function App() {
           'updated_at': d.updated_at,
           'updated_by': d.updated_by
         }));
+
+        // 2. Fetch Location Data (Actual counted data)
+        const cloudLocation = await fetchLocationFromSupabase();
+        if (!cloudLocation || cloudLocation.length === 0) {
+          throw new Error("ບໍ່ພົບຂໍ້ມູນ Location Inventory ໃນ Cloud. ທ່ານຕ້ອງເຄີຍກົດ 'Save to Cloud' ໃນໜ້າຜົນລັດກ່ອນ.");
+        }
+
+        locationRows = cloudLocation.map(l => ({
+          id: l.id, // Keep the DB ID for editing
+          'Barcode': l.barcode_no,
+          'Rack Location': l.rack_location,
+          'Category-1': l.category_1_actual,
+          'Category-2': l.category_2_actual,
+          'QTY': l.qty,
+          'Item Name': l.item_name
+        }));
+
+        console.log('✅ Cloud Data Fetched:', {
+          master: dataRows.length,
+          location: locationRows.length
+        });
       } else {
+        // Local Excel Mode
+        if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
         dataRows = sheetToJSON(workbook, dataSheet || 'DATA');
-        console.log('DEBUG: Loaded data from Excel:', dataRows?.length, 'records');
+        locationRows = sheetToJSON(workbook, locationSheet);
       }
 
-      const locationRows = sheetToJSON(workbook, locationSheet);
-      console.log('DEBUG: Validating', locationRows.length, 'location rows against', dataRows.length, 'master rows');
+      if (locationRows.length === 0) {
+        throw new Error("ບໍ່ພົບຂໍ້ມູນໃນ Sheet ທີ່ເລືອກ ຫຼື ຖານຂໍ້ມູນ Location ວ່າງເປົ່າ.");
+      }
 
       const { results, stats } = validateData(locationRows, dataRows);
-      console.log('DEBUG: Validation complete. Stats:', stats);
+      setMasterData(dataRows);
       setValidationResults(results);
       setStats(stats);
       setStep('results');
     } catch (err) {
-      alert('Error: ' + err.message);
+      console.error('Validation Error:', err);
+      alert('⚠️ ' + err.message);
     } finally {
       setIsProcessing(false);
     }
@@ -369,6 +411,7 @@ function App() {
             />
             <ResultTable
               results={validationResults}
+              masterData={masterData}
               rawFile={rawFile}
               locationSheetName={locationSheetName}
               filterStatus={filterStatus}

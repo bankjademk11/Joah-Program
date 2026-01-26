@@ -7,10 +7,12 @@ import {
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
-import { syncLocationResultsToSupabase } from '../utils/supabaseSync';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase } from '../utils/supabaseSync';
+import { readExcelFromUrl, sheetToJSON } from '../utils/excelProcessor';
+import databaseUrl from '../assets/DataBaseJoah.xlsx';
 
 const ResultTable = ({
-    results, rawFile, locationSheetName, filterStatus,
+    results, masterData, rawFile, locationSheetName, filterStatus,
     onFilterChange, dbSource, onRefresh, onUpdateRowQty
 }) => {
     const [currentPage, setCurrentPage] = useState(1);
@@ -43,15 +45,22 @@ const ResultTable = ({
     const currentResults = filteredResults.slice(startIndex, endIndex);
 
     const handleMouseEnter = (e, row) => {
-        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = setTimeout(() => {
             setHoveredRowInfo({
                 row,
-                x: rect.left + rect.width / 2,
-                y: rect.top
+                x,
+                y
             });
-        }, 800);
+        }, 600);
+    };
+
+    const handleMouseMove = (e) => {
+        if (hoveredRowInfo) {
+            setHoveredRowInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+        }
     };
 
     const handleMouseLeave = () => {
@@ -59,31 +68,60 @@ const ResultTable = ({
         setHoveredRowInfo(null);
     };
 
-    const getStatusHint = (status) => {
+    const getStatusHint = (row) => {
+        if (!row) return null;
+        const { status, category1, category2, masterCategory1, masterCategory2 } = row;
+
         switch (status) {
             case 'passed':
                 return {
                     title: 'ຂໍ້ມູນຖືກຕ້ອງສົມບູນ',
-                    reason: 'ຈຳນວນສິນຄ້າ ແລະ ສະຖານທີ່ ກົງກັບຖານຂໍ້ມູນ Master ຢ່າງສົມບູນ 100%.',
-                    action: 'ບໍ່ຈຳເປັນຕ້ອງແກ້ໄຂຫຍັງ. ລະບົບຢືນຢັນວ່າຂໍ້ມູນນີ້ປົກກະຕິ!',
+                    reason: 'ທຸກຢ່າງກົງກັນ 100% ທັງໝວດໝູ່ ແລະ ສະຖານທີ່.',
+                    action: 'ຂໍ້ມູນນີ້ສົມບູນແລ້ວ, ບໍ່ຕ້ອງມີການແກ້ໄຂເພີ່ມເຕີມ.',
                     color: 'text-emerald-500',
                     bg: 'bg-emerald-500',
                     icon: <CheckCircle size={14} />
                 };
             case 'mismatch':
+                const c1Wrong = String(category1 || '').trim() !== String(masterCategory1 || '').trim();
+                const c2Wrong = String(category2 || '').trim() !== String(masterCategory2 || '').trim();
+
+                let detailReason = "";
+                let detailAction = "";
+
+                if (c1Wrong && c2Wrong) {
+                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat1 (${category1 || 'ວ່າງ'}) ແລະ Cat2 (${category2 || 'ວ່າງ'}) ບໍ່ກົງກັບໃນລະບົບ.`;
+                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງແກ້ໄຂໃຫ້ກົງຄື: Cat1: ${masterCategory1} ແລະ Cat2: ${masterCategory2}`;
+                } else if (c1Wrong) {
+                    detailReason = `ສາເหດ: ຂໍ້ມູນ Cat1 ໃນໜ້າຮ້ານແມ່ນ [${category1 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory1}].`;
+                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat1 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory1}"`;
+                } else {
+                    detailReason = `ສາເຫด: ຂໍ້ມູນ Cat2 ໃນໜ້າຮ້ານແມ່ນ [${category2 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory2}].`;
+                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat2 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory2}"`;
+                }
+
                 return {
-                    title: 'ຈຳນວນບໍ່ກົງກັນ',
-                    reason: 'ຈຳນວນທີ່ນັບໄດ້ໃນສະຖານທີ່ນີ້ ບໍ່ກົງກັບຈຳນວນທີ່ມີໃນລະບົບ Master Data.',
-                    action: 'ກະລຸນາກວດສອບຄືນ ຫຼື ກົດປຸ່ມ "Edit" ສີແດງເພື່ອອັບເດດຈຳນວນໃຫ້ກົງກັນ.',
+                    title: 'ຂໍ້ມູນບໍ່ກົງກັນ',
+                    reason: detailReason,
+                    action: detailAction,
                     color: 'text-rose-500',
                     bg: 'bg-rose-500',
                     icon: <AlertTriangle size={14} />
                 };
+            case 'missing':
+                return {
+                    title: 'ບໍ່ພົບໃນລະບົບ',
+                    reason: `ບາໂຄ້ດ [${row.barcode}] ນີ້ ບໍ່ມີຢູ່ໃນຖານຂໍ້ມູນ Master ອ້າງອີງ.`,
+                    action: 'ກະລຸນາກວດສອບບາໂຄ້ດຄືນ ຫຼື ເພີ່ມສິນຄ້ານີ້ເຂົ້າໃນລະບົບ Master ກ່ອນ.',
+                    color: 'text-sky-500',
+                    bg: 'bg-sky-500',
+                    icon: <Search size={14} />
+                };
             default:
                 return {
-                    title: 'ບໍ່ພົບຂໍ້ມູນໃນລະບົບ',
-                    reason: 'ບາໂຄດນີ້ບໍ່ມີຢູ່ໃນລະບົບ Master Database ເຮັດໃຫ້ບໍ່ສາມາດກວດສອບຈຳນວນໄດ້.',
-                    action: 'ລອງກວດສອບບາໂຄດຄືນ ຫຼື ເພີ່ມຂໍ້ມູນສິນຄ້ານີ້ເຂົ້າໃນລະບົບກ່ອນ.',
+                    title: 'ຂໍ້ມູນບໍ່ສົມບູນ',
+                    reason: 'ພົบบາโຄ້ดในระบบ แต่ข้อมูลใน Master ยังไม่ครบถ้วน.',
+                    action: 'ກະລຸນາໄປອັບເດດຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນ Master ໃຫ້ຄົບຖ້ວນ.',
                     color: 'text-amber-500',
                     bg: 'bg-amber-500',
                     icon: <Info size={14} />
@@ -112,6 +150,8 @@ const ResultTable = ({
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
+
+        // Name required for cloud sync traceability
         if (dbSource === 'supabase' && !employeeName.trim()) {
             alert('ກະລຸນາໃສ່ຊື່ພະນັກງານກ່ອນບັນທຶກ');
             return;
@@ -119,68 +159,94 @@ const ResultTable = ({
 
         setIsUpdating(true);
         const now = new Date().toISOString();
-        const oldVal = selectedRow.masterQty || 0;
+        const newQtyValue = Number(editQty);
+        const oldQtyValue = selectedRow.qty || 0;
 
-        // Save name to localStorage for convenience
+        console.log(`[DEBUG] 🛠️ Starting Update for Barcode: ${selectedRow.barcode}`);
+        console.log(`[DEBUG] 📍 Row Index: ${selectedRow.rowIndex}, Database ID: ${selectedRow.id || 'N/A'}`);
+        console.log(`[DEBUG] 📊 Change: ${oldQtyValue} -> ${newQtyValue}`);
+
+        // Persistent employee name
         localStorage.setItem('joah_employee_name', employeeName);
 
-        // 1. Update Frontend immediately (as requested)
+        // 1. Update Frontend immediately (Updates Actual Count in Table)
         if (onUpdateRowQty) {
             onUpdateRowQty(selectedRow.rowIndex, {
-                masterQty: Number(editQty),
+                qty: newQtyValue,
                 updatedAt: now,
                 updatedBy: employeeName
             });
+            console.log(`[DEBUG] ✅ UI Updated Real-time`);
         }
 
-        // 2. If it's Cloud Mode, also save to DB
+        // 2. Sync to Cloud if in Supabase mode
         try {
             if (dbSource === 'supabase') {
-                // 1. Update Master Data
-                const { error: masterError } = await supabase
-                    .from('master_data')
+                if (!selectedRow.id) {
+                    console.error('[DEBUG] ❌ Cannot sync to cloud: Missing Record ID');
+                    throw new Error("ບໍ່ພົບ Record ID ໃນຖານຂໍ້ມູນ. ກະລຸນາລອງ Refresh ຂໍ້ມູນໃໝ່.");
+                }
+
+                console.log(`[DEBUG] ☁️ Sending update to Supabase table 'location_inventory'...`);
+
+                const { data, error: locError } = await supabase
+                    .from('location_inventory')
                     .update({
-                        qty: Number(editQty),
-                        updated_at: now,
-                        updated_by: employeeName
+                        qty: newQtyValue,
+                        remarks: `Updated manually by ${employeeName} at ${now}`
                     })
-                    .eq('barcode', selectedRow.barcode);
+                    .eq('id', selectedRow.id)
+                    .select();
 
-                if (masterError) throw masterError;
+                if (locError) {
+                    console.error('[DEBUG] ❌ Supabase DB Error:', locError);
+                    throw locError;
+                }
 
-                // 2. Insert into History Table
-                const { error: historyError } = await supabase
-                    .from('inventory_history')
-                    .insert({
-                        barcode: selectedRow.barcode,
-                        item_name: selectedRow.masterItemName || selectedRow.itemName,
-                        old_qty: oldVal,
-                        new_qty: Number(editQty),
-                        updated_by: employeeName,
-                        updated_at: now
-                    });
-
-                if (historyError) console.error('History Log Error:', historyError);
+                console.log(`[DEBUG] 🚀 Cloud Sync Successful! Data returned:`, data);
             }
+
             setSelectedRow(null);
-            alert('ອັບເດດຂໍ້ມູນສຳເລັດ!');
+            alert('✨ ອັບເດດຈຳນວນນັບສຳເລັດແລ້ວ!');
         } catch (err) {
-            alert('Cloud Save Error: ' + err.message);
+            console.error('[DEBUG] ❌ Final Catch Error:', err);
+            alert('❌ ບໍ່ສາມາດບັນທຶກได้: ' + err.message);
         } finally {
             setIsUpdating(false);
+            console.log(`[DEBUG] 🏁 Update Process Finished.`);
         }
     };
 
     const handleSaveToCloud = async () => {
         setIsSavingToCloud(true);
         try {
+            console.log('🚀 Starting Unified Cloud Sync...');
+
+            // 1. If we have the raw file, Sync Master Data first
+            if (rawFile && dbSource === 'excel') {
+                console.log('📦 Syncing Master Data from DATA sheet...');
+                const wb = await readExcelFile(rawFile);
+                const dataRows = sheetToJSON(wb, 'DATA');
+                if (dataRows && dataRows.length > 0) {
+                    const masterResult = await syncMasterDataToSupabase(dataRows);
+                    if (!masterResult.success) {
+                        throw new Error('Master Sync Failed: ' + masterResult.error);
+                    }
+                    console.log('✅ Master Data Synced');
+                }
+            }
+
+            // 2. Sync Location counting results
             const result = await syncLocationResultsToSupabase(results);
+
             if (result.success) {
-                alert('✨ ບັນທຶກຜົນການກວດສອບລົງ Cloud (location_inventory) ສຳເລັດແລ້ວ!');
+                const msg = `✨ ບັນທຶກທັງຂໍ້ມູນ Master ແລະ ຜົນການກວດສອບລົງ Cloud ສຳເລັດແລ้ວ!\n🚛Synced: ${result.synced} items.`;
+                alert(msg);
             } else {
                 alert('❌ ບັນທຶກບໍ່ສຳເລັດ: ' + result.error);
             }
         } catch (e) {
+            console.error('Unified Sync Error:', e);
             alert('❌ Error: ' + e.message);
         } finally {
             setIsSavingToCloud(false);
@@ -188,138 +254,143 @@ const ResultTable = ({
     };
 
     const handleExportWithColor = async () => {
-        if (!rawFile || !locationSheetName) return;
         setIsExporting(true);
         try {
             const workbook = new ExcelJS.Workbook();
-            const originalWb = new ExcelJS.Workbook();
-            await originalWb.xlsx.load(await rawFile.arrayBuffer());
+            
+            if (dbSource === 'supabase') {
+                // Cloud Mode: Build a new workbook from scratch
+                const locationSheet = workbook.addWorksheet('Location');
+                const dataSheet = workbook.addWorksheet('DATA');
 
-            originalWb.eachSheet((oldSheet) => {
-                const newSheet = workbook.addWorksheet(oldSheet.name);
-                oldSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-                    const newRow = newSheet.getRow(rowNumber);
+                // Populate Location Sheet Headers
+                locationSheet.getRow(1).values = [
+                    'Barcode', 'Rack Location', 'Category-1', 'Category-2', 'QTY', 'Item Name',
+                    'QTY (Cloud)', 'Status', 'Remarks', 'Last Updated', 'Updated By'
+                ];
+                
+                // Populate Location Sheet Rows
+                results.forEach(res => {
+                    const row = locationSheet.addRow([
+                        res.barcode,
+                        res.rackLocation,
+                        res.category1,
+                        res.category2,
+                        res.qty,
+                        res.masterItemName,
+                        res.masterQty || 0,
+                        res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ',
+                        res.status === 'passed' ? 'ຂໍ້ມູນຖືກຕ້ອງ' : (res.reason || 'ກວດສອບພົບຂໍ້ຜິດພາດ'),
+                        res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '-',
+                        res.updatedBy || '-'
+                    ]);
 
-                    for (let colNumber = 1; colNumber <= 10; colNumber++) {
-                        const cell = row.getCell(colNumber);
-                        let val = cell.value;
-
-                        if (val && typeof val === 'object') {
-                            val = val.result !== undefined ? val.result : val.text;
-                        }
-
-                        if (rowNumber > 1) {
-                            const isDataSheetTarget = (oldSheet.name === 'DATA' || oldSheet.name === 'Data') && (colNumber === 3 || colNumber === 4);
-
-                            if (val === null || val === undefined || String(val).trim() === '' || val === 0 || val === '0') {
-                                if (isDataSheetTarget) {
-                                    val = 'ບໍ່ມີຂໍ້ມູນ';
-                                }
-                            }
-                        }
-
-                        newRow.getCell(colNumber).value = val;
+                    // Apply coloring to the status cell in Location sheet
+                    const statusCell = row.getCell(8);
+                    let bgColor = null;
+                    if (res.status === 'passed') bgColor = 'CCE3F6E3';
+                    if (res.status === 'mismatch') bgColor = 'CCF9DADA';
+                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'CCD1E9F6';
+                    if (bgColor) {
+                        statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
                     }
-                    if (rowNumber === 1) newRow.font = { bold: true };
                 });
-            });
-
-            const worksheet = workbook.getWorksheet(locationSheetName);
-            if (!worksheet) throw new Error(`Sheet ${locationSheetName} not found`);
-
-            const qtyCol = 7;     // Column G
-            const statusCol = 8;  // Column H
-            const remarkCol = 9;  // Column I
-            const dateCol = 10;   // Column J
-            const userCol = 11;   // Column K
-
-            // Fix Header Names in Lao (Since the original file might have wrong names)
-            const headerRow = worksheet.getRow(1);
-            headerRow.getCell(qtyCol).value = 'ຈຳນວນ (QTY Cloud)';
-            headerRow.getCell(statusCol).value = 'ສະຖານະກວດສອບ';
-            headerRow.getCell(remarkCol).value = 'ໝາຍເຫດ (Remarks)';
-            headerRow.getCell(dateCol).value = 'ວັນທີແກ້ໄຂ';
-            headerRow.getCell(userCol).value = 'ຜູ້ແກ້ໄຂ (User)';
-
-            // Apply Header Styling
-            [qtyCol, statusCol, remarkCol, dateCol, userCol].forEach(colIndex => {
-                const cell = headerRow.getCell(colIndex);
-                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                cell.fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FF334155' } // Deep Slate
-                };
-                cell.alignment = { horizontal: 'center' };
-            });
-
-            results.forEach((res) => {
-                const excelRowNumber = res.rowIndex + 1;
-                if (excelRowNumber <= 1) return;
-                const row = worksheet.getRow(excelRowNumber);
-
-                // 1. Set QTY (from Supabase) in Column G
-                row.getCell(qtyCol).value = res.masterQty || 0;
-
-                // 2. Set Status Value in Column H
-                const statusCell = row.getCell(statusCol);
-                statusCell.value = res.status === 'passed' ? 'ຖືກຕ້ອງ' :
-                    res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ';
-
-                // 3. Set Remark (Reason) in Column I - In Lao
-                const remarkCell = row.getCell(remarkCol);
-                remarkCell.value = res.status === 'passed' ? 'ຂໍ້ມູນຖືກຕ້ອງ' : (res.reason || 'ກວດສອບພົບຂໍ້ຜິດພາດ');
-
-                // 4. Set Update Info in Column J & K
-                row.getCell(dateCol).value = res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '-';
-                row.getCell(userCol).value = res.updatedBy || '-';
-
-                // Color Logic for Status Cell
-                let bgColor = null;
-                if (res.status === 'passed') bgColor = 'CCE3F6E3'; // Soft Green
-                if (res.status === 'mismatch') bgColor = 'CCF9DADA'; // Soft Red
-                if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'CCD1E9F6'; // Soft Blue
-
-                if (bgColor) {
-                    statusCell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: bgColor }
-                    };
-                    statusCell.font = { bold: true };
+                
+                // Populate DATA Sheet
+                if (masterData && masterData.length > 0) {
+                    const headers = Object.keys(masterData[0]);
+                    dataSheet.getRow(1).values = headers;
+                    masterData.forEach(row => {
+                        const values = headers.map(header => row[header]);
+                        dataSheet.addRow(values);
+                    });
                 }
 
-                // Color for Rack Location (Column D / 4)
-                const rackCell = row.getCell(4);
-                if (res.color === 'red') {
-                    rackCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'CCF9DADA' } };
-                } else if (res.color === 'blue') {
-                    rackCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'CCD1E9F6' } };
+            } else {
+                // Excel Mode: Use existing logic with rawFile
+                if (!rawFile || !locationSheetName) {
+                    alert("ບໍ່ພົບໄຟລ໌ຕົ້ນສະບັບ ຫຼື ຊື່ຊີດ");
+                    setIsExporting(false);
+                    return;
                 }
 
-                const cat1Cell = row.getCell(5);
-                const cat2Cell = row.getCell(6);
+                const originalWb = new ExcelJS.Workbook();
+                await originalWb.xlsx.load(await rawFile.arrayBuffer());
 
-                const handleEmptyCell = (cell) => {
-                    const val = cell.value;
-                    if (val === null || val === undefined || val === '' || val === 0 || val === '0') {
-                        cell.value = 'Empty';
-                        cell.font = { color: { argb: 'FF0EA5E9' }, bold: true, italic: true };
+                originalWb.eachSheet((oldSheet, sheetId) => {
+                    const newSheet = workbook.addWorksheet(oldSheet.name);
+                    oldSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+                        const newRow = newSheet.getRow(rowNumber);
+                        // Simple 1-to-1 copy
+                        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                            newRow.getCell(colNumber).value = cell.value;
+                        });
+                    });
+                });
+                
+                const worksheet = workbook.getWorksheet(locationSheetName);
+                if (!worksheet) throw new Error(`Sheet "${locationSheetName}" not found`);
+
+                const qtyCol = 7;
+                const statusCol = 8;
+                const remarkCol = 9;
+                const dateCol = 10;
+                const userCol = 11;
+
+                const headerRow = worksheet.getRow(1);
+                headerRow.getCell(qtyCol).value = 'ຈຳນວນ (QTY Cloud)';
+                headerRow.getCell(statusCol).value = 'ສະຖານະກວດສອບ';
+                headerRow.getCell(remarkCol).value = 'ໝາຍເຫດ (Remarks)';
+                headerRow.getCell(dateCol).value = 'ວັນທີແກ້ໄຂ';
+                headerRow.getCell(userCol).value = 'ຜູ້ແກ້ໄຂ (User)';
+
+                [qtyCol, statusCol, remarkCol, dateCol, userCol].forEach(colIndex => {
+                    const cell = headerRow.getCell(colIndex);
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+                    cell.alignment = { horizontal: 'center' };
+                });
+
+                results.forEach((res) => {
+                    const excelRowNumber = res.rowIndex + 1;
+                    if (excelRowNumber <= 1) return;
+
+                    const row = worksheet.getRow(excelRowNumber);
+                    if (!row) return;
+
+                    row.getCell(qtyCol).value = res.masterQty || 0;
+                    const statusCell = row.getCell(statusCol);
+                    statusCell.value = res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ';
+                    row.getCell(remarkCol).value = res.status === 'passed' ? 'ຂໍ້ມູນຖືກຕ້ອງ' : (res.reason || 'ກວດສອບພົບຂໍ້ຜິດພາດ');
+                    row.getCell(dateCol).value = res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '-';
+                    row.getCell(userCol).value = res.updatedBy || '-';
+
+                    let bgColor = null;
+                    if (res.status === 'passed') bgColor = 'CCE3F6E3';
+                    if (res.status === 'mismatch') bgColor = 'CCF9DADA';
+                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'CCD1E9F6';
+
+                    if (bgColor) {
+                        statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
                     }
-                };
-                handleEmptyCell(cat1Cell);
-                handleEmptyCell(cat2Cell);
-            });
+                });
+            }
 
+            // Generate and download the file
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Report_${rawFile.name || 'Validation'}.xlsx`;
+            a.download = `Report_${dbSource === 'supabase' ? 'CloudData' : (rawFile ? rawFile.name : 'Validation')}.xlsx`;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
         } catch (error) {
             console.error('Export Error:', error);
+            alert('Export failed: ' + error.message);
         } finally {
             setIsExporting(false);
         }
@@ -401,7 +472,7 @@ const ResultTable = ({
                             <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '80px' }}>ID</th>
                             <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Barcode / Item</th>
                             <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Location</th>
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '100px' }}>QTY</th>
+                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '120px' }}>QTY (Actual / Sys)</th>
                             <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 hidden xl:table-cell">Categories</th>
                             <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '160px' }}>Status</th>
                             <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '100px' }}>Action</th>
@@ -423,8 +494,9 @@ const ResultTable = ({
                             currentResults.map((row) => <tr
                                 key={row.rowIndex}
                                 className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200 cursor-pointer"
-                                onClick={() => { setSelectedRow(row); setEditQty(row.masterQty || 0); }}
+                                onClick={() => { setSelectedRow(row); setEditQty(row.qty || 0); }}
                                 onMouseEnter={(e) => handleMouseEnter(e, row)}
+                                onMouseMove={handleMouseMove}
                                 onMouseLeave={handleMouseLeave}
                             >
                                 <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
@@ -445,7 +517,13 @@ const ResultTable = ({
                                     </span>
                                 </td>
                                 <td className="px-6 py-6 text-center">
-                                    <span className="text-lg font-black text-slate-800 dark:text-white">{row.masterQty || 0}</span>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
+                                        <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter mt-1 p-1 bg-slate-50 dark:bg-slate-800 rounded-md">
+                                            <Database size={8} className="text-sky-500" />
+                                            <span>Master: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-6 hidden xl:table-cell">
                                     <div className="flex flex-col gap-1">
@@ -550,19 +628,27 @@ const ResultTable = ({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] mb-2 block">
-                                            Update System QTY
+                                            Update Counted QTY (ແກ້ໄຂຈຳນວນນັບໜ້າຮ້ານ)
                                         </label>
-                                        <input
-                                            type="number"
-                                            className="w-full h-12 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/5 rounded-2xl px-5 text-slate-900 dark:text-white font-black text-lg focus:outline-none focus:border-joah-orange transition-all duration-300 shadow-inner"
-                                            value={editQty}
-                                            onChange={(e) => setEditQty(e.target.value)}
-                                            placeholder="QTY..."
-                                        />
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                className="w-full h-12 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/5 rounded-2xl px-5 text-slate-900 dark:text-white font-black text-lg focus:outline-none focus:border-joah-orange transition-all duration-300 shadow-inner"
+                                                value={editQty}
+                                                onChange={(e) => setEditQty(e.target.value)}
+                                                placeholder="Enter correct actual count..."
+                                            />
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none">
+                                                <Edit2 size={16} />
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] font-bold text-slate-400 mt-2 italic px-1">
+                                            * ການແກ້ໄຂນີ້ຈະປ່ຽນຕົວເລກ "ຈຳນວນນັບຈິງ" ເທົ່ານັ້ນ, ຂໍ້ມູນ Master ຈະຄືເກົ່າ.
+                                        </p>
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] mb-2 block">
-                                            Employee (ຜູ້ແກ້ໄຂ)
+                                            Verifier (ຜູ້ກວດກາ)
                                         </label>
                                         <input
                                             type="text"
@@ -576,11 +662,11 @@ const ResultTable = ({
 
                                 <button
                                     onClick={handleUpdateMasterQty}
-                                    disabled={isUpdating || (dbSource !== 'supabase' && dbSource !== 'local')}
+                                    disabled={isUpdating}
                                     className="w-full h-12 bg-joah-orange hover:bg-slate-900 dark:hover:bg-white dark:hover:text-joah-orange text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all duration-300 shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2"
                                 >
                                     {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <Save size={18} />}
-                                    <span>Save Changes</span>
+                                    <span>Update Floor Count</span>
                                 </button>
                             </div>
 
@@ -596,7 +682,11 @@ const ResultTable = ({
                                             <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Location</p>
                                             <p className="text-md font-black text-slate-800 dark:text-white">{selectedRow.rackLocation}</p>
                                         </div>
-                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-orange-100/50 dark:border-orange-500/10 space-y-1">
+                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-orange-100/50 dark:border-orange-500/10 space-y-2">
+                                            <div className="flex justify-between items-center border-b border-orange-100/30 pb-2 mb-1">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase">ຈຳນວນທີ່ນັບໄດ້:</span>
+                                                <span className="text-lg font-black text-joah-orange">{selectedRow.qty || 0}</span>
+                                            </div>
                                             <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
                                                 <span>CAT 1:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.category1 || '-'}</span>
                                             </p>
@@ -615,9 +705,13 @@ const ResultTable = ({
                                     <div className="space-y-3 relative z-10">
                                         <div>
                                             <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Records</p>
-                                            <p className="text-md font-black text-slate-800 dark:text-white">Master Data</p>
+                                            <p className="text-md font-black text-slate-800 dark:text-white">Full Master Version</p>
                                         </div>
-                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-sky-100/50 dark:border-sky-500/10 space-y-1">
+                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-sky-100/50 dark:border-sky-500/10 space-y-2">
+                                            <div className="flex justify-between items-center border-b border-sky-100/30 pb-2 mb-1">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase">ຈຳນວນໃນ Master:</span>
+                                                <span className="text-lg font-black text-sky-500">{selectedRow.masterQty || 0}</span>
+                                            </div>
                                             <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
                                                 <span>Target 1:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.masterCategory1 || '-'}</span>
                                             </p>
@@ -625,6 +719,7 @@ const ResultTable = ({
                                                 <span>Target 2:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.masterCategory2 || '-'}</span>
                                             </p>
                                         </div>
+                                        <p className="text-[8px] font-black text-sky-500 uppercase mt-2 text-center">--- Read Only Data ---</p>
                                     </div>
                                 </div>
                             </div>
@@ -705,33 +800,32 @@ const ResultTable = ({
             {/* Smart Hover Tooltip */}
             {hoveredRowInfo && (
                 <div
-                    className="fixed z-[999] pointer-events-none animate-fade-in-up"
+                    className="fixed z-[999] pointer-events-none animate-in fade-in zoom-in duration-200"
                     style={{
-                        left: `${hoveredRowInfo.x}px`,
-                        top: `${hoveredRowInfo.y - 10}px`,
-                        transform: 'translate(-50%, -100%)'
+                        left: `${hoveredRowInfo.x + 20}px`,
+                        top: `${hoveredRowInfo.y + 20}px`,
                     }}
                 >
-                    <div className="w-[280px] bg-white dark:bg-slate-900 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.2)] border border-slate-100 dark:border-slate-800 overflow-hidden">
-                        <div className={`p-4 flex items-center gap-3 border-b border-slate-50 dark:border-slate-800/50 ${getStatusHint(hoveredRowInfo.row.status).bg}/10`}>
-                            <div className={`p-2 rounded-xl text-white ${getStatusHint(hoveredRowInfo.row.status).bg} shadow-sm`}>
-                                {getStatusHint(hoveredRowInfo.row.status).icon}
+                    <div className="w-[320px] bg-white dark:bg-slate-900 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.2)] border border-slate-100 dark:border-slate-800 overflow-hidden">
+                        <div className={`p-4 flex items-center gap-3 border-b border-slate-50 dark:border-slate-800/50 ${getStatusHint(hoveredRowInfo.row).bg}/10`}>
+                            <div className={`p-2 rounded-xl text-white ${getStatusHint(hoveredRowInfo.row).bg} shadow-sm`}>
+                                {getStatusHint(hoveredRowInfo.row).icon}
                             </div>
-                            <h4 className={`font-black text-sm uppercase tracking-tight ${getStatusHint(hoveredRowInfo.row.status).color}`}>
-                                {getStatusHint(hoveredRowInfo.row.status).title}
+                            <h4 className={`font-black text-sm uppercase tracking-tight ${getStatusHint(hoveredRowInfo.row).color}`}>
+                                {getStatusHint(hoveredRowInfo.row).title}
                             </h4>
                         </div>
                         <div className="p-5 space-y-3">
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">ສາເຫດທີ່ຜິດ:</p>
-                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">
-                                    {getStatusHint(hoveredRowInfo.row.status).reason}
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">ລາຍລະອຽດສາເຫດ:</p>
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-relaxed">
+                                    {getStatusHint(hoveredRowInfo.row).reason}
                                 </p>
                             </div>
                             <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">ວິທີແກ້ໄຂ:</p>
-                                <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
-                                    {getStatusHint(hoveredRowInfo.row.status).action}
+                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">ສິ່ງທີ່ຕ້ອງເຮັດ:</p>
+                                <p className="text-[11px] font-heavy text-rose-600 dark:text-rose-400 leading-relaxed font-bold">
+                                    {getStatusHint(hoveredRowInfo.row).action}
                                 </p>
                             </div>
                         </div>
