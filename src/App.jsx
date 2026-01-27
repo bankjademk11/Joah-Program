@@ -3,6 +3,7 @@ import FileUpload from './components/FileUpload';
 import SheetMapper from './components/SheetMapper';
 import Dashboard from './components/Dashboard';
 import ResultTable from './components/ResultTable';
+import Navbar from './components/Navbar';
 import {
   readExcelFile,
   readExcelFromUrl,
@@ -13,7 +14,8 @@ import {
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, fetchLocationFromSupabase } from './utils/supabaseSync';
-import { RefreshCw, Database, Cloud, CloudUpload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw } from 'lucide-react';
+import HistoryLog from './components/HistoryLog';
+import { RefreshCw, Database, CloudUpload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
@@ -39,6 +41,7 @@ function App() {
     }
     return false;
   });
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -63,104 +66,6 @@ function App() {
     }
   };
 
-  const handleDatabaseLoad = async () => {
-    setIsProcessing(true);
-    try {
-      // 1. Check if Cloud Master Data exists
-      const cloudMaster = await fetchMasterFromSupabase();
-
-      if (cloudMaster && cloudMaster.length > 0) {
-        setDbSource('supabase');
-        setDataSourceLabel('Cloud Mode (Supabase)');
-
-        // 2. Proactively try to load Cloud Results immediately
-        // Pass 'supabase' explicitly to avoid state race condition
-        await handleValidate({
-          locationSheet: 'Cloud Database',
-          pSource: 'supabase'
-        });
-        return; // Exit early as handleValidate handles the rest
-      } else {
-        // Fallback to Local/Asset mode if Cloud is empty
-        setDbSource('excel');
-        setDataSourceLabel('Pre-built Mode (Local Assets)');
-        alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud. ລະບົບຈະໂຫຼດຂໍ້ມູນຕົວຢ່າງຈາກໄຟລ໌ພາຍໃນແທນ.');
-      }
-
-      const wb = await readExcelFromUrl(databaseUrl);
-      const names = getSheetNames(wb);
-      const suggested = suggestSheetMapping(names);
-
-      setRawFile(new File([], "DataBaseJoah.xlsx")); // Placeholder
-      setLoadedFileName('DataBaseJoah.xlsx');
-      setWorkbook(wb);
-      setSheetNames(names);
-      setSuggestions(suggested);
-      if (suggested.location) setLocationSheetName(suggested.location);
-
-      setStep('mapping'); // Go to mapping if Cloud was empty
-    } catch (error) {
-      console.error(error);
-      alert('⚠️ ບໍ່ສາມາດຕິດຕໍ່ Cloud ໄດ້: ' + error.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSyncToCloud = async () => {
-    setIsProcessing(true);
-    try {
-      const wb = await readExcelFromUrl(databaseUrl);
-      setWorkbook(wb);
-
-      const dataRows = sheetToJSON(wb, 'DATA');
-      if (!dataRows || dataRows.length === 0) {
-        throw new Error("ບໍ່ພົບຂໍ້ມູນໃນ Sheet 'DATA' ໃນໄຟລ໌ຕົ້ນທາງ.");
-      }
-
-      const result = await syncMasterDataToSupabase(dataRows);
-
-      if (result.success) {
-        setDbSource('supabase');
-        setDataSourceLabel('Synced Cloud Mode');
-
-        const names = getSheetNames(wb);
-        const suggested = suggestSheetMapping(names);
-
-        if (suggested.locationSheet) {
-          const locationSheet = suggested.locationSheet;
-          setLocationSheetName(locationSheet);
-
-          const cloudData = await fetchMasterFromSupabase();
-          const mappedDataRows = cloudData.map(d => ({
-            'CATEGORIES 1': d.category_1,
-            'CATEGORIES 2': d.category_2,
-            'Barcode': d.barcode,
-            'Item Name': d.product_name_la
-          }));
-
-          const locationRows = sheetToJSON(wb, locationSheet);
-          const { results, stats } = validateData(locationRows, mappedDataRows);
-
-          setValidationResults(results);
-          setStats(stats);
-          setStep('results');
-          alert('🚀 Sync ແລະ ກວດສອບຂໍ້ມູນອັດຕະໂນມັດສຳເລັດແລ້ວ!');
-        } else {
-          setStep('mapping');
-          alert('✨ Sync ສຳເລັດແລ້ວ! ກະລຸນາເລືອກ Sheet ທີ່ຕ້ອງການກວດສອບ');
-        }
-      } else {
-        const debugMsg = `❌ Sync ບໍ່ສຳເລັດ!\nສາເຫດ (Reason): ${result.error}`;
-        alert(debugMsg);
-      }
-    } catch (e) {
-      alert('❌ Error: ' + e.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const processWorkbook = (wb) => {
     const names = getSheetNames(wb);
     const suggested = suggestSheetMapping(names);
@@ -169,6 +74,41 @@ function App() {
     setSuggestions(suggested);
     if (suggested.location) setLocationSheetName(suggested.location);
     setStep('mapping');
+  };
+
+  const handleDatabaseLoad = async () => {
+    setIsProcessing(true);
+    try {
+      const cloudMaster = await fetchMasterFromSupabase();
+      if (cloudMaster && cloudMaster.length > 0) {
+        setDbSource('supabase');
+        setDataSourceLabel('Cloud Mode (Supabase)');
+        await handleValidate({
+          locationSheet: 'Cloud Database',
+          pSource: 'supabase'
+        });
+        return;
+      } else {
+        setDbSource('excel');
+        setDataSourceLabel('Pre-built Mode (Local Assets)');
+        alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud. ລະບົບຈະໂຫຼດຂໍ້ມູນຕົວຢ່າງຈາກໄຟລ໌ພາຍໃນແທน.');
+      }
+
+      const wb = await readExcelFromUrl(databaseUrl);
+      const names = getSheetNames(wb);
+      const suggested = suggestSheetMapping(names);
+      setRawFile(new File([], "DataBaseJoah.xlsx"));
+      setLoadedFileName('DataBaseJoah.xlsx');
+      setWorkbook(wb);
+      setSheetNames(names);
+      setSuggestions(suggested);
+      if (suggested.location) setLocationSheetName(suggested.location);
+      setStep('mapping');
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleValidate = async ({ locationSheet, dataSheet, pSource }) => {
@@ -180,195 +120,109 @@ function App() {
       let locationRows = [];
 
       if (activeSource === 'supabase') {
-        console.log('🚀 Starting Cloud Validation...');
-        // 1. Fetch Master Data
         const cloudMaster = await fetchMasterFromSupabase();
         if (!cloudMaster || cloudMaster.length === 0) {
-          throw new Error("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud. ກະລຸນາ Sync ຂໍ້ມູນ Master ກ່ອນ.");
+          throw new Error("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud.");
         }
-
         dataRows = cloudMaster.map(d => ({
-          'CATEGORIES 1': d.category_1,
-          'CATEGORIES 2': d.category_2,
-          'Barcode': d.barcode,
-          'Item Name': d.product_name_la,
-          'Qty': d.qty,
-          'updated_at': d.updated_at,
-          'updated_by': d.updated_by
+          'CATEGORIES 1': d.category_1, 'CATEGORIES 2': d.category_2, 'Barcode': d.barcode,
+          'Item Name': d.item_name, 'Qty': d.qty, 'updated_at': d.updated_at, 'updated_by': d.updated_by
         }));
-
-        // 2. Fetch Location Data (Actual counted data)
         const cloudLocation = await fetchLocationFromSupabase();
         if (!cloudLocation || cloudLocation.length === 0) {
-          throw new Error("ບໍ່ພົບຂໍ້ມູນ Location Inventory ໃນ Cloud. ທ່ານຕ້ອງເຄີຍກົດ 'Save to Cloud' ໃນໜ້າຜົນລັດກ່ອນ.");
+          throw new Error("ບໍ່ພົບຂໍ້ມູນ Location Inventory.");
         }
-
         locationRows = cloudLocation.map(l => ({
-          id: l.id, // Keep the DB ID for editing
-          'Barcode': l.barcode_no,
-          'Rack Location': l.rack_location,
-          'Category-1': l.category_1_actual,
-          'Category-2': l.category_2_actual,
-          'QTY': l.qty,
-          'Item Name': l.item_name
+          id: l.id, 'Barcode': l.barcode_no, 'Rack Location': l.rack_location,
+          'Category-1': l.category_1_actual, 'Category-2': l.category_2_actual,
+          'QTY': l.qty, 'Item Name': l.item_name
         }));
-
-        console.log('✅ Cloud Data Fetched:', {
-          master: dataRows.length,
-          location: locationRows.length
-        });
       } else {
-        // Local Excel Mode
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
         dataRows = sheetToJSON(workbook, dataSheet || 'DATA');
         locationRows = sheetToJSON(workbook, locationSheet);
       }
 
-      if (locationRows.length === 0) {
-        throw new Error("ບໍ່ພົບຂໍ້ມູນໃນ Sheet ທີ່ເລືອກ ຫຼື ຖານຂໍ້ມູນ Location ວ່າງເປົ່າ.");
-      }
-
       const { results, stats } = validateData(locationRows, dataRows);
-      setMasterData(dataRows);
       setValidationResults(results);
+      setMasterData(dataRows);
       setStats(stats);
       setStep('results');
     } catch (err) {
-      console.error('Validation Error:', err);
-      alert('⚠️ ' + err.message);
+      alert('Error: ' + err.message);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleUpdateResultRowQty = (rowIndex, newData) => {
-    setValidationResults(prev => prev.map(row =>
-      row.rowIndex === rowIndex ? { ...row, ...newData } : row
-    ));
+    setValidationResults(prev => prev.map(row => row.rowIndex === rowIndex ? { ...row, ...newData } : row));
+  };
+
+  const handleSyncToCloud = async () => {
+    if (!workbook) return;
+    setIsProcessing(true);
+    try {
+      const dataRows = sheetToJSON(workbook, 'DATA');
+      const result = await syncMasterDataToSupabase(dataRows);
+      if (result.success) alert(`✅ Synced ${result.synced} items to Cloud!`);
+      else alert('❌ Sync Failed: ' + result.error);
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col overflow-hidden transition-colors duration-300">
-      {/* Radical Redesign Navigation */}
-      <nav className="sticky top-0 w-full z-50 px-4 md:px-8 pt-4">
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-b border-white/40 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-black/20 rounded-[2rem] px-6 py-3 flex items-center justify-between gap-6 min-h-[100px]">
+    <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots">
+      {/* Navigation */}
+      <Navbar
+        step={step}
+        dbSource={dbSource}
+        dataSourceLabel={dataSourceLabel}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        isProcessing={isProcessing}
+        onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
+        onShowHistory={() => setShowHistory(true)}
+        onReset={() => window.location.reload()}
+      />
 
-          {/* Signboard Style Branding */}
-          <div className="flex items-center cursor-pointer group" onClick={() => window.location.reload()}>
-            <div className="relative flex items-center">
-              {/* Wide Aspect Ratio Logo Container (Matching 1904x904) */}
-              <div className="w-[180px] sm:w-[280px] h-[80px] sm:h-[120px] relative z-10 overflow-hidden rounded-3xl shadow-xl border-4 border-white dark:border-slate-800 transition-all duration-500 group-hover:scale-[1.02] group-hover:shadow-joah-orange/20">
-                <img
-                  src={joahLogo}
-                  alt="Joah Logo"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Minimal Text Label - Submerged in Navbar Text Style */}
-              <div className="hidden lg:flex flex-col ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-8 capitalize">
-                <span className="text-4xl font-black text-slate-800 dark:text-slate-100 tracking-tighter uppercase leading-none">WAREHOUSE</span>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs font-black text-joah-orange uppercase tracking-[0.5em] leading-none">Management System</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Status & Source Section */}
-            <div className="hidden md:flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Source:</span>
-                <span className="text-sm font-black text-slate-700 dark:text-slate-200 leading-none">{dataSourceLabel}</span>
-              </div>
-
-              {dbSource === 'supabase' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full border border-emerald-100 dark:border-emerald-500/20 animate-fade-in">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Cloud Active</span>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-3">
-              {/* Dark Mode Toggle */}
-              <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                title="Swith Theme"
-                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-300 hover:text-joah-orange hover:border-joah-orange transition-all duration-300 shadow-sm"
-              >
-                {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-
-              {/* Silent Data Refresh - Pull from Supabase but stay on Results Page */}
-              {step === 'results' && (
-                <button
-                  onClick={() => handleValidate({ locationSheet: locationSheetName })}
-                  disabled={isProcessing}
-                  title="Refresh Data from Cloud"
-                  className="flex items-center gap-3 px-6 h-12 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl text-slate-600 dark:text-slate-200 hover:border-joah-orange hover:text-joah-orange transition-all duration-300 shadow-sm group"
-                >
-                  <RotateCw size={18} className={`${isProcessing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest">Sync Refresh</span>
-                </button>
-              )}
-
-              {dbSource === 'supabase' && step === 'upload' && workbook && (
-                <button
-                  onClick={() => setStep('mapping')}
-                  className="flex items-center gap-3 px-8 py-4 bg-slate-900 dark:bg-joah-orange text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-joah-orange dark:hover:bg-joah-orange-dark hover:shadow-2xl hover:shadow-orange-500/40 transition-all duration-300 transform hover:-translate-y-1 active:scale-95"
-                >
-                  <Play size={16} fill="currentColor" />
-                  Start
-                </button>
-              )}
-
-              {step !== 'upload' && (
-                <button
-                  onClick={() => window.location.reload()}
-                  title="Reset & Back to Home"
-                  className="w-12 h-12 bg-rose-50 dark:bg-rose-500/10 border-2 border-rose-100 dark:border-rose-500/20 rounded-2xl flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white transition-all duration-300 shadow-sm"
-                >
-                  <X size={20} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content - Centered for Single Page Feel */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-8 py-4 overflow-hidden">
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center">
         {step === 'upload' && (
-          <div className="max-w-5xl w-full animate-slide-up flex flex-col">
-            <div className="text-center mb-6 px-4">
-              <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-2 transition-colors">
-                ກວດສອບຄວາມຖືກຕ້ອງ <span className="text-joah-orange">ສິນຄ້າໃນສາງ</span>
+          <div className="max-w-5xl w-full animate-fade-in-up flex flex-col items-center">
+            <div className="text-center mb-10 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
+                <Sparkles size={14} className="animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
+              </div>
+              <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
+                ກວດສອບຄວາມຖືກຕ້ອງ <br /><span className="text-joah-orange">ສິນຄ້າໃນສາງ</span>
               </h1>
-              <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 max-w-xl mx-auto transition-colors">
+              <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
                 ລະບົບກວດສອບຂໍ້ມູນສິນຄ້າອັດຕະໂນມັດ ປຽບທຽບລະຫວ່າງໜ້າວຽກຈິງ ແລະ ຖານຂໍ້ມູນກາງ ເພື່ອຄວາມແມ່ນຍຳ 100%
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto w-full">
+            <div className="grid md:grid-cols-2 gap-8 w-full max-w-4xl">
               <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
 
-              <div className="glass-card rounded-[1.5rem] p-6 flex flex-col items-center justify-center text-center gap-4 group hover:border-joah-orange/30 transition-all duration-500">
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
-                  <DBIcon size={32} />
+              <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500">
+                <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                  <DBIcon size={32} strokeWidth={2.5} />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">ໃຊ້ຖານຂໍ້ມູນຫຼັກ</h3>
-                  <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-bold tracking-widest leading-none">Cloud Record Database</p>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ໃຊ້ຖານຂໍ້ມູນຫຼັກ</h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Cloud Record Database</p>
                 </div>
                 <button
                   onClick={handleDatabaseLoad}
                   disabled={isProcessing}
-                  className="w-full btn-primary h-12 text-sm mt-1 group shadow-md"
+                  className="w-full btn-primary mt-2 group py-4"
                 >
-                  {isProcessing ? <RefreshCw className="animate-spin" /> : <Database width={16} />}
+                  {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
                   <span>ສືບຕໍ່ດ້ວຍ Cloud Database</span>
                 </button>
               </div>
@@ -377,23 +231,19 @@ function App() {
         )}
 
         {step === 'mapping' && (
-          <div className="max-w-md w-full animate-slide-up">
-            <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-8 border border-slate-100 dark:border-slate-800 transition-colors">
-              <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="max-w-md w-full animate-fade-in-up">
+            <div className="glass-card rounded-[2.5rem] shadow-2xl p-10 border-white/50">
+              <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Mapping Sheets</h2>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 uppercase font-bold tracking-widest leading-none">Configuration</p>
+                  <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຂໍ້ມູນ</h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Configuration</p>
                 </div>
                 {dbSource === 'excel' && (
-                  <button
-                    onClick={handleSyncToCloud}
-                    disabled={isProcessing}
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
-                      {isProcessing ? <RefreshCw className="animate-spin" width={16} /> : <CloudUpload width={16} />}
+                  <button onClick={handleSyncToCloud} disabled={isProcessing} className="flex flex-col items-center gap-1 group">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center group-hover:bg-joah-orange group-hover:text-white transition-all duration-300 shadow-sm">
+                      {isProcessing ? <RefreshCw className="animate-spin" width={18} /> : <CloudUpload width={18} />}
                     </div>
-                    <span className="text-[8px] font-black text-slate-400 uppercase group-hover:text-blue-600 transition-colors">Sync</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Sync Cloud</span>
                   </button>
                 )}
               </div>
@@ -403,12 +253,8 @@ function App() {
         )}
 
         {step === 'results' && (
-          <div className="w-full h-full space-y-6 animate-in overflow-y-auto pr-2 custom-scrollbar">
-            <Dashboard
-              stats={stats}
-              activeFilter={filterStatus}
-              onFilterChange={setFilterStatus}
-            />
+          <div className="w-full h-full space-y-8 animate-fade-in-up">
+            <Dashboard stats={stats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
             <ResultTable
               results={validationResults}
               masterData={masterData}
@@ -424,10 +270,13 @@ function App() {
         )}
       </main>
 
-      {/* Footer - More compact */}
-      <footer className="py-4 px-8 text-center border-t border-slate-100 dark:border-slate-800 transition-colors">
-        <p className="text-xs font-black text-slate-300 dark:text-slate-700 uppercase tracking-[0.3em]">Built with ❤️ by JOAH Team Santisouk Laxayphone</p>
+      {/* Footer */}
+      <footer className="py-6 px-8 text-center bg-white/30 dark:bg-slate-900/30 backdrop-blur-md">
+        <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.4em]">Built with ❤️ by JOAH Team Santisouk Laxayphone</p>
       </footer>
+
+      {/* History Modal */}
+      {showHistory && <HistoryLog onClose={() => setShowHistory(false)} />}
     </div>
   );
 }

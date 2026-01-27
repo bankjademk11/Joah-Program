@@ -1,108 +1,146 @@
-import { TrendingUp, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles } from 'lucide-react';
 
 const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
     const cards = [
         {
             id: 'all',
             title: 'ທັງໝົດ',
+            subtitle: 'Total Items',
             value: stats.total,
             icon: TrendingUp,
-            colorClass: 'indigo',
-            accent: 'bg-indigo-500',
-            text: 'text-indigo-600 dark:text-indigo-400',
-            bg: 'bg-indigo-50 dark:bg-indigo-500/10',
-            border: 'border-indigo-100 dark:border-indigo-500/20'
+            gradient: 'from-violet-500 to-indigo-600',
+            glow: 'shadow-violet-500/25',
+            iconBg: 'bg-gradient-to-br from-violet-400 to-indigo-500',
+            ring: 'ring-violet-500/30'
         },
         {
             id: 'passed',
             title: 'ຖືກຕ້ອງ',
+            subtitle: 'Matched',
             value: stats.passed,
             icon: CheckCircle,
-            colorClass: 'emerald',
-            accent: 'bg-emerald-500',
-            text: 'text-emerald-600 dark:text-emerald-400',
-            bg: 'bg-emerald-50 dark:bg-emerald-500/10',
-            border: 'border-emerald-100 dark:border-emerald-500/20'
+            gradient: 'from-emerald-500 to-teal-600',
+            glow: 'shadow-emerald-500/25',
+            iconBg: 'bg-gradient-to-br from-emerald-400 to-teal-500',
+            ring: 'ring-emerald-500/30'
         },
         {
             id: 'mismatch',
             title: 'ບໍ່ກົງກັນ',
+            subtitle: 'Mismatch',
             value: stats.mismatch,
             icon: XCircle,
-            colorClass: 'rose',
-            accent: 'bg-rose-500',
-            text: 'text-rose-600 dark:text-rose-400',
-            bg: 'bg-rose-50 dark:bg-rose-500/10',
-            border: 'border-rose-100 dark:border-rose-500/20'
+            gradient: 'from-rose-500 to-pink-600',
+            glow: 'shadow-rose-500/25',
+            iconBg: 'bg-gradient-to-br from-rose-400 to-pink-500',
+            ring: 'ring-rose-500/30'
         },
         {
             id: 'missing',
             title: 'ຂໍ້ມູນບໍ່ຄົບ',
+            subtitle: 'Incomplete',
             value: stats.missing,
             icon: AlertCircle,
-            colorClass: 'orange',
-            accent: 'bg-joah-orange',
-            text: 'text-joah-orange dark:text-orange-400',
-            bg: 'bg-orange-50 dark:bg-orange-500/10',
-            border: 'border-orange-100 dark:border-orange-500/20'
+            gradient: 'from-amber-500 to-orange-600',
+            glow: 'shadow-amber-500/25',
+            iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500',
+            ring: 'ring-amber-500/30'
         },
     ];
 
+    const percentage = (value) => stats.total > 0 ? ((value / stats.total) * 100).toFixed(1) : 0;
+
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 transition-colors">
-            {cards.map((card, index) => {
-                const Icon = card.icon;
-                const isActive = activeFilter === card.id;
-
-                return (
-                    <div
-                        key={card.id}
-                        className={`relative overflow-hidden group p-6 rounded-[2rem] border-2 transition-all duration-500 cursor-pointer animate-slide-up
-                            ${isActive
-                                ? `bg-white dark:bg-slate-900 ${card.border} scale-[1.03] shadow-2xl shadow-${card.colorClass}-500/10`
-                                : 'bg-white/60 dark:bg-slate-900/40 border-transparent hover:bg-white dark:hover:bg-slate-900 hover:border-slate-100 dark:hover:border-slate-800 hover:shadow-xl'}`}
-                        style={{ animationDelay: `${index * 100}ms` }}
-                        onClick={() => onFilterChange(card.id)}
-                    >
-                        {/* Background Decoration */}
-                        <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full transition-all duration-500 opacity-[0.05] group-hover:scale-150 ${card.accent}`}></div>
-
-                        <div className="flex items-center justify-between mb-4 relative z-10">
-                            <span className={`text-xs font-black uppercase tracking-widest ${isActive ? card.text : 'text-slate-400 dark:text-slate-500'}`}>
-                                {card.title}
-                            </span>
-                            <div className={`p-3 rounded-2xl transition-all duration-500 ${isActive ? card.bg + ' ' + card.text : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 group-hover:scale-110'}`}>
-                                <Icon size={20} />
-                            </div>
-                        </div>
-
-                        <div className="flex items-baseline gap-3 relative z-10">
-                            <span className="text-4xl font-black text-slate-800 dark:text-white tracking-tight">
-                                {card.value.toLocaleString()}
-                            </span>
-                            {card.id !== 'all' && stats.total > 0 && (
-                                <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${card.bg} ${card.text}`}>
-                                    {((card.value / stats.total) * 100).toFixed(1)}%
-                                </span>
-                            )}
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="mt-6 relative z-10">
-                            <div className={`h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden`}>
-                                <div
-                                    className={`h-full rounded-full transition-all duration-1000 ease-out ${card.accent}`}
-                                    style={{ width: `${(card.value / stats.total * 100) || 0}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        {isActive && (
-                            <div className={`absolute bottom-0 left-0 h-1 w-full ${card.accent} animate-fade-in`}></div>
-                        )}
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-gradient-to-br from-joah-orange to-orange-600 text-white shadow-lg shadow-orange-500/30">
+                        <Sparkles size={20} />
                     </div>
-                );
-            })}
+                    <div>
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white">ສະຖິຕິການກວດສອບ</h3>
+                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500">Validation Statistics</p>
+                    </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Live Data</span>
+                </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                {cards.map((card, index) => {
+                    const Icon = card.icon;
+                    const isActive = activeFilter === card.id;
+
+                    return (
+                        <div
+                            key={card.id}
+                            className={`group relative overflow-hidden rounded-[1.75rem] transition-all duration-500 cursor-pointer
+                                ${isActive
+                                    ? `bg-gradient-to-br ${card.gradient} shadow-2xl ${card.glow} scale-[1.03] ring-2 ring-white/50 dark:ring-white/20 ring-offset-4 ring-offset-transparent`
+                                    : 'bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:-translate-y-1'
+                                }`}
+                            style={{ animationDelay: `${index * 80}ms` }}
+                            onClick={() => onFilterChange(card.id)}
+                        >
+                            {/* Background Pattern */}
+                            <div className={`absolute inset-0 opacity-10 bg-grid ${isActive ? 'opacity-20' : ''}`}></div>
+
+                            {/* Glow Effect for Active */}
+                            {isActive && (
+                                <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-white/30 blur-3xl"></div>
+                            )}
+
+                            <div className="relative p-6">
+                                {/* Header */}
+                                <div className="flex items-start justify-between mb-6">
+                                    <div>
+                                        <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${isActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                                            {card.subtitle}
+                                        </p>
+                                        <h4 className={`text-sm font-black ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                                            {card.title}
+                                        </h4>
+                                    </div>
+                                    <div className={`p-3 rounded-2xl transition-all duration-300 ${isActive ? 'bg-white/20 text-white' : `${card.iconBg} text-white shadow-lg ${card.glow}`} group-hover:scale-110`}>
+                                        <Icon size={20} strokeWidth={2.5} />
+                                    </div>
+                                </div>
+
+                                {/* Value */}
+                                <div className="flex items-baseline gap-3 mb-4">
+                                    <span className={`text-4xl sm:text-5xl font-black tracking-tight tabular-nums ${isActive ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
+                                        {card.value.toLocaleString()}
+                                    </span>
+                                    {card.id !== 'all' && stats.total > 0 && (
+                                        <span className={`text-sm font-black px-2.5 py-1 rounded-xl ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                            {percentage(card.value)}%
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Progress Bar */}
+                                <div className="relative">
+                                    <div className={`h-2 w-full rounded-full overflow-hidden ${isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-1000 ease-out delay-300 ${isActive ? 'bg-white' : `bg-gradient-to-r ${card.gradient}`}`}
+                                            style={{ width: `${percentage(card.value)}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Active Indicator */}
+                                {isActive && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-white/0 via-white to-white/0"></div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 };

@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
     ChevronLeft, ChevronRight, Search, Download,
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
-    CloudUpload, FileSpreadsheet, Info, History, Clock
+    CloudUpload, FileSpreadsheet, Info, History, Clock,
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
@@ -28,12 +29,15 @@ const ResultTable = ({
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [hoveredRowInfo, setHoveredRowInfo] = useState(null);
     const hoverTimeoutRef = useRef(null);
-    const itemsPerPage = 50;
 
-    const filteredResults = results.filter((row) => {
+    const itemsPerPage = 8;
+
+    const filteredResults = results.filter(row => {
         const matchesSearch =
             row.barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            row.rackLocation.toLowerCase().includes(searchTerm.toLowerCase());
+            row.rackLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter =
             filterStatus === 'all' || row.status === filterStatus || (filterStatus === 'missing' && row.status === 'incomplete');
         return matchesSearch && matchesFilter;
@@ -49,11 +53,7 @@ const ResultTable = ({
         const y = e.clientY;
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = setTimeout(() => {
-            setHoveredRowInfo({
-                row,
-                x,
-                y
-            });
+            setHoveredRowInfo({ row, x, y });
         }, 600);
     };
 
@@ -85,46 +85,35 @@ const ResultTable = ({
             case 'mismatch':
                 const c1Wrong = String(category1 || '').trim() !== String(masterCategory1 || '').trim();
                 const c2Wrong = String(category2 || '').trim() !== String(masterCategory2 || '').trim();
-
                 let detailReason = "";
                 let detailAction = "";
-
                 if (c1Wrong && c2Wrong) {
                     detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat1 (${category1 || 'ວ່າງ'}) ແລະ Cat2 (${category2 || 'ວ່າງ'}) ບໍ່ກົງກັບໃນລະບົບ.`;
-                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງແກ້ໄຂໃຫ້ກົງຄື: Cat1: ${masterCategory1} ແລະ Cat2: ${masterCategory2}`;
+                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງແກ້ໄຂໃຫ້ກົງຄື: Cat1: ${masterCategory1} ແລະ Cat2: ${masterCategory2}`;
                 } else if (c1Wrong) {
-                    detailReason = `ສາເหດ: ຂໍ້ມູນ Cat1 ໃນໜ້າຮ້ານແມ່ນ [${category1 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory1}].`;
-                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat1 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory1}"`;
+                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat1 ໃນໜ້າຮ້ານແມ່ນ [${category1 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory1}].`;
+                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat1 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory1}"`;
                 } else {
-                    detailReason = `ສາເຫด: ຂໍ້ມູນ Cat2 ໃນໜ້າຮ້ານແມ່ນ [${category2 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory2}].`;
-                    detailAction = `ວິທີແກ້ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat2 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory2}"`;
+                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat2 ໃນໜ້າຮ້ານແມ່ນ [${category2 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory2}].`;
+                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat2 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory2}"`;
                 }
-
                 return {
-                    title: 'ຂໍ້ມູນບໍ່ກົງກັນ',
-                    reason: detailReason,
-                    action: detailAction,
-                    color: 'text-rose-500',
-                    bg: 'bg-rose-500',
-                    icon: <AlertTriangle size={14} />
+                    title: 'ຂໍ້ມູນບໍ່ກົງກັນ', reason: detailReason, action: detailAction,
+                    color: 'text-rose-500', bg: 'bg-rose-500', icon: <AlertTriangle size={14} />
                 };
             case 'missing':
                 return {
                     title: 'ບໍ່ພົບໃນລະບົບ',
                     reason: `ບາໂຄ້ດ [${row.barcode}] ນີ້ ບໍ່ມີຢູ່ໃນຖານຂໍ້ມູນ Master ອ້າງອີງ.`,
                     action: 'ກະລຸນາກວດສອບບາໂຄ້ດຄືນ ຫຼື ເພີ່ມສິນຄ້ານີ້ເຂົ້າໃນລະບົບ Master ກ່ອນ.',
-                    color: 'text-sky-500',
-                    bg: 'bg-sky-500',
-                    icon: <Search size={14} />
+                    color: 'text-sky-500', bg: 'bg-sky-500', icon: <Search size={14} />
                 };
             default:
                 return {
                     title: 'ຂໍ້ມູນບໍ່ສົມບູນ',
-                    reason: 'ພົบบາโຄ້ดในระบบ แต่ข้อมูลใน Master ยังไม่ครบถ้วน.',
+                    reason: 'ພົบบາโຄ้ดในระบบ แต่ข้อมูลใน Master ยังไม่ครบถ้วน.',
                     action: 'ກະລຸນາໄປອັບເດດຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນ Master ໃຫ້ຄົບຖ້ວນ.',
-                    color: 'text-amber-500',
-                    bg: 'bg-amber-500',
-                    icon: <Info size={14} />
+                    color: 'text-amber-500', bg: 'bg-amber-500', icon: <Info size={14} />
                 };
         }
     };
@@ -138,7 +127,6 @@ const ResultTable = ({
                 .select('*')
                 .eq('barcode', barcode)
                 .order('updated_at', { ascending: false });
-
             if (error) throw error;
             setHistoryData(data || []);
         } catch (err) {
@@ -150,8 +138,6 @@ const ResultTable = ({
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
-
-        // Name required for cloud sync traceability
         if (dbSource === 'supabase' && !employeeName.trim()) {
             alert('ກະລຸນາໃສ່ຊື່ພະນັກງານກ່ອນບັນທຶກ');
             return;
@@ -163,721 +149,460 @@ const ResultTable = ({
         const oldQtyValue = selectedRow.qty || 0;
 
         console.log(`[DEBUG] 🛠️ Starting Update for Barcode: ${selectedRow.barcode}`);
-        console.log(`[DEBUG] 📍 Row Index: ${selectedRow.rowIndex}, Database ID: ${selectedRow.id || 'N/A'}`);
-        console.log(`[DEBUG] 📊 Change: ${oldQtyValue} -> ${newQtyValue}`);
-
-        // Persistent employee name
         localStorage.setItem('joah_employee_name', employeeName);
 
-        // 1. Update Frontend immediately (Updates Actual Count in Table)
         if (onUpdateRowQty) {
             onUpdateRowQty(selectedRow.rowIndex, {
-                qty: newQtyValue,
-                updatedAt: now,
-                updatedBy: employeeName
+                qty: newQtyValue, updatedAt: now, updatedBy: employeeName
             });
-            console.log(`[DEBUG] ✅ UI Updated Real-time`);
         }
 
-        // 2. Sync to Cloud if in Supabase mode
         try {
             if (dbSource === 'supabase') {
-                if (!selectedRow.id) {
-                    console.error('[DEBUG] ❌ Cannot sync to cloud: Missing Record ID');
-                    throw new Error("ບໍ່ພົບ Record ID ໃນຖານຂໍ້ມູນ. ກະລຸນາລອງ Refresh ຂໍ້ມູນໃໝ່.");
-                }
+                if (!selectedRow.id) throw new Error("ບໍ່ພົບ Record ID ໃນຖານຂໍ້ມູນ.");
 
-                console.log(`[DEBUG] ☁️ Sending update to Supabase table 'location_inventory'...`);
-
-                const { data, error: locError } = await supabase
+                // 1. Update Main Inventory
+                const { error: locError } = await supabase
                     .from('location_inventory')
-                    .update({
-                        qty: newQtyValue,
-                        remarks: `Updated manually by ${employeeName} at ${now}`
-                    })
-                    .eq('id', selectedRow.id)
-                    .select();
+                    .update({ qty: newQtyValue, remarks: `Updated by ${employeeName} at ${now}` })
+                    .eq('id', selectedRow.id);
+                if (locError) throw locError;
 
-                if (locError) {
-                    console.error('[DEBUG] ❌ Supabase DB Error:', locError);
-                    throw locError;
-                }
+                // 2. Insert into History Log
+                const { error: histError } = await supabase
+                    .from('inventory_history')
+                    .insert([{
+                        barcode: selectedRow.barcode,
+                        item_name: selectedRow.masterItemName || selectedRow.itemName,
+                        old_qty: oldQtyValue,
+                        new_qty: newQtyValue,
+                        updated_by: employeeName
+                    }]);
 
-                console.log(`[DEBUG] 🚀 Cloud Sync Successful! Data returned:`, data);
+                if (histError) console.error("Failed to save history:", histError);
             }
-
             setSelectedRow(null);
-            alert('✨ ອັບເດດຈຳນວນນັບສຳເລັດແລ້ວ!');
         } catch (err) {
-            console.error('[DEBUG] ❌ Final Catch Error:', err);
-            alert('❌ ບໍ່ສາມາດບັນທຶກได้: ' + err.message);
+            alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
         } finally {
             setIsUpdating(false);
-            console.log(`[DEBUG] 🏁 Update Process Finished.`);
-        }
-    };
-
-    const handleSaveToCloud = async () => {
-        setIsSavingToCloud(true);
-        try {
-            console.log('🚀 Starting Unified Cloud Sync...');
-
-            // 1. If we have the raw file, Sync Master Data first
-            if (rawFile && dbSource === 'excel') {
-                console.log('📦 Syncing Master Data from DATA sheet...');
-                const wb = await readExcelFile(rawFile);
-                const dataRows = sheetToJSON(wb, 'DATA');
-                if (dataRows && dataRows.length > 0) {
-                    const masterResult = await syncMasterDataToSupabase(dataRows);
-                    if (!masterResult.success) {
-                        throw new Error('Master Sync Failed: ' + masterResult.error);
-                    }
-                    console.log('✅ Master Data Synced');
-                }
-            }
-
-            // 2. Sync Location counting results
-            const result = await syncLocationResultsToSupabase(results);
-
-            if (result.success) {
-                const msg = `✨ ບັນທຶກທັງຂໍ້ມູນ Master ແລະ ຜົນການກວດສອບລົງ Cloud ສຳເລັດແລ้ວ!\n🚛Synced: ${result.synced} items.`;
-                alert(msg);
-            } else {
-                alert('❌ ບັນທຶກບໍ່ສຳເລັດ: ' + result.error);
-            }
-        } catch (e) {
-            console.error('Unified Sync Error:', e);
-            alert('❌ Error: ' + e.message);
-        } finally {
-            setIsSavingToCloud(false);
         }
     };
 
     const handleExportWithColor = async () => {
         setIsExporting(true);
+
+        // Helper function to sanitize cell values for Excel
+        const sanitize = (value) => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') {
+                // Remove control characters that Excel can't handle
+                return value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+            }
+            return value;
+        };
+
         try {
             const workbook = new ExcelJS.Workbook();
-
             if (dbSource === 'supabase') {
-                // Cloud Mode: Build a new workbook from scratch
                 const locationSheet = workbook.addWorksheet('Location Inventory');
                 const dataSheet = workbook.addWorksheet('Master Data Reference');
 
-                // Populate Location Sheet Headers ( Standardized )
-                locationSheet.getRow(1).values = [
-                    'Barcode No.',
-                    'Item Name (ຊື່ສິນຄ້າ)',
-                    'Rack Location',
-                    'Category-1',
-                    'Category-2',
-                    'Actual QTY (ນັບໄດ້)',
-                    'System QTY (ໃນລະບົບ)',
-                    'Status (ສະຖານະ)',
-                    'Remarks (ໝາຍເຫດ)',
-                    'Verifier (ຜູ້ກວດ)',
-                    'Last Update (ວັນທີ)'
+                // 1. Headers
+                const headers = [
+                    'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
+                    'Actual QTY', 'System QTY', 'Status', 'Remarks',
+                    'Verifier', 'Last Update'
                 ];
+                const hRow = locationSheet.addRow(headers);
 
-                // Style Header
-                locationSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                locationSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEA580C' } }; // Orange Brand
-
-                // Populate Location Sheet Rows
-                results.forEach(res => {
-                    const row = locationSheet.addRow([
-                        res.barcode,
-                        res.masterItemName || res.itemName || '',
-                        res.rackLocation,
-                        res.category1,
-                        res.category2,
-                        Number(res.qty || 0),        // Actual Count
-                        Number(res.masterQty || 0),  // System Count
-                        res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ',
-                        res.status === 'passed' ? 'Complete' : (res.reason || '-'),
-                        res.updatedBy || '', // Only show if user edited
-                        res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '' // Only show if user edited
-                    ]);
-
-                    // Coloring
-                    const statusCell = row.getCell(8);
-                    let bgColor = 'FFFFFFFF';
-                    if (res.status === 'passed') bgColor = 'FFDCFCE7'; // Green
-                    if (res.status === 'mismatch') bgColor = 'FFFEE2E2'; // Red
-                    if (res.status === 'missing') bgColor = 'FFEOF2FE'; // Blue
-
-                    if (res.status !== 'passed' || bgColor !== 'FFFFFFFF') {
-                        statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-                    }
-                });
-
-                // Fetch and Populate Master Data Sheet from Supabase
-                console.log('📊 Fetching Master Data from Supabase for export...');
-                const cloudMaster = await fetchMasterFromSupabase();
-
-                if (cloudMaster && cloudMaster.length > 0) {
-                    const forcedDisplayHeaders = ['Barcode', 'Item Name', 'CATEGORIES 1', 'CATEGORIES 2', 'Qty'];
-
-                    dataSheet.getRow(1).values = forcedDisplayHeaders;
-                    dataSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                    dataSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-
-                    cloudMaster.forEach(mRow => {
-                        const vals = [
-                            mRow.barcode || '',
-                            mRow.item_name || mRow.product_name_la || '', // Fallback to product_name_la
-                            mRow.category_1 || '',
-                            mRow.category_2 || '',
-                            mRow.qty || 0
-                        ];
-                        dataSheet.addRow(vals);
-                    });
-                    console.log(`✅ Exported ${cloudMaster.length} Master Data records`);
-                } else {
-                    console.warn('⚠️ No Master Data found in Supabase');
-                }
-
-            } else {
-                // Excel Mode: Use existing logic with rawFile
-                if (!rawFile || !locationSheetName) {
-                    alert("ບໍ່ພົບໄຟລ໌ຕົ້ນສະບັບ ຫຼື ຊື່ຊີດ");
-                    setIsExporting(false);
-                    return;
-                }
-
-                const originalWb = new ExcelJS.Workbook();
-                await originalWb.xlsx.load(await rawFile.arrayBuffer());
-
-                originalWb.eachSheet((oldSheet, sheetId) => {
-                    const newSheet = workbook.addWorksheet(oldSheet.name);
-                    oldSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-                        const newRow = newSheet.getRow(rowNumber);
-                        // Simple 1-to-1 copy with styles
-                        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                            newRow.getCell(colNumber).value = cell.value;
-                            newRow.getCell(colNumber).style = cell.style; // Copy styles
-                        });
-                    });
-                });
-
-                const worksheet = workbook.getWorksheet(locationSheetName);
-                if (!worksheet) throw new Error(`Sheet "${locationSheetName}" not found`);
-
-                // Define Columns (Starting from Col H)
-                const qtyCol = 7;
-                const sysQtyCol = 8;
-                const statusCol = 9;
-                const remarkCol = 10;
-                const dateCol = 11;
-                const userCol = 12;
-
-                const headerRow = worksheet.getRow(1);
-                headerRow.getCell(qtyCol).value = 'Actual QTY (ນັບໄດ້)';
-                headerRow.getCell(sysQtyCol).value = 'System QTY (ໃນລະບົບ)';
-                headerRow.getCell(statusCol).value = 'Status (ສະຖານະ)';
-                headerRow.getCell(remarkCol).value = 'Remarks (ໝາຍເຫດ)';
-                headerRow.getCell(dateCol).value = 'Update Date';
-                headerRow.getCell(userCol).value = 'Verifier';
-
-                [qtyCol, sysQtyCol, statusCol, remarkCol, dateCol, userCol].forEach(colIndex => {
-                    const cell = headerRow.getCell(colIndex);
+                // Style Header Row (Safer approach: apply to each cell)
+                hRow.eachCell((cell) => {
                     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-                    cell.alignment = { horizontal: 'center' };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEA580C' } };
                 });
 
-                results.forEach((res) => {
-                    const excelRowNumber = res.rowIndex + 1;
-                    if (excelRowNumber <= 1) return;
+                // 2. Add Data Rows
+                results.forEach(res => {
+                    const rowData = [
+                        sanitize(res.barcode),
+                        sanitize(res.masterItemName || res.itemName || ''),
+                        sanitize(res.rackLocation || ''),
+                        sanitize(res.category1 || ''),
+                        sanitize(res.category2 || ''),
+                        isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                        isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
+                        sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing'),
+                        sanitize(res.status === 'passed' ? 'Complete' : (res.reason || '-')),
+                        sanitize(res.updatedBy || ''),
+                        res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : ''
+                    ];
+                    const row = locationSheet.addRow(rowData);
 
-                    const row = worksheet.getRow(excelRowNumber);
-                    if (!row) return;
-
-                    // 1. Update the Actual Qty with what is in the app (edited value)
-                    row.getCell(qtyCol).value = Number(res.qty || 0);
-
-                    // 2. Add System Qty for reference
-                    row.getCell(sysQtyCol).value = Number(res.masterQty || 0);
-
-                    // 3. Status & Info
-                    const statusCell = row.getCell(statusCol);
-                    statusCell.value = res.status === 'passed' ? 'ຖືກຕ້ອງ' : res.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບຖ້ວນ';
-                    row.getCell(remarkCol).value = res.status === 'passed' ? 'Complete' : (res.reason || '-');
-
-                    // Only show update date/user if specifically edited in this session
-                    row.getCell(dateCol).value = res.updatedAt ? new Date(res.updatedAt).toLocaleString('lo-LA') : '';
-                    row.getCell(userCol).value = res.updatedBy || '';
-
-                    let bgColor = null;
+                    // Style Status Cell (Column 8)
+                    const statusCell = row.getCell(8);
+                    let bgColor = '';
                     if (res.status === 'passed') bgColor = 'FFDCFCE7';
-                    if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
-                    if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'FFEOF2FE';
+                    else if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
+                    else if (res.status === 'missing') bgColor = 'FFE0F2FE';
 
                     if (bgColor) {
                         statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
                     }
                 });
-            }
 
-            // Generate and download the file
+                // 3. Cloud Master Data
+                const cloudMaster = await fetchMasterFromSupabase();
+                if (cloudMaster && cloudMaster.length > 0) {
+                    const mhRow = dataSheet.addRow(['Barcode', 'Item Name', 'Category 1', 'Category 2', 'Qty']);
+                    mhRow.eachCell((cell) => {
+                        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+                    });
+
+                    cloudMaster.forEach(mRow => {
+                        dataSheet.addRow([
+                            sanitize(mRow.barcode || ''),
+                            sanitize(mRow.item_name || mRow.product_name_la || ''),
+                            sanitize(mRow.category_1 || ''),
+                            sanitize(mRow.category_2 || ''),
+                            isNaN(Number(mRow.qty)) ? 0 : Number(mRow.qty)
+                        ]);
+                    });
+                }
+
+                // Final touches: Set Column Widths
+                locationSheet.columns = [
+                    { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
+                    { width: 12 }, { width: 12 }, { width: 12 }, { width: 20 }, { width: 15 }, { width: 20 }
+                ];
+                dataSheet.columns = [
+                    { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 12 }
+                ];
+            } else {
+                if (!rawFile || !locationSheetName) return;
+
+                // Directly load the original file buffer into the workbook
+                // This preserves all original styles, macros, and structure
+                const arrayBuffer = await rawFile.arrayBuffer();
+                await workbook.xlsx.load(arrayBuffer);
+
+                const worksheet = workbook.getWorksheet(locationSheetName);
+                if (worksheet) {
+                    const cols = { qty: 7, sys: 8, status: 9, remark: 10, date: 11, user: 12 };
+                    const header = worksheet.getRow(1);
+                    header.getCell(cols.qty).value = 'Actual QTY';
+                    header.getCell(cols.sys).value = 'System QTY';
+                    header.getCell(cols.status).value = 'Status';
+                    header.getCell(cols.remark).value = 'Remarks';
+                    header.getCell(cols.date).value = 'Update Date';
+                    header.getCell(cols.user).value = 'Verifier';
+
+                    // Apply bold style to header cells we modified to ensure consistency
+                    [cols.qty, cols.sys, cols.status, cols.remark, cols.date, cols.user].forEach(col => {
+                        header.getCell(col).font = { bold: true };
+                    });
+
+                    results.forEach(res => {
+                        const excelRowNumber = res.rowIndex + 1;
+                        const row = worksheet.getRow(excelRowNumber);
+                        if (!row) return;
+                        row.getCell(cols.qty).value = Number(res.qty || 0);
+                        row.getCell(cols.sys).value = Number(res.masterQty || 0);
+                        row.getCell(cols.status).value = res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing';
+                        row.getCell(cols.remark).value = sanitize(res.status === 'passed' ? 'Complete' : (res.reason || '-'));
+                        row.getCell(cols.date).value = res.updatedAt ? new Date(res.updatedAt).toLocaleDateString() : '';
+                        row.getCell(cols.user).value = sanitize(res.updatedBy || '');
+                    });
+                }
+            }
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Report_${dbSource === 'supabase' ? 'CloudData' : (rawFile ? rawFile.name : 'Validation')}.xlsx`;
-            document.body.appendChild(a);
+            a.download = `Warehouse_Validation_${new Date().toISOString().split('T')[0]}.xlsx`;
             a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-        } catch (error) {
-            console.error('Export Error:', error);
-            alert('Export failed: ' + error.message);
+        } catch (e) {
+            console.error('Export Error:', e);
         } finally {
             setIsExporting(false);
         }
     };
 
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/20 overflow-hidden animate-slide-up transition-colors">
-            {/* Table Header */}
-            <div className="p-8 md:p-10 border-b border-slate-50 dark:border-slate-800">
-                <div className="flex flex-col lg:flex-row gap-8 lg:items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 text-joah-orange flex items-center justify-center">
-                                <FileSpreadsheet size={24} />
-                            </div>
-                            <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">ລາຍການຂໍ້ມູນ</h2>
-                        </div>
-                        <p className="text-sm text-slate-400 dark:text-slate-500 mt-2 font-bold flex items-center gap-2">
-                            <Info size={14} className="text-slate-300 dark:text-slate-700" />
-                            ກວດພົບທັງໝົດ <span className="text-joah-orange">{filteredResults.length}</span> ລາຍການໃນ {locationSheetName}
-                        </p>
+        <div className="space-y-6 animate-fade-in-up">
+            {/* Action Bar */}
+            <div className="glass-card rounded-[2.5rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-6 items-center border-white/50">
+                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="relative group">
+                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
+                        <input
+                            type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ຕຳແໜ່ງ..."
+                            className="input-field pl-14 font-bold"
+                            value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                        />
                     </div>
-
-                    <div className="flex flex-wrap gap-4">
-                        <div className="relative group min-w-[280px]">
-                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
-                            <input
-                                type="text"
-                                placeholder="ຄົ້ນຫາບາໂຄ້ດ ຫຼື ຕຳແໜ່ງ..."
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                                className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-transparent focus:bg-white dark:focus:bg-slate-800 focus:border-joah-orange focus:outline-none transition-all duration-300 font-bold text-slate-700 dark:text-white"
-                            />
-                        </div>
-
-                        <div className="relative min-w-[160px]">
-                            <Filter className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 pointer-events-none" size={18} />
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => { onFilterChange(e.target.value); setCurrentPage(1); }}
-                                className="w-full h-14 pl-14 pr-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-transparent appearance-none focus:bg-white dark:focus:bg-slate-800 focus:border-slate-200 dark:focus:border-slate-700 focus:outline-none transition-all duration-300 font-bold text-slate-700 dark:text-white"
-                            >
-                                <option value="all">ທັງໝົດ</option>
-                                <option value="passed">ຖືກຕ້ອງ</option>
-                                <option value="mismatch">ບໍ່ກົງກັນ</option>
-                                <option value="missing">ບໍ່ຄົບທ້ວນ</option>
-                            </select>
-                            <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 pointer-events-none" size={16} />
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleSaveToCloud}
-                                disabled={isSavingToCloud}
-                                className="btn-secondary h-14 !px-6 border-2 border-emerald-50 dark:border-emerald-500/10 bg-emerald-50/30 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all duration-300"
-                            >
-                                {isSavingToCloud ? <Loader2 className="animate-spin" size={20} /> : <CloudUpload size={20} />}
-                                <span className="hidden xl:inline text-sm">Save to Cloud</span>
-                            </button>
-
-                            <button
-                                onClick={handleExportWithColor}
-                                disabled={isExporting}
-                                className="btn-primary h-14 !px-8 shadow-xl shadow-orange-500/20"
-                            >
-                                {isExporting ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-                                <span className="hidden xl:inline text-sm">Export Report</span>
-                            </button>
-                        </div>
+                    <div className="relative">
+                        <Filter className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600" size={18} />
+                        <select
+                            className="input-field pl-14 appearance-none font-bold"
+                            value={filterStatus} onChange={(e) => { onFilterChange(e.target.value); setCurrentPage(1); }}
+                        >
+                            <option value="all">ທັງໝົດ (All Status)</option>
+                            <option value="passed">✅ ຖືກຕ້ອງ (Passed)</option>
+                            <option value="mismatch">❌ ບໍ່ກົງກັນ (Mismatch)</option>
+                            <option value="missing">❓ ຂໍ້ມູນບໍ່ຄົບ (Missing)</option>
+                        </select>
+                        <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                     </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 w-full xl:w-auto border-t xl:border-t-0 xl:border-l border-slate-100 dark:border-slate-800 pt-6 xl:pt-0 xl:pl-8">
+                    <button onClick={handleExportWithColor} disabled={isExporting} className="btn-success shadow-emerald-500/20 py-3 uppercase text-[10px] tracking-widest min-w-[160px]">
+                        {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                        <span>Export Report</span>
+                    </button>
+                    {onRefresh && (
+                        <button onClick={onRefresh} className="btn-secondary py-3 uppercase text-[10px] tracking-widest min-w-[120px]">
+                            <RotateCw size={16} />
+                            <span>Refresh</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* Table Area */}
-            <div className="overflow-x-auto min-h-[400px]">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr className="bg-slate-50/50 dark:bg-slate-800/20">
-                            <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '80px' }}>ID</th>
-                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Barcode</th>
-                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Item Name (ຊື່ສິນຄ້າ)</th>
-                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">Location</th>
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '120px' }}>QTY (Actual / Sys)</th>
-                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 hidden xl:table-cell">Categories</th>
-                            <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '160px' }}>Status</th>
-                            <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800" style={{ width: '100px' }}>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                        {currentResults.length === 0 ? (
-                            <tr>
-                                <td colSpan="8" className="py-32 text-center text-slate-300 dark:text-slate-700">
-                                    <div className="flex flex-col items-center gap-4">
-                                        <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-700">
-                                            <Search size={32} />
-                                        </div>
-                                        <p className="text-slate-400 dark:text-slate-600 font-bold">ບໍ່ພົບຂໍ້ມູນທີ່ທ່ານຄົ້ນຫາ</p>
-                                    </div>
-                                </td>
+            {/* Table Area (Premium Modern Style) */}
+            <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl shadow-slate-200/50 dark:shadow-black/20 overflow-visible">
+                <div className="overflow-x-auto custom-scrollbar rounded-[2.5rem]">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/80 dark:bg-slate-800/50">
+                                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">#</th>
+                                <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Barcode / Product</th>
+                                <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Rack Location</th>
+                                <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Count / System</th>
+                                <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">Categories</th>
+                                <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Status</th>
+                                <th className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Action</th>
                             </tr>
-                        ) : (
-                            currentResults.map((row) => <tr
-                                key={row.rowIndex}
-                                className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200 cursor-pointer"
-                                onClick={() => { setSelectedRow(row); setEditQty(row.qty || 0); }}
-                                onMouseEnter={(e) => handleMouseEnter(e, row)}
-                                onMouseMove={handleMouseMove}
-                                onMouseLeave={handleMouseLeave}
-                            >
-                                <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
-                                <td className="px-6 py-6">
-                                    <div className="font-mono text-sm font-black text-slate-800 dark:text-white leading-none">{row.barcode}</div>
-                                </td>
-                                <td className="px-6 py-6">
-                                    <div className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[300px]" title={row.masterItemName || row.itemName || row.product_name_la || ''}>
-                                        {row.masterItemName || row.itemName || row.product_name_la || <span className="text-slate-400 italic">ຍັງບໍ່ມີຊື່ສິນຄ້າ</span>}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-6">
-                                    <span className={`inline-flex px-3 py-1.5 rounded-xl text-xs font-black tracking-tight
-                                                ${row.color === 'red' ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20' :
-                                            row.color === 'blue' ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20' :
-                                                'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
-                                        {row.rackLocation}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-6 text-center">
-                                    <div className="flex flex-col items-center gap-0.5">
-                                        <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                        <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter mt-1 p-1 bg-slate-50 dark:bg-slate-800 rounded-md">
-                                            <Database size={8} className="text-sky-500" />
-                                            <span>Master: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                            {currentResults.length > 0 ? currentResults.map((row) => (
+                                <tr key={row.rowIndex} onMouseEnter={(e) => handleMouseEnter(e, row)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className="group hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05] transition-all duration-300">
+                                    <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
+                                    <td className="px-6 py-6">
+                                        <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                            <span className="text-sm font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
+                                            <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.masterItemName || row.itemName}>{row.masterItemName || row.itemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-6 hidden xl:table-cell">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-2">
-                                            C1: {(!row.category1 || row.category1 === '0') ? <span className="text-sky-500 italic">Empty</span> : <span className="text-slate-700 dark:text-slate-300">{row.category1}</span>}
+                                    </td>
+                                    <td className="px-6 py-6">
+                                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-joah-orange/30 transition-colors">
+                                            <MapPin size={12} className="text-joah-orange/50" />
+                                            <span className="text-xs font-black tracking-tighter uppercase">{row.rackLocation}</span>
                                         </div>
-                                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-2">
-                                            C2: {(!row.category2 || row.category2 === '0') ? <span className="text-sky-500 italic">Empty</span> : <span className="text-slate-700 dark:text-slate-300">{row.category2}</span>}
+                                    </td>
+                                    <td className="px-6 py-6">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
+                                            <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
+                                                <Database size={8} className="text-sky-500" />
+                                                <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-6 text-center">
-                                    <div className={`status-badge mx-auto ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
-                                        {row.status === 'passed' ? <CheckCircle size={12} /> : row.status === 'mismatch' ? <X size={12} /> : <AlertTriangle size={12} />}
-                                        <span>
-                                            {row.status === 'passed' ? 'ຖືກຕ້ອງ' : row.status === 'mismatch' ? 'ບໍ່ກົງກັນ' : 'ບໍ່ຄົບ'}
+                                    </td>
+                                    <td className="px-6 py-6 hidden lg:table-cell">
+                                        <div className="flex flex-col gap-1 max-w-[150px]">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate">{row.category1 || '-'}</span>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter opacity-50 truncate">{row.category2 || '-'}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-6 text-center">
+                                        <span className={`status-badge ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
+                                            {getStatusHint(row).icon}
+                                            {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                         </span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                    <button className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-joah-orange hover:border-joah-orange hover:shadow-lg transition-all flex items-center justify-center">
-                                        <Edit2 size={16} />
-                                    </button>
-                                </td>
-                            </tr>
-                            )
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {dbSource === 'supabase' && (
+                                                <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
+                                                    <History size={18} />
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setSelectedRow(row); setEditQty(row.qty || 0); }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
+                                                <Edit2 size={18} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="7" className="py-32 text-center">
+                                        <div className="flex flex-col items-center gap-4 text-slate-300 dark:text-slate-700">
+                                            <Package size={64} strokeWidth={1} className="animate-float" />
+                                            <p className="text-sm font-black uppercase tracking-[0.3em]">No Records Found</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-                <div className="px-10 py-8 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-6 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Showing</span>
-                        <span className="px-4 py-2 bg-white dark:bg-slate-800 rounded-xl text-xs font-black text-slate-700 dark:text-slate-300 shadow-sm transition-colors">
-                            {startIndex + 1} - {Math.min(endIndex, filteredResults.length)} <span className="mx-2 text-slate-200 dark:text-slate-700">/</span> {filteredResults.length}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); }}
-                            disabled={currentPage === 1}
-                            className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:border-joah-orange dark:hover:border-joah-orange hover:text-joah-orange disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-
-                        <div className="px-6 h-12 bg-joah-orange rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-                            <span className="text-white font-black text-sm">{currentPage} <span className="mx-2 opacity-50">of</span> {totalPages}</span>
-                        </div>
-
-                        <button
-                            onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
-                            disabled={currentPage === totalPages}
-                            className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:border-joah-orange dark:hover:border-joah-orange hover:text-joah-orange disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
-                        >
-                            <ChevronRight size={20} />
-                        </button>
+                {/* Pagination */}
+                <div className="p-6 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/50">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">Showing <span className="text-slate-700 dark:text-slate-300">{startIndex + 1}-{Math.min(endIndex, filteredResults.length)}</span> of <span className="text-slate-700 dark:text-slate-300">{filteredResults.length}</span> items</p>
+                    <div className="flex gap-2">
+                        <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="btn-secondary !p-3 !rounded-xl disabled:opacity-30"><ChevronLeft size={18} /></button>
+                        <div className="flex items-center px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-slate-700 dark:text-white">{currentPage} / {totalPages || 1}</div>
+                        <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="btn-secondary !p-3 !rounded-xl disabled:opacity-30"><ChevronRight size={18} /></button>
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* Detail Modal - Reverted to Stable Centered Version */}
+            {/* Edit Modal */}
             {selectedRow && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedRow(null)}></div>
-
-                    <div className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl overflow-y-auto animate-slide-up border border-white dark:border-slate-800 transition-colors custom-scrollbar">
-                        <div className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-8 md:p-10 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center transition-colors">
-                            <div>
-                                <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ປຽບທຽບຂໍ້ມູນ</h3>
-                                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-widest">Details Verification</p>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-slate-950/40 animate-fade-in">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl animate-scale-in relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-joah-orange/10 blur-[60px] rounded-full pointer-events-none"></div>
+                        <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800 relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 rounded-xl bg-joah-orange text-white shadow-lg shadow-orange-500/20"><Edit2 size={20} /></div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">ແກ້ໄຂຈຳນວນ</h3>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Manual Adjustment</p>
+                                </div>
                             </div>
-                            <button
-                                onClick={() => setSelectedRow(null)}
-                                className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-500 transition-all flex items-center justify-center"
-                            >
-                                <X size={24} />
-                            </button>
+                            <button onClick={() => setSelectedRow(null)} className="p-2 text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"><X size={20} /></button>
                         </div>
 
-                        <div className="p-8 space-y-8">
-                            {/* Product Header Card */}
-                            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center gap-6 transition-colors">
-                                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 flex items-center justify-center text-joah-orange shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
-                                    <Database size={28} />
+                        <div className="space-y-6 relative z-10">
+                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-3">
+                                <div className="flex justify-between items-start text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    <span>Item Info</span>
+                                    <span className="text-joah-orange">#{selectedRow.rowIndex}</span>
                                 </div>
                                 <div className="space-y-0.5">
-                                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Product Reference</p>
-                                    <h4 className="text-lg font-black text-slate-800 dark:text-white leading-tight transition-colors">
-                                        {selectedRow.masterItemName || selectedRow.itemName || 'ລໍຖ້າການລະບຸຊື່ສິນຄ້າ'}
-                                    </h4>
-                                    <div className="font-mono text-xs text-slate-400 dark:text-slate-500 font-bold transition-colors">{selectedRow.barcode}</div>
+                                    <p className="text-base font-black text-slate-800 dark:text-white font-mono tracking-tight">{selectedRow.barcode}</p>
+                                    <p className="text-xs font-bold text-slate-500 truncate">{selectedRow.masterItemName || selectedRow.itemName}</p>
+                                </div>
+                                <div className="pt-3 grid grid-cols-2 gap-4 border-t border-slate-200 dark:border-slate-700/50">
+                                    <div className="space-y-0.5">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">System Count</p>
+                                        <div className="flex items-center gap-1.5"><Database size={10} className="text-sky-500" /><span className="text-sm font-black text-slate-700 dark:text-slate-300">{selectedRow.masterQty || 0}</span></div>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Location</p>
+                                        <div className="flex items-center gap-1.5"><MapPin size={10} className="text-joah-orange" /><span className="text-sm font-black text-slate-700 dark:text-slate-300">{selectedRow.rackLocation}</span></div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* SMART Editor Section - Stayed at the top for convenience */}
-                            <div className="p-8 bg-slate-100 dark:bg-slate-950 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-all duration-300">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] mb-2 block">
-                                            Update Counted QTY (ແກ້ໄຂຈຳນວນນັບໜ້າຮ້ານ)
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                className="w-full h-12 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/5 rounded-2xl px-5 text-slate-900 dark:text-white font-black text-lg focus:outline-none focus:border-joah-orange transition-all duration-300 shadow-inner"
-                                                value={editQty}
-                                                onChange={(e) => setEditQty(e.target.value)}
-                                                placeholder="Enter correct actual count..."
-                                            />
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none">
-                                                <Edit2 size={16} />
-                                            </div>
-                                        </div>
-                                        <p className="text-[9px] font-bold text-slate-400 mt-2 italic px-1">
-                                            * ການແກ້ໄຂນີ້ຈະປ່ຽນຕົວເລກ "ຈຳນວນນັບຈິງ" ເທົ່ານັ້ນ, ຂໍ້ມູນ Master ຈະຄືເກົ່າ.
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] mb-2 block">
-                                            Verifier (ຜູ້ກວດກາ)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            className="w-full h-12 bg-white dark:bg-white/5 border-2 border-slate-200 dark:border-white/5 rounded-2xl px-5 text-slate-900 dark:text-white font-black text-sm focus:outline-none focus:border-sky-500 transition-all duration-300 shadow-inner"
-                                            value={employeeName}
-                                            onChange={(e) => setEmployeeName(e.target.value)}
-                                            placeholder="ໃສ່ຊື່ຂອງທ່ານ..."
-                                        />
+                            <div className="space-y-4">
+                                <div className="relative group">
+                                    <span className="floating-label group-focus-within:text-joah-orange">New Actual Qty</span>
+                                    <input
+                                        type="number"
+                                        value={editQty}
+                                        onChange={(e) => setEditQty(e.target.value)}
+                                        className="input-field !text-xl text-center py-4 font-black caret-joah-orange text-joah-orange focus:text-joah-orange transition-all duration-300 focus:ring-4 focus:ring-joah-orange/10"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="relative group mt-4">
+                                    <span className="absolute -top-3 left-4 px-2 bg-white dark:bg-slate-900 text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-joah-orange z-10 transition-colors">Verifier Name</span>
+                                    <div className="relative">
+                                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors" size={16} />
+                                        <input type="text" placeholder="ໃສ່ຊື່ເຈົ້າຂອງຜົນກວດ..." value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="input-field pl-12 py-3.5 text-sm font-bold" />
                                     </div>
                                 </div>
+                            </div>
 
-                                <button
-                                    onClick={handleUpdateMasterQty}
-                                    disabled={isUpdating}
-                                    className="w-full h-12 bg-joah-orange hover:bg-slate-900 dark:hover:bg-white dark:hover:text-joah-orange text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all duration-300 shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2"
-                                >
-                                    {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <Save size={18} />}
-                                    <span>Update Floor Count</span>
+                            <div className="grid grid-cols-2 gap-4 pt-6">
+                                <button onClick={() => setSelectedRow(null)} disabled={isUpdating} className="btn-secondary bg-slate-800 text-white border-slate-700 hover:bg-slate-700 h-16 uppercase text-xs tracking-widest shadow-none disabled:opacity-50">Cancel</button>
+                                <button onClick={handleUpdateMasterQty} disabled={isUpdating} className={`btn-primary h-16 uppercase text-xs tracking-widest shadow-orange-500/10 ${isUpdating ? 'opacity-70 cursor-wait' : ''}`}>
+                                    {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                                    <span>{isUpdating ? 'Saving...' : 'Confirm Save'}</span>
                                 </button>
                             </div>
-
-                            {/* Comparison Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Actual Info */}
-                                <div className="p-6 bg-orange-50/50 dark:bg-orange-500/5 rounded-[2rem] border border-orange-100 dark:border-orange-500/10 relative group overflow-hidden transition-colors">
-                                    <h5 className="text-[10px] font-black text-joah-orange dark:text-orange-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <MapPin size={12} /> ຂໍ້ມູນໜ້າຮ້ານ
-                                    </h5>
-                                    <div className="space-y-3 relative z-10">
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Location</p>
-                                            <p className="text-md font-black text-slate-800 dark:text-white">{selectedRow.rackLocation}</p>
-                                        </div>
-                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-orange-100/50 dark:border-orange-500/10 space-y-2">
-                                            <div className="flex justify-between items-center border-b border-orange-100/30 pb-2 mb-1">
-                                                <span className="text-[10px] font-black text-slate-500 uppercase">ຈຳນວນທີ່ນັບໄດ້:</span>
-                                                <span className="text-lg font-black text-joah-orange">{selectedRow.qty || 0}</span>
-                                            </div>
-                                            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
-                                                <span>CAT 1:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.category1 || '-'}</span>
-                                            </p>
-                                            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
-                                                <span>CAT 2:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.category2 || '-'}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Master Info */}
-                                <div className="p-6 bg-sky-50/50 dark:bg-sky-500/5 rounded-[2rem] border border-sky-100 dark:border-sky-500/10 relative group overflow-hidden transition-colors">
-                                    <h5 className="text-[10px] font-black text-sky-500 dark:text-sky-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <Database size={12} /> ຂໍ້ມູນລະບົບ
-                                    </h5>
-                                    <div className="space-y-3 relative z-10">
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Records</p>
-                                            <p className="text-md font-black text-slate-800 dark:text-white">Full Master Version</p>
-                                        </div>
-                                        <div className="p-3 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-sky-100/50 dark:border-sky-500/10 space-y-2">
-                                            <div className="flex justify-between items-center border-b border-sky-100/30 pb-2 mb-1">
-                                                <span className="text-[10px] font-black text-slate-500 uppercase">ຈຳນວນໃນ Master:</span>
-                                                <span className="text-lg font-black text-sky-500">{selectedRow.masterQty || 0}</span>
-                                            </div>
-                                            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
-                                                <span>Target 1:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.masterCategory1 || '-'}</span>
-                                            </p>
-                                            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex justify-between">
-                                                <span>Target 2:</span> <span className="font-black text-slate-800 dark:text-slate-200">{selectedRow.masterCategory2 || '-'}</span>
-                                            </p>
-                                        </div>
-                                        <p className="text-[8px] font-black text-sky-500 uppercase mt-2 text-center">--- Read Only Data ---</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-4">
-                                <div className="flex-1">
-                                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-1">Last Update</p>
-                                    <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">{selectedRow.updatedAt ? new Date(selectedRow.updatedAt).toLocaleString('lo-LA') : 'ບໍ່ມີຂໍ້ມູນ'}</p>
-                                </div>
-                                <div className="flex-1 text-right">
-                                    <button
-                                        onClick={() => fetchHistory(selectedRow.barcode)}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all group border border-slate-200 dark:border-transparent"
-                                    >
-                                        <History size={14} className="group-hover:rotate-[-45deg] transition-transform" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">History</span>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
-
-                        {/* History Overlay (Slide-up inside modal) */}
-                        {showHistory && (
-                            <div className="absolute inset-0 z-[30] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 animate-slide-up flex flex-col">
-                                <div className="p-6 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-slate-900 dark:bg-joah-orange rounded-lg text-white">
-                                            <History size={16} />
-                                        </div>
-                                        <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-widest text-sm">Update History</h4>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowHistory(false)}
-                                        className="w-10 h-10 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-all flex items-center justify-center"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                                    {isLoadingHistory ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4">
-                                            <Loader2 className="animate-spin" size={32} />
-                                            <p className="text-xs font-black uppercase tracking-widest">Loading Records...</p>
-                                        </div>
-                                    ) : historyData.length === 0 ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[2rem]">
-                                            <Clock size={32} />
-                                            <p className="text-xs font-black uppercase tracking-widest">No history found</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {historyData.map((item, idx) => (
-                                                <div key={item.id} className="p-5 bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group hover:border-joah-orange/30 transition-all">
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black text-slate-800 dark:text-white">{item.updated_by}</span>
-                                                            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                            <span className="text-[10px] font-bold text-slate-400">{new Date(item.updated_at).toLocaleString('lo-LA')}</span>
-                                                        </div>
-                                                        <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                                                            Changed from <span className="text-slate-400 line-through">{item.old_qty}</span> to <span className="text-joah-orange font-black text-xs">{item.new_qty}</span>
-                                                        </p>
-                                                    </div>
-                                                    <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-joah-orange shadow-sm opacity-0 group-hover:opacity-100 transition-all">
-                                                        <CheckCircle size={14} />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             )}
+
+            {/* History Modal */}
+            {showHistory && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-slate-950/40 animate-fade-in">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl animate-scale-in relative overflow-hidden flex flex-col max-h-[85vh]">
+                        <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 rounded-xl bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"><History size={20} /></div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">ປະຫວັດການແກ້ໄຂ</h3>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Audit Log</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowHistory(false)} className="p-2 text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"><X size={20} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
+                            {isLoadingHistory ? (
+                                <div className="flex flex-col items-center justify-center py-12 gap-4 text-slate-400">
+                                    <Loader2 className="animate-spin" size={32} />
+                                    <p className="text-xs font-black uppercase tracking-widest">Loading History...</p>
+                                </div>
+                            ) : historyData.length > 0 ? (
+                                historyData.map((log) => (
+                                    <div key={log.id} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                                        <div className="mt-1 p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                            <Clock size={16} />
+                                        </div>
+                                        <div className="flex-1 space-y-1">
+                                            <div className="flex justify-between items-start">
+                                                <p className="text-sm font-black text-slate-700 dark:text-slate-200">{log.updated_by || 'Unknown'}</p>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{new Date(log.updated_at).toLocaleString('lo-LA')}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                                <span>Qty:</span>
+                                                <span className="line-through opacity-70">{log.old_qty}</span>
+                                                <ArrowUpDown size={12} className="rotate-90 text-indigo-500" />
+                                                <span className="font-bold text-indigo-600 dark:text-indigo-300">{log.new_qty}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 gap-3 text-slate-400 opacity-60">
+                                    <History size={48} strokeWidth={1} />
+                                    <p className="text-xs font-black uppercase tracking-widest">No History Found</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Smart Hover Tooltip */}
             {hoveredRowInfo && (
-                <div
-                    className="fixed z-[999] pointer-events-none animate-in fade-in zoom-in duration-200"
-                    style={{
-                        left: `${hoveredRowInfo.x + 20}px`,
-                        top: `${hoveredRowInfo.y + 20}px`,
-                    }}
-                >
-                    <div className="w-[320px] bg-white dark:bg-slate-900 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.2)] border border-slate-100 dark:border-slate-800 overflow-hidden">
-                        <div className={`p-4 flex items-center gap-3 border-b border-slate-50 dark:border-slate-800/50 ${getStatusHint(hoveredRowInfo.row).bg}/10`}>
-                            <div className={`p-2 rounded-xl text-white ${getStatusHint(hoveredRowInfo.row).bg} shadow-sm`}>
-                                {getStatusHint(hoveredRowInfo.row).icon}
-                            </div>
-                            <h4 className={`font-black text-sm uppercase tracking-tight ${getStatusHint(hoveredRowInfo.row).color}`}>
-                                {getStatusHint(hoveredRowInfo.row).title}
-                            </h4>
-                        </div>
-                        <div className="p-5 space-y-3">
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">ລາຍລະອຽດສາເຫດ:</p>
-                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-relaxed">
-                                    {getStatusHint(hoveredRowInfo.row).reason}
-                                </p>
-                            </div>
-                            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">ສິ່ງທີ່ຕ້ອງເຮັດ:</p>
-                                <p className="text-[11px] font-heavy text-rose-600 dark:text-rose-400 leading-relaxed font-bold">
-                                    {getStatusHint(hoveredRowInfo.row).action}
-                                </p>
+                <div className="fixed z-[999] pointer-events-none animate-scale-in origin-top-left" style={{ left: `${hoveredRowInfo.x + 20}px`, top: `${hoveredRowInfo.y + 20}px` }}>
+                    <div className="w-[340px] glass-card dark:glass-card-dark rounded-[2rem] shadow-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800/80">
+                        <div className={`p-5 flex items-center gap-4 border-b border-slate-100 dark:border-slate-800/50 ${getStatusHint(hoveredRowInfo.row).bg}/10`}>
+                            <div className={`p-2.5 rounded-2xl text-white ${getStatusHint(hoveredRowInfo.row).bg} shadow-lg`}>{getStatusHint(hoveredRowInfo.row).icon}</div>
+                            <div className="space-y-0.5">
+                                <h5 className="text-sm font-black text-slate-800 dark:text-white leading-none tracking-tight">{getStatusHint(hoveredRowInfo.row).title}</h5>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Diagnostics</p>
                             </div>
                         </div>
-                        <div className="bg-slate-50/50 dark:bg-slate-800/50 px-5 py-3 flex items-center justify-between border-t border-slate-50 dark:border-slate-800">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Smart Support</span>
-                            <div className="flex gap-1">
-                                <span className="w-1 h-1 rounded-full bg-joah-orange"></span>
-                                <span className="w-1 h-1 rounded-full bg-joah-orange/50"></span>
-                                <span className="w-1 h-1 rounded-full bg-joah-orange/20"></span>
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ສັງເກດເຫັນຂໍ້ຜິດພາດ:</p>
+                                <p className="text-xs font-bold leading-relaxed text-slate-700 dark:text-slate-300">{getStatusHint(hoveredRowInfo.row).reason}</p>
+                            </div>
+                            <div className="space-y-1.5 p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/50 shadow-sm">
+                                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">ວິທີແກ້ໄຂ:</p>
+                                <p className="text-xs font-black leading-relaxed text-slate-800 dark:text-white">{getStatusHint(hoveredRowInfo.row).action}</p>
                             </div>
                         </div>
                     </div>
