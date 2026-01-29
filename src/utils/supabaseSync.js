@@ -143,7 +143,8 @@ export const addLocationRecord = async (record) => {
                 category_2_actual: record.category_2_actual,
                 qty: Number(record.qty || 0),
                 validation_status: record.validation_status || 'ປົກກະຕິ',
-                remarks: record.remarks || ''
+                remarks: record.remarks || '',
+                uploaded_by: record.uploaded_by || 'Unknown' // New field
             }])
             .select();
 

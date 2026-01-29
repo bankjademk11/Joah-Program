@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../assets/Joah.jpeg';
 import joahWarehouseImg from '../assets/joah warehosue.png';
-import { User, ArrowRight, Loader2 } from 'lucide-react';
+import { User, ArrowRight, Loader2, Lock } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
     const [employeeId, setEmployeeId] = useState('');
+    const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const inputRef = useRef(null);
@@ -21,6 +22,13 @@ const Login = ({ onLogin }) => {
         setIsLoading(true);
         setError('');
 
+        // Check if password is provided (mockup - any password works)
+        if (!password || password.trim() === '') {
+            setError('ກະລຸນາໃສ່ລະຫັດຜ່ານ');
+            setIsLoading(false);
+            return;
+        }
+
         // Specific Approved Users List
         const mockEmployees = [
             { id: 'k2411149', name: 'Mr. khamphout kiettimoungkhoun', role: 'staff' },
@@ -34,6 +42,8 @@ const Login = ({ onLogin }) => {
             const foundUser = mockEmployees.find(emp => emp.id.toLowerCase() === employeeId.trim().toLowerCase());
 
             if (foundUser) {
+                localStorage.setItem('joah_employee_name', foundUser.name);
+                localStorage.setItem('joah_employee_id', foundUser.id);
                 onLogin(foundUser);
             } else {
                 setError('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
@@ -94,7 +104,7 @@ const Login = ({ onLogin }) => {
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-8">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Employee ID Field */}
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດພະນັກງານ / EMPLOYEE ID</label>
@@ -113,8 +123,27 @@ const Login = ({ onLogin }) => {
                                     autoComplete="off"
                                 />
                             </div>
-                            <p className="text-xs text-slate-400 pl-2 opacity-0 group-focus-within:opacity-100 transition-opacity">
-                                * ກົດ Enter ເພື່ອເຂົ້າສູ່ລະບົບທັນທີ
+                        </div>
+
+                        {/* Password Field */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດຜ່ານ / PASSWORD</label>
+                            <div className="relative group">
+                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                    <Lock size={24} />
+                                </div>
+                                <input
+                                    type="password"
+                                    placeholder="Enter Password..."
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full h-20 pl-16 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-[1.5rem] focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-2xl focus:shadow-orange-500/10 transition-all duration-300 outline-none text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 tracking-wider"
+                                    required
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-400 pl-2">
+                                * ໃສ່ລະຫັດຜ່ານໃດກໍໄດ້ເພື່ອຢືນຢັນຕົວຕົນ
                             </p>
                         </div>
 

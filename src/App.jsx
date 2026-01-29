@@ -185,7 +185,9 @@ function App() {
           'Category-1': l.category_1_actual,
           'Category-2': l.category_2_actual,
           'QTY': l.qty,
-          'Item Name': l.item_name
+          'Item Name': l.item_name,
+          'uploaded_by': l.uploaded_by,
+          'created_at': l.created_at
         }));
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");

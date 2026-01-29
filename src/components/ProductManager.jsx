@@ -25,7 +25,14 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
 
     useEffect(() => {
         if (initialBarcode) {
-            setFormData(prev => ({ ...prev, barcode: initialBarcode }));
+            setFormData({
+                barcode: initialBarcode,
+                product_name_la: '',
+                item_name: '',
+                category_1: '',
+                category_2: '',
+                qty: 0
+            });
             setShowForm(true);
         }
     }, [initialBarcode]);

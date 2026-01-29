@@ -216,16 +216,16 @@ export const validateData = (locationRows, dataRows) => {
             const r = rack.toUpperCase().trim();
 
             const RACK_RULES = [
-                { cats: ['KITCHEN'], pattern: /^((G0[1-8]|H0[2-4])-L[1-5]|ໂລພື້ນ\s?G(9|10|11))/i, label: 'G01-08-L1-5, H02-04-L1-5 ຫຼື G9-11' },
-                { cats: ['BEAUTY'], pattern: /^(E0[1-4]-L[1-5]|ໂລພື້ນE\s?[578])/i, label: 'E01-04-L1-5 ຫຼື E5,7,8' },
-                { cats: ['STATIONERY'], pattern: /^(S0[1235678]-L[1-5]|S10-L[1-4])/i, label: 'S01-08-L1-5 ຫຼື S10-L1-4' },
-                { cats: ['TOYS'], pattern: /^S09-L[1-5]/i, label: 'S09-L1-5' },
-                { cats: ['CLEANING/BATH'], pattern: /^(A0[1-35]-L[1-5]|A04-L[1-6])/i, label: 'A01-05 (A04 ຮອດ L6)' },
-                { cats: ['INTERIOR'], pattern: /^(B01-L[1-3]|B0[2-4]-L[1-4])/i, label: 'B01-L1-3, B02-04-L1-4' },
-                { cats: ['TOOL/DIGITAL'], pattern: /^F0[1-4]-L[1-5]/i, label: 'F01-04-L1-5' },
-                { cats: ['STORAGE'], pattern: /^(D0[1-6]-L[1-5]|ໂລພື້ນ\s?D0?[78])/i, label: 'D01-06-L1-5 ຫຼື D07-08' },
-                { cats: ['FASHION'], pattern: /^C0[1-4]-L[1-5]/i, label: 'C01-04-L1-5' },
-                { cats: ['SPORTS/LEISURE', 'SPORT LEISURE', 'SPORT'], pattern: /^H01-L[1-5]/i, label: 'H01-L1-5' },
+                { cats: ['KITCHEN'], pattern: /^((G0[1-8]|H0[2-4])-L[1-5]-[1-4]|ໂລພື້ນ\s?G(9|10|11))/i, label: 'G01-G08, H02-H04, L1-L5, sections 1-4 (ເຊັ່ນ: G01-L1-1, H02-L5-4) ຫຼື ໂລພື້ນ G9/G10/G11' },
+                { cats: ['BEAUTY'], pattern: /^(E0[1-4]-L[1-5]-[1-4]|ໂລພື້ນE\s?[578])/i, label: 'E01-E04, L1-L5, sections 1-4 (ເຊັ່ນ: E01-L1-1, E03-L4-3) ຫຼື ໂລພື້ນE 5/7/8' },
+                { cats: ['STATIONERY'], pattern: /^(S0[1235678]-L[1-5]-[1-4]|S10-L[1-4]-[1-4])/i, label: 'S01-S08, L1-L5, sections 1-4 (ເຊັ່ນ: S01-L1-1, S07-L4-2) | S10: L1-L4, sections 1-4' },
+                { cats: ['TOYS'], pattern: /^S09-L[1-5]-[1-4]/i, label: 'S09, L1-L5, sections 1-4 (ເຊັ່ນ: S09-L1-1, S09-L3-2, S09-L5-4)' },
+                { cats: ['CLEANING/BATH'], pattern: /^(A0[1-35]-L[1-5]-[1-4]|A04-L[1-6]-[1-4])/i, label: 'A01-A03/A05: L1-L5, sections 1-4 | A04: L1-L6, sections 1-4 (ເຊັ່ນ: A01-L1-1, A04-L6-4)' },
+                { cats: ['INTERIOR'], pattern: /^(B01-L[1-3]-[1-4]|B0[2-4]-L[1-4]-[1-4])/i, label: 'B01: L1-L3, sections 1-4 | B02-B04: L1-L4, sections 1-4 (ເຊັ່ນ: B01-L1-1, B02-L4-3)' },
+                { cats: ['TOOL/DIGITAL'], pattern: /^F0[1-4]-L[1-5]-[1-5]/i, label: 'F01-F04, L1-L5, sections 1-5 (ເຊັ່ນ: F01-L1-1, F03-L4-3, F04-L5-5)' },
+                { cats: ['STORAGE'], pattern: /^(D0[1-6]-L[1-5]-[1-4]|ໂລພື້ນ\s?D0?[78])/i, label: 'D01-D06, L1-L5, sections 1-4 (ເຊັ່ນ: D01-L1-1, D05-L4-2) ຫຼື ໂລພື້ນ D07/D08' },
+                { cats: ['FASHION'], pattern: /^C0[1-4]-L[1-5]-[1-4]/i, label: 'C01-C04, L1-L5, sections 1-4 (ເຊັ່ນ: C01-L1-1, C03-L4-2, C04-L5-4)' },
+                { cats: ['SPORTS/LEISURE', 'SPORT LEISURE', 'SPORT'], pattern: /^H01-L[1-5]-[1-4]/i, label: 'H01, L1-L5, sections 1-4 (ເຊັ່ນ: H01-L1-1, H01-L3-2, H01-L5-4)' },
             ];
 
             const rule = RACK_RULES.find(rule => rule.cats.includes(c));
@@ -295,8 +295,8 @@ export const validateData = (locationRows, dataRows) => {
             masterItemName: masterData?.itemName || '',
             masterUpdatedAt: masterData?.updatedAt || '', // Renamed to keep separate
             masterUpdatedBy: masterData?.updatedBy || '', // Renamed to keep separate
-            updatedAt: '', // Keep empty initially for counts
-            updatedBy: '', // Keep empty initially for counts
+            updatedAt: row.created_at || row.updated_at || '',
+            uploadedBy: row.uploaded_by || 'Unknown', // Map uploaded_by from raw row
             originalRow: row
         });
     });
