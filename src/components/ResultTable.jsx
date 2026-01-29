@@ -4,17 +4,17 @@ import {
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     CloudUpload, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
-import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase } from '../utils/supabaseSync';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord } from '../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProcessor';
 import databaseUrl from '../assets/DataBaseJoah.xlsx';
 
 const ResultTable = ({
     results, masterData, rawFile, locationSheetName, filterStatus,
-    onFilterChange, dbSource, onRefresh, onUpdateRowQty
+    onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct
 }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
@@ -27,15 +27,26 @@ const ResultTable = ({
     const [showHistory, setShowHistory] = useState(false);
     const [historyData, setHistoryData] = useState([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-    const [hoveredRowInfo, setHoveredRowInfo] = useState(null);
-    const hoverTimeoutRef = useRef(null);
+    const [diagnosticRow, setDiagnosticRow] = useState(null);
+    const [showQuickAdd, setShowQuickAdd] = useState(false);
+    const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
+    const [quickAddForm, setQuickAddForm] = useState({
+        barcode_no: '',
+        item_name: '',
+        rack_location: '',
+        category_1_actual: '',
+        category_2_actual: '',
+        qty: 0,
+        remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+    });
 
-    const itemsPerPage = 8;
+    const itemsPerPage = 50;
+    const rowRefs = useRef({}); // Store refs for each barcode row
 
     const filteredResults = results.filter(row => {
         const matchesSearch =
-            row.barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            row.rackLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (row.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (row.rackLocation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter =
@@ -43,77 +54,73 @@ const ResultTable = ({
         return matchesSearch && matchesFilter;
     });
 
+    // Auto-scroll logic when searching for an exact barcode
+    useEffect(() => {
+        if (searchTerm && searchTerm.length >= 4) {
+            const exactMatch = results.find(r => r.barcode === searchTerm);
+            if (exactMatch && rowRefs.current[exactMatch.barcode]) {
+                rowRefs.current[exactMatch.barcode].scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+        }
+    }, [searchTerm, results]);
+
     const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentResults = filteredResults.slice(startIndex, endIndex);
 
-    const handleMouseEnter = (e, row) => {
-        const x = e.clientX;
-        const y = e.clientY;
-        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = setTimeout(() => {
-            setHoveredRowInfo({ row, x, y });
-        }, 600);
-    };
-
-    const handleMouseMove = (e) => {
-        if (hoveredRowInfo) {
-            setHoveredRowInfo(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-        }
-    };
-
-    const handleMouseLeave = () => {
-        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-        setHoveredRowInfo(null);
-    };
-
     const getStatusHint = (row) => {
         if (!row) return null;
-        const { status, category1, category2, masterCategory1, masterCategory2 } = row;
+        const { status, category1, category2, masterCategory1, masterCategory2, reason } = row;
 
         switch (status) {
             case 'passed':
                 return {
                     title: 'ຂໍ້ມູນຖືກຕ້ອງສົມບູນ',
-                    reason: 'ທຸກຢ່າງກົງກັນ 100% ທັງໝວດໝູ່ ແລະ ສະຖານທີ່.',
+                    reason: 'ທຸກຢ່າງກົງກັນ 100% ທັງໝວດໝູ່ ແລະ ສະຖານທີ່ວາງເຄື່ອງ.',
                     action: 'ຂໍ້ມູນນີ້ສົມບູນແລ້ວ, ບໍ່ຕ້ອງມີການແກ້ໄຂເພີ່ມເຕີມ.',
                     color: 'text-emerald-500',
                     bg: 'bg-emerald-500',
-                    icon: <CheckCircle size={14} />
+                    icon: <CheckCircle size={24} />
                 };
             case 'mismatch':
-                const c1Wrong = String(category1 || '').trim() !== String(masterCategory1 || '').trim();
-                const c2Wrong = String(category2 || '').trim() !== String(masterCategory2 || '').trim();
-                let detailReason = "";
-                let detailAction = "";
-                if (c1Wrong && c2Wrong) {
-                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat1 (${category1 || 'ວ່າງ'}) ແລະ Cat2 (${category2 || 'ວ່າງ'}) ບໍ່ກົງກັບໃນລະບົບ.`;
-                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງແກ້ໄຂໃຫ້ກົງຄື: Cat1: ${masterCategory1} ແລະ Cat2: ${masterCategory2}`;
-                } else if (c1Wrong) {
-                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat1 ໃນໜ້າຮ້ານແມ່ນ [${category1 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory1}].`;
-                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat1 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory1}"`;
-                } else {
-                    detailReason = `ສາເຫດ: ຂໍ້ມູນ Cat2 ໃນໜ້າຮ້ານແມ່ນ [${category2 || 'ວ່າງ'}], ແຕ່ຂໍ້ມູນໃນລະບົບແມ່ນ [${masterCategory2}].`;
-                    detailAction = `ວິທີແກ้ໄຂ: ທ່ານຕ້ອງປ່ຽນ Cat2 ໃຫ້ກົງກັບ Master ນັ້ນກໍ່ຄື: "${masterCategory2}"`;
-                }
+                const isRackError = reason?.includes('ວາງຜິດ Rack');
+                const isCat1Error = reason?.includes('Cat-1 ບໍ່ກົງ');
+                const isCat2Error = reason?.includes('Cat-2 ບໍ່ກົງ');
+
                 return {
-                    title: 'ຂໍ້ມູນບໍ່ກົງກັນ', reason: detailReason, action: detailAction,
-                    color: 'text-rose-500', bg: 'bg-rose-500', icon: <AlertTriangle size={14} />
+                    title: 'ພົບຂໍ້ຜິດພາດ (Mismatch)',
+                    reason: reason || 'ຂໍ້ມູນບໍ່ກົງກັບຖານຂໍ້ມູນ Master',
+                    action: 'ກະລຸນາແກ້ໄຂຂໍ້ມູນ ຫຼື ຍ້າຍສິນຄ້າໄປວາງໃຫ້ຖືກຕ້ອງຕາມທີ່ລະບົບແນະນຳ.',
+                    fixSteps: [
+                        isCat1Error && `ປ່ຽນ ໝວດໝູ່ 1 ເປັນ: "${masterCategory1}"`,
+                        isCat2Error && `ປ່ຽນ ໝວດໝູ່ 2 ເປັນ: "${masterCategory2}"`,
+                        isRackError && `ຍ້າຍສິນຄ້າໄປວາງຢູ່ Rack ທີ່ຂຶ້ນຕົ້ນດ້ວຍ: ${reason.split('ຄວນແມ່ນ ')[1]?.split(')')[0] || 'ໂຊນທີ່ຖືກຕ້ອງ'}`
+                    ].filter(Boolean),
+                    color: 'text-rose-500',
+                    bg: 'bg-rose-500',
+                    icon: <AlertTriangle size={24} />
                 };
             case 'missing':
                 return {
-                    title: 'ບໍ່ພົບໃນລະບົບ',
-                    reason: `ບາໂຄ້ດ [${row.barcode}] ນີ້ ບໍ່ມີຢູ່ໃນຖານຂໍ້ມູນ Master ອ້າງອີງ.`,
-                    action: 'ກະລຸນາກວດສອບບາໂຄ້ດຄືນ ຫຼື ເພີ່ມສິນຄ້ານີ້ເຂົ້າໃນລະບົບ Master ກ່ອນ.',
-                    color: 'text-sky-500', bg: 'bg-sky-500', icon: <Search size={14} />
+                    title: 'ບໍ່ພົບໃນລະບົບ Master',
+                    reason: `ບາໂຄ້ດ [${row.barcode}] ນີ້ ບໍ່ມີຢູ່ໃນຖານຂໍ້ມູນສິນຄ້າຫຼັກ.`,
+                    action: 'ກະລຸນາກວດສອບບາໂຄ້ດຄືນ ຫຼື ເພີ່ມສິນຄ້ານີ້ເຂົ້າໃນລະບົບ "ຈັດການສິນຄ້າ" ກ່ອນ.',
+                    color: 'text-sky-500',
+                    bg: 'bg-sky-500',
+                    icon: <Search size={24} />
                 };
             default:
                 return {
-                    title: 'ຂໍ້ມູນບໍ່ສົມບູນ',
-                    reason: 'ພົบบາโຄ้ดในระบบ แต่ข้อมูลใน Master ยังไม่ครบถ้วน.',
-                    action: 'ກະລຸນາໄປອັບເດດຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນ Master ໃຫ້ຄົບຖ້ວນ.',
-                    color: 'text-amber-500', bg: 'bg-amber-500', icon: <Info size={14} />
+                    title: 'ຂໍ້ມູນ Master ບໍ່ສົມບູນ',
+                    reason: 'ພົບບາໂຄ້ດໃນລະບົບ ແຕ່ຂໍ້ມູນໃນ Master ຍັງບໍ່ທັນຄົບຖ້ວນ.',
+                    action: 'ກະລຸນາໄປທີ່ໜ້າ "ຈັດການສິນຄ້າ" ເພື່ອອັບເດດຂໍ້ມູນໝວດໝູ່ໃຫ້ຄົບຖ້ວນ.',
+                    color: 'text-amber-500',
+                    bg: 'bg-amber-500',
+                    icon: <Info size={24} />
                 };
         }
     };
@@ -138,8 +145,22 @@ const ResultTable = ({
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
-        if (dbSource === 'supabase' && !employeeName.trim()) {
-            alert('ກະລຸນາໃສ່ຊື່ພະນັກງານກ່ອນບັນທຶກ');
+
+        // Use the logged-in user's name automatically
+        // If "user" prop is available (passed from parent), use it. Otherwise fallback to localStorage or 'Unknown'
+        // For now, let's assume 'employeeName' state was previously set by prompt, but we want to override it or remove the prompt logic.
+        // We need to inject the currentUser from App.jsx into this component.
+        // BUT, since we are inside ResultTable and props might not have currentUser yet, let's check localStorage first as a quick fix or rely on a new prop.
+
+        // Better Approach: Update handleUpdateMasterQty to use a prop 'currentUser'
+        // Since I cannot see the props definition in this view, I will assume we need to add 'currentUser' to props later.
+        // For this Step, let's modify the logic to NOT check for manual input if currentUser is present.
+
+        // Actually, the previous code used `employeeName` state. We should remove the alert check.
+        const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+
+        if (dbSource === 'supabase' && !activeUser) {
+            alert('Error: User not identified. Please login again.');
             return;
         }
 
@@ -148,12 +169,12 @@ const ResultTable = ({
         const newQtyValue = Number(editQty);
         const oldQtyValue = selectedRow.qty || 0;
 
-        console.log(`[DEBUG] 🛠️ Starting Update for Barcode: ${selectedRow.barcode}`);
-        localStorage.setItem('joah_employee_name', employeeName);
+        console.log(`[DEBUG] 🛠️ Starting Update for Barcode: ${selectedRow.barcode} by ${activeUser}`);
+
 
         if (onUpdateRowQty) {
             onUpdateRowQty(selectedRow.rowIndex, {
-                qty: newQtyValue, updatedAt: now, updatedBy: employeeName
+                qty: newQtyValue, updatedAt: now, updatedBy: activeUser
             });
         }
 
@@ -164,7 +185,7 @@ const ResultTable = ({
                 // 1. Update Main Inventory
                 const { error: locError } = await supabase
                     .from('location_inventory')
-                    .update({ qty: newQtyValue, remarks: `Updated by ${employeeName} at ${now}` })
+                    .update({ qty: newQtyValue, remarks: `Updated by ${activeUser} at ${now}` })
                     .eq('id', selectedRow.id);
                 if (locError) throw locError;
 
@@ -176,7 +197,7 @@ const ResultTable = ({
                         item_name: selectedRow.masterItemName || selectedRow.itemName,
                         old_qty: oldQtyValue,
                         new_qty: newQtyValue,
-                        updated_by: employeeName
+                        updated_by: activeUser
                     }]);
 
                 if (histError) console.error("Failed to save history:", histError);
@@ -186,6 +207,29 @@ const ResultTable = ({
             alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handleQuickAddSave = async () => {
+        if (!quickAddForm.barcode_no || !quickAddForm.rack_location) {
+            alert('ກະລຸນາປ້ອນ ບາໂຄ້ດ ແລະ ສະຖານທີ່ວາງເຄື່ອງ');
+            return;
+        }
+
+        setIsSavingQuickAdd(true);
+        try {
+            const result = await addLocationRecord(quickAddForm);
+            if (result.success) {
+                alert('✅ ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ສຳເລັດແລ້ວ!');
+                setShowQuickAdd(false);
+                onRefresh(); // Trigger data reload in App.jsx
+            } else {
+                alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            setIsSavingQuickAdd(false);
         }
     };
 
@@ -340,7 +384,30 @@ const ResultTable = ({
                         <input
                             type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ຕຳແໜ່ງ..."
                             className="input-field pl-14 font-bold"
-                            value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                            value={searchTerm}
+                            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && filteredResults.length === 0 && searchTerm.length >= 5) {
+                                    if (dbSource !== 'supabase') {
+                                        alert('⚠️ ກະລຸນາເຊື່ອມຕໍ່ Cloud ຄັ້ງທຳອິດກ່ອນເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ໂດຍກົງ.');
+                                        return;
+                                    }
+
+                                    // Try to find item name in master data to pre-fill
+                                    const masterItem = masterData.find(m => m.barcode === searchTerm);
+
+                                    if (window.confirm(`ບໍ່ພົບ [${searchTerm}] ໃນລายການນີ້, ຕ້ອງການເພີ່ມເຂົ້າ Inventory (location_inventory) ເລີຍບໍ່?`)) {
+                                        setQuickAddForm(prev => ({
+                                            ...prev,
+                                            barcode_no: searchTerm,
+                                            item_name: masterItem ? masterItem.item_name : '',
+                                            category_1_actual: masterItem ? masterItem.category_1 : '',
+                                            category_2_actual: masterItem ? masterItem.category_2 : ''
+                                        }));
+                                        setShowQuickAdd(true);
+                                    }
+                                }
+                            }}
                         />
                     </div>
                     <div className="relative">
@@ -389,7 +456,11 @@ const ResultTable = ({
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                             {currentResults.length > 0 ? currentResults.map((row) => (
-                                <tr key={row.rowIndex} onMouseEnter={(e) => handleMouseEnter(e, row)} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className="group hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05] transition-all duration-300">
+                                <tr
+                                    key={row.rowIndex}
+                                    ref={el => rowRefs.current[row.barcode] = el}
+                                    className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
+                                >
                                     <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
                                     <td className="px-6 py-6">
                                         <div className="flex flex-col gap-1.5 min-w-[200px]">
@@ -419,13 +490,19 @@ const ResultTable = ({
                                         </div>
                                     </td>
                                     <td className="px-6 py-6 text-center">
-                                        <span className={`status-badge ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
+                                        <button
+                                            onClick={() => setDiagnosticRow(row)}
+                                            className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}
+                                        >
                                             {getStatusHint(row).icon}
                                             {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
-                                        </span>
+                                        </button>
                                     </td>
                                     <td className="px-8 py-6 text-right">
                                         <div className="flex items-center justify-end gap-2">
+                                            <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
+                                                <Info size={18} />
+                                            </button>
                                             {dbSource === 'supabase' && (
                                                 <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
                                                     <History size={18} />
@@ -439,10 +516,42 @@ const ResultTable = ({
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="7" className="py-32 text-center">
-                                        <div className="flex flex-col items-center gap-4 text-slate-300 dark:text-slate-700">
-                                            <Package size={64} strokeWidth={1} className="animate-float" />
-                                            <p className="text-sm font-black uppercase tracking-[0.3em]">No Records Found</p>
+                                    <td colSpan="7" className="py-24 text-center">
+                                        <div className="flex flex-col items-center gap-6 text-slate-300 dark:text-slate-700 animate-fade-in">
+                                            <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center text-slate-300 shadow-inner">
+                                                <Package size={40} strokeWidth={1.5} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-lg font-black text-slate-800 dark:text-white">ບໍ່ພົບຂໍ້ມູນໃນລາຍການ</p>
+                                                {searchTerm.length > 0 ? (
+                                                    <p className="text-sm font-bold text-slate-400">ບໍ່ພົບຜົນການຄົ້ນຫາສຳລັບ: <span className="text-joah-orange font-mono underline decoration-2 underline-offset-4">{searchTerm}</span></p>
+                                                ) : (
+                                                    <p className="text-sm font-bold text-slate-400 tracking-widest uppercase">ກະລຸນາລອງຄົ້ນຫາຄືนໃໝ່</p>
+                                                )}
+                                            </div>
+                                            {searchTerm.length >= 5 && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (dbSource !== 'supabase') {
+                                                            alert('⚠️ ກະລຸນາເຊື່ອນຕໍ່ Cloud ກ່ອນເພີ່ມຂໍ້ມູນ.');
+                                                            return;
+                                                        }
+                                                        const masterItem = masterData.find(m => m.barcode === searchTerm);
+                                                        setQuickAddForm(prev => ({
+                                                            ...prev,
+                                                            barcode_no: searchTerm,
+                                                            item_name: masterItem ? masterItem.item_name : '',
+                                                            category_1_actual: masterItem ? masterItem.category_1 : '',
+                                                            category_2_actual: masterItem ? masterItem.category_2 : ''
+                                                        }));
+                                                        setShowQuickAdd(true);
+                                                    }}
+                                                    className="btn-primary py-4 px-10 rounded-2xl shadow-xl shadow-joah-orange/20 group transform hover:scale-105 active:scale-95 transition-all"
+                                                >
+                                                    <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                                                    <span className="font-black">ເພີ່ມເຂົ້າ Inventory ໂດຍກົງ</span>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -461,6 +570,118 @@ const ResultTable = ({
                     </div>
                 </div>
             </div>
+
+            {/* Diagnostic Modal [NEW] */}
+            {diagnosticRow && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/60 animate-fade-in">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3rem] overflow-hidden border-2 border-slate-100 dark:border-slate-800 shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className={`p-8 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 ${getStatusHint(diagnosticRow).bg}/10`}>
+                            <div className="flex items-center gap-6">
+                                <div className={`p-4 rounded-3xl text-white ${getStatusHint(diagnosticRow).bg} shadow-xl`}>
+                                    {getStatusHint(diagnosticRow).icon}
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white">{getStatusHint(diagnosticRow).title}</h3>
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Validation Analysis Report</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setDiagnosticRow(null)} className="p-4 hover:bg-white dark:hover:bg-slate-800 rounded-2xl transition-all shadow-inner">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                            {/* Summary Box */}
+                            <div className="p-6 rounded-[2rem] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">ສາເຫດ (Root Cause)</p>
+                                <p className="text-lg font-bold text-slate-800 dark:text-slate-200 leading-relaxed">{getStatusHint(diagnosticRow).reason}</p>
+                            </div>
+
+                            {/* Comparison Table */}
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <p className="px-2 text-xs font-black text-slate-400 uppercase tracking-widest text-center">ຂໍ້ມູນທີ່ກວດພົບ (Actual)</p>
+                                    <div className="p-5 rounded-[2rem] bg-rose-50/30 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-900/30 space-y-4">
+                                        <div>
+                                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ໝວດໝູ່ 1</p>
+                                            <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.category1 || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ໝວດໝູ່ 2</p>
+                                            <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.category2 || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ບ່ອນວາງ (Rack)</p>
+                                            <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.rackLocation}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <p className="px-2 text-xs font-black text-emerald-500 uppercase tracking-widest text-center">ຂໍ້ມູນທີ່ຖືກຕ້ອງ (Master)</p>
+                                    <div className="p-5 rounded-[2rem] bg-emerald-50/30 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-900/30 space-y-4">
+                                        <div>
+                                            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໝວດໝູ່ 1</p>
+                                            <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.masterCategory1 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໝວດໝູ່ 2</p>
+                                            <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.masterCategory2 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໂຊนທີ່ຄວນຢູ່</p>
+                                            <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.status === 'passed' ? diagnosticRow.rackLocation : (diagnosticRow.reason?.includes('ຄວນແມ່ນ') ? diagnosticRow.reason.split('ຄວນແມ່ນ ')[1].split(')')[0] : '-')}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action/Fix Steps */}
+                            <div className="p-8 rounded-[2rem] bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-xl shadow-indigo-500/20">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <HelpCircle size={20} />
+                                    <p className="text-sm font-black uppercase tracking-widest">ວິທີແກ້ໄຂ (Solution Steps)</p>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-base font-medium opacity-90">{getStatusHint(diagnosticRow).action}</p>
+                                    {getStatusHint(diagnosticRow).fixSteps?.length > 0 && (
+                                        <div className="pt-4 space-y-3">
+                                            {getStatusHint(diagnosticRow).fixSteps.map((step, idx) => (
+                                                <div key={idx} className="flex gap-4 items-center bg-white/10 p-4 rounded-2xl border border-white/10">
+                                                    <div className="w-8 h-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-black flex-shrink-0">{idx + 1}</div>
+                                                    <p className="text-sm font-bold">{step}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-4">
+                            <button onClick={() => setDiagnosticRow(null)} className="px-8 h-14 rounded-2xl font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:bg-white dark:hover:bg-slate-800 transition-all text-xs">
+                                ປິດໜ້າຕ່າງ
+                            </button>
+                            {diagnosticRow.status !== 'passed' && (
+                                <button
+                                    onClick={() => {
+                                        setDiagnosticRow(null);
+                                        setSelectedRow(diagnosticRow);
+                                        setEditQty(diagnosticRow.qty);
+                                    }}
+                                    className="px-8 h-14 rounded-2xl bg-joah-orange text-white font-black uppercase tracking-widest hover:scale-105 transition-all text-xs shadow-lg shadow-orange-500/30 flex items-center gap-2"
+                                >
+                                    <Edit2 size={16} />
+                                    ແກ້ໄຂຂໍ້ມູນ
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Edit Modal */}
             {selectedRow && (
@@ -515,7 +736,12 @@ const ResultTable = ({
                                     <span className="absolute -top-3 left-4 px-2 bg-white dark:bg-slate-900 text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-joah-orange z-10 transition-colors">Verifier Name</span>
                                     <div className="relative">
                                         <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors" size={16} />
-                                        <input type="text" placeholder="ໃສ່ຊື່ເຈົ້າຂອງຜົນກວດ..." value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="input-field pl-12 py-3.5 text-sm font-bold" />
+                                        <input
+                                            type="text"
+                                            value={currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown')}
+                                            readOnly
+                                            className="input-field pl-12 py-3.5 text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -583,27 +809,101 @@ const ResultTable = ({
                     </div>
                 </div>
             )}
+            {/* Quick Add to Inventory Modal */}
+            {showQuickAdd && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-950/40 animate-fade-in">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] p-10 border border-slate-200 dark:border-slate-800 shadow-2xl animate-scale-in relative overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-4">
+                                <div className="p-4 rounded-[1.25rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
+                                    <Plus size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ໂດຍກົງ</h3>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Add to location_inventory</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowQuickAdd(false)} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
 
-            {/* Smart Hover Tooltip */}
-            {hoveredRowInfo && (
-                <div className="fixed z-[999] pointer-events-none animate-scale-in origin-top-left" style={{ left: `${hoveredRowInfo.x + 20}px`, top: `${hoveredRowInfo.y + 20}px` }}>
-                    <div className="w-[340px] glass-card dark:glass-card-dark rounded-[2rem] shadow-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800/80">
-                        <div className={`p-5 flex items-center gap-4 border-b border-slate-100 dark:border-slate-800/50 ${getStatusHint(hoveredRowInfo.row).bg}/10`}>
-                            <div className={`p-2.5 rounded-2xl text-white ${getStatusHint(hoveredRowInfo.row).bg} shadow-lg`}>{getStatusHint(hoveredRowInfo.row).icon}</div>
-                            <div className="space-y-0.5">
-                                <h5 className="text-sm font-black text-slate-800 dark:text-white leading-none tracking-tight">{getStatusHint(hoveredRowInfo.row).title}</h5>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Diagnostics</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Barcode</label>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.barcode_no}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, barcode_no: e.target.value })}
+                                    className="input-field py-4 font-mono font-bold"
+                                    placeholder="ບາໂຄ້ດສິນຄ້າ..."
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Name</label>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.item_name}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, item_name: e.target.value })}
+                                    className="input-field py-4 font-bold"
+                                    placeholder="ຊື່ສິນຄ້າ..."
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rack Location</label>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.rack_location}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, rack_location: e.target.value })}
+                                    className="input-field py-4 font-bold"
+                                    placeholder="ເຊັ່ນ: G01-L1"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Qty</label>
+                                <input
+                                    type="number"
+                                    value={quickAddForm.qty}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, qty: Number(e.target.value) })}
+                                    className="input-field py-4 font-black text-joah-orange"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 font-bold">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category 1</label>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.category_1_actual}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, category_1_actual: e.target.value })}
+                                    className="input-field py-4"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5 font-bold">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category 2</label>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.category_2_actual}
+                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, category_2_actual: e.target.value })}
+                                    className="input-field py-4"
+                                />
                             </div>
                         </div>
-                        <div className="p-6 space-y-4">
-                            <div className="space-y-1.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ສັງເກດເຫັນຂໍ້ຜິດພາດ:</p>
-                                <p className="text-xs font-bold leading-relaxed text-slate-700 dark:text-slate-300">{getStatusHint(hoveredRowInfo.row).reason}</p>
-                            </div>
-                            <div className="space-y-1.5 p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/50 shadow-sm">
-                                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">ວິທີແກ້ໄຂ:</p>
-                                <p className="text-xs font-black leading-relaxed text-slate-800 dark:text-white">{getStatusHint(hoveredRowInfo.row).action}</p>
-                            </div>
+
+                        <div className="flex gap-4 mt-10">
+                            <button onClick={() => setShowQuickAdd(false)} className="flex-1 btn-secondary py-5 rounded-[1.25rem] font-black uppercase text-xs tracking-widest bg-slate-100 dark:bg-slate-800 border-none">Cancel</button>
+                            <button
+                                onClick={handleQuickAddSave}
+                                disabled={isSavingQuickAdd}
+                                className="flex-[2] btn-primary py-5 rounded-[1.25rem] font-black uppercase text-xs tracking-widest shadow-emerald-500/20 bg-emerald-600 hover:bg-emerald-700 border-none"
+                            >
+                                {isSavingQuickAdd ? <Loader2 className="animate-spin" /> : <Save size={18} />}
+                                <span>{isSavingQuickAdd ? 'Saving...' : 'Add to Inventory'}</span>
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -23,15 +23,15 @@ export const syncMasterDataToSupabase = async (masterDataArray) => {
                 return '';
             };
 
-            const barcode = String(row['Barcode No.'] || row.barcode || row.Barcode || row.BARCODE || '').trim();
+            const barcode = String(row['Barcode No.'] || row.barcode || row.barcode_no || row.Barcode || row.BARCODE || '').trim();
             if (barcode) {
-                const itemNameValue = getVal(['Product Name(LA)', 'Item Name', 'product_name_la', 'Product Name', 'ລາຍການ', 'ITEM NAME']);
+                const itemNameValue = getVal(['Product Name(LA)', 'Item Name', 'product_name_la', 'item_name', 'Product Name', 'ລາຍການ', 'ITEM NAME', 'product_name']);
                 uniqueMap.set(barcode, {
                     barcode: barcode,
                     product_name_la: itemNameValue,
-                    item_name: itemNameValue, // Add item_name field
-                    category_1: getVal(['category_1', 'category1', 'CATEGORIES 1', 'Category 1', 'Category-1']),
-                    category_2: getVal(['category_2', 'category2', 'CATEGORIES 2', 'Category 2', 'Category-2']),
+                    item_name: itemNameValue, // Sync both for compatibility
+                    category_1: getVal(['category_1', 'category1', 'CATEGORIES 1', 'Category 1', 'Category-1', 'category_1_actual']),
+                    category_2: getVal(['category_2', 'category2', 'CATEGORIES 2', 'Category 2', 'Category-2', 'category_2_actual']),
                     qty: Number(row.qty || row.Qty || row.QTY || 0)
                 });
             }
@@ -39,24 +39,20 @@ export const syncMasterDataToSupabase = async (masterDataArray) => {
 
         const finalData = Array.from(uniqueMap.values());
 
-        // 3. Insert new data in chunks (Optimized for 30,000+ records)
+        // 3. Insert new data in chunks
         const chunkSize = 1000;
         for (let i = 0; i < finalData.length; i += chunkSize) {
             const { error: insertError } = await supabase.from('master_data').insert(finalData.slice(i, i + chunkSize));
             if (insertError) throw insertError;
         }
 
-        return { success: true };
+        return { success: true, synced: finalData.length };
     } catch (error) {
         console.error('Master Sync Error:', error);
         return { success: false, error: error.message };
     }
 };
 
-/**
- * Fetch ALL Master Data from Supabase (Handling pagination)
- * ดึงข้อมูลทั้งหมดโดยไม่จำกัดแค่ 1,000 แถว
- */
 export const fetchMasterFromSupabase = async () => {
     try {
         let allData = [];
@@ -68,12 +64,12 @@ export const fetchMasterFromSupabase = async () => {
             const { data, error } = await supabase
                 .from('master_data')
                 .select('*')
-                .order('barcode', { ascending: true }) // Ensure stable order
+                .order('barcode', { ascending: true })
                 .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
 
             if (error) throw error;
 
-            if (data.length > 0) {
+            if (data && data.length > 0) {
                 allData = [...allData, ...data];
                 curPage++;
             } else {
@@ -85,7 +81,7 @@ export const fetchMasterFromSupabase = async () => {
 
         return allData;
     } catch (error) {
-        console.error('Fetch Error:', error);
+        console.error('Fetch Master Error:', error);
         return null;
     }
 };
@@ -133,8 +129,32 @@ export const syncLocationResultsToSupabase = async (validatedResults) => {
 };
 
 /**
- * Fetch ALL Location counting data from Supabase
+ * 3. ເພີ່ມຂໍ້ມູນໃໝ່ເຂົ້າ location_inventory (Single Insert)
  */
+export const addLocationRecord = async (record) => {
+    try {
+        const { data, error } = await supabase
+            .from('location_inventory')
+            .insert([{
+                barcode_no: record.barcode_no,
+                item_name: record.item_name,
+                rack_location: record.rack_location,
+                category_1_actual: record.category_1_actual,
+                category_2_actual: record.category_2_actual,
+                qty: Number(record.qty || 0),
+                validation_status: record.validation_status || 'ປົກກະຕິ',
+                remarks: record.remarks || ''
+            }])
+            .select();
+
+        if (error) throw error;
+        return { success: true, data };
+    } catch (error) {
+        console.error('Add Location Record Error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 export const fetchLocationFromSupabase = async () => {
     try {
         let allData = [];

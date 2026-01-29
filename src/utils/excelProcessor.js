@@ -209,6 +209,35 @@ export const validateData = (locationRows, dataRows) => {
 
         const masterData = masterMap.get(barcode);
 
+        // --- เพิ่มระบบตรวจสอบ Rack ตาม Mapdata.MD ---
+        const checkRackMatch = (cat1, rack) => {
+            if (!cat1 || !rack) return { match: true }; // ข้ามถ้าข้อมูลไม่ครบ
+            const c = cat1.toUpperCase().trim();
+            const r = rack.toUpperCase().trim();
+
+            const RACK_RULES = [
+                { cats: ['KITCHEN'], pattern: /^((G0[1-8]|H0[2-4])-L[1-5]|ໂລພື້ນ\s?G(9|10|11))/i, label: 'G01-08-L1-5, H02-04-L1-5 ຫຼື G9-11' },
+                { cats: ['BEAUTY'], pattern: /^(E0[1-4]-L[1-5]|ໂລພື້ນE\s?[578])/i, label: 'E01-04-L1-5 ຫຼື E5,7,8' },
+                { cats: ['STATIONERY'], pattern: /^(S0[1235678]-L[1-5]|S10-L[1-4])/i, label: 'S01-08-L1-5 ຫຼື S10-L1-4' },
+                { cats: ['TOYS'], pattern: /^S09-L[1-5]/i, label: 'S09-L1-5' },
+                { cats: ['CLEANING/BATH'], pattern: /^(A0[1-35]-L[1-5]|A04-L[1-6])/i, label: 'A01-05 (A04 ຮອດ L6)' },
+                { cats: ['INTERIOR'], pattern: /^(B01-L[1-3]|B0[2-4]-L[1-4])/i, label: 'B01-L1-3, B02-04-L1-4' },
+                { cats: ['TOOL/DIGITAL'], pattern: /^F0[1-4]-L[1-5]/i, label: 'F01-04-L1-5' },
+                { cats: ['STORAGE'], pattern: /^(D0[1-6]-L[1-5]|ໂລພື້ນ\s?D0?[78])/i, label: 'D01-06-L1-5 ຫຼື D07-08' },
+                { cats: ['FASHION'], pattern: /^C0[1-4]-L[1-5]/i, label: 'C01-04-L1-5' },
+                { cats: ['SPORTS/LEISURE', 'SPORT LEISURE', 'SPORT'], pattern: /^H01-L[1-5]/i, label: 'H01-L1-5' },
+            ];
+
+            const rule = RACK_RULES.find(rule => rule.cats.includes(c));
+            if (rule) {
+                return {
+                    match: rule.pattern.test(r),
+                    expected: rule.label
+                };
+            }
+            return { match: true }; // ถ้าไม่มีใน Rule ให้ถือว่าผ่าน
+        };
+
         if (!masterData) {
             // ไม่พบ Barcode ใน DATA
             status = 'missing';
@@ -219,20 +248,24 @@ export const validateData = (locationRows, dataRows) => {
             const cat1Match = normalizeForComparison(category1) === normalizeForComparison(masterData.category1);
             const cat2Match = normalizeForComparison(category2) === normalizeForComparison(masterData.category2);
 
+            // ตรวจสอบ Rack กับ Category หลัก (Master)
+            const rackValidation = checkRackMatch(masterData.category1, rackLocation);
+
             if (!masterData.category1 || !masterData.category2) {
                 // Categories ใน DATA เป็นค่าว่าง
                 status = 'incomplete';
                 color = 'blue';
                 reason = 'ຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນບໍ່ຄົບຖ້ວນ';
                 stats.missing++;
-            } else if (!cat1Match || !cat2Match) {
+            } else if (!cat1Match || !cat2Match || !rackValidation.match) {
                 // ถ้าอย่างใดอย่างหนึ่งไม่ตรง -> Mismatch (สีแดง)
                 status = 'mismatch';
                 color = 'red';
 
                 let mismatchReason = [];
-                if (!cat1Match) mismatchReason.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1 || 'ປ່ຽນແປງ'})`);
-                if (!cat2Match) mismatchReason.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2 || 'ປ່ຽນແປງ'})`);
+                if (!cat1Match) mismatchReason.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1})`);
+                if (!cat2Match) mismatchReason.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2})`);
+                if (!rackValidation.match) mismatchReason.push(`ວາງຜິດ Rack (ຄວນແມ່ນ ${rackValidation.expected})`);
 
                 reason = mismatchReason.join(' | ');
                 stats.mismatch++;

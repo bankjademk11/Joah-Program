@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2 } from 'lucide-react';
+import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const HistoryLog = ({ onClose }) => {
     const [historyData, setHistoryData] = useState([]);
@@ -8,6 +8,8 @@ const HistoryLog = ({ onClose }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 50;
 
     useEffect(() => {
         const fetchAllHistory = async () => {
@@ -31,6 +33,11 @@ const HistoryLog = ({ onClose }) => {
         fetchAllHistory();
     }, []);
 
+    // Reset page on search
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, startDate, endDate]);
+
     const filteredData = historyData.filter(log => {
         const matchesSearch = (log.updated_by || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (log.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -44,6 +51,10 @@ const HistoryLog = ({ onClose }) => {
 
         return matchesSearch && matchesDate;
     });
+
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const currentItems = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-900/60 animate-fade-in">
@@ -125,7 +136,7 @@ const HistoryLog = ({ onClose }) => {
                                     </td>
                                 </tr>
                             ) : filteredData.length > 0 ? (
-                                filteredData.map((row) => (
+                                currentItems.map((row) => (
                                     <tr key={row.id} className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
                                         <td className="p-5">
                                             <div className="flex flex-col">
@@ -163,6 +174,22 @@ const HistoryLog = ({ onClose }) => {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 flex-shrink-0">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Showing <span className="text-slate-900 dark:text-white">{Math.min(startIndex + 1, filteredData.length)}-{Math.min(startIndex + itemsPerPage, filteredData.length)}</span> of <span className="text-slate-900 dark:text-white">{filteredData.length}</span> logs</p>
+                    <div className="flex gap-2">
+                        <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30">
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div className="flex items-center px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black text-slate-900 dark:text-white">
+                            {currentPage} / {totalPages || 1}
+                        </div>
+                        <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30">
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

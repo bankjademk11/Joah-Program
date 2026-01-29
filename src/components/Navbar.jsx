@@ -10,7 +10,8 @@ const Navbar = ({
     isProcessing,
     onRefresh,
     onShowHistory,
-    onReset
+    onReset,
+    currentUser // New prop
 }) => {
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
@@ -63,6 +64,14 @@ const Navbar = ({
 
                     {/* === RIGHT: Actions Section === */}
                     <div className="flex items-center gap-4">
+                        {/* User Profile Badge */}
+                        {currentUser && (
+                            <div className="hidden md:flex flex-col items-end mr-2">
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Logged in as</p>
+                                <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{currentUser.name}</p>
+                            </div>
+                        )}
+
                         {/* Action Buttons Container */}
                         <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
                             {/* History Button - Hidden on Upload page */}

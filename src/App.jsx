@@ -19,7 +19,14 @@ import { RefreshCw, Database, CloudUpload, LayoutDashboard, Database as DBIcon, 
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
+import Login from './components/Login';
+import ProductManager from './components/ProductManager';
+import MasterAudit from './components/MasterAudit';
+
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
+
   const [step, setStep] = useState('upload');
   const [workbook, setWorkbook] = useState(null);
   const [rawFile, setRawFile] = useState(null);
@@ -42,6 +49,7 @@ function App() {
     return false;
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [preFilledBarcode, setPreFilledBarcode] = useState(null);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -52,6 +60,23 @@ function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+
+  const handleLogin = (userInfo) => {
+    setUser(userInfo);
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUser(null);
+    setStep('upload');
+    setPreFilledBarcode(null);
+  };
+
+  const handleGotoProductManager = (barcode) => {
+    setPreFilledBarcode(barcode);
+    setStep('product-manager');
+  };
 
   const handleFileSelect = async (file) => {
     setIsProcessing(true);
@@ -79,8 +104,13 @@ function App() {
   const handleDatabaseLoad = async () => {
     setIsProcessing(true);
     try {
-      const cloudMaster = await fetchMasterFromSupabase();
-      if (cloudMaster && cloudMaster.length > 0) {
+      // Check for both Master Data and Location Counting data
+      const [cloudMaster, cloudLocation] = await Promise.all([
+        fetchMasterFromSupabase(),
+        fetchLocationFromSupabase()
+      ]);
+
+      if ((cloudMaster && cloudMaster.length > 0) || (cloudLocation && cloudLocation.length > 0)) {
         setDbSource('supabase');
         setDataSourceLabel('Cloud Mode (Supabase)');
         await handleValidate({
@@ -91,7 +121,13 @@ function App() {
       } else {
         setDbSource('excel');
         setDataSourceLabel('Pre-built Mode (Local Assets)');
-        alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud. ລະບົບຈະໂຫຼດຂໍ້ມູນຕົວຢ່າງຈາກໄຟລ໌ພາຍໃນແທน.');
+
+        const isError = cloudMaster === null || cloudLocation === null;
+        if (isError) {
+          alert('❌ ບໍ່ສາມາດເຊື່ອມຕໍ່ກັບ Cloud ໄດ້. ກະລຸນາກວດສອບ Internet ຫຼື Supabase Connection.');
+        } else {
+          alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud (ທັງ Master ແລະ Inventory). ກະລຸນາ Sync ຂໍ້ມູນກ່อน หรือ ใช้ข้อมูลจากไฟล์ส่วนตัวแทน.');
+        }
       }
 
       const wb = await readExcelFromUrl(databaseUrl);
@@ -120,22 +156,36 @@ function App() {
       let locationRows = [];
 
       if (activeSource === 'supabase') {
-        const cloudMaster = await fetchMasterFromSupabase();
+        const [cloudMaster, cloudLocation] = await Promise.all([
+          fetchMasterFromSupabase(),
+          fetchLocationFromSupabase()
+        ]);
+
         if (!cloudMaster || cloudMaster.length === 0) {
-          throw new Error("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud.");
+          // If no master data, we can't validate properly, but let's try to proceed if we have location data
+          console.warn("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud.");
         }
-        dataRows = cloudMaster.map(d => ({
-          'CATEGORIES 1': d.category_1, 'CATEGORIES 2': d.category_2, 'Barcode': d.barcode,
-          'Item Name': d.item_name, 'Qty': d.qty, 'updated_at': d.updated_at, 'updated_by': d.updated_by
+
+        dataRows = (cloudMaster || []).map(d => ({
+          'CATEGORIES 1': d.category_1,
+          'CATEGORIES 2': d.category_2,
+          'Barcode': d.barcode,
+          'product_name_la': d.product_name_la,
+          'item_name': d.item_name,
+          'Item Name': d.product_name_la || d.item_name,
+          'Qty': d.qty,
+          'updated_at': d.updated_at,
+          'updated_by': d.updated_by
         }));
-        const cloudLocation = await fetchLocationFromSupabase();
-        if (!cloudLocation || cloudLocation.length === 0) {
-          throw new Error("ບໍ່ພົບຂໍ້ມູນ Location Inventory.");
-        }
-        locationRows = cloudLocation.map(l => ({
-          id: l.id, 'Barcode': l.barcode_no, 'Rack Location': l.rack_location,
-          'Category-1': l.category_1_actual, 'Category-2': l.category_2_actual,
-          'QTY': l.qty, 'Item Name': l.item_name
+
+        locationRows = (cloudLocation || []).map(l => ({
+          id: l.id,
+          'Barcode': l.barcode_no,
+          'Rack Location': l.rack_location,
+          'Category-1': l.category_1_actual,
+          'Category-2': l.category_2_actual,
+          'QTY': l.qty,
+          'Item Name': l.item_name
         }));
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
@@ -174,6 +224,10 @@ function App() {
     }
   };
 
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots">
       {/* Navigation */}
@@ -187,6 +241,7 @@ function App() {
         onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
         onShowHistory={() => setShowHistory(true)}
         onReset={() => window.location.reload()}
+        currentUser={user}
       />
 
       {/* Main Content */}
@@ -202,11 +257,11 @@ function App() {
                 ກວດສອບຄວາມຖືກຕ້ອງ <br /><span className="text-joah-orange">ສິນຄ້າໃນສາງ</span>
               </h1>
               <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                ລະບົບກວດສອບຂໍ້ມູນສິນຄ້າອັດຕະໂນມັດ ປຽບທຽບລະຫວ່າງໜ້າວຽກຈິງ ແລະ ຖານຂໍ້ມູນກາງ ເພື່ອຄວາມແມ່ນຍຳ 100%
+                ລະບົບກວດສອບຂໍ້ມູນสິນค้าອັດຕະໂນມັດ ປຽບທຽບລະຫວ່າງໜ້າວຽກຈິງ ແລະ ຖານຂໍ້ມູນກາງ ເພື່ອຄວາມສະດວກ
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8 w-full max-w-4xl">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-7xl">
               <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
 
               <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500">
@@ -224,6 +279,40 @@ function App() {
                 >
                   {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
                   <span>ສືບຕໍ່ດ້ວຍ Cloud Database</span>
+                </button>
+              </div>
+
+              <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500">
+                <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                  <LayoutDashboard size={32} strokeWidth={2.5} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
+                </div>
+                <button
+                  onClick={() => setStep('product-manager')}
+                  className="w-full btn-primary mt-2 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
+                >
+                  <LayoutDashboard size={18} />
+                  <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
+                </button>
+              </div>
+
+              <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500">
+                <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                  <Database size={32} strokeWidth={2.5} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
+                </div>
+                <button
+                  onClick={() => setStep('master-audit')}
+                  className="w-full btn-primary mt-2 group py-4 bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
+                >
+                  <Database size={18} />
+                  <span>ກວດສອບ Master Data</span>
                 </button>
               </div>
             </div>
@@ -252,6 +341,18 @@ function App() {
           </div>
         )}
 
+        {step === 'product-manager' && (
+          <ProductManager
+            onBack={() => { setStep('upload'); setPreFilledBarcode(null); }}
+            currentUser={user}
+            initialBarcode={preFilledBarcode}
+          />
+        )}
+
+        {step === 'master-audit' && (
+          <MasterAudit onBack={() => setStep('upload')} currentUser={user} />
+        )}
+
         {step === 'results' && (
           <div className="w-full h-full space-y-8 animate-fade-in-up">
             <Dashboard stats={stats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
@@ -265,6 +366,8 @@ function App() {
               dbSource={dbSource}
               onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
               onUpdateRowQty={handleUpdateResultRowQty}
+              currentUser={user}
+              onAddNewProduct={handleGotoProductManager}
             />
           </div>
         )}
