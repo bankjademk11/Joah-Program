@@ -44,6 +44,7 @@ const ResultTable = ({
         remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
     });
     const [inspectedLocation, setInspectedLocation] = useState(null); // New state for location inspector
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // New sort state
 
     // --- Helper to render Location Contents Inspector ---
     const renderLocationInspector = () => {
@@ -223,16 +224,47 @@ const ResultTable = ({
     const itemsPerPage = 50;
     const rowRefs = useRef({}); // Store refs for each barcode row
 
-    const filteredResults = results.filter(row => {
-        const matchesSearch =
-            (row.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (row.rackLocation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter =
-            filterStatus === 'all' || row.status === filterStatus || (filterStatus === 'missing' && row.status === 'incomplete');
-        return matchesSearch && matchesFilter;
-    });
+    const filteredResults = results
+        .filter(row => {
+            const matchesSearch =
+                (row.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (row.rackLocation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesFilter =
+                filterStatus === 'all' ||
+                row.status === filterStatus ||
+                (filterStatus === 'missing' && row.status === 'incomplete') ||
+                (filterStatus === 'zero' && parseFloat(row.qty) === 0) ||
+                (filterStatus === 'hasQty' && parseFloat(row.qty) > 0);
+            return matchesSearch && matchesFilter;
+        })
+        .sort((a, b) => {
+            if (!sortConfig.key) return 0;
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+
+            if (sortConfig.key === 'qty') {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            } else {
+                valA = String(valA || '').toLowerCase();
+                valB = String(valB || '').toLowerCase();
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+        setCurrentPage(1);
+    };
 
     // Auto-scroll logic when searching for an exact barcode
     useEffect(() => {
@@ -578,6 +610,8 @@ const ResultTable = ({
                                 <option value="passed">✅ ຖືກຕ້ອງ (Passed)</option>
                                 <option value="mismatch">❌ ບໍ່ກົງກັນ (Mismatch)</option>
                                 <option value="missing">❓ ຂໍ້ມູນບໍ່ຄົບ (Missing)</option>
+                                <option value="zero">⚠️ ສິນຄ້າເປັນ 0 (Zero)</option>
+                                <option value="hasQty">📦 ສິນຄ້າມີຈໍานວນ (In Stock)</option>
                             </select>
                             <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         </div>
@@ -606,7 +640,19 @@ const ResultTable = ({
                                     <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">#</th>
                                     <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Barcode / Product</th>
                                     <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Rack Location</th>
-                                    <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Count / System</th>
+                                    <th
+                                        onClick={() => handleSort('qty')}
+                                        className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:text-joah-orange transition-colors group/head"
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            Count / System
+                                            <div className={`transition-all duration-300 ${sortConfig.key === 'qty' ? 'text-joah-orange scale-110' : 'text-slate-300 group-hover/head:text-joah-orange/50'}`}>
+                                                {sortConfig.key === 'qty' ? (
+                                                    sortConfig.direction === 'asc' ? <ChevronDown size={14} strokeWidth={3} /> : <ChevronDown size={14} className="rotate-180" strokeWidth={3} />
+                                                ) : <ArrowUpDown size={14} />}
+                                            </div>
+                                        </div>
+                                    </th>
                                     <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">Categories</th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Status</th>
                                     <th className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Action</th>

@@ -130,6 +130,8 @@ export const validateData = (locationRows, dataRows) => {
         passed: 0,
         mismatch: 0, // สีแดง
         missing: 0,  // สีฟ้า
+        zeroQty: 0,  // สินค้าเป็น 0
+        hasQty: 0,   // สินค้ามีจำนวน
     };
 
     locationRows.forEach((row, index) => {
@@ -178,6 +180,11 @@ export const validateData = (locationRows, dataRows) => {
             // Fallback: เช็ค __EMPTY_6 (เผื่อมี)
             if (!qty && row['__EMPTY_6']) qty = row['__EMPTY_6'];
         }
+
+        // เพิ่มการตรวจจับสินค้าที่เป็น 0
+        const numericQty = parseFloat(qty) || 0;
+        if (numericQty === 0) stats.zeroQty++;
+        else if (numericQty > 0) stats.hasQty++;
 
         // ดึงข้อมูล Date (Column H)
         let inputDate = '';

@@ -1,6 +1,9 @@
-import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen } from 'lucide-react';
+import { useState } from 'react';
 
 const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
+    const [isZeroMode, setIsZeroMode] = useState(true);
+
     const cards = [
         {
             id: 'all',
@@ -46,6 +49,18 @@ const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
             iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500',
             ring: 'ring-amber-500/30'
         },
+        {
+            id: isZeroMode ? 'zero' : 'hasQty',
+            title: isZeroMode ? 'ສິນຄ້າເປັນ 0' : 'ສິນຄ້າມີຈໍານວນ',
+            subtitle: isZeroMode ? 'Zero Quantity' : 'In Stock Items',
+            value: isZeroMode ? (stats.zeroQty || 0) : (stats.hasQty || 0),
+            icon: isZeroMode ? AlertTriangle : PackageOpen,
+            gradient: isZeroMode ? 'from-orange-500 to-red-600' : 'from-sky-500 to-blue-600',
+            glow: isZeroMode ? 'shadow-orange-500/25' : 'shadow-sky-500/25',
+            iconBg: isZeroMode ? 'bg-gradient-to-br from-orange-400 to-red-500' : 'bg-gradient-to-br from-sky-400 to-blue-500',
+            ring: isZeroMode ? 'ring-orange-500/30' : 'ring-sky-500/30',
+            isToggle: true
+        },
     ];
 
     const percentage = (value) => stats.total > 0 ? ((value / stats.total) * 100).toFixed(1) : 0;
@@ -70,7 +85,7 @@ const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
                 {cards.map((card, index) => {
                     const Icon = card.icon;
                     const isActive = activeFilter === card.id;
@@ -105,8 +120,23 @@ const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
                                             {card.title}
                                         </h4>
                                     </div>
-                                    <div className={`p-3 rounded-2xl transition-all duration-300 ${isActive ? 'bg-white/20 text-white' : `${card.iconBg} text-white shadow-lg ${card.glow}`} group-hover:scale-110`}>
-                                        <Icon size={20} strokeWidth={2.5} />
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-3 rounded-2xl transition-all duration-300 ${isActive ? 'bg-white/20 text-white' : `${card.iconBg} text-white shadow-lg ${card.glow}`} group-hover:scale-110`}>
+                                            <Icon size={20} strokeWidth={2.5} />
+                                        </div>
+                                        {card.isToggle && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsZeroMode(!isZeroMode);
+                                                    if (isActive) onFilterChange(isZeroMode ? 'hasQty' : 'zero');
+                                                }}
+                                                className={`p-2 rounded-xl border border-white/20 hover:bg-white/10 transition-all ${isActive ? 'text-white' : 'text-slate-400 opacity-0 group-hover:opacity-100'}`}
+                                                title="สลับโหมด"
+                                            >
+                                                <RefreshCw size={14} className={isActive ? 'animate-spin-slow' : ''} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
