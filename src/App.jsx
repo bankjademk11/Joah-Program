@@ -13,15 +13,16 @@ import {
   suggestSheetMapping
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
-import { fetchMasterFromSupabase, syncMasterDataToSupabase, fetchLocationFromSupabase } from './utils/supabaseSync';
+import { fetchMasterFromSupabase, syncMasterDataToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/HistoryLog';
-import { RefreshCw, Database, CloudUpload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History } from 'lucide-react';
+import { RefreshCw, Database, CloudUpload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2 } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
 import Login from './components/Login';
 import ProductManager from './components/ProductManager';
 import MasterAudit from './components/MasterAudit';
+import OdooMonitor from './components/OdooMonitor';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -154,15 +155,16 @@ function App() {
     try {
       let dataRows = [];
       let locationRows = [];
+      let odooRows = [];
 
       if (activeSource === 'supabase') {
-        const [cloudMaster, cloudLocation] = await Promise.all([
+        const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
           fetchMasterFromSupabase(),
-          fetchLocationFromSupabase()
+          fetchLocationFromSupabase(),
+          fetchOdooFromSupabase()
         ]);
 
         if (!cloudMaster || cloudMaster.length === 0) {
-          // If no master data, we can't validate properly, but let's try to proceed if we have location data
           console.warn("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud.");
         }
 
@@ -189,13 +191,29 @@ function App() {
           'uploaded_by': l.uploaded_by,
           'created_at': l.created_at
         }));
+
+        odooRows = (cloudOdoo || []).map(o => ({
+          barcode: o.barcode,
+          qty: o.qty_odoo
+        }));
+
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
         dataRows = sheetToJSON(workbook, dataSheet || 'DATA');
         locationRows = sheetToJSON(workbook, locationSheet);
+        // Local mode doesn't support Odoo file yet, or we assume Odoo upload via the new button goes to Supabase only.
+        // If user is in Excel mode but uploaded Odoo via the specific button, it went to Supabase.
+        // For simplicity, let's try to fetch Odoo from Supabase even in Excel mode if available? 
+        // User asked for "Comparison from Odoo".
+        // Let's assume Odoo data is always in Supabase for now as per the added feature.
+        const cloudOdoo = await fetchOdooFromSupabase();
+        odooRows = (cloudOdoo || []).map(o => ({
+          barcode: o.barcode,
+          qty: o.qty_odoo
+        }));
       }
 
-      const { results, stats } = validateData(locationRows, dataRows);
+      const { results, stats } = validateData(locationRows, dataRows, odooRows);
       setValidationResults(results);
       setMasterData(dataRows);
       setStats(stats);
@@ -317,6 +335,26 @@ function App() {
                   <span>ກວດສອບ Master Data</span>
                 </button>
               </div>
+
+              {/* Odoo Sync Card */}
+              <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative">
+                <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                  <RotateCw size={32} strokeWidth={2.5} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                </div>
+
+                <button
+                  onClick={() => setStep('odoo-monitor')}
+                  disabled={isProcessing}
+                  className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
+                >
+                  <LayoutDashboard size={18} />
+                  <span>Open Monitor</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -341,6 +379,10 @@ function App() {
               <SheetMapper sheetNames={sheetNames} suggestions={suggestions} onConfirm={handleValidate} />
             </div>
           </div>
+        )}
+
+        {step === 'odoo-monitor' && (
+          <OdooMonitor onBack={() => setStep('upload')} />
         )}
 
         {step === 'product-manager' && (

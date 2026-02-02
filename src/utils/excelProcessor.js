@@ -122,8 +122,16 @@ const createMasterDataMap = (dataRows) => {
  * - สีแดง: Categories ไม่ตรงกัน
  * - ปกติ: ข้อมูลถูกต้องทั้งหมด
  */
-export const validateData = (locationRows, dataRows) => {
+export const validateData = (locationRows, dataRows, odooRows = []) => {
     const masterMap = createMasterDataMap(dataRows);
+
+    // Create Odoo Map for fast lookup
+    const odooMap = new Map();
+    odooRows.forEach(row => {
+        const bc = normalizeBarcode(row.barcode || row.Barcode || row['Barcode No.']);
+        if (bc) odooMap.set(bc, Number(row.qty || row.qty_odoo || 0));
+    });
+
     const results = [];
     let stats = {
         total: 0,
@@ -215,6 +223,7 @@ export const validateData = (locationRows, dataRows) => {
         stats.total++;
 
         const masterData = masterMap.get(barcode);
+        const odooQty = odooMap.has(barcode) ? odooMap.get(barcode) : null;
 
         // --- เพิ่มระบบตรวจสอบ Rack ตาม Mapdata.MD ---
         const checkRackMatch = (cat1, rack) => {
@@ -258,13 +267,17 @@ export const validateData = (locationRows, dataRows) => {
             // ตรวจสอบ Rack กับ Category หลัก (Master)
             const rackValidation = checkRackMatch(masterData.category1, rackLocation);
 
+            // Check if Odoo Qty mismatches (if available)
+            // Note: We prioritize displaying it, but let's make it alertable
+            const odooMismatch = (odooQty !== null && Number(odooQty) !== numericQty);
+
             if (!masterData.category1 || !masterData.category2) {
                 // Categories ใน DATA เป็นค่าว่าง
                 status = 'incomplete';
                 color = 'blue';
                 reason = 'ຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນບໍ່ຄົບຖ້ວນ';
                 stats.missing++;
-            } else if (!cat1Match || !cat2Match || !rackValidation.match) {
+            } else if (!cat1Match || !cat2Match || !rackValidation.match || odooMismatch) {
                 // ถ้าอย่างใดอย่างหนึ่งไม่ตรง -> Mismatch (สีแดง)
                 status = 'mismatch';
                 color = 'red';
@@ -273,6 +286,7 @@ export const validateData = (locationRows, dataRows) => {
                 if (!cat1Match) mismatchReason.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1})`);
                 if (!cat2Match) mismatchReason.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2})`);
                 if (!rackValidation.match) mismatchReason.push(`ວາງຜິດ Rack (ຄວນແມ່ນ ${rackValidation.expected})`);
+                if (odooMismatch) mismatchReason.push(`Odoo Qty Diff (Odoo: ${odooQty})`);
 
                 reason = mismatchReason.join(' | ');
                 stats.mismatch++;
@@ -299,6 +313,7 @@ export const validateData = (locationRows, dataRows) => {
             masterCategory1: masterData?.category1 || '',
             masterCategory2: masterData?.category2 || '',
             masterQty: masterData?.qty || 0,
+            odooQty: odooQty, // Included in result
             masterItemName: masterData?.itemName || '',
             masterUpdatedAt: masterData?.updatedAt || '', // Renamed to keep separate
             masterUpdatedBy: masterData?.updatedBy || '', // Renamed to keep separate

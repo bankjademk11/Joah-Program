@@ -524,6 +524,65 @@ const ResultTable = ({
                     });
                     sheetMissing.columns = [{ width: 15 }, { width: 30 }, { width: 15 }, { width: 12 }, { width: 35 }, { width: 15 }, { width: 20 }];
 
+                } else if (template === 'odoo-adjustment') {
+                    // --- ODOO ADJUSTMENT SHEET LOGIC ---
+                    const adjData = results.filter(res => {
+                        const actual = Number(res.qty || 0);
+                        const odoo = Number(res.odooQty || 0);
+                        return (res.odooQty !== undefined && res.odooQty !== null) && (actual !== odoo);
+                    });
+
+                    const sheetAdj = workbook.addWorksheet('Odoo Adjustment');
+                    const headersAdj = [
+                        'Barcode', 'Product Name', 'Odoo Qty (System)', 'Actual Count', 'Diff (+/-)', 'Status', 'Note'
+                    ];
+
+                    const hRow = sheetAdj.addRow(headersAdj);
+                    hRow.eachCell((cell) => {
+                        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } }; // Purple-600
+                        cell.alignment = { horizontal: 'center' };
+                    });
+
+                    adjData.forEach(res => {
+                        const actual = Number(res.qty || 0);
+                        const odoo = Number(res.odooQty || 0);
+                        const diff = actual - odoo;
+
+                        const rowData = [
+                            sanitize(res.barcode),
+                            sanitize(res.masterItemName || res.itemName || ''),
+                            isNaN(odoo) ? 0 : odoo,
+                            isNaN(actual) ? 0 : actual,
+                            isNaN(diff) ? 0 : diff,
+                            sanitize(diff < 0 ? 'Loss (Missing)' : 'Gain (Found)'),
+                            ''
+                        ];
+
+                        const row = sheetAdj.addRow(rowData);
+
+                        // Set number format for numeric columns
+                        row.getCell(3).numFmt = '0';
+                        row.getCell(4).numFmt = '0';
+                        row.getCell(5).numFmt = '0';
+
+                        // Alignment
+                        row.getCell(3).alignment = { horizontal: 'center' };
+                        row.getCell(4).alignment = { horizontal: 'center' };
+                        row.getCell(5).alignment = { horizontal: 'center' };
+
+                        // Color for diff column
+                        if (diff < 0) {
+                            row.getCell(5).font = { bold: true, color: { argb: 'FFDC2626' } };
+                        } else if (diff > 0) {
+                            row.getCell(5).font = { bold: true, color: { argb: 'FF16A34A' } };
+                        }
+                    });
+
+                    sheetAdj.columns = [
+                        { width: 16 }, { width: 40 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 20 }, { width: 30 }
+                    ];
+
                 } else {
                     // --- STANDARD / SIMPLE LOGIC ---
                     const sheetName = template === 'simple' ? 'Inventory Summary' : 'Location Inventory';
@@ -792,6 +851,18 @@ const ResultTable = ({
                                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">Essential Inventory Columns</p>
                                             </div>
                                         </button>
+                                        <button
+                                            onClick={() => handleExportWithColor('odoo-adjustment')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 group-hover:scale-110 transition-transform">
+                                                <RotateCw size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Odoo Adjustment</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Diff Only (For Accounting)</p>
+                                            </div>
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -829,6 +900,7 @@ const ResultTable = ({
                                     </th>
                                     <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">Categories</th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Status</th>
+                                    <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">OD Qty</th>
                                     <th className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Action</th>
                                 </tr>
                             </thead>
@@ -875,6 +947,21 @@ const ResultTable = ({
                                                 {getStatusHint(row).icon}
                                                 {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                             </button>
+                                        </td>
+                                        {/* Odoo Qty Column */}
+                                        <td className="px-6 py-6 text-center">
+                                            {row.odooQty !== undefined && row.odooQty !== null ? (
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                        {row.odooQty}
+                                                    </span>
+                                                    {Number(row.qty) !== Number(row.odooQty) && (
+                                                        <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Diff</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
+                                            )}
                                         </td>
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex items-center justify-end gap-2">

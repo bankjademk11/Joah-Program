@@ -212,3 +212,123 @@ export const fetchLocationFromSupabase = async () => {
         return null;
     }
 };
+
+/**
+ * 5. Sync Odoo Data -> odoo_stocks
+ */
+export const syncOdooToSupabase = async (odooDataArray) => {
+    try {
+        console.log('Syncing to odoo_stocks...', odooDataArray.length, 'records');
+
+        // Clear old Odoo data
+        await supabase.from('odoo_stocks').delete().not('id', 'is', null);
+
+        // Transform and Deduplicate (Sum Qty for same barcode)
+        const uniqueMap = new Map();
+
+        odooDataArray.forEach((row, idx) => {
+            // Debug first row structure
+            if (idx === 0) console.log('Odoo Row 1 Keys:', Object.keys(row));
+
+            // Try to find Barcode
+            let barcode = String(row.barcode || row['Barcode'] || row['Barcode No.'] || row['EAN13'] || row['Code'] || row['Internal Reference'] || '').trim();
+            if (!barcode) return;
+
+            // Try to find Quantity (Smart Search)
+            let qty = 0;
+            const numericKeys = ['qty', 'quantity', 'on hand', 'available', 'free to use', 'count', 'total'];
+
+            // 1. Direct match first
+            if (row.qty !== undefined) qty = row.qty;
+            else if (row['Quantity'] !== undefined) qty = row['Quantity'];
+            else if (row['Odoo Qty'] !== undefined) qty = row['Odoo Qty'];
+            else {
+                // 2. Fuzzy search for key containing 'qty' or 'quantity'
+                const keyFound = Object.keys(row).find(k => {
+                    const lower = k.toLowerCase();
+                    return numericKeys.some(n => lower.includes(n)) && !lower.includes('cost') && !lower.includes('price');
+                });
+                if (keyFound) qty = row[keyFound];
+            }
+
+            if (qty === null || qty === undefined || qty === '') qty = 0;
+            qty = Number(qty);
+            if (isNaN(qty)) qty = 0;
+            const name = row.product_name || row['Product Name'] || row.item_name || row['Name'] || '';
+
+            if (uniqueMap.has(barcode)) {
+                const existing = uniqueMap.get(barcode);
+                existing.qty_odoo += qty;
+            } else {
+                uniqueMap.set(barcode, {
+                    barcode: barcode,
+                    product_name: name,
+                    qty_odoo: qty
+                });
+            }
+        });
+
+        const dataToInsert = Array.from(uniqueMap.values());
+
+        // Batch Insert
+        const chunkSize = 1000;
+        for (let i = 0; i < dataToInsert.length; i += chunkSize) {
+            const { error } = await supabase.from('odoo_stocks').insert(dataToInsert.slice(i, i + chunkSize));
+            if (error) throw error;
+        }
+
+        return { success: true, synced: dataToInsert.length };
+    } catch (error) {
+        console.error('Odoo Sync Error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * 7. Clear Odoo Data
+ */
+export const clearOdooData = async () => {
+    try {
+        const { error } = await supabase.from('odoo_stocks').delete().not('id', 'is', null);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Clear Odoo Error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * 6. Fetch Odoo Data
+ */
+/**
+ * 6. Fetch Odoo Data
+ */
+export const fetchOdooFromSupabase = async () => {
+    try {
+        let allData = [];
+        let curPage = 0;
+        const pageSize = 2000; // Odoo data is smaller, can fetch more
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('odoo_stocks')
+                .select('*')
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                curPage++;
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
+    } catch (error) {
+        console.error('Fetch Odoo Error:', error);
+        return [];
+    }
+};
