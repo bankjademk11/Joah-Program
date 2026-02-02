@@ -1,5 +1,7 @@
-import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home } from 'lucide-react';
+import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail } from 'lucide-react';
 import joahLogo from '../assets/Joah.jpeg';
+import { supabase } from '../utils/supabaseClient';
+import { useState, useEffect } from 'react';
 
 const Navbar = ({
     step,
@@ -11,8 +13,43 @@ const Navbar = ({
     onRefresh,
     onShowHistory,
     onReset,
-    currentUser // New prop
+    currentUser,
+    onOpenRequests
 }) => {
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        // Initial fetch
+        fetchPendingCount();
+
+        // Subscribe to real-time changes
+        const subscription = supabase
+            .channel('store_requests_count')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'store_requests' }, () => {
+                fetchPendingCount();
+            })
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    const fetchPendingCount = async () => {
+        try {
+            const { count, error } = await supabase
+                .from('store_requests')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+
+            if (!error) {
+                setPendingCount(count || 0);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
             <div className="max-w-[1800px] mx-auto">
@@ -64,6 +101,20 @@ const Navbar = ({
 
                     {/* === RIGHT: Actions Section === */}
                     <div className="flex items-center gap-4">
+                        {/* Notifications - Only show in results step */}
+                        {step === 'results' && (
+                            <div className="relative group cursor-pointer mr-4" onClick={onOpenRequests}>
+                                <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
+                                    <Mail size={24} />
+                                </div>
+                                {pendingCount > 0 && (
+                                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 animate-bounce">
+                                        {pendingCount > 99 ? '99+' : pendingCount}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* User Profile Badge */}
                         {currentUser && (
                             <div className="hidden md:flex flex-col items-end mr-2">
