@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../assets/Joah.jpeg';
 import joahWarehouseImg from '../assets/joah warehosue.png';
-import { User, ArrowRight, Loader2, Lock } from 'lucide-react';
+import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
     const [employeeId, setEmployeeId] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Register State
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [regEmployeeId, setRegEmployeeId] = useState('');
+    const [regPassword, setRegPassword] = useState('');
+    const [address, setAddress] = useState('');
+    const [phone, setPhone] = useState('');
+
     const inputRef = useRef(null);
 
     // Auto-focus input on mount
@@ -16,6 +24,18 @@ const Login = ({ onLogin }) => {
             inputRef.current.focus();
         }
     }, []);
+
+    const handleRegister = (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        // Mock API Call
+        setTimeout(() => {
+            alert('✅ ລົງທະບຽນສຳເລັດ! ກະລຸນາລໍຖ້າການອະນຸມັດຈາກ Admin.');
+            setIsRegistering(false);
+            setIsLoading(false);
+            setEmployeeId(regEmployeeId); // Auto-fill login
+        }, 1500);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -94,83 +114,190 @@ const Login = ({ onLogin }) => {
 
                 <div className="w-full max-w-md relative z-10 animate-fade-in-up">
                     {/* Header */}
-                    <div className="mb-10 text-center lg:text-left">
+                    <div className="mb-8 text-center lg:text-left">
                         <div className="flex items-center gap-3 mb-6 lg:hidden justify-center">
                             <img src={joahLogo} alt="Logo" className="w-12 h-auto drop-shadow-md" />
                             <span className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">JOAH TOOLS</span>
                         </div>
-                        <h1 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">ຍິນດີຕ້ອນຮັບ</h1>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">ສະແກນ ຫຼື ພິມລະຫັດພະນັກງານເພື່ອເຂົ້າສູ່ລະບົບ</p>
+                        <h1 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                            {isRegistering ? 'ສ້າງບັນຊີ' : 'ຍິນດີຕ້ອນຮັບ'}
+                        </h1>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">
+                            {isRegistering ? 'ປ້ອນຂໍ້ມູນເພື່ອຂໍສິດເຂົ້າໃຊ້ງານ' : 'ສະແກນ ຫຼື ພິມລະຫັດພະນັກງານເພື່ອເຂົ້າສູ່ລະບົບ'}
+                        </p>
                     </div>
 
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Employee ID Field */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດພະນັກງານ / EMPLOYEE ID</label>
-                            <div className="relative group">
-                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
-                                    <User size={24} />
-                                </div>
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    placeholder="Scan ID or Type..."
-                                    value={employeeId}
-                                    onChange={(e) => setEmployeeId(e.target.value)}
-                                    className="w-full h-20 pl-16 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-[1.5rem] focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-2xl focus:shadow-orange-500/10 transition-all duration-300 outline-none text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 tracking-wider"
-                                    required
-                                    autoComplete="off"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Password Field */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດຜ່ານ / PASSWORD</label>
-                            <div className="relative group">
-                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
-                                    <Lock size={24} />
-                                </div>
-                                <input
-                                    type="password"
-                                    placeholder="Enter Password..."
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full h-20 pl-16 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-[1.5rem] focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-2xl focus:shadow-orange-500/10 transition-all duration-300 outline-none text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 tracking-wider"
-                                    required
-                                    autoComplete="off"
-                                />
-                            </div>
-                            <p className="text-xs text-slate-400 pl-2">
-                                * ໃສ່ລະຫັດຜ່ານໃດກໍໄດ້ເພື່ອຢືນຢັນຕົວຕົນ
-                            </p>
-                        </div>
-
-                        {error && (
-                            <div className="p-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center gap-3 animate-shake">
-                                <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-                                {error}
-                            </div>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full h-16 bg-joah-orange hover:bg-orange-600 text-white rounded-[1.25rem] font-black text-xl shadow-2xl shadow-orange-500/40 hover:shadow-orange-500/60 transition-all duration-300 transform hover:-translate-y-1 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-4 group overflow-hidden"
-                        >
-                            {isLoading ? (
-                                <Loader2 className="animate-spin" size={28} />
-                            ) : (
-                                <>
-                                    <span>ເຂົ້າສູ່ລະບົບ</span>
-                                    <div className="bg-white/20 p-1.5 rounded-lg group-hover:translate-x-2 transition-transform duration-300">
-                                        <ArrowRight size={20} />
+                    {isRegistering ? (
+                        /* REGISTER FORM */
+                        <form onSubmit={handleRegister} className="space-y-4">
+                            {/* Address */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ທີ່ຢູ່ / ADDRESS</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <MapPin size={20} />
                                     </div>
-                                </>
+                                    <input
+                                        type="text"
+                                        placeholder="ປ້ອນທີ່ຢູ່ປັດຈຸບັນ..."
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Phone */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ເບີໂທ / PHONE</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 flex items-center gap-2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <Phone size={20} />
+                                        <span className="font-black text-sm text-slate-500 group-focus-within:text-joah-orange">+856</span>
+                                    </div>
+                                    <input
+                                        type="tel"
+                                        placeholder="20 xxxxxxxx"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        className="w-full h-14 pl-24 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Employee ID */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດພະນັກງານ / ID</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <User size={20} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="ລະຫັດພະນັກງານ"
+                                        value={regEmployeeId}
+                                        onChange={(e) => setRegEmployeeId(e.target.value)}
+                                        className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300 uppercase"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Password */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດຜ່ານ / PASS</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <Lock size={20} />
+                                    </div>
+                                    <input
+                                        type="password"
+                                        placeholder="ຕັ້ງລະຫັດຜ່ານ..."
+                                        value={regPassword}
+                                        onChange={(e) => setRegPassword(e.target.value)}
+                                        className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full h-14 mt-4 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-2xl font-black text-lg shadow-xl shadow-slate-900/20 transition-all duration-300 transform hover:-translate-y-1 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="animate-spin" size={24} /> : 'ລົງທະບຽນ'}
+                            </button>
+
+                            <div className="text-center pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRegistering(false)}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold text-xs transition-colors"
+                                >
+                                    ມີບັນຊີແລ້ວ? <span className="text-joah-orange underline decoration-2 underline-offset-4">ເຂົ້າສູ່ລະບົບ</span>
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        /* LOGIN FORM */
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* Employee ID Field */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດພະນັກງານ / EMPLOYEE ID</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <User size={24} />
+                                    </div>
+                                    <input
+                                        ref={inputRef}
+                                        type="text"
+                                        placeholder="Scan ID or Type..."
+                                        value={employeeId}
+                                        onChange={(e) => setEmployeeId(e.target.value)}
+                                        className="w-full h-20 pl-16 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-[1.5rem] focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-2xl focus:shadow-orange-500/10 transition-all duration-300 outline-none text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 tracking-wider"
+                                        required
+                                        autoComplete="off"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Password Field */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ລະຫັດຜ່ານ / PASSWORD</label>
+                                <div className="relative group">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                        <Lock size={24} />
+                                    </div>
+                                    <input
+                                        type="password"
+                                        placeholder="Enter Password..."
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full h-20 pl-16 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-[1.5rem] focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-2xl focus:shadow-orange-500/10 transition-all duration-300 outline-none text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 tracking-wider"
+                                        required
+                                        autoComplete="off"
+                                    />
+                                </div>
+                            </div>
+
+                            {error && (
+                                <div className="p-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center gap-3 animate-shake">
+                                    <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                                    {error}
+                                </div>
                             )}
-                        </button>
-                    </form>
+
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full h-16 bg-joah-orange hover:bg-orange-600 text-white rounded-[1.25rem] font-black text-xl shadow-2xl shadow-orange-500/40 hover:shadow-orange-500/60 transition-all duration-300 transform hover:-translate-y-1 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-4 group overflow-hidden"
+                            >
+                                {isLoading ? (
+                                    <Loader2 className="animate-spin" size={28} />
+                                ) : (
+                                    <>
+                                        <span>ເຂົ້າສູ່ລະບົບ</span>
+                                        <div className="bg-white/20 p-1.5 rounded-lg group-hover:translate-x-2 transition-transform duration-300">
+                                            <ArrowRight size={20} />
+                                        </div>
+                                    </>
+                                )}
+                            </button>
+
+                            <div className="text-center pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRegistering(true)}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold text-xs transition-colors"
+                                >
+                                    ຍັງບໍ່ມີບັນຊີ? <span className="text-joah-orange underline decoration-2 underline-offset-4">ລົງທະບຽນໃໝ່</span>
+                                </button>
+                            </div>
+                        </form>
+                    )}
 
                     {/* Footer */}
                     <div className="mt-20 text-center">

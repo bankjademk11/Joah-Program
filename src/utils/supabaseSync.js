@@ -148,10 +148,34 @@ export const addLocationRecord = async (record) => {
             }])
             .select();
 
+
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
         console.error('Add Location Record Error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * 4. ບັນທຶກປະຫວັດການປ່ຽນແປງ (Audit Log)
+ */
+export const logInventoryHistory = async ({ barcode, itemName, oldQty, newQty, updatedBy, reason }) => {
+    try {
+        const { error } = await supabase
+            .from('inventory_history')
+            .insert([{
+                barcode,
+                item_name: itemName,
+                old_qty: Number(oldQty || 0),
+                new_qty: Number(newQty || 0),
+                updated_by: updatedBy || 'Unknown',
+                change_reason: reason || ''
+            }]);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('History Log Error:', error);
         return { success: false, error: error.message };
     }
 };

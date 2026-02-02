@@ -4,11 +4,11 @@ import {
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     CloudUpload, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
-import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord } from '../utils/supabaseSync';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProcessor';
 import databaseUrl from '../assets/DataBaseJoah.xlsx';
 
@@ -26,7 +26,9 @@ const ResultTable = ({
     const [editLocation, setEditLocation] = useState('');
     const [editCat1, setEditCat1] = useState('');
     const [editCat2, setEditCat2] = useState('');
+    const [editReason, setEditReason] = useState('');
     const [employeeName, setEmployeeName] = useState(localStorage.getItem('joah_employee_name') || '');
+    const [showExportDropdown, setShowExportDropdown] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [historyData, setHistoryData] = useState([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -310,7 +312,7 @@ const ResultTable = ({
                     fixSteps: [
                         isCat1Error && `ປ່ຽນ ໝວດໝູ່ 1 ເປັນ: "${masterCategory1}"`,
                         isCat2Error && `ປ່ຽນ ໝວດໝູ່ 2 ເປັນ: "${masterCategory2}"`,
-                        isRackError && `ຍ້າຍສินຄ້າໄປວາງຢູ່ Rack ທີ່ຂຶ້ນຕົ້ນດ້ວຍ: ${reason.split('ຄວນແມ່ນ ')[1]?.split(')')[0] || 'ໂຊนທີ່ຖືກຕ້ອງ'}`
+                        isRackError && `ຍ້າຍສິນຄ້າໄປວາງຢູ່ Rack: ${reason.split('ຄວນແມ່ນ ')[1]?.split(')')[0] || 'ໂຊนທີ່ຖືກຕ້ອງ'}`
                     ].filter(Boolean),
                     color: 'text-rose-500',
                     bg: 'bg-rose-500',
@@ -377,7 +379,8 @@ const ResultTable = ({
                 category2: editCat2 || selectedRow.category2,
                 updatedAt: now,
                 updatedBy: activeUser,
-                uploadedBy: activeUser
+                uploadedBy: activeUser,
+                manualReason: editReason // Store the user's manual reason separately
             });
         }
 
@@ -398,19 +401,18 @@ const ResultTable = ({
                     .eq('id', selectedRow.id);
                 if (locError) throw locError;
 
-                const { error: histError } = await supabase
-                    .from('inventory_history')
-                    .insert([{
-                        barcode: selectedRow.barcode,
-                        item_name: selectedRow.masterItemName || selectedRow.itemName,
-                        old_qty: oldQtyValue,
-                        new_qty: newQtyValue,
-                        updated_by: activeUser
-                    }]);
-
-                if (histError) console.error("Failed to save history:", histError);
+                // Log History
+                await logInventoryHistory({
+                    barcode: selectedRow.barcode,
+                    itemName: selectedRow.masterItemName || selectedRow.itemName,
+                    oldQty: oldQtyValue,
+                    newQty: newQtyValue,
+                    updatedBy: activeUser,
+                    reason: editReason || (editLocation !== selectedRow.rackLocation ? `Moved to ${editLocation}` : 'Manual Qty Update')
+                });
             }
             setSelectedRow(null);
+            setEditReason(''); // Reset reason
         } catch (err) {
             alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
         } finally {
@@ -429,6 +431,16 @@ const ResultTable = ({
             const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
             const result = await addLocationRecord({ ...quickAddForm, uploaded_by: activeUser });
             if (result.success) {
+                // Log History for New Item
+                await logInventoryHistory({
+                    barcode: quickAddForm.barcode_no,
+                    itemName: quickAddForm.item_name,
+                    oldQty: 0,
+                    newQty: quickAddForm.qty,
+                    updatedBy: activeUser,
+                    reason: quickAddForm.remarks || 'Direct Addition to Inventory'
+                });
+
                 alert('✅ ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ສຳເລັດແລ້ວ!');
                 setShowQuickAdd(false);
                 onRefresh();
@@ -442,8 +454,9 @@ const ResultTable = ({
         }
     };
 
-    const handleExportWithColor = async () => {
+    const handleExportWithColor = async (template = 'standard') => {
         setIsExporting(true);
+        setShowExportDropdown(false);
         const sanitize = (value) => {
             if (value === null || value === undefined) return '';
             if (typeof value === 'string') {
@@ -454,71 +467,161 @@ const ResultTable = ({
 
         try {
             const workbook = new ExcelJS.Workbook();
+            const dataToExport = template === 'audit' ? results.filter(res => res.status !== 'passed') : [...results];
+
             if (dbSource === 'supabase') {
-                const locationSheet = workbook.addWorksheet('Location Inventory');
-                const dataSheet = workbook.addWorksheet('Master Data Reference');
-                const headers = [
-                    'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
-                    'Actual QTY', 'System QTY', 'Status', 'Remarks',
-                    'Last Update', 'Verifier' // Verifier is now 11th (K)
-                ];
-                const hRow = locationSheet.addRow(headers);
-                hRow.eachCell((cell) => {
-                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEA580C' } };
-                });
+                if (template === 'audit') {
+                    // --- SPLIT SHEET LOGIC FOR AUDIT ---
 
-                results.forEach(res => {
-                    const rowData = [
-                        sanitize(res.barcode),
-                        sanitize(res.masterItemName || res.itemName || ''),
-                        sanitize(res.rackLocation || ''),
-                        sanitize(res.category1 || ''),
-                        sanitize(res.category2 || ''),
-                        isNaN(Number(res.qty)) ? 0 : Number(res.qty),
-                        isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
-                        sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing'),
-                        sanitize(res.status === 'passed' ? 'Complete' : (res.reason || '-')),
-                        res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
-                        sanitize(res.uploadedBy || res.updatedBy || '') // Verifier in Column K (11)
-                    ];
-                    const row = locationSheet.addRow(rowData);
-                    const statusCell = row.getCell(8);
-                    let bgColor = '';
-                    if (res.status === 'passed') bgColor = 'FFDCFCE7';
-                    else if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
-                    else if (res.status === 'missing') bgColor = 'FFE0F2FE';
+                    // 1. Mismatch Sheet
+                    const mismatchData = results.filter(res => res.status === 'mismatch');
+                    const sheetMismatch = workbook.addWorksheet('Mismatch Focus');
+                    const headersAudit = ['Barcode No.', 'Item Name', 'Rack Location', 'Status', 'Status Reason', 'Last Update', 'Verifier'];
 
-                    if (bgColor) {
-                        statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-                    }
-                });
-
-                const cloudMaster = await fetchMasterFromSupabase();
-                if (cloudMaster && cloudMaster.length > 0) {
-                    const mhRow = dataSheet.addRow(['Barcode', 'Item Name', 'Category 1', 'Category 2', 'Qty']);
-                    mhRow.eachCell((cell) => {
+                    const hRow1 = sheetMismatch.addRow(headersAudit);
+                    hRow1.eachCell((cell) => {
                         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE11D48' } }; // Rose-600
                     });
 
-                    cloudMaster.forEach(mRow => {
-                        dataSheet.addRow([
-                            sanitize(mRow.barcode || ''),
-                            sanitize(mRow.item_name || mRow.product_name_la || ''),
-                            sanitize(mRow.category_1 || ''),
-                            sanitize(mRow.category_2 || ''),
-                            isNaN(Number(mRow.qty)) ? 0 : Number(mRow.qty)
-                        ]);
+                    mismatchData.forEach(res => {
+                        const rowData = [
+                            sanitize(res.barcode),
+                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.rackLocation || ''),
+                            'Mismatch',
+                            sanitize(res.reason || ''),
+                            res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
+                            sanitize(res.uploadedBy || res.updatedBy || '')
+                        ];
+                        const row = sheetMismatch.addRow(rowData);
+                        row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red-50
                     });
+                    sheetMismatch.columns = [{ width: 15 }, { width: 30 }, { width: 15 }, { width: 12 }, { width: 35 }, { width: 15 }, { width: 20 }];
+
+                    // 2. Missing Sheet
+                    const missingData = results.filter(res => res.status === 'missing');
+                    const sheetMissing = workbook.addWorksheet('Missing Items');
+
+                    const hRow2 = sheetMissing.addRow(headersAudit);
+                    hRow2.eachCell((cell) => {
+                        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } }; // Slate-600
+                    });
+
+                    missingData.forEach(res => {
+                        const rowData = [
+                            sanitize(res.barcode),
+                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.rackLocation || ''),
+                            'Missing',
+                            sanitize(res.reason || 'Not found in inventory'),
+                            res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
+                            sanitize(res.uploadedBy || res.updatedBy || '')
+                        ];
+                        const row = sheetMissing.addRow(rowData);
+                        row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; // Slate-100
+                    });
+                    sheetMissing.columns = [{ width: 15 }, { width: 30 }, { width: 15 }, { width: 12 }, { width: 35 }, { width: 15 }, { width: 20 }];
+
+                } else {
+                    // --- STANDARD / SIMPLE LOGIC ---
+                    const sheetName = template === 'simple' ? 'Inventory Summary' : 'Location Inventory';
+                    const locationSheet = workbook.addWorksheet(sheetName);
+
+                    if (template === 'standard') {
+                        workbook.addWorksheet('Master Data Reference');
+                    }
+
+                    let headers;
+                    if (template === 'simple') {
+                        headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Verifier'];
+                    } else {
+                        headers = [
+                            'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
+                            'Actual QTY', 'System QTY', 'Status', 'Status Reason',
+                            'Last Update', 'Verifier', 'Manual Change Reason'
+                        ];
+                    }
+
+                    const hRow = locationSheet.addRow(headers);
+                    hRow.eachCell((cell) => {
+                        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                        let headerColor = 'FFEA580C';
+                        if (template === 'simple') headerColor = 'FF0284C7';
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerColor } };
+                    });
+
+                    dataToExport.forEach(res => {
+                        let rowData;
+                        if (template === 'simple') {
+                            rowData = [
+                                sanitize(res.barcode),
+                                sanitize(res.masterItemName || res.itemName || ''),
+                                sanitize(res.rackLocation || ''),
+                                isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                                sanitize(res.uploadedBy || res.updatedBy || '')
+                            ];
+                        } else {
+                            rowData = [
+                                sanitize(res.barcode),
+                                sanitize(res.masterItemName || res.itemName || ''),
+                                sanitize(res.rackLocation || ''),
+                                sanitize(res.category1 || ''),
+                                sanitize(res.category2 || ''),
+                                isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                                isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
+                                sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing'),
+                                sanitize(res.reason || ''),
+                                res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
+                                sanitize(res.uploadedBy || res.updatedBy || ''),
+                                sanitize(res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
+                            ];
+                        }
+                        const row = locationSheet.addRow(rowData);
+
+                        if (template !== 'simple') {
+                            const statusCol = 8;
+                            const statusCell = row.getCell(statusCol);
+                            let bgColor = '';
+                            if (res.status === 'passed') bgColor = 'FFDCFCE7';
+                            else if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
+                            else if (res.status === 'missing') bgColor = 'FFE0F2FE';
+                            if (bgColor) statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                        }
+                    });
+
+                    if (template === 'standard') {
+                        const dataSheet = workbook.getWorksheet('Master Data Reference');
+                        const cloudMaster = await fetchMasterFromSupabase();
+                        if (cloudMaster && cloudMaster.length > 0) {
+                            const mhRow = dataSheet.addRow(['Barcode', 'Item Name', 'Category 1', 'Category 2', 'Qty']);
+                            mhRow.eachCell((cell) => {
+                                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+                            });
+                            cloudMaster.forEach(mRow => {
+                                dataSheet.addRow([
+                                    sanitize(mRow.barcode || ''),
+                                    sanitize(mRow.item_name || mRow.product_name_la || ''),
+                                    sanitize(mRow.category_1 || ''),
+                                    sanitize(mRow.category_2 || ''),
+                                    isNaN(Number(mRow.qty)) ? 0 : Number(mRow.qty)
+                                ]);
+                            });
+                            dataSheet.columns = [{ width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 12 }];
+                        }
+                    }
+
+                    if (template === 'simple') {
+                        locationSheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }];
+                    } else {
+                        locationSheet.columns = [
+                            { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
+                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 30 }
+                        ];
+                    }
                 }
-                locationSheet.columns = [
-                    { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
-                    { width: 12 }, { width: 12 }, { width: 12 }, { width: 20 }, { width: 15 }, { width: 20 }
-                ];
-                dataSheet.columns = [
-                    { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 12 }
-                ];
             } else {
                 if (!rawFile || !locationSheetName) return;
                 const arrayBuffer = await rawFile.arrayBuffer();
@@ -536,7 +639,7 @@ const ResultTable = ({
                     [cols.qty, cols.sys, cols.status, cols.remark, cols.date, cols.user].forEach(col => {
                         header.getCell(col).font = { bold: true };
                     });
-                    results.forEach(res => {
+                    dataToExport.forEach(res => {
                         const excelRowNumber = res.rowIndex + 1;
                         const row = worksheet.getRow(excelRowNumber);
                         if (!row) return;
@@ -549,12 +652,27 @@ const ResultTable = ({
                     });
                 }
             }
+
+            // Set default font to Phetsarath OT for all cells
+            workbook.eachSheet((sheet) => {
+                sheet.eachRow((row) => {
+                    row.eachCell((cell) => {
+                        const currentFont = cell.font || {};
+                        cell.font = {
+                            ...currentFont,
+                            name: 'Phetsarath OT',
+                            size: currentFont.size || 11
+                        };
+                    });
+                });
+            });
+
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Warehouse_Validation_${new Date().toISOString().split('T')[0]}.xlsx`;
+            a.download = `JoahTools_${template.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
             a.click();
         } catch (e) {
             console.error('Export Error:', e);
@@ -568,7 +686,7 @@ const ResultTable = ({
             {renderLocationInspector()}
             <div className="space-y-6 animate-fade-in-up">
                 {/* Action Bar */}
-                <div className="glass-card rounded-[2.5rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-6 items-center border-white/50">
+                <div className="glass-card rounded-[2.5rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-6 items-center border-white/50 relative z-50">
                     <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="relative group">
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
@@ -618,10 +736,66 @@ const ResultTable = ({
                     </div>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 w-full xl:w-auto border-t xl:border-t-0 xl:border-l border-slate-100 dark:border-slate-800 pt-6 xl:pt-0 xl:pl-8">
-                        <button onClick={handleExportWithColor} disabled={isExporting} className="btn-success shadow-emerald-500/20 py-3 uppercase text-[10px] tracking-widest min-w-[160px]">
-                            {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                            <span>Export Report</span>
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowExportDropdown(!showExportDropdown)}
+                                disabled={isExporting}
+                                className="btn-success shadow-emerald-500/20 py-3 uppercase text-[10px] tracking-widest min-w-[170px] flex items-center justify-center gap-3"
+                            >
+                                {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                                <span>Export Report</span>
+                                <ChevronDown size={14} className={`transition-transform duration-300 ${showExportDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {/* Export Dropdown Menu */}
+                            {showExportDropdown && (
+                                <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden z-[100] animate-fade-in-up">
+                                    <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Template</p>
+                                    </div>
+                                    <div className="p-2">
+                                        <button
+                                            onClick={() => handleExportWithColor('standard')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-joah-orange/10 text-joah-orange group-hover:scale-110 transition-transform">
+                                                <FileSpreadsheet size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Standard Report</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Full Data + Master Reference</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleExportWithColor('audit')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500 group-hover:scale-110 transition-transform">
+                                                <AlertTriangle size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Audit Focus</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Mismatch & Missing Items Only</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleExportWithColor('simple')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-500 group-hover:scale-110 transition-transform">
+                                                <ClipboardList size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Simple Summary</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Essential Inventory Columns</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         {onRefresh && (
                             <button onClick={onRefresh} className="btn-secondary py-3 uppercase text-[10px] tracking-widest min-w-[120px]">
                                 <RotateCw size={16} />
@@ -775,6 +949,8 @@ const ResultTable = ({
                         </div>
                     </div>
                 </div>
+
+
 
                 {/* Diagnostic Modal */}
                 {diagnosticRow && (
@@ -964,10 +1140,28 @@ const ResultTable = ({
                                                 onFocus={(e) => {
                                                     if (!editLocation) setEditLocation(selectedRow.rackLocation);
                                                 }}
-                                                className="input-field py-3 font-bold uppercase w-1/3"
+                                                className={`input-field py-3 font-bold uppercase w-1/3 transition-all ${editLocation !== selectedRow.rackLocation ? 'ring-2 ring-joah-orange bg-orange-50/10' : ''}`}
                                                 placeholder={selectedRow.rackLocation}
                                             />
                                         </div>
+
+                                        {/* Dynamic Reason for Custom/Changed Rack */}
+                                        {editLocation !== selectedRow.rackLocation && (
+                                            <div className="mt-4 p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-900/30 animate-fade-in-up">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Info size={14} className="text-joah-orange" />
+                                                    <span className="text-[10px] font-black text-joah-orange uppercase tracking-widest">Reason for Rack Change</span>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={editReason}
+                                                    onChange={(e) => setEditReason(e.target.value)}
+                                                    placeholder="ບອກເຫດຜົນທີ່ປ່ຽນຕຳແໜ່ງ ຫຼືໃຊ້ Rack ນີ້"
+                                                    className="w-full bg-transparent border-b border-orange-300 dark:border-orange-800 focus:border-joah-orange outline-none py-1 text-sm font-bold placeholder:text-slate-400"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Category 1 Editor */}
@@ -1065,6 +1259,12 @@ const ResultTable = ({
                                                     <ArrowUpDown size={12} className="rotate-90 text-indigo-500" />
                                                     <span className="font-bold text-indigo-600 dark:text-indigo-300">{log.new_qty}</span>
                                                 </div>
+                                                {log.change_reason && (
+                                                    <div className="mt-2 p-2.5 rounded-xl bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20">
+                                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">Reason</p>
+                                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{log.change_reason}</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))

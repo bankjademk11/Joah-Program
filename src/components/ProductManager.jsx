@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import { logInventoryHistory } from '../utils/supabaseSync';
 import {
     Plus, Save, X, Edit2, Trash2, Search, Package,
     ArrowLeft, Loader2, CheckCircle, AlertCircle, Database, History, Calendar, User, ArrowRight,
@@ -137,11 +138,47 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
 
                 if (error) throw error;
 
-                // Log Update/Insert
-                await logOperation(editingProduct ? 'UPDATE' : 'INSERT', formData.barcode, formData.product_name_la, editingProduct, formData);
+                // Log to Inventory History if Qty or Name changed
+                await logInventoryHistory({
+                    barcode: formData.barcode,
+                    itemName: formData.product_name_la,
+                    oldQty: editingProduct.qty,
+                    newQty: formData.qty,
+                    updatedBy: currentUser?.name || 'Unknown'
+                });
 
-                alert(`✅ ${editingProduct ? 'ອັບເດດ' : 'ເພີ່ມ'}ສິນຄ້າສຳເລັດ!`);
+                // Log Detail to Master Logs
+                await logOperation('UPDATE', formData.barcode, formData.product_name_la, editingProduct, formData);
+            } else {
+                // Insert new product
+                const { error } = await supabase
+                    .from('master_data')
+                    .insert([{
+                        barcode: formData.barcode,
+                        product_name_la: formData.product_name_la,
+                        item_name: formData.item_name,
+                        category_1: formData.category_1,
+                        category_2: formData.category_2,
+                        qty: formData.qty,
+                        updated_by: currentUser?.name || 'Unknown'
+                    }]);
+
+                if (error) throw error;
+
+                // Log to Inventory History
+                await logInventoryHistory({
+                    barcode: formData.barcode,
+                    itemName: formData.product_name_la,
+                    oldQty: 0,
+                    newQty: formData.qty,
+                    updatedBy: currentUser?.name || 'Unknown'
+                });
+
+                // Log Detail to Master Logs
+                await logOperation('INSERT', formData.barcode, formData.product_name_la, null, formData);
             }
+
+            alert(`✅ ${editingProduct ? 'ອັບເດດ' : 'ເພີ່ມ'}ສິນຄ້າສຳເລັດ!`);
 
             resetForm();
             fetchProducts();
@@ -177,8 +214,17 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
 
             if (error) throw error;
 
-            // Log Delete
+            // Log Delete to Master Logs
             await logOperation('DELETE', product.barcode, product.product_name_la, product, null);
+
+            // Log to Inventory History
+            await logInventoryHistory({
+                barcode: product.barcode,
+                itemName: product.product_name_la,
+                oldQty: product.qty,
+                newQty: 0,
+                updatedBy: currentUser?.name || 'Unknown'
+            });
 
             alert('✅ ລຶບສິນຄ້າສຳເລັດ!');
             fetchProducts();
