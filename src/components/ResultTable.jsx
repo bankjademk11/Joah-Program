@@ -441,6 +441,17 @@ const ResultTable = ({
                     reason: quickAddForm.remarks || 'Direct Addition to Inventory'
                 });
 
+                // --- NEW: Log to dedicated "Added Items" Log (For Tracking New Insertions) ---
+                const { error: logError } = await supabase.from('added_items_log').insert({
+                    barcode: quickAddForm.barcode_no,
+                    item_name: quickAddForm.item_name,
+                    qty: quickAddForm.qty,
+                    added_by: activeUser,
+                    location: quickAddForm.rack_location
+                });
+                if (logError) console.error("Failed to log added item:", logError);
+                // --------------------------------------------------------------------------
+
                 alert('✅ ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ສຳເລັດແລ້ວ!');
                 setShowQuickAdd(false);
                 onRefresh();
@@ -1151,7 +1162,12 @@ const ResultTable = ({
                                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Manual Adjustment</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setSelectedRow(null)} className="p-2 text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"><X size={20} /></button>
+                                <button
+                                    onClick={() => setSelectedRow(null)}
+                                    className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-all transform hover:scale-105 active:scale-95 shadow-sm"
+                                >
+                                    <X size={28} strokeWidth={2.5} />
+                                </button>
                             </div>
                             <div className="space-y-6 relative z-10">
                                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-3">

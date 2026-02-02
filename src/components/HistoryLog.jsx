@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, ChevronRight, Filter, FileSpreadsheet, PlusCircle, Edit3, ChevronDown } from 'lucide-react';
+import ExcelJS from 'exceljs';
 
 const HistoryLog = ({ onClose }) => {
     const [historyData, setHistoryData] = useState([]);
@@ -9,22 +10,104 @@ const HistoryLog = ({ onClose }) => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [actionFilter, setActionFilter] = useState('all'); // 'all', 'added', 'edited'
+    const [showExportMenu, setShowExportMenu] = useState(false);
+
+    // Refs for click outside
+    const exportMenuRef = useRef(null);
+
     const itemsPerPage = 50;
+
+    // Handle click outside to close dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+                setShowExportMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const fetchAllHistory = async () => {
             setIsLoading(true);
             try {
-                const { data, error } = await supabase
+                // 1. Fetch Edit History
+                const { data: editData, error: editError } = await supabase
                     .from('inventory_history')
                     .select('*')
                     .order('updated_at', { ascending: false })
-                    .limit(500); // Increased limit for better history view
+                    .limit(500);
+                if (editError) throw editError;
 
-                if (error) throw error;
-                setHistoryData(data || []);
+                // 2. Fetch Added Items History
+                const { data: addData, error: addError } = await supabase
+                    .from('added_items_log')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(500);
+                if (addError) {
+                    // If table doesn't exist yet, just ignore (for safety)
+                    console.warn("Added items log table might not exist yet:", addError);
+                }
+
+                // 3. Normalize and Merge Data
+                const formattedEdits = (editData || []).map(item => {
+                    // FIX: Use 'change_reason' as defined in DB schema, fallback to 'reason' just in case
+                    let reasonDisplay = item.change_reason || item.reason;
+                    const changeVal = item.new_qty - item.old_qty;
+
+                    // 1. If reason is missing/empty
+                    if (!reasonDisplay) {
+                        // If Qty didn't change, it must be a Data/Location update
+                        if (changeVal === 0) reasonDisplay = 'ແກ້ໄຂຂໍ້ມູນ/ຕຳແໜ່ງ';
+                        else reasonDisplay = 'ແກ້ໄຂຈຳນວນ';
+                    }
+
+                    // 2. Translate common English phrases
+                    if (reasonDisplay === 'Manual Qty Update') {
+                        if (changeVal === 0) reasonDisplay = 'ແກ້ໄຂຂໍ້ມູນ (Manual)';
+                        else reasonDisplay = 'ແກ້ໄຂຈຳນວນ (Manual)';
+                    }
+                    if (reasonDisplay === 'qty update') reasonDisplay = 'ປັບປຸງຈຳນວນ';
+                    if (reasonDisplay === 'No key changes detected') reasonDisplay = 'ກົດບັນທຶກ (ບໍ່ມີການປ່ຽນແປງ)';
+
+                    // 3. Translate Partial Phrases (Smart Replace)
+                    if (String(reasonDisplay).includes('Moved to')) reasonDisplay = String(reasonDisplay).replace('Moved to', 'ຍ້າຍໄປ');
+                    if (String(reasonDisplay).includes('ຍ້າຍ:')) reasonDisplay = reasonDisplay; // Keep original Lao log from ResultTable
+                    if (String(reasonDisplay).includes('Direct Addition')) reasonDisplay = 'ເພີ່ມເຂົ້າລະບົບໂດຍກົງ';
+
+                    return {
+                        ...item,
+                        type: 'edited',
+                        timestamp: item.updated_at,
+                        user: item.updated_by,
+                        change_qty: changeVal,
+                        details: reasonDisplay
+                    };
+                });
+
+                const formattedAdds = (addData || []).map(item => ({
+                    ...item,
+                    type: 'added',
+                    timestamp: item.created_at,
+                    user: item.added_by,
+                    old_qty: 0,
+                    new_qty: item.qty,
+                    change_qty: item.qty,
+                    details: 'ເພີ່ມສິນຄ້າໃໝ່ຜ່ານ Dashboard' // Translate here
+                }));
+
+                // Combine and Sort
+                const combined = [...formattedEdits, ...formattedAdds].sort((a, b) =>
+                    new Date(b.timestamp) - new Date(a.timestamp)
+                );
+
+                setHistoryData(combined);
             } catch (err) {
                 console.error('Error fetching history:', err);
+                // alert('Error fetching history: ' + err.message);
             } finally {
                 setIsLoading(false);
             }
@@ -33,32 +116,132 @@ const HistoryLog = ({ onClose }) => {
         fetchAllHistory();
     }, []);
 
-    // Reset page on search
+    // Reset page on search/filter
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, startDate, endDate]);
+    }, [searchTerm, startDate, endDate, actionFilter]);
 
+    // Filtering Logic
     const filteredData = historyData.filter(log => {
-        const matchesSearch = (log.updated_by || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        // Text Search
+        const matchesSearch = (log.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (log.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (log.barcode || '').includes(searchTerm);
 
-        const logDate = new Date(log.updated_at).setHours(0, 0, 0, 0);
+        // Date Filter
+        const logDate = new Date(log.timestamp).setHours(0, 0, 0, 0);
         const start = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
         const end = endDate ? new Date(endDate).setHours(0, 0, 0, 0) : null;
-
         const matchesDate = (!start || logDate >= start) && (!end || logDate <= end);
 
-        return matchesSearch && matchesDate;
+        // Type Action Filter
+        const matchesType = actionFilter === 'all' || log.type === actionFilter;
+
+        return matchesSearch && matchesDate && matchesType;
     });
 
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const currentItems = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
+    // --- Export Logic (ExcelJS) ---
+    const handleExport = async (template = 'all') => {
+        try {
+            setShowExportMenu(false);
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('History Log');
+
+            // Determine data source based on template
+            let dataToExport = [...filteredData]; // Default: whatever is currently filtered
+
+            if (template === 'added') {
+                dataToExport = historyData.filter(d => d.type === 'added');
+            } else if (template === 'edited') {
+                dataToExport = historyData.filter(d => d.type === 'edited');
+            }
+
+            if (dataToExport.length === 0) {
+                alert('No data to export for this selection');
+                return;
+            }
+
+            // Columns
+            sheet.columns = [
+                { header: 'ເວລາ', key: 'time', width: 20 },
+                { header: 'ປະເພດ', key: 'type', width: 15 },
+                { header: 'ຜູ້ດຳເນີນການ', key: 'user', width: 25 },
+                { header: 'ບາໂຄ້ດ', key: 'barcode', width: 15 },
+                { header: 'ຊື່ສິນຄ້າ', key: 'item', width: 40 },
+                { header: 'ຈໍານວນເກົ່າ', key: 'old', width: 10 },
+                { header: 'ຈໍານວນໃໝ່', key: 'new', width: 10 },
+                { header: 'ປ່ຽນແປງ', key: 'change', width: 10 },
+                { header: 'ລາຍລະອຽດ/ເຫດຜົນ', key: 'details', width: 30 },
+            ];
+
+            // Style Header
+            const headerRow = sheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF4F46E5' } // Indigo color
+            };
+
+            // Add Rows
+            dataToExport.forEach(log => {
+                const row = sheet.addRow({
+                    time: new Date(log.timestamp).toLocaleString('lo-LA'),
+                    type: log.type === 'added' ? 'ເພີ່ມສິນຄ້າໃໝ່' : 'ແກ້ໄຂຈຳນວນ',
+                    user: log.user,
+                    barcode: log.barcode,
+                    item: log.item_name,
+                    old: log.old_qty,
+                    new: log.new_qty,
+                    change: log.change_qty > 0 ? `+${log.change_qty}` : log.change_qty,
+                    details: log.details
+                });
+
+                // Conditional Coloring
+                const typeCell = row.getCell('type');
+                if (log.type === 'added') {
+                    typeCell.font = { color: { argb: 'FF16A34A' }, bold: true, name: 'Phetsarath OT' }; // Green
+                } else {
+                    typeCell.font = { color: { argb: 'FFF59E0B' }, bold: true, name: 'Phetsarath OT' }; // Amber
+                }
+            });
+
+            // --- Apply Font 'Phetsarath OT' to All Cells ---
+            sheet.eachRow((row) => {
+                row.eachCell((cell) => {
+                    const currentFont = cell.font || {};
+                    cell.font = {
+                        ...currentFont,
+                        name: 'Phetsarath OT',
+                        size: currentFont.size || 11
+                    };
+                });
+            });
+            // -----------------------------------------------
+
+            // Download
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `History_Log_${template}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            anchor.click();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Export failed: ' + error.message);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-900/60 animate-fade-in">
-            <div className="glass-card-dark w-full max-w-5xl h-[85vh] rounded-[2.5rem] p-8 border border-slate-700/50 shadow-2xl flex flex-col relative overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+            <div className="glass-card-dark w-full max-w-6xl h-[90vh] rounded-[2.5rem] p-8 border border-slate-700/50 shadow-2xl flex flex-col relative overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
@@ -67,8 +250,8 @@ const HistoryLog = ({ onClose }) => {
                             <Clock size={24} />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black tracking-tight">ປະຫວັດການແກ້ໄຂທັງໝົດ</h2>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Full System Audit Log</p>
+                            <h2 className="text-2xl font-black tracking-tight">ປະຫວັດການເຄື່ອນໄຫວ (System Audit)</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Full System Logs (Adds & Edits)</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">
@@ -77,39 +260,95 @@ const HistoryLog = ({ onClose }) => {
                 </div>
 
                 {/* Toolbar */}
-                <div className="flex flex-col md:flex-row items-center gap-4 mb-6 flex-shrink-0">
+                <div className="flex flex-col xl:flex-row items-center gap-4 mb-6 flex-shrink-0">
+                    {/* Search */}
                     <div className="relative flex-1 w-full">
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
                             type="text"
-                            placeholder="🔍 ຄົ້ນຫາ: ຊື່ສິນຄ້າ, ບາໂຄ້ດ ຫຼື ຜູ້ກວດ..."
+                            placeholder="🔍 ຄົ້ນຫາ: ຊື່ສິນຄ້າ, ບາໂຄ້ດ ຫຼື ຜູ້ໃຊ້..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 outline-none text-sm font-bold transition-all placeholder:font-normal"
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 w-full md:w-auto">
-                        <div className="relative group flex-1 md:flex-none">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Calendar size={16} /></div>
+                    {/* Filters & Actions Group */}
+                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+
+                        {/* Action Filter */}
+                        <div className="relative">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                            <select
+                                value={actionFilter}
+                                onChange={(e) => setActionFilter(e.target.value)}
+                                className="appearance-none pl-10 pr-10 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer min-w-[160px]"
+                            >
+                                <option value="all">ປະຫວັດທັງໝົດ (All)</option>
+                                <option value="added">🆕 ເພີ່ມສິນຄ້າໃໝ່ (Added)</option>
+                                <option value="edited">📝 ແກ້ໄຂ QTY (Edited)</option>
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                        </div>
+
+                        {/* Date Range */}
+                        <div className="flex items-center gap-2">
                             <input
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full md:w-40 pl-10 pr-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-36 px-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50"
                             />
-                            <span className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[9px] font-black text-slate-400 uppercase">From</span>
-                        </div>
-                        <span className="text-slate-300">–</span>
-                        <div className="relative group flex-1 md:flex-none">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Calendar size={16} /></div>
+                            <span className="text-slate-300">-</span>
                             <input
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full md:w-40 pl-10 pr-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-36 px-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50"
                             />
-                            <span className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[9px] font-black text-slate-400 uppercase">To</span>
+                        </div>
+
+                        <div className="w-px h-10 bg-slate-200 dark:bg-slate-800 mx-1"></div>
+
+                        {/* Export Button */}
+                        <div className="relative" ref={exportMenuRef}>
+                            <button
+                                onClick={() => setShowExportMenu(!showExportMenu)}
+                                className="flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm"
+                            >
+                                <FileSpreadsheet size={18} />
+                                <span>Export</span>
+                                <ChevronDown size={14} />
+                            </button>
+
+                            {showExportMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-[110] animate-scale-in">
+                                    <div className="p-2">
+                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-widest">ເລືອກຮູບແບບ (Select Template)</div>
+                                        <button
+                                            onClick={() => handleExport('all')} // Uses current Filters
+                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors mb-1"
+                                        >
+                                            📑 ຂໍ້ມູນທີ່ສະແດງຢູ່ (Current View)
+                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">Export ຕາມທີ່ເຫັນໃນຕາຕະລາງ</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExport('added')}
+                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm font-medium transition-colors mb-1"
+                                        >
+                                            🆕 ລາຍການສິນຄ້າໃໝ່ (Added Only)
+                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">ລາຍການທີ່ເພີ່ມເຂົ້າລະບົບໃໝ່ທັງໝົດ</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExport('edited')}
+                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm font-medium transition-colors"
+                                        >
+                                            📝 ປະຫວັດການແກ້ໄຂ (Edited Only)
+                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">ສະເພາະທີ່ມີການແກ້ໄຂຈຳນວນ</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -119,10 +358,10 @@ const HistoryLog = ({ onClose }) => {
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
                             <tr>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">Time</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">User</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 w-1/3">Item Detail</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">Change</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">ເວລາ / ການເຄື່ອນໄຫວ</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">ຜູ້ດຳເນີນການ</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 w-1/3">ລາຍລະອຽດສິນຄ້າ</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">ການປ່ຽນແປງ</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -136,40 +375,73 @@ const HistoryLog = ({ onClose }) => {
                                     </td>
                                 </tr>
                             ) : filteredData.length > 0 ? (
-                                currentItems.map((row) => (
-                                    <tr key={row.id} className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
+                                currentItems.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors group">
                                         <td className="p-5">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{new Date(row.updated_at).toLocaleDateString('lo-LA')}</span>
-                                                <span className="text-xs text-slate-400 font-mono">{new Date(row.updated_at).toLocaleTimeString('lo-LA')}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-5">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-                                                    <User size={12} />
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    {row.type === 'added' ? (
+                                                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                            <PlusCircle size={10} strokeWidth={3} /> ເພີ່ມໃໝ່
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                            <Edit3 size={10} strokeWidth={3} /> ແກ້ໄຂ
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{row.updated_by || 'Unknown'}</span>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{new Date(row.timestamp).toLocaleDateString('lo-LA')}</span>
+                                                <span className="text-xs text-slate-400 font-mono">{new Date(row.timestamp).toLocaleTimeString('lo-LA')}</span>
                                             </div>
                                         </td>
                                         <td className="p-5">
-                                            <div className="flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-xl flex items-center justify-center ${row.type === 'added' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-900/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                                                    }`}>
+                                                    <User size={16} />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{row.user || 'Unknown'}</span>
+                                                    <span className="text-[10px] text-slate-400 font-medium">ຜູ້ທຳລາຍການ</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-5">
+                                            <div className="flex flex-col gap-1">
                                                 <span className="text-xs font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
-                                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[200px]">{row.item_name || '-'}</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.item_name}>{row.item_name || '-'}</span>
+                                                {row.details && (
+                                                    <span className="text-[10px] text-slate-400 italic mt-0.5">"{row.details}"</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="p-5 text-center">
-                                            <div className="inline-flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                                <span className="text-sm font-mono text-slate-500 line-through opacity-50">{row.old_qty}</span>
-                                                <ArrowUpDown size={14} className="rotate-90 text-indigo-500" />
-                                                <span className="text-lg font-black font-mono text-indigo-600 dark:text-indigo-400">{row.new_qty}</span>
+                                            <div className={`inline-flex items-center gap-3 px-4 py-2 rounded-xl border ${row.type === 'added'
+                                                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/50'
+                                                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                                }`}>
+                                                {row.type === 'edited' && (
+                                                    <>
+                                                        <span className="text-sm font-mono text-slate-500 line-through opacity-50">{row.old_qty}</span>
+                                                        <ArrowUpDown size={14} className="rotate-90 text-slate-400" />
+                                                    </>
+                                                )}
+                                                <span className={`text-xl font-black font-mono ${row.type === 'added' ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                                                    {row.new_qty}
+                                                </span>
                                             </div>
                                         </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="4" className="py-20 text-center text-slate-400 font-medium">No history logs found.</td>
+                                    <td colSpan="4" className="py-20 text-center">
+                                        <div className="flex flex-col items-center justify-center text-slate-300 dark:text-slate-700">
+                                            <Search size={48} strokeWidth={1} className="mb-4 opacity-50" />
+                                            <p className="text-lg font-black">ບໍ່ພົບຂໍ້ມູນໃນປະຫວັດ</p>
+                                            <p className="text-sm font-medium opacity-70">ກະລຸນາລອງຄົ້ນຫາໃໝ່ ຫຼື ປ່ຽນເງື່ອນໄຂຕົວລັບ (Filter).</p>
+                                        </div>
+                                    </td>
                                 </tr>
                             )}
                         </tbody>
