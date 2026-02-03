@@ -1,7 +1,10 @@
 import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail } from 'lucide-react';
 import joahLogo from '../assets/Joah.jpeg';
+import laosFlag from '../assets/Laos.png';
+import englishFlag from '../assets/EnglishFlang.png';
 import { supabase } from '../utils/supabaseClient';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const Navbar = ({
     step,
@@ -50,6 +53,9 @@ const Navbar = ({
         }
     };
 
+    // Language toggle
+    const { language, toggleLanguage, t } = useLanguage();
+
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
             <div className="max-w-[1800px] mx-auto">
@@ -84,7 +90,7 @@ const Navbar = ({
                             </div>
                             <div className="flex items-center gap-4 mt-2">
                                 <p className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em]">
-                                    Warehouse Validator
+                                    {t('navbar.title')}
                                 </p>
                                 <div className="h-4 w-px bg-slate-200 dark:bg-slate-700"></div>
                                 {/* Mode Badge */}
@@ -93,7 +99,7 @@ const Navbar = ({
                                     : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                                     }`}>
                                     {dbSource === 'supabase' ? <ShieldCheck size={14} /> : <Database size={14} />}
-                                    <span>{dbSource === 'supabase' ? 'Cloud Mode' : 'Local Mode'}</span>
+                                    <span>{dbSource === 'supabase' ? t('navbar.cloudMode') : t('navbar.localMode')}</span>
                                 </div>
                             </div>
                         </div>
@@ -118,7 +124,7 @@ const Navbar = ({
                         {/* User Profile Badge */}
                         {currentUser && (
                             <div className="hidden md:flex flex-col items-end mr-2">
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Logged in as</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('navbar.loggedInAs')}</p>
                                 <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{currentUser.name}</p>
                             </div>
                         )}
@@ -150,6 +156,21 @@ const Navbar = ({
 
                             {/* Divider */}
                             <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                            {/* Language Toggle */}
+                            <button
+                                onClick={toggleLanguage}
+                                className="w-14 h-14 flex items-center justify-center rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group relative overflow-hidden"
+                                title={language === 'lo' ? 'Switch to English' : 'ປ່ຽນເປັນພາສາລາວ'}
+                            >
+                                <div className="relative w-8 h-8 rounded-lg overflow-hidden ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-joah-orange group-hover:scale-110 transition-all duration-300">
+                                    <img
+                                        src={language === 'lo' ? laosFlag : englishFlag}
+                                        alt={language === 'lo' ? 'Lao' : 'English'}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            </button>
 
                             {/* Theme Toggle */}
                             <button

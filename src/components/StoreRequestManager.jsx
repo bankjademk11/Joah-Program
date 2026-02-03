@@ -67,7 +67,33 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
             const { data, error } = await query;
 
             if (error) throw error;
-            setRequests(data || []);
+
+            // 🆕 Fetch inventory data for each request
+            const requestsWithInventory = await Promise.all(
+                (data || []).map(async (request) => {
+                    try {
+                        const { data: inventoryData } = await supabase
+                            .from('location_inventory')
+                            .select('qty, rack_location')
+                            .eq('barcode_no', request.barcode)
+                            .maybeSingle();
+
+                        return {
+                            ...request,
+                            available_qty: inventoryData?.qty || 0,
+                            rack_location: inventoryData?.rack_location || 'N/A'
+                        };
+                    } catch (err) {
+                        return {
+                            ...request,
+                            available_qty: 0,
+                            rack_location: 'N/A'
+                        };
+                    }
+                })
+            );
+
+            setRequests(requestsWithInventory);
         } catch (err) {
             console.error('Error fetching:', err);
             toast.error('Failed to load requests');
@@ -330,14 +356,19 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                             <div className="grid gap-4">
                                 {pendingRequests.map((req) => (
                                     <div key={req.id} className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all group">
-                                        <div className="flex items-center justify-between flex-wrap gap-4">
-                                            <div className="flex items-center gap-6">
-                                                <div className="w-16 h-16 rounded-2xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-2xl font-black text-slate-700 dark:text-slate-300">
-                                                    {req.qty}
+                                        <div className="flex items-start justify-between flex-wrap gap-4">
+                                            <div className="flex items-start gap-6 flex-1">
+                                                {/* Requested Qty Badge */}
+                                                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex flex-col items-center justify-center text-white shadow-lg">
+                                                    <div className="text-3xl font-black">{req.qty}</div>
+                                                    <div className="text-[9px] font-bold opacity-80 uppercase">ຂໍ</div>
                                                 </div>
-                                                <div>
-                                                    <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-1">{req.product_name}</h4>
-                                                    <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
+
+                                                <div className="flex-1">
+                                                    <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-2">{req.product_name}</h4>
+
+                                                    {/* Info Row */}
+                                                    <div className="flex items-center gap-4 text-xs font-medium text-slate-400 mb-3">
                                                         <span className="flex items-center gap-1">
                                                             <User size={12} />
                                                             {req.request_by}
@@ -350,12 +381,54 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                             {req.barcode}
                                                         </span>
                                                     </div>
+
+                                                    {/* 🆕 Stock & Location Info */}
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {/* Available Stock */}
+                                                        <div className={`p-3 rounded-xl border-2 ${req.available_qty >= req.qty
+                                                                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+                                                                : req.available_qty > 0
+                                                                    ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
+                                                                    : 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30'
+                                                            }`}>
+                                                            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                                                ສາງມີ (Stock)
+                                                            </div>
+                                                            <div className={`text-2xl font-black ${req.available_qty >= req.qty
+                                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                                    : req.available_qty > 0
+                                                                        ? 'text-amber-600 dark:text-amber-400'
+                                                                        : 'text-rose-600 dark:text-rose-400'
+                                                                }`}>
+                                                                {req.available_qty}
+                                                                {req.available_qty >= req.qty && <span className="text-sm ml-1">✓</span>}
+                                                                {req.available_qty > 0 && req.available_qty < req.qty && <span className="text-sm ml-1">⚠</span>}
+                                                                {req.available_qty === 0 && <span className="text-sm ml-1">✕</span>}
+                                                            </div>
+                                                            {req.available_qty < req.qty && req.available_qty > 0 && (
+                                                                <div className="text-[9px] font-bold text-amber-600 dark:text-amber-400 mt-1">
+                                                                    ບໍ່ພໍ! ຂາດ {req.qty - req.available_qty}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Rack Location */}
+                                                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700">
+                                                            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                                                ຕຳແໜ່ງ (Location)
+                                                            </div>
+                                                            <div className="text-xl font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                                                                📍 {req.rack_location || 'N/A'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             <button
                                                 onClick={() => handleAccept(req.id, req.product_name)}
-                                                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 flex items-center gap-2 active:scale-95 transition-all"
+                                                disabled={req.available_qty === 0}
+                                                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-400"
                                             >
                                                 <Check size={20} strokeWidth={3} />
                                                 <span>ACCEPT</span>

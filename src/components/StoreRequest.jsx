@@ -52,10 +52,18 @@ const StoreRequest = ({ onBack, currentUser }) => {
                 setProduct({
                     barcode: data.barcode_no,
                     item_name: data.item_name,
-                    product_name_la: data.item_name // Fallback to item_name as there might not be product_name_la in location_inventory
+                    product_name_la: data.item_name, // Fallback to item_name as there might not be product_name_la in location_inventory
+                    available_qty: data.qty || 0, // 🆕 Add available stock
+                    rack_location: data.rack_location || 'N/A' // 🆕 Add rack location
                 });
                 setQty(1);
-                toast.success('ພົບຂໍ້ມູນສິນຄ້າ!');
+
+                // 🆕 Show appropriate message based on stock
+                if (data.qty > 0) {
+                    toast.success(`ພົບສິນຄ້າ! ມີໃນສາງ: ${data.qty} ຫນ່ວຍ`);
+                } else {
+                    toast.warning('ພົບສິນຄ້າ, ແຕ່ສາງໝົດແລ້ວ (QTY = 0)');
+                }
             } else {
                 setProduct(null);
                 toast.error('ບໍ່ພົບສິນຄ້ານີ້ໃນລະບົບ');
@@ -217,7 +225,39 @@ const StoreRequest = ({ onBack, currentUser }) => {
                     {product && (
                         <div className="animate-scale-in bg-white dark:bg-slate-800/50 rounded-3xl p-6 border-2 border-blue-100 dark:border-blue-500/30 relative z-10">
                             <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1 line-clamp-1">{product.product_name_la || 'No Name'}</h3>
-                            <p className="text-sm font-medium text-slate-500 mb-6">{product.item_name}</p>
+                            <p className="text-sm font-medium text-slate-500 mb-2">ບາໂຄ້ດ: {product.barcode || product.item_name}</p>
+
+                            {/* 🆕 Stock Availability Display */}
+                            <div className={`flex items-center gap-3 mb-6 p-4 rounded-2xl ${product.available_qty > 0
+                                    ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30'
+                                    : 'bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30'
+                                }`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${product.available_qty > 0
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-rose-500 text-white'
+                                    }`}>
+                                    {product.available_qty > 0 ? '✓' : '✕'}
+                                </div>
+                                <div className="flex-1">
+                                    <p className={`text-xs font-black uppercase tracking-wider ${product.available_qty > 0
+                                            ? 'text-emerald-700 dark:text-emerald-400'
+                                            : 'text-rose-700 dark:text-rose-400'
+                                        }`}>
+                                        {product.available_qty > 0 ? 'ມີໃນສາງ (Available)' : 'ສາງໝົດ (Out of Stock)'}
+                                    </p>
+                                    <p className={`text-lg font-black ${product.available_qty > 0
+                                            ? 'text-emerald-600 dark:text-emerald-300'
+                                            : 'text-rose-600 dark:text-rose-300'
+                                        }`}>
+                                        {product.available_qty} ຫນ່ວຍ
+                                    </p>
+                                    {product.rack_location && product.rack_location !== 'N/A' && (
+                                        <p className="text-xs font-medium text-slate-500 mt-1">
+                                            📍 ຕຳແໜ່ງ: {product.rack_location}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
 
                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-2xl p-2 mb-6">
                                 <button

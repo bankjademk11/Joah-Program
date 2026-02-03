@@ -24,9 +24,11 @@ import OdooMonitor from './components/OdooMonitor';
 import StoreRequest from './components/StoreRequest';
 import StoreRequestManager from './components/StoreRequestManager';
 import { ToastProvider, useToast } from './components/ToastProvider';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 
 
-function App() {
+function AppContent() {
+  const { t } = useLanguage();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
 
@@ -282,10 +284,10 @@ function App() {
                   <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
                 </div>
                 <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
-                  ກວດສອບຄວາມຖືກຕ້ອງ <br /><span className="text-joah-orange">ສິນຄ້າໃນສາງ</span>
+                  {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
                 </h1>
                 <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                  ລະບົບກວດສອບຂໍ້ມູນสິນค้าອັດຕະໂນມັດ ປຽບທຽບລະຫວ່າງໜ້າວຽກຈິງ ແລະ ຖານຂໍ້ມູນກາງ ເພື່ອຄວາມສະດວກ
+                  {t('home.description')}
                 </p>
 
                 {/* Admin Toggle Button */}
@@ -298,12 +300,14 @@ function App() {
                       }`}
                   >
                     <ShieldCheck size={18} />
-                    <span>{showAdminMenu ? 'ປິດເມນູ Admin' : 'Admin - Showing All'}</span>
+                    <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
                   </button>
                 </div>
               </div>
 
-              <div className={`grid gap-8 w-full transition-all duration-500 ${showAdminMenu ? 'md:grid-cols-2 lg:grid-cols-4 max-w-7xl' : 'justify-center'
+              <div className={`grid gap-6 w-full transition-all duration-500 ${showAdminMenu
+                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl'
+                : 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
                 }`}>
                 {/* Always show: File Upload (only if admin) */}
                 {showAdminMenu && <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />}
@@ -315,8 +319,8 @@ function App() {
                     <DBIcon size={32} strokeWidth={2.5} />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ໃຊ້ຖານຂໍ້ມູນຫຼັກ</h3>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Cloud Record Database</p>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
                   </div>
                   <button
                     onClick={handleDatabaseLoad}
@@ -324,7 +328,7 @@ function App() {
                     className="w-full btn-primary mt-2 group py-4"
                   >
                     {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
-                    <span>ສືບຕໍ່ດ້ວຍ Cloud Database</span>
+                    <span>{t('home.continueWithCloud')}</span>
                   </button>
                 </div>
 
@@ -335,15 +339,15 @@ function App() {
                       <ShieldCheck size={32} strokeWidth={2.5} />
                     </div>
                     <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຂໍສິນຄ້າຈາກສາງ</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Store Request System</p>
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
                     </div>
                     <button
                       onClick={() => setStep('store-request')}
                       className="w-full btn-primary mt-2 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30"
                     >
                       <Play size={18} />
-                      <span>ເຂົ້າສູ່ໜ້າຮ້ານ</span>
+                      <span>{t('home.enterStore')}</span>
                     </button>
                   </div>
                 )}
@@ -493,6 +497,14 @@ function App() {
         )}
       </div>
     </ToastProvider>
+  );
+}
+
+function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }
 
