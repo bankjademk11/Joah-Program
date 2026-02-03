@@ -58,6 +58,37 @@ function AppContent() {
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
 
+  // 🔄 Auto-Login from LocalStorage
+  useEffect(() => {
+    const storedId = localStorage.getItem('joah_employee_id');
+    const storedName = localStorage.getItem('joah_employee_name');
+    const storedRole = localStorage.getItem('joah_employee_role');
+
+    if (storedId && storedName) {
+      setUser({
+        id: storedId,
+        name: storedName,
+        role: storedRole || 'staff' // Default to staff if role is missing
+      });
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('joah_employee_id');
+    localStorage.removeItem('joah_employee_name');
+    localStorage.removeItem('joah_employee_role');
+    setIsLoggedIn(false);
+    setUser(null);
+    setStep('upload');
+    setPreFilledBarcode(null);
+  };
+
+  const handleReset = () => {
+    setStep('upload');
+    setValidationResults([]);
+  };
+
 
 
   useEffect(() => {
@@ -75,12 +106,7 @@ function AppContent() {
     setIsLoggedIn(true);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUser(null);
-    setStep('upload');
-    setPreFilledBarcode(null);
-  };
+
 
   const handleGotoProductManager = (barcode) => {
     setPreFilledBarcode(barcode);
@@ -269,9 +295,10 @@ function AppContent() {
           isProcessing={isProcessing}
           onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
           onShowHistory={() => setShowHistory(true)}
-          onReset={() => window.location.reload()}
+          onReset={handleReset}
           currentUser={user}
           onOpenRequests={() => setShowStoreRequestManager(true)}
+          onLogout={handleLogout}
         />
 
         {/* Main Content */}

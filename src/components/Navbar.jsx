@@ -1,4 +1,4 @@
-import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail } from 'lucide-react';
+import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut } from 'lucide-react';
 import joahLogo from '../assets/Joah.jpeg';
 import laosFlag from '../assets/Laos.png';
 import englishFlag from '../assets/EnglishFlang.png';
@@ -17,7 +17,8 @@ const Navbar = ({
     onShowHistory,
     onReset,
     currentUser,
-    onOpenRequests
+    onOpenRequests,
+    onLogout
 }) => {
     const [pendingCount, setPendingCount] = useState(0);
 
@@ -180,6 +181,8 @@ const Navbar = ({
                             >
                                 {isDarkMode ? <Sun size={22} /> : <Moon size={22} />}
                             </button>
+
+
                         </div>
 
                         {/* Reset/Home Button - Visible only when not on upload step */}
@@ -187,10 +190,20 @@ const Navbar = ({
                             <button
                                 onClick={onReset}
                                 className="h-14 px-6 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300"
-                                title="ກັບຄືນໜ້າຫຼັກ (Reset)"
                             >
                                 <Home size={20} />
-                                <span className="hidden md:inline">Home</span>
+                                <span>HOME</span>
+                            </button>
+                        )}
+
+                        {/* Logout Button - Always Visible */}
+                        {currentUser && (
+                            <button
+                                onClick={onLogout}
+                                className="h-14 px-4 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:border-rose-200 dark:hover:border-rose-800 transition-all duration-300 shadow-sm"
+                                title="ອອກຈາກລະບົບ (Logout)"
+                            >
+                                <LogOut size={20} />
                             </button>
                         )}
                     </div>

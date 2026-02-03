@@ -64,6 +64,7 @@ const Login = ({ onLogin }) => {
             if (foundUser) {
                 localStorage.setItem('joah_employee_name', foundUser.name);
                 localStorage.setItem('joah_employee_id', foundUser.id);
+                localStorage.setItem('joah_employee_role', foundUser.role);
                 onLogin(foundUser);
             } else {
                 setError('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
@@ -93,8 +94,9 @@ const Login = ({ onLogin }) => {
                 {/* Motivational Text */}
                 <div className="absolute bottom-24 left-16 right-16 z-20 text-white drop-shadow-2xl">
                     <h2 className="text-6xl font-black mb-6 leading-tight tracking-tighter">
-                        Smart Logistics <br />
-                        <span className="text-joah-orange drop-shadow-[0_0_15px_rgba(249,115,22,0.4)]">Efficiency Redefined.</span>
+                        <span className="text-white drop-shadow-2xl">Smart Logistics</span> <br />
+                        <span className="text-white drop-shadow-2xl">Efficiency Redefined</span> <br />
+                        <span className="text-5xl text-joah-orange drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] whitespace-nowrap">Store Warehouse Management</span>
                     </h2>
                     <p className="text-xl font-medium opacity-90 max-w-xl leading-relaxed">
                         ເຊື່ອມໂຍງທຸກຂໍ້ມູນ ຈັດການທຸກຄັງສິນຄ້າ ດ້ວຍລະບົບອັດສະລິຍະ ຈາກ JOAH ENTERPRISE
