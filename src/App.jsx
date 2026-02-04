@@ -25,6 +25,8 @@ import StoreRequest from './components/StoreRequest';
 import StoreRequestManager from './components/StoreRequestManager';
 import { ToastProvider, useToast } from './components/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import MasterAudit from './components/MasterAudit';
+import ProductManager from './components/ProductManager';
 
 
 function AppContent() {
@@ -455,7 +457,7 @@ function AppContent() {
                   {dbSource === 'excel' && (
                     <button onClick={handleSyncToCloud} disabled={isProcessing} className="flex flex-col items-center gap-1 group">
                       <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center group-hover:bg-joah-orange group-hover:text-white transition-all duration-300 shadow-sm">
-                        {isProcessing ? <RefreshCw className="animate-spin" width={18} /> : <CloudUpload width={18} />}
+                        {isProcessing ? <RefreshCw className="animate-spin" width={18} /> : <UploadCloud width={18} />}
                       </div>
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Sync Cloud</span>
                     </button>

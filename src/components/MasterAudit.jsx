@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ExcelJS from 'exceljs';
 import { supabase } from '../utils/supabaseClient';
 import { fetchMasterFromSupabase } from '../utils/supabaseSync';
 import {
     Database, Search, Filter, ArrowLeft, RefreshCw,
     AlertTriangle, CheckCircle, Info, Edit2, X,
     ChevronLeft, ChevronRight, Package, LayoutDashboard,
-    ExternalLink, AlertCircle, HelpCircle
+    ExternalLink, AlertCircle, HelpCircle, Save, Trash2, Loader2, ChevronDown,
+    FileSpreadsheet
 } from 'lucide-react';
 
 const MasterAudit = ({ onBack, currentUser }) => {
@@ -13,9 +15,19 @@ const MasterAudit = ({ onBack, currentUser }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filter, setFilter] = useState('all');
+    const [filterCat1, setFilterCat1] = useState('all');
+    const [filterCat2, setFilterCat2] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const itemsPerPage = 50; // Increased for better initial loading
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [editForm, setEditForm] = useState({
+        barcode: '',
+        product_name_la: '',
+        category_1: '',
+        category_2: ''
+    });
+    const [isSaving, setIsSaving] = useState(false);
+    const itemsPerPage = 50;
     const rowRefs = useRef({});
 
     useEffect(() => {
@@ -41,7 +53,7 @@ const MasterAudit = ({ onBack, currentUser }) => {
         const isMissingCat = !cat1 || cat1.includes('ຂໍ້ມູນ') || cat1 === '---';
 
         if (isMissingCat) {
-            issues.push('ຂາດຂໍ້ມູນ Category 1');
+            issues.push('ຂຶດຂາດຂໍ້ມູນ Category 1');
         }
 
         if (!item.category_2 || item.category_2.includes('ຂໍ້ມູນ')) issues.push('ຂາດຂໍ້ມູນ Category 2');
@@ -56,57 +68,10 @@ const MasterAudit = ({ onBack, currentUser }) => {
             issues.push(`ໝວດໝູ່ "${cat1}" ບໍ່ມີໃນລະບົບ`);
         }
 
-        // --- Advanced Validation & Suggestion Logic (NEW FORMAT with Section Numbers) ---
-        const RACK_RULES = [
-            { cats: ['KITCHEN'], pattern: /^((G0[1-8]|H0[2-4])-L[1-5]-[1-4]|ໂລພື້ນ\s?G(9|10|11))/i, label: 'G01-G08, H02-H04, L1-L5, sections 1-4 (ເຊັ່ນ: G01-L1-1, H02-L5-4) ຫຼື ໂລພື້ນ G9/G10/G11' },
-            { cats: ['BEAUTY'], pattern: /^(E0[1-4]-L[1-5]-[1-4]|ໂລພື້ນE\s?[578])/i, label: 'E01-E04, L1-L5, sections 1-4 (ເຊັ່ນ: E01-L1-1, E03-L4-3) ຫຼື ໂລພື້ນE 5/7/8' },
-            { cats: ['STATIONERY'], pattern: /^(S0[1235678]-L[1-5]-[1-4]|S10-L[1-4]-[1-4])/i, label: 'S01-S08, L1-L5, sections 1-4 (ເຊັ່ນ: S01-L1-1, S07-L4-2) | S10: L1-L4, sections 1-4' },
-            { cats: ['TOYS'], pattern: /^S09-L[1-5]-[1-4]/i, label: 'S09, L1-L5, sections 1-4 (ເຊັ່ນ: S09-L1-1, S09-L3-2, S09-L5-4)' },
-            { cats: ['CLEANING/BATH'], pattern: /^(A0[1-35]-L[1-5]-[1-4]|A04-L[1-6]-[1-4])/i, label: 'A01-A03/A05: L1-L5, sections 1-4 | A04: L1-L6, sections 1-4 (ເຊັ່ນ: A01-L1-1, A04-L6-4)' },
-            { cats: ['INTERIOR'], pattern: /^(B01-L[1-3]-[1-4]|B0[2-4]-L[1-4]-[1-4])/i, label: 'B01: L1-L3, sections 1-4 | B02-B04: L1-L4, sections 1-4 (ເຊັ່ນ: B01-L1-1, B02-L4-3)' },
-            { cats: ['TOOL/DIGITAL'], pattern: /^F0[1-4]-L[1-5]-[1-5]/i, label: 'F01-F04, L1-L5, sections 1-5 (ເຊັ່ນ: F01-L1-1, F03-L4-3, F04-L5-5)' },
-            { cats: ['STORAGE'], pattern: /^(D0[1-6]-L[1-5]-[1-4]|ໂລພື້ນ\s?D0?[78])/i, label: 'D01-D06, L1-L5, sections 1-4 (ເຊັ່ນ: D01-L1-1, D05-L4-2) ຫຼື ໂລພື້ນ D07/D08' },
-            { cats: ['FASHION'], pattern: /^C0[1-4]-L[1-5]-[1-4]/i, label: 'C01-C04, L1-L5, sections 1-4 (ເຊັ່ນ: C01-L1-1, C03-L4-2, C04-L5-4)' },
-            { cats: ['SPORTS/LEISURE', 'SPORT LEISURE', 'SPORT'], pattern: /^H01-L[1-5]-[1-4]/i, label: 'H01, L1-L5, sections 1-4 (ເຊັ່ນ: H01-L1-1, H01-L3-2, H01-L5-4)' },
-        ];
-
-        const checkRackMatch = (cat1, rack) => {
-            if (!cat1 || !rack) return { match: true };
-            const c = cat1.toUpperCase().trim();
-            const r = rack.toUpperCase().trim();
-
-            const rule = RACK_RULES.find(rule => rule.cats.includes(c));
-            if (rule) {
-                return {
-                    match: rule.pattern.test(r),
-                    expected: rule.label
-                };
-            }
-            return { match: true };
-        };
-
-        const suggestCategory = (rack) => {
-            if (!rack) return null;
-            const r = rack.toUpperCase().trim();
-            const foundRule = RACK_RULES.find(rule => rule.pattern.test(r));
-            return foundRule ? foundRule.cats[0] : null;
-        };
-
-        const rackCheck = checkRackMatch(item.category_1, item.rack_location);
-        const categorySuggestion = suggestCategory(item.rack_location);
-
-        if (item.rack_location && item.rack_location.trim() !== '' && !item.rack_location.includes('ຂໍ້ມູນ')) {
-            if (!rackCheck.match) {
-                issues.push(`ຕຳແໜ່ງ Rack ບໍ່ກົງກັບໝວດໝູ່ (ຂໍ້ມູນປັດຈຸບັນຢູ່ Rack ${item.rack_location})`);
-            }
-        }
-
         const isProblematic = issues.length > 0;
         return {
             status: isProblematic ? 'incomplete' : 'complete',
             issues: issues,
-            rackCheck: rackCheck,
-            categorySuggestion: categorySuggestion,
             label: isProblematic ? 'ພົບບັນຫາ' : 'ສົມບູນ 100%',
             color: isProblematic ? 'text-amber-500' : 'text-emerald-500',
             bg: isProblematic ? 'bg-amber-500/10' : 'bg-emerald-500/10'
@@ -121,18 +86,24 @@ const MasterAudit = ({ onBack, currentUser }) => {
 
         let matchesFilter = true;
         if (filter === 'complete') matchesFilter = audit.status === 'complete';
-        else if (filter === 'incomplete') matchesFilter = audit.issues.some(i => i.startsWith('ຂາດ') && !i.includes('Rack'));
+        else if (filter === 'incomplete') matchesFilter = audit.issues.some(i => i.startsWith('ຂາດ'));
         else if (filter === 'wrong_cat') matchesFilter = audit.issues.some(i => i.includes('ບໍ່ມີໃນລະບົບ'));
-        else if (filter === 'no_rack') matchesFilter = !p.rack_location || p.rack_location.trim() === '';
         else if (filter === 'problematic') matchesFilter = audit.status === 'incomplete';
 
-        return matchesSearch && matchesFilter;
+        const matchesCat1 = filterCat1 === 'all' || (p.category_1 || 'No Category').toUpperCase() === filterCat1.toUpperCase();
+        const matchesCat2 = filterCat2 === 'all' || (p.category_2 || 'No Category').toUpperCase() === filterCat2.toUpperCase();
+
+        return matchesSearch && matchesFilter && matchesCat1 && matchesCat2;
     });
+
+    // Extract unique categories for filters and dropdowns
+    const uniqueCat1 = [...new Set(products.map(p => (p.category_1 || 'No Category').toUpperCase()))].filter(Boolean).sort();
+    const uniqueCat2 = [...new Set(products.map(p => (p.category_2 || 'No Category').toUpperCase()))].filter(Boolean).sort();
 
     // Reset page on search/filter
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filter]);
+    }, [searchTerm, filter, filterCat1, filterCat2]);
 
     // Auto-scroll logic for items
     useEffect(() => {
@@ -146,6 +117,113 @@ const MasterAudit = ({ onBack, currentUser }) => {
             }
         }
     }, [searchTerm, products]);
+
+    const handleEdit = (p) => {
+        setEditingProduct(p);
+        setEditForm({
+            barcode: p.barcode || '',
+            product_name_la: p.product_name_la || '',
+            category_1: p.category_1 || '',
+            category_2: p.category_2 || ''
+        });
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editForm.barcode) return alert('ກະລຸນາໃສ່ Barcode');
+        setIsSaving(true);
+        try {
+            const { error } = await supabase
+                .from('master_data')
+                .update({
+                    barcode: editForm.barcode,
+                    product_name_la: editForm.product_name_la,
+                    category_1: editForm.category_1,
+                    category_2: editForm.category_2,
+                    updated_at: new Date().toISOString(),
+                    updated_by: currentUser?.name || 'Audit Admin'
+                })
+                .eq('barcode', editingProduct.barcode);
+
+            if (error) throw error;
+
+            alert('✅ ອັບເດດຂໍ້ມູນສຳເລັດ!');
+            setEditingProduct(null);
+            fetchMasterData();
+        } catch (err) {
+            console.error('Update Error:', err);
+            alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async (barcode) => {
+        if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບສິນຄ້ານີ້?')) return;
+        try {
+            const { error } = await supabase
+                .from('master_data')
+                .delete()
+                .eq('barcode', barcode);
+            if (error) throw error;
+            alert('✅ ລຶບສິນຄ້າສຳເລັດ!');
+            fetchMasterData();
+        } catch (err) {
+            alert('Error deleting: ' + err.message);
+        }
+    };
+
+    const handleExportExcel = async () => {
+        if (filteredProducts.length === 0) return alert('ບໍ່ມີຂໍ້ມູນທີ່ຈະສົ່ງອອກ');
+
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Master Data Audit');
+
+            // Define Columns
+            worksheet.columns = [
+                { header: 'Barcode', key: 'barcode', width: 20 },
+                { header: 'Product Name (LA)', key: 'product_name_la', width: 40 },
+                { header: 'Category 1', key: 'category_1', width: 20 },
+                { header: 'Category 2', key: 'category_2', width: 20 },
+                { header: 'Status', key: 'status', width: 15 },
+                { header: 'Audit Findings', key: 'issues', width: 50 }
+            ];
+
+            // Add Data
+            filteredProducts.forEach(p => {
+                const audit = getRowAudit(p);
+                worksheet.addRow({
+                    barcode: p.barcode,
+                    product_name_la: p.product_name_la,
+                    category_1: p.category_1,
+                    category_2: p.category_2,
+                    status: audit.label,
+                    issues: audit.issues.join(', ') || 'Normal'
+                });
+            });
+
+            // Style Header
+            worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            worksheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF1E293B' }
+            };
+
+            // Write to buffer and download
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Master_Data_Audit_${new Date().toISOString().split('T')[0]}.xlsx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export Error:', err);
+            alert('Export Failed: ' + err.message);
+        }
+    };
 
     const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -188,6 +266,14 @@ const MasterAudit = ({ onBack, currentUser }) => {
                 </div>
 
                 <div className="flex gap-3">
+                    <button
+                        onClick={handleExportExcel}
+                        className="btn-secondary !rounded-2xl h-14 bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-600 hover:text-white"
+                        title="Export to Excel"
+                    >
+                        <FileSpreadsheet size={20} />
+                        <span>Export Excel</span>
+                    </button>
                     <button
                         onClick={fetchMasterData}
                         className="btn-secondary !rounded-2xl h-14"
@@ -263,11 +349,38 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                 <option value="all">ທັງໝົດ (All Products)</option>
                                 <option value="complete">✅ ຂໍ້ມູນສົມບູນ 100%</option>
                                 <option value="incomplete">⚠️ ຂໍ້ມູນບໍ່ຄົບຖ້ວນ (ຂາດຊື່/ບາໂຄ້ດ)</option>
-                                <option value="no_rack">📍 ບໍ່ມີຂໍ້ມູນ Rack (No Rack)</option>
                                 <option value="wrong_cat">❌ ໝວດໝູ່ບໍ່ຖືກຕ້ອງ (Wrong Cat)</option>
-                                <option value="problematic">🔍 ລວມບັນຫາທັງໝົດ</option>
+                                <option value="problematic">🔍 ລວมບັນຫາທັງໝົດ</option>
                             </select>
                             <Filter className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                        </div>
+
+                        <div className="relative">
+                            <select
+                                className="input-field pl-6 pr-12 h-14 appearance-none font-bold min-w-[180px]"
+                                value={filterCat1}
+                                onChange={(e) => setFilterCat1(e.target.value)}
+                            >
+                                <option value="all">ທັງໝົດ Cat-1</option>
+                                {uniqueCat1.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                        </div>
+
+                        <div className="relative">
+                            <select
+                                className="input-field pl-6 pr-12 h-14 appearance-none font-bold min-w-[180px]"
+                                value={filterCat2}
+                                onChange={(e) => setFilterCat2(e.target.value)}
+                            >
+                                <option value="all">ທັງໝົດ Cat-2</option>
+                                {uniqueCat2.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         </div>
                     </div>
                 </div>
@@ -279,10 +392,10 @@ const MasterAudit = ({ onBack, currentUser }) => {
                             <tr className="bg-slate-50/80 dark:bg-slate-800/50">
                                 <th className="px-8 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">Barcode</th>
                                 <th className="px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">Product Name (LA)</th>
-                                <th className="px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">Rack Map</th>
                                 <th className="px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">Categories</th>
                                 <th className="px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800 text-center">Status</th>
-                                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800 text-right">Audit Findings</th>
+                                <th className="px-6 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800">Audit Findings</th>
+                                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -312,14 +425,6 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                         </td>
                                         <td className="px-6 py-6">
                                             <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">{item.rack_location || 'No Rack'}</span>
-                                                <span className={`text-[9px] font-bold ${audit.rackCheck?.match ? 'text-emerald-500' : 'text-rose-500 animate-pulse'}`}>
-                                                    {audit.rackCheck?.match ? '✓ Rack กົງ' : '✗ Rack ຜິດ'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6">
-                                            <div className="flex flex-col gap-1">
                                                 <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">{item.category_1 || 'No Cat-1'}</span>
                                                 <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400 opacity-60">{item.category_2 || 'No Cat-2'}</span>
                                             </div>
@@ -330,8 +435,8 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                                 {audit.label}
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex flex-col items-end gap-1">
+                                        <td className="px-6 py-6">
+                                            <div className="flex flex-col items-start gap-1">
                                                 {audit.issues.length > 0 ? (
                                                     audit.issues.slice(0, 2).map((issue, idx) => (
                                                         <span key={idx} className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-500/20">{issue}</span>
@@ -340,6 +445,24 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                                     <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-500/20">Data is Correct</span>
                                                 )}
                                                 {audit.issues.length > 2 && <span className="text-[9px] text-slate-400 font-bold">+{audit.issues.length - 2} more...</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                    className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-100 dark:border-blue-900/30"
+                                                    title="Edit Product"
+                                                >
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(item.barcode); }}
+                                                    className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 hover:bg-rose-600 hover:text-white transition-all shadow-sm border border-rose-100 dark:border-rose-900/30"
+                                                    title="Delete Product"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -415,17 +538,6 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ຈຳນວນໃນລະບົບ (Qty)</p>
                                         <p className="text-base font-bold text-slate-800 dark:text-white">{selectedProduct.qty || 0}</p>
                                     </div>
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ຕຳແໜ່ງ Rack (Rack Location)</p>
-                                        <div className="flex items-center gap-2">
-                                            <p className={`text-base font-black ${audit.rackCheck?.match ? 'text-slate-800 dark:text-white' : 'text-rose-500 animate-pulse'}`}>
-                                                {selectedProduct.rack_location || '---'}
-                                            </p>
-                                            {!audit.rackCheck?.match && (
-                                                <span className="px-2 py-0.5 bg-rose-100 text-rose-600 rounded-lg text-[9px] font-black uppercase">Wrong Location</span>
-                                            )}
-                                        </div>
-                                    </div>
                                 </div>
 
                                 {/* Audit Results */}
@@ -443,33 +555,11 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                                     <div>
                                                         <p className="text-sm font-bold text-rose-700 dark:text-rose-300">{issue}</p>
                                                         <p className="text-xs text-rose-600/60 dark:text-rose-400/60 mt-1">
-                                                            {issue.includes('Rack') ? 'ລະບົບພົບວ່າສິນຄ້ານີ້ວາງຢູ່ໃນຕຳແໜ່ງທີ່ບໍ່ກົງກັບໝວດໝູ່. ກະລຸນາຍ້າຍສິນຄ້າ ຫຼື ປ່ຽນໝວດໝູ່ໃຫ້ຖືກຕ້ອງ.' :
-                                                                issue.includes('ໝວດໝູ່') ? 'ໝວດໝູ່ທີ່ເລືອກບໍ່ມີໃນລະບົບມາດຕະຖານ. ລະບົບໄດ້ທຳການກວດສອບ ແລະ ປຽບທຽບໃຫ້ອັດຕະໂນມັດແລ້ວ.' :
-                                                                    'ຂໍ້ມູນສ່ວນນີ້ມີຄວາມຈຳເປັນໃນການຄຳນວນລາຍງານ, ກະລຸນາເພີ່ມຂໍ້ມູນໃຫ້ຄົບຖ້ວນ'}
+                                                            {issue.includes('ໝວດໝູ່') ? 'ໝວດໝູ່ທີ່ເລືອກບໍ່ມີໃນລະບົບມາດຕະຖານ. ລະບົບໄດ້ທຳການກວດສອບ ແລະ ປຽບທຽບໃຫ້ອັດຕະໂນມັດແລ้ວ.' :
+                                                                'ຂໍ້ມູນສ່ວນນີ້ມີຄວາມຈຳເປັນໃນການຄຳນວນລາຍງານ, ກະລຸນາເພີ່ມຂໍ້ມູນໃຫ້ຄົບຖ້ວນ'}
                                                         </p>
                                                     </div>
                                                 </div>
-
-                                                {(issue.includes('Rack') || issue.includes('ຂາດຂໍ້ມູນ Rack')) && (
-                                                    <div className="mt-2 space-y-3">
-                                                        {audit.rackCheck?.expected && (
-                                                            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-rose-200 dark:border-rose-500/20">
-                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ຕຳແໜ່ງທີ່ຄວນໄປຢູ່ (Target Rack)</p>
-                                                                <p className="text-sm font-black text-rose-600 dark:text-rose-400 uppercase">
-                                                                    ➡️ ຄວນຢູ່ Rack: <span className="underline decoration-2 underline-offset-4 bg-rose-50 dark:bg-rose-500/10 px-2 rounded-md">{audit.rackCheck.expected}</span>
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                        {audit.categorySuggestion && !audit.rackCheck?.match && (
-                                                            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-500/20">
-                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ໝວດໝູ່ທີ່ແນະນຳ (Suggested Category)</p>
-                                                                <p className="text-sm font-black text-amber-600 dark:text-amber-400 uppercase">
-                                                                    💡 ອີງຕາມ Rack "{selectedProduct.rack_location}", ໝວດໝູ່ຄວນເປັນ: <span className="bg-amber-50 dark:bg-amber-500/10 px-2 rounded-md">{audit.categorySuggestion}</span>
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
                                             </div>
                                         )) : (
                                             <div className="flex items-start gap-4 p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10">
@@ -494,6 +584,103 @@ const MasterAudit = ({ onBack, currentUser }) => {
                     </div>
                 );
             })()}
+
+            {/* Edit Modal */}
+            {editingProduct && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setEditingProduct(null)}></div>
+                    <div className="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-[3rem] overflow-hidden shadow-2xl animate-scale-in border border-slate-200 dark:border-slate-800">
+                        {/* Header */}
+                        <div className="p-8 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 relative">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3.5 bg-blue-500 text-white rounded-2xl shadow-lg shadow-blue-500/20">
+                                    <Edit2 size={24} />
+                                </div>
+                                <button
+                                    onClick={() => setEditingProduct(null)}
+                                    className="p-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">ແກ້ໄຂຂໍ້ມູນສິນຄ້າ</h3>
+                            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Item Ref: {editingProduct.barcode}</p>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-5">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Barcode / SKU</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.barcode}
+                                        onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
+                                        className="w-full px-5 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                                        placeholder="Scan or Type Barcode..."
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Product Name (Lao)</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.product_name_la}
+                                        onChange={(e) => setEditForm({ ...editForm, product_name_la: e.target.value })}
+                                        className="w-full px-5 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                                        placeholder="ຊື່ສິນຄ້າພາສາລາວ..."
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-5">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Category 1</label>
+                                        <div className="relative">
+                                            <select
+                                                value={editForm.category_1}
+                                                onChange={(e) => setEditForm({ ...editForm, category_1: e.target.value })}
+                                                className="w-full px-5 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white appearance-none cursor-pointer"
+                                            >
+                                                <option value="">-- ເລືອກໝວດໝູ່ --</option>
+                                                {uniqueCat1.map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Category 2</label>
+                                        <div className="relative">
+                                            <select
+                                                value={editForm.category_2}
+                                                onChange={(e) => setEditForm({ ...editForm, category_2: e.target.value })}
+                                                className="w-full px-5 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white appearance-none cursor-pointer"
+                                            >
+                                                <option value="">-- ເລືອກໝວດໝູ່ຍ່ອຍ --</option>
+                                                {uniqueCat2.map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleSaveEdit}
+                                disabled={isSaving}
+                                className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black shadow-xl shadow-blue-500/30 flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-50"
+                            >
+                                {isSaving ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
+                                <span>ບັນທຶກການແກ้ໄຂ</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
