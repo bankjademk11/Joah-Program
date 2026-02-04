@@ -65,12 +65,14 @@ function AppContent() {
     const storedId = localStorage.getItem('joah_employee_id');
     const storedName = localStorage.getItem('joah_employee_name');
     const storedRole = localStorage.getItem('joah_employee_role');
+    const storedWorkplace = localStorage.getItem('joah_employee_workplace');
 
     if (storedId && storedName) {
       setUser({
         id: storedId,
         name: storedName,
-        role: storedRole || 'staff' // Default to staff if role is missing
+        role: storedRole || 'staff',
+        workplace: storedWorkplace || 'front' // Default to front
       });
       setIsLoggedIn(true);
     }
@@ -80,6 +82,7 @@ function AppContent() {
     localStorage.removeItem('joah_employee_id');
     localStorage.removeItem('joah_employee_name');
     localStorage.removeItem('joah_employee_role');
+    localStorage.removeItem('joah_employee_workplace');
     setIsLoggedIn(false);
     setUser(null);
     setStep('upload');
@@ -319,50 +322,51 @@ function AppContent() {
                   {t('home.description')}
                 </p>
 
-                {/* Admin Toggle Button */}
-                <div className="mt-8">
-                  <button
-                    onClick={() => setShowAdminMenu(!showAdminMenu)}
-                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
-                      ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                  >
-                    <ShieldCheck size={18} />
-                    <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
-                  </button>
-                </div>
+                {/* Admin Toggle Button (Only for back store or admin) */}
+                {user?.workplace !== 'front' && (
+                  <div className="mt-8">
+                    <button
+                      onClick={() => setShowAdminMenu(!showAdminMenu)}
+                      className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
+                        ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                      <ShieldCheck size={18} />
+                      <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className={`grid gap-6 w-full transition-all duration-500 ${showAdminMenu
-                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl'
-                : 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
-                }`}>
+              <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
                 {/* Always show: File Upload (only if admin) */}
                 {showAdminMenu && <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />}
 
-                {/* Always show: Cloud Database */}
-                <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
-                  }`}>
-                  <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                    <DBIcon size={32} strokeWidth={2.5} />
+                {/* Cloud Database (Hidden for Front Store) */}
+                {user?.workplace !== 'front' && (
+                  <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
+                    }`}>
+                    <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                      <DBIcon size={32} strokeWidth={2.5} />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
+                    </div>
+                    <button
+                      onClick={handleDatabaseLoad}
+                      disabled={isProcessing}
+                      className="w-full btn-primary mt-2 group py-4"
+                    >
+                      {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
+                      <span>{t('home.continueWithCloud')}</span>
+                    </button>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
-                  </div>
-                  <button
-                    onClick={handleDatabaseLoad}
-                    disabled={isProcessing}
-                    className="w-full btn-primary mt-2 group py-4"
-                  >
-                    {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
-                    <span>{t('home.continueWithCloud')}</span>
-                  </button>
-                </div>
+                )}
 
-                {/* Store Request Card */}
-                {!showAdminMenu && (
+                {/* Store Request Card (Only for Front Store or when not in Admin Menu) */}
+                {!showAdminMenu && user?.workplace !== 'back' && (
                   <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 max-w-md mx-auto">
                     <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                       <ShieldCheck size={32} strokeWidth={2.5} />

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../assets/Joah.jpeg';
 import joahWarehouseImg from '../assets/joah warehosue.png';
 import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
+import { supabase } from '../utils/supabaseClient';
 
 const Login = ({ onLogin }) => {
     const [employeeId, setEmployeeId] = useState('');
@@ -15,6 +16,7 @@ const Login = ({ onLogin }) => {
     const [regPassword, setRegPassword] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
+    const [regWorkplace, setRegWorkplace] = useState('front'); // Default to front store
 
     const inputRef = useRef(null);
 
@@ -25,16 +27,32 @@ const Login = ({ onLogin }) => {
         }
     }, []);
 
-    const handleRegister = (e) => {
+    const handleRegister = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        // Mock API Call
-        setTimeout(() => {
-            alert('✅ ລົງທະບຽນສຳເລັດ! ກະລຸນາລໍຖ້າການອະນຸມັດຈາກ Admin.');
+        setError('');
+
+        try {
+            const { error: regError } = await supabase
+                .from('employees')
+                .insert([{
+                    employee_id: regEmployeeId.trim().toUpperCase(),
+                    password: regPassword, // In a real app, hash this!
+                    name: regEmployeeId.trim(), // Placeholder for name, user can edit later
+                    role: 'staff',
+                    workplace: regWorkplace
+                }]);
+
+            if (regError) throw regError;
+
+            alert('✅ ລົງທະບຽນສຳເລັດ! ສາມາດເຂົ້າສູ່ລະບົບໄດ້ທັນທີ.');
             setIsRegistering(false);
+            setEmployeeId(regEmployeeId);
+        } catch (err) {
+            setError('ບໍ່ສາມາດລົງທະບຽນໄດ້: ' + err.message);
+        } finally {
             setIsLoading(false);
-            setEmployeeId(regEmployeeId); // Auto-fill login
-        }, 1500);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -42,36 +60,40 @@ const Login = ({ onLogin }) => {
         setIsLoading(true);
         setError('');
 
-        // Check if password is provided (mockup - any password works)
         if (!password || password.trim() === '') {
             setError('ກະລຸນາໃສ່ລະຫັດຜ່ານ');
             setIsLoading(false);
             return;
         }
 
-        // Specific Approved Users List
-        const mockEmployees = [
-            { id: 'k2411149', name: 'Mr. khamphout kiettimoungkhoun', role: 'staff' },
-            { id: 'k2412084', name: 'Mr. Khunthavong sayyavongsa', role: 'staff' },
-            { id: 'k2508142', name: 'Mr. Chanthavisouk Aiyyavong', role: 'staff' },
-            { id: 'k2507171', name: 'Mr. DiDar keopaserd', role: 'staff' },
-            { id: 'ADMIN', name: 'System Admin', role: 'admin' }
-        ];
+        try {
+            const { data: employee, error: dbError } = await supabase
+                .from('employees')
+                .select('*')
+                .ilike('employee_id', employeeId.trim())
+                .maybeSingle(); // Use maybeSingle to avoid 406/unhandled errors
 
-        setTimeout(() => {
-            const foundUser = mockEmployees.find(emp => emp.id.toLowerCase() === employeeId.trim().toLowerCase());
-
-            if (foundUser) {
-                localStorage.setItem('joah_employee_name', foundUser.name);
-                localStorage.setItem('joah_employee_id', foundUser.id);
-                localStorage.setItem('joah_employee_role', foundUser.role);
-                onLogin(foundUser);
-            } else {
-                setError('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
-                setIsLoading(false);
-                inputRef.current?.focus();
+            if (dbError || !employee) {
+                throw new Error('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
             }
-        }, 800);
+
+            localStorage.setItem('joah_employee_id', employee.employee_id);
+            localStorage.setItem('joah_employee_name', employee.name || employee.employee_id);
+            localStorage.setItem('joah_employee_role', employee.role);
+            localStorage.setItem('joah_employee_workplace', employee.workplace || 'front');
+
+            onLogin({
+                id: employee.employee_id,
+                name: employee.name || employee.employee_id,
+                role: employee.role,
+                workplace: employee.workplace || 'front'
+            });
+
+        } catch (err) {
+            setError(err.message);
+            setIsLoading(false);
+            inputRef.current?.focus();
+        }
     };
 
     return (
@@ -132,21 +154,29 @@ const Login = ({ onLogin }) => {
                     {isRegistering ? (
                         /* REGISTER FORM */
                         <form onSubmit={handleRegister} className="space-y-4">
-                            {/* Address */}
+                            {/* Address Dropdown */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ທີ່ຢູ່ / ADDRESS</label>
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ສາຂາ / BRANCH</label>
                                 <div className="relative group">
-                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300">
+                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors duration-300 pointer-events-none z-10">
                                         <MapPin size={20} />
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder="ປ້ອນທີ່ຢູ່ປັດຈຸບັນ..."
+                                    <select
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300"
+                                        className="w-full h-14 pl-14 pr-10 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white appearance-none cursor-pointer"
                                         required
-                                    />
+                                    >
+                                        <option value="" disabled>ເລືອກສາຂາ...</option>
+                                        <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                                        <option value="ສີວິໄລ">ສີວິໄລ</option>
+                                        <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                                        <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                                    </select>
+                                    {/* Custom Dropdown Arrow */}
+                                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                        <ArrowRight size={18} className="rotate-90" />
+                                    </div>
                                 </div>
                             </div>
 
@@ -202,6 +232,31 @@ const Login = ({ onLogin }) => {
                                         className="w-full h-14 pl-14 pr-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-joah-orange/50 focus:bg-white dark:focus:bg-slate-900 outline-none text-lg font-bold text-slate-800 dark:text-white placeholder:text-slate-300"
                                         required
                                     />
+                                </div>
+                            </div>
+
+                            {/* Workplace Selection */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">ແຜນກ / DEPARTMENT</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRegWorkplace('front')}
+                                        className={`h-12 rounded-xl font-bold transition-all ${regWorkplace === 'front'
+                                            ? 'bg-joah-orange text-white shadow-lg'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'}`}
+                                    >
+                                        ໜ້າຮ້ານ
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRegWorkplace('back')}
+                                        className={`h-12 rounded-xl font-bold transition-all ${regWorkplace === 'back'
+                                            ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'}`}
+                                    >
+                                        ຫລັງຮ້ານ
+                                    </button>
                                 </div>
                             </div>
 

@@ -125,15 +125,23 @@ const Navbar = ({
                         {/* User Profile Badge */}
                         {currentUser && (
                             <div className="hidden md:flex flex-col items-end mr-2">
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('navbar.loggedInAs')}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${currentUser.workplace === 'back'
+                                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                            : 'bg-joah-orange text-white'
+                                        }`}>
+                                        {currentUser.workplace === 'back' ? 'BACK' : 'FRONT'}
+                                    </span>
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('navbar.loggedInAs')}</p>
+                                </div>
                                 <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{currentUser.name}</p>
                             </div>
                         )}
 
                         {/* Action Buttons Container */}
                         <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                            {/* History Button - Hidden on Upload page */}
-                            {step !== 'upload' && (
+                            {/* History Button - Hidden on Upload page and for Front store workers */}
+                            {step !== 'upload' && currentUser?.workplace !== 'front' && (
                                 <button
                                     onClick={onShowHistory}
                                     className="w-14 h-14 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg transition-all duration-300"
