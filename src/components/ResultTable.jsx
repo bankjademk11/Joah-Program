@@ -11,11 +11,15 @@ import { supabase } from '../utils/supabaseClient';
 import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProcessor';
 import databaseUrl from '../assets/DataBaseJoah.xlsx';
+import { useToast } from './ToastProvider';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const ResultTable = ({
     results, masterData, rawFile, locationSheetName, filterStatus,
     onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct
 }) => {
+    const { t } = useLanguage();
+    const { success, error: showError } = useToast(); // Initialize Toast
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [isExporting, setIsExporting] = useState(false);
@@ -235,6 +239,7 @@ const ResultTable = ({
                 (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
             const matchesFilter =
                 filterStatus === 'all' ||
+                (filterStatus === 'odooDiff' && row.odooQty !== undefined && row.odooQty !== null && Number(row.qty) !== Number(row.odooQty)) ||
                 row.status === filterStatus ||
                 (filterStatus === 'missing' && row.status === 'incomplete') ||
                 (filterStatus === 'zero' && parseFloat(row.qty) === 0) ||
@@ -362,7 +367,7 @@ const ResultTable = ({
         const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
         if (dbSource === 'supabase' && !activeUser) {
-            alert('Error: User not identified. Please login again.');
+            showError('Error: User not identified. Please login again.');
             return;
         }
 
@@ -388,6 +393,17 @@ const ResultTable = ({
             if (dbSource === 'supabase') {
                 if (!selectedRow.id) throw new Error("ບໍ່ພົບ Record ID ໃນຖານຂໍ້ມູນ.");
 
+                // Validate Reason if changes detected
+                const hasRackChangedCheck = editLocation !== selectedRow.rackLocation;
+                const hasCatChangedCheck = (editCat1 !== selectedRow.category1) || (editCat2 !== selectedRow.category2);
+                const hasQtyChangedCheck = Number(editQty) !== (selectedRow.qty || 0);
+
+                if ((hasRackChangedCheck || hasCatChangedCheck || hasQtyChangedCheck) && !editReason.trim()) {
+                    showError(t('results.reasonRequired'));
+                    setIsUpdating(false);
+                    return;
+                }
+
                 const { error: locError } = await supabase
                     .from('location_inventory')
                     .update({
@@ -402,19 +418,61 @@ const ResultTable = ({
                 if (locError) throw locError;
 
                 // Log History
+                // Log History with detailed tracking
+                const hasRackChanged = editLocation !== selectedRow.rackLocation;
+                const hasCatChanged = (editCat1 !== selectedRow.category1) || (editCat2 !== selectedRow.category2);
+                const hasQtyChanged = newQtyValue !== oldQtyValue;
+
+
+
+                let detailedReason = '';
+                if (hasRackChanged && hasCatChanged) {
+                    detailedReason = 'ແກ້ໄຂຜັງ Rack ແລະ ໝວດໝູ່';
+                } else if (hasRackChanged) {
+                    detailedReason = `ຍ້າຍຈາກ ${selectedRow.rackLocation || 'N/A'} ໄປ ${editLocation || 'N/A'}`;
+                } else if (hasCatChanged) {
+                    detailedReason = 'ແກ້ໄຂໝວດໝູ່ສິນຄ້າ (Category Update)';
+                } else if (hasQtyChanged) {
+                    detailedReason = 'ປັບປຸງຈຳນວນສິນຄ້າ (Qty Update)';
+                } else {
+                    detailedReason = 'Manual Update';
+                }
+
+                // Append user manual reason
+                if (editReason.trim()) {
+                    detailedReason += `: ${editReason.trim()}`;
+                }
+
+                console.log('📝 [ResultTable] Logging history with:', {
+                    barcode: selectedRow.barcode,
+                    oldRack: selectedRow.rackLocation,
+                    newRack: editLocation,
+                    hasRackChanged,
+                    hasCatChanged,
+                    hasQtyChanged,
+                    reason: detailedReason
+                });
+
                 await logInventoryHistory({
                     barcode: selectedRow.barcode,
                     itemName: selectedRow.masterItemName || selectedRow.itemName,
                     oldQty: oldQtyValue,
                     newQty: newQtyValue,
+                    oldRack: selectedRow.rackLocation || null,
+                    newRack: editLocation || null,
+                    oldCat1: selectedRow.category1 || null,  // ✅ Category tracking
+                    newCat1: editCat1 || null,               // ✅ Category tracking
+                    oldCat2: selectedRow.category2 || null,  // ✅ Category tracking
+                    newCat2: editCat2 || null,               // ✅ Category tracking
                     updatedBy: activeUser,
-                    reason: editReason || (editLocation !== selectedRow.rackLocation ? `Moved to ${editLocation}` : 'Manual Qty Update')
+                    reason: detailedReason
                 });
             }
+            success(t('results.saveSuccess'));
             setSelectedRow(null);
             setEditReason(''); // Reset reason
         } catch (err) {
-            alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
+            showError(t('results.saveError') + ': ' + err.message);
         } finally {
             setIsUpdating(false);
         }
@@ -422,7 +480,7 @@ const ResultTable = ({
 
     const handleQuickAddSave = async () => {
         if (!quickAddForm.barcode_no || !quickAddForm.rack_location) {
-            alert('ກະລຸນາປ້ອນ ບາໂຄ້ດ ແລະ ສະຖານທີ່ວາງເຄື່ອງ');
+            alert(t('results.fillRequired'));
             return;
         }
 
@@ -794,12 +852,13 @@ const ResultTable = ({
                                 className="input-field pl-14 appearance-none font-bold"
                                 value={filterStatus} onChange={(e) => { onFilterChange(e.target.value); setCurrentPage(1); }}
                             >
-                                <option value="all">ທັງໝົດ (All Status)</option>
-                                <option value="passed">✅ ຖືກຕ້ອງ (Passed)</option>
-                                <option value="mismatch">❌ ບໍ່ກົງກັນ (Mismatch)</option>
-                                <option value="missing">❓ ຂໍ້ມູນບໍ່ຄົບ (Missing)</option>
-                                <option value="zero">⚠️ ສິນຄ້າເປັນ 0 (Zero)</option>
-                                <option value="hasQty">📦 ສິນຄ້າມີຈໍานວນ (In Stock)</option>
+                                <option value="all">{t('results.filterAll')}</option>
+                                <option value="passed">{t('results.filterPassed')}</option>
+                                <option value="mismatch">{t('results.filterMismatch')}</option>
+                                <option value="missing">{t('results.filterIncomplete')}</option>
+                                <option value="zero">{t('results.filterZero')}</option>
+                                <option value="hasQty">{t('results.filterHasQty')}</option>
+                                <option value="odooDiff">{t('results.filterOdooDiff')}</option>
                             </select>
                             <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
                         </div>
@@ -810,10 +869,10 @@ const ResultTable = ({
                             <button
                                 onClick={() => setShowExportDropdown(!showExportDropdown)}
                                 disabled={isExporting}
-                                className="btn-success shadow-emerald-500/20 py-3 uppercase text-[10px] tracking-widest min-w-[170px] flex items-center justify-center gap-3"
+                                className="btn-success shadow-emerald-500/20 py-3 text-[10px] min-w-[170px] flex items-center justify-center gap-3 font-bold"
                             >
                                 {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                                <span>Export Report</span>
+                                <span>{t('results.exportExcel')}</span>
                                 <ChevronDown size={14} className={`transition-transform duration-300 ${showExportDropdown ? 'rotate-180' : ''}`} />
                             </button>
 
@@ -821,7 +880,7 @@ const ResultTable = ({
                             {showExportDropdown && (
                                 <div className="absolute top-full right-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden z-[100] animate-fade-in-up">
                                     <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Template</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('results.exportTemplate')}</p>
                                     </div>
                                     <div className="p-2">
                                         <button
@@ -832,8 +891,8 @@ const ResultTable = ({
                                                 <FileSpreadsheet size={18} />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Standard Report</p>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Full Data + Master Reference</p>
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">{t('results.stdReport')}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">{t('results.stdReportDesc')}</p>
                                             </div>
                                         </button>
 
@@ -845,8 +904,8 @@ const ResultTable = ({
                                                 <AlertTriangle size={18} />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Audit Focus</p>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Mismatch & Missing Items Only</p>
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">{t('results.auditFocus')}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">{t('results.auditFocusDesc')}</p>
                                             </div>
                                         </button>
 
@@ -858,8 +917,8 @@ const ResultTable = ({
                                                 <ClipboardList size={18} />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Simple Summary</p>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Essential Inventory Columns</p>
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">{t('results.simpleSum')}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">{t('results.simpleSumDesc')}</p>
                                             </div>
                                         </button>
                                         <button
@@ -870,8 +929,8 @@ const ResultTable = ({
                                                 <RotateCw size={18} />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Odoo Adjustment</p>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Diff Only (For Accounting)</p>
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">{t('results.odooAdj')}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">{t('results.odooAdjDesc')}</p>
                                             </div>
                                         </button>
                                     </div>
@@ -879,9 +938,9 @@ const ResultTable = ({
                             )}
                         </div>
                         {onRefresh && (
-                            <button onClick={onRefresh} className="btn-secondary py-3 uppercase text-[10px] tracking-widest min-w-[120px]">
+                            <button onClick={onRefresh} className="btn-secondary py-3 text-[10px] min-w-[120px] font-bold">
                                 <RotateCw size={16} />
-                                <span>Refresh</span>
+                                <span>{t('navbar.refresh')}</span>
                             </button>
                         )}
                     </div>
@@ -893,15 +952,15 @@ const ResultTable = ({
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-slate-50/80 dark:bg-slate-800/50">
-                                    <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">#</th>
-                                    <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Barcode / Product</th>
-                                    <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Rack Location</th>
+                                    <th className="px-8 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">#</th>
+                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.barcode')} / {t('results.itemName')}</th>
+                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.location')}</th>
                                     <th
                                         onClick={() => handleSort('qty')}
-                                        className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:text-joah-orange transition-colors group/head"
+                                        className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:text-joah-orange transition-colors group/head"
                                     >
                                         <div className="flex items-center justify-center gap-2">
-                                            Count / System
+                                            {t('results.actualQty')} / {t('results.masterQty')}
                                             <div className={`transition-all duration-300 ${sortConfig.key === 'qty' ? 'text-joah-orange scale-110' : 'text-slate-300 group-hover/head:text-joah-orange/50'}`}>
                                                 {sortConfig.key === 'qty' ? (
                                                     sortConfig.direction === 'asc' ? <ChevronDown size={14} strokeWidth={3} /> : <ChevronDown size={14} className="rotate-180" strokeWidth={3} />
@@ -909,10 +968,10 @@ const ResultTable = ({
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">Categories</th>
-                                    <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Status</th>
-                                    <th className="px-6 py-6 text-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">OD Qty</th>
-                                    <th className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Action</th>
+                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">{t('results.category1')} & {t('results.category2')}</th>
+                                    <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.status')}</th>
+                                    <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.odooQty')}</th>
+                                    <th className="px-8 py-6 text-right text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -984,7 +1043,13 @@ const ResultTable = ({
                                                         <History size={18} />
                                                     </button>
                                                 )}
-                                                <button onClick={() => { setSelectedRow(row); setEditQty(row.qty || 0); }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
+                                                <button onClick={() => {
+                                                    setSelectedRow(row);
+                                                    setEditQty(row.qty || 0);
+                                                    setEditLocation(row.rackLocation || '');
+                                                    setEditCat1(row.category1 || '');
+                                                    setEditCat2(row.category2 || '');
+                                                }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
                                                     <Edit2 size={18} />
                                                 </button>
                                             </div>
@@ -1136,7 +1201,10 @@ const ResultTable = ({
                                         onClick={() => {
                                             setDiagnosticRow(null);
                                             setSelectedRow(diagnosticRow);
-                                            setEditQty(diagnosticRow.qty);
+                                            setEditQty(diagnosticRow.qty || 0);
+                                            setEditLocation(diagnosticRow.rackLocation || '');
+                                            setEditCat1(diagnosticRow.category1 || '');
+                                            setEditCat2(diagnosticRow.category2 || '');
                                         }}
                                         className="px-8 h-14 rounded-2xl bg-joah-orange text-white font-black uppercase tracking-widest hover:scale-105 transition-all text-xs shadow-lg shadow-orange-500/30 flex items-center gap-2"
                                     >
@@ -1248,23 +1316,7 @@ const ResultTable = ({
                                             />
                                         </div>
 
-                                        {/* Dynamic Reason for Custom/Changed Rack */}
-                                        {editLocation !== selectedRow.rackLocation && (
-                                            <div className="mt-4 p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-900/30 animate-fade-in-up">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Info size={14} className="text-joah-orange" />
-                                                    <span className="text-[10px] font-black text-joah-orange uppercase tracking-widest">Reason for Rack Change</span>
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    value={editReason}
-                                                    onChange={(e) => setEditReason(e.target.value)}
-                                                    placeholder="ບອກເຫດຜົນທີ່ປ່ຽນຕຳແໜ່ງ ຫຼືໃຊ້ Rack ນີ້"
-                                                    className="w-full bg-transparent border-b border-orange-300 dark:border-orange-800 focus:border-joah-orange outline-none py-1 text-sm font-bold placeholder:text-slate-400"
-                                                    autoFocus
-                                                />
-                                            </div>
-                                        )}
+                                        {/* Rack Location Reason Input Removed - Consolidated below */}
                                     </div>
 
                                     {/* Category 1 Editor */}
@@ -1300,8 +1352,28 @@ const ResultTable = ({
                                         />
                                     </div>
 
+                                    {/* Consolidated Reason Input for ANY change */}
+                                    <div className="md:col-span-2 relative group mt-2">
+                                        <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-900/30 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Info size={14} className="text-joah-orange" />
+                                                    <span className="text-[10px] font-black text-joah-orange uppercase tracking-widest">{t('results.reasonPrompt')}</span>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 rounded-md uppercase tracking-wide">{t('results.mustFill')}</span>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={editReason}
+                                                onChange={(e) => setEditReason(e.target.value)}
+                                                placeholder={t('results.reasonPlaceholder')}
+                                                className="w-full bg-transparent border-b border-orange-300 dark:border-orange-800 focus:border-joah-orange outline-none py-2 text-sm font-bold placeholder:text-slate-400/70"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div className="relative group mt-4 md:col-span-2">
-                                        <span className="absolute -top-3 left-4 px-2 bg-white dark:bg-slate-900 text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-joah-orange z-10 transition-colors">Verifier Name</span>
+                                        <span className="absolute -top-3 left-4 px-2 bg-white dark:bg-slate-900 text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-joah-orange z-10 transition-colors">{t('results.verifier')}</span>
                                         <div className="relative">
                                             <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors" size={16} />
                                             <input
@@ -1314,10 +1386,10 @@ const ResultTable = ({
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-6">
-                                    <button onClick={() => setSelectedRow(null)} disabled={isUpdating} className="btn-secondary bg-slate-800 text-white border-slate-700 hover:bg-slate-700 h-16 uppercase text-xs tracking-widest shadow-none disabled:opacity-50">Cancel</button>
+                                    <button onClick={() => setSelectedRow(null)} disabled={isUpdating} className="btn-secondary bg-slate-800 text-white border-slate-700 hover:bg-slate-700 h-16 uppercase text-xs tracking-widest shadow-none disabled:opacity-50">{t('common.cancel')}</button>
                                     <button onClick={handleUpdateMasterQty} disabled={isUpdating} className={`btn-primary h-16 uppercase text-xs tracking-widest shadow-orange-500/10 ${isUpdating ? 'opacity-70 cursor-wait' : ''}`}>
                                         {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                                        <span>{isUpdating ? 'Saving...' : 'Confirm Save'}</span>
+                                        <span>{isUpdating ? t('results.saving') : t('results.saveChanges')}</span>
                                     </button>
                                 </div>
                             </div>

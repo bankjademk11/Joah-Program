@@ -159,23 +159,54 @@ export const addLocationRecord = async (record) => {
 
 /**
  * 4. ບັນທຶກປະຫວັດການປ່ຽນແປງ (Audit Log)
+ * Updated to match actual inventory_history schema
  */
-export const logInventoryHistory = async ({ barcode, itemName, oldQty, newQty, updatedBy, reason }) => {
+export const logInventoryHistory = async ({
+    barcode, itemName, oldQty, newQty, updatedBy, reason,
+    oldRack, newRack, oldCat1, newCat1, oldCat2, newCat2
+}) => {
     try {
-        const { error } = await supabase
+        console.log('📝 [logInventoryHistory] Starting...');
+        console.log('📦 Input Data:', {
+            barcode, itemName, oldQty, newQty, updatedBy, reason,
+            oldRack, newRack, oldCat1, newCat1, oldCat2, newCat2
+        });
+
+        const historyRecord = {
+            barcode,
+            item_name: itemName,  // ✅ Match DB schema
+            old_qty: Number(oldQty || 0),
+            new_qty: Number(newQty || 0),
+            old_rack: oldRack || null,  // ✅ Rack tracking
+            new_rack: newRack || null,  // ✅ Rack tracking
+            old_category_1: oldCat1 || null,  // ✅ Category tracking
+            new_category_1: newCat1 || null,  // ✅ Category tracking
+            old_category_2: oldCat2 || null,  // ✅ Category tracking
+            new_category_2: newCat2 || null,  // ✅ Category tracking
+            change_reason: reason || '',
+            details: reason || '',  // ✅ New field (same as change_reason)
+            updated_by: updatedBy || 'Unknown',  // ✅ Match DB schema
+            updated_at: new Date().toISOString()  // ✅ Add timestamp
+        };
+
+        console.log('📤 [logInventoryHistory] Attempting to insert:', historyRecord);
+
+        const { data, error } = await supabase
             .from('inventory_history')
-            .insert([{
-                barcode,
-                item_name: itemName,
-                old_qty: Number(oldQty || 0),
-                new_qty: Number(newQty || 0),
-                updated_by: updatedBy || 'Unknown',
-                change_reason: reason || ''
-            }]);
-        if (error) throw error;
-        return { success: true };
+            .insert([historyRecord])
+            .select();
+
+        if (error) {
+            console.error('❌ [logInventoryHistory] Insert Error:', error);
+            console.error('❌ Error Details:', JSON.stringify(error, null, 2));
+            throw error;
+        }
+
+        console.log('✅ [logInventoryHistory] Success! Inserted:', data);
+        return { success: true, data };
     } catch (error) {
-        console.error('History Log Error:', error);
+        console.error('❌ [logInventoryHistory] Catch Block Error:', error);
+        console.error('❌ Error Stack:', error.stack);
         return { success: false, error: error.message };
     }
 };

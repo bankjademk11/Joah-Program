@@ -277,23 +277,30 @@ export const validateData = (locationRows, dataRows, odooRows = []) => {
                 color = 'blue';
                 reason = 'ຂໍ້ມູນໝວດໝູ່ໃນຖານຂໍ້ມູນບໍ່ຄົບຖ້ວນ';
                 stats.missing++;
-            } else if (!cat1Match || !cat2Match || !rackValidation.match || odooMismatch) {
-                // ถ้าอย่างใดอย่างหนึ่งไม่ตรง -> Mismatch (สีแดง)
+            } else if (!cat1Match || !cat2Match || !rackValidation.match) {
+                // ถ้า Cat1, Cat2 ຫຼື Rack ບໍ່ຕົງ -> Mismatch (ສີແດງ)
                 status = 'mismatch';
                 color = 'red';
 
-                let mismatchReason = [];
-                if (!cat1Match) mismatchReason.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1})`);
-                if (!cat2Match) mismatchReason.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2})`);
-                if (!rackValidation.match) mismatchReason.push(`ວາງຜິດ Rack (ຄວນແມ່ນ ${rackValidation.expected})`);
-                if (odooMismatch) mismatchReason.push(`Odoo Qty Diff (Odoo: ${odooQty})`);
+                const mismatchReasons = [];
+                if (!cat1Match) mismatchReasons.push(`Cat-1 ບໍ່ກົງ (DB: ${masterData.category1})`);
+                if (!cat2Match) mismatchReasons.push(`Cat-2 ບໍ່ກົງ (DB: ${masterData.category2})`);
+                if (!rackValidation.match) mismatchReasons.push(`ວາງຜິດ Rack (ຄວນແມ່ນ ${rackValidation.expected})`);
 
-                reason = mismatchReason.join(' | ');
+                // Add Odoo info to reason but it's not the cause of "mismatch" status
+                if (odooMismatch) mismatchReasons.push(`Odoo Qty Diff (Odoo: ${odooQty})`);
+
+                reason = mismatchReasons.join(' | ');
                 stats.mismatch++;
             } else {
-                // ตรงกันทั้งหมด
+                // ตรงกันทั้งหมด (Rack & Category Passed)
+                // แม้ Odoo Qty ไม่ตรง ก็ยังถือว่า Passed ในส่วนของ Warehouse Validator
                 status = 'passed';
                 stats.passed++;
+
+                if (odooMismatch) {
+                    reason = `Odoo Qty Diff (Odoo: ${odooQty})`;
+                }
             }
         }
 

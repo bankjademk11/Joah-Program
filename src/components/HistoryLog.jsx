@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, ChevronRight, Filter, FileSpreadsheet, PlusCircle, Edit3, ChevronDown } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const HistoryLog = ({ onClose }) => {
+    const { t } = useLanguage();
     const [historyData, setHistoryData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -54,8 +56,8 @@ const HistoryLog = ({ onClose }) => {
 
                 // 3. Normalize and Merge Data
                 const formattedEdits = (editData || []).map(item => {
-                    // FIX: Use 'change_reason' as defined in DB schema, fallback to 'reason' just in case
-                    let reasonDisplay = item.change_reason || item.reason;
+                    // Priority: details (Smart Log) -> change_reason -> reason
+                    let reasonDisplay = item.details || item.change_reason || item.reason;
                     const changeVal = item.new_qty - item.old_qty;
 
                     // 1. If reason is missing/empty
@@ -158,6 +160,30 @@ const HistoryLog = ({ onClose }) => {
                 dataToExport = historyData.filter(d => d.type === 'added');
             } else if (template === 'edited') {
                 dataToExport = historyData.filter(d => d.type === 'edited');
+            } else if (template === 'changes') {
+                // Combined: Rack Movement + Category Changes
+                dataToExport = historyData.filter(d => {
+                    const isEdited = d.type === 'edited';
+                    if (!isEdited) return false;
+
+                    // Normalize helper: Treat null, undefined, "" as equivalent
+                    const norm = (val) => (val === null || val === undefined) ? '' : String(val).trim();
+
+                    // Check actual value changes
+                    const rackChanged = norm(d.old_rack) !== norm(d.new_rack);
+                    const cat1Changed = norm(d.old_category_1) !== norm(d.new_category_1);
+                    const cat2Changed = norm(d.old_category_2) !== norm(d.new_category_2);
+
+                    if (rackChanged || cat1Changed || cat2Changed) return true;
+
+                    // Fallback: Check details text ONLY if it clearly indicates movement/category change
+                    // Avoiding generic 'Category' which might appear in other contexts if not careful
+                    const details = String(d.details || '');
+                    const isMovement = details.includes('ຍ້າຍ') || (details.includes('Rack') && !details.includes('Qty'));
+                    const isCatChange = details.includes('ໝວດໝູ່') || (details.includes('Category') && !details.includes('Qty'));
+
+                    return isMovement || isCatChange;
+                });
             }
 
             if (dataToExport.length === 0) {
@@ -172,6 +198,12 @@ const HistoryLog = ({ onClose }) => {
                 { header: 'ຜູ້ດຳເນີນການ', key: 'user', width: 25 },
                 { header: 'ບາໂຄ້ດ', key: 'barcode', width: 15 },
                 { header: 'ຊື່ສິນຄ້າ', key: 'item', width: 40 },
+                { header: 'ພິກັດເກົ່າ (Old Rack)', key: 'old_rack', width: 15 },  // ✅ New
+                { header: 'ພິກັດໃໝ່ (New Rack)', key: 'new_rack', width: 15 },  // ✅ New
+                { header: 'Category 1 ເກົ່າ', key: 'old_cat1', width: 18 },  // ✅ New
+                { header: 'Category 1 ໃໝ່', key: 'new_cat1', width: 18 },   // ✅ New
+                { header: 'Category 2 ເກົ່າ', key: 'old_cat2', width: 18 },  // ✅ New
+                { header: 'Category 2 ໃໝ່', key: 'new_cat2', width: 18 },   // ✅ New
                 { header: 'ຈໍານວນເກົ່າ', key: 'old', width: 10 },
                 { header: 'ຈໍານວນໃໝ່', key: 'new', width: 10 },
                 { header: 'ປ່ຽນແປງ', key: 'change', width: 10 },
@@ -195,6 +227,12 @@ const HistoryLog = ({ onClose }) => {
                     user: log.user,
                     barcode: log.barcode,
                     item: log.item_name,
+                    old_rack: log.old_rack || '-',  // ✅ New
+                    new_rack: log.new_rack || '-',  // ✅ New
+                    old_cat1: log.old_category_1 || '-',  // ✅ New
+                    new_cat1: log.new_category_1 || '-',  // ✅ New
+                    old_cat2: log.old_category_2 || '-',  // ✅ New
+                    new_cat2: log.new_category_2 || '-',  // ✅ New
                     old: log.old_qty,
                     new: log.new_qty,
                     change: log.change_qty > 0 ? `+${log.change_qty}` : log.change_qty,
@@ -241,7 +279,7 @@ const HistoryLog = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-900/60 animate-fade-in">
-            <div className="glass-card-dark w-full max-w-6xl h-[90vh] rounded-[2.5rem] p-8 border border-slate-700/50 shadow-2xl flex flex-col relative overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+            <div className="glass-card-dark w-full max-w-6xl h-[90vh] rounded-[2.5rem] p-8 border border-slate-700/50 shadow-2xl flex flex-col relative bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
@@ -266,7 +304,7 @@ const HistoryLog = ({ onClose }) => {
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
                             type="text"
-                            placeholder="🔍 ຄົ້ນຫາ: ຊື່ສິນຄ້າ, ບາໂຄ້ດ ຫຼື ຜູ້ໃຊ້..."
+                            placeholder={t('history.searchPlaceholder')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 outline-none text-sm font-bold transition-all placeholder:font-normal"
@@ -284,9 +322,10 @@ const HistoryLog = ({ onClose }) => {
                                 onChange={(e) => setActionFilter(e.target.value)}
                                 className="appearance-none pl-10 pr-10 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer min-w-[160px]"
                             >
-                                <option value="all">ປະຫວັດທັງໝົດ (All)</option>
-                                <option value="added">🆕 ເພີ່ມສິນຄ້າໃໝ່ (Added)</option>
-                                <option value="edited">📝 ແກ້ໄຂ QTY (Edited)</option>
+                                <option value="all">{t('history.filterAll')}</option>
+                                <option value="added">{t('history.filterAdded')}</option>
+                                <option value="edited">{t('history.filterEdited')}</option>
+                                <option value="changes">{t('history.filterChanges')}</option>
                             </select>
                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                         </div>
@@ -322,29 +361,71 @@ const HistoryLog = ({ onClose }) => {
                             </button>
 
                             {showExportMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-[110] animate-scale-in">
-                                    <div className="p-2">
-                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-widest">ເລືອກຮູບແບບ (Select Template)</div>
+                                <div className="absolute right-0 top-full mt-3 w-72 bg-white dark:bg-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-100 dark:border-slate-700 overflow-hidden z-[999] animate-scale-in origin-top-right">
+                                    <div className="p-3 space-y-1">
+                                        <div className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800/50 mb-2">
+                                            {t('history.selectTemplate')}
+                                        </div>
+
                                         <button
-                                            onClick={() => handleExport('all')} // Uses current Filters
-                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors mb-1"
+                                            onClick={() => handleExport('all')}
+                                            className="w-full text-left px-4 py-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700/50 group transition-all"
                                         >
-                                            📑 ຂໍ້ມູນທີ່ສະແດງຢູ່ (Current View)
-                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">Export ຕາມທີ່ເຫັນໃນຕາຕະລາງ</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-joah-orange transition-colors">
+                                                    <FileSpreadsheet size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t('history.currentView')}</p>
+                                                    <span className="text-[10px] text-slate-400 font-medium">{t('history.currentViewDesc')}</span>
+                                                </div>
+                                            </div>
                                         </button>
+
                                         <button
                                             onClick={() => handleExport('added')}
-                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm font-medium transition-colors mb-1"
+                                            className="w-full text-left px-4 py-4 rounded-2xl hover:bg-emerald-50 dark:hover:bg-emerald-500/5 group transition-all"
                                         >
-                                            🆕 ລາຍການສິນຄ້າໃໝ່ (Added Only)
-                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">ລາຍການທີ່ເພີ່ມເຂົ້າລະບົບໃໝ່ທັງໝົດ</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                                    <PlusCircle size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t('history.addedOnly')}</p>
+                                                    <span className="text-[10px] text-slate-400 font-medium">{t('history.addedOnlyDesc')}</span>
+                                                </div>
+                                            </div>
                                         </button>
+
                                         <button
                                             onClick={() => handleExport('edited')}
-                                            className="w-full text-left px-3 py-3 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm font-medium transition-colors"
+                                            className="w-full text-left px-4 py-4 rounded-2xl hover:bg-amber-50 dark:hover:bg-amber-500/5 group transition-all"
                                         >
-                                            📝 ປະຫວັດການແກ້ໄຂ (Edited Only)
-                                            <span className="block text-[10px] text-slate-400 font-normal mt-0.5">ສະເພາະທີ່ມີການແກ້ໄຂຈຳນວນ</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center text-amber-500">
+                                                    <Edit3 size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{t('history.editedOnly')}</p>
+                                                    <span className="text-[10px] text-slate-400 font-medium">{t('history.editedOnlyDesc')}</span>
+                                                </div>
+                                            </div>
+                                        </button>
+
+
+                                        <button
+                                            onClick={() => handleExport('changes')}
+                                            className="w-full text-left px-4 py-4 rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-500/5 group transition-all"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center text-purple-500">
+                                                    <ArrowUpDown size={18} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-purple-700 dark:text-purple-400">{t('history.changesOnly')}</p>
+                                                    <span className="text-[10px] text-slate-400 font-medium">{t('history.changesOnlyDesc')}</span>
+                                                </div>
+                                            </div>
                                         </button>
                                     </div>
                                 </div>
@@ -358,10 +439,10 @@ const HistoryLog = ({ onClose }) => {
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
                             <tr>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">ເວລາ / ການເຄື່ອນໄຫວ</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">ຜູ້ດຳເນີນການ</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 w-1/3">ລາຍລະອຽດສິນຄ້າ</th>
-                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">ການປ່ຽນແປງ</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">{t('history.timeAction')}</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">{t('history.user')}</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 w-1/3">{t('history.itemDetail')}</th>
+                                <th className="p-5 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">{t('history.change')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -370,7 +451,7 @@ const HistoryLog = ({ onClose }) => {
                                     <td colSpan="4" className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 text-slate-400">
                                             <Loader2 className="animate-spin" size={32} />
-                                            <span className="text-xs font-bold uppercase">Loading Data...</span>
+                                            <span className="text-xs font-bold uppercase">{t('common.loading')}</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -382,11 +463,11 @@ const HistoryLog = ({ onClose }) => {
                                                 <div className="flex items-center gap-2">
                                                     {row.type === 'added' ? (
                                                         <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                                                            <PlusCircle size={10} strokeWidth={3} /> ເພີ່ມໃໝ່
+                                                            <PlusCircle size={10} strokeWidth={3} /> {t('history.added')}
                                                         </span>
                                                     ) : (
                                                         <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                                                            <Edit3 size={10} strokeWidth={3} /> ແກ້ໄຂ
+                                                            <Edit3 size={10} strokeWidth={3} /> {t('history.edited')}
                                                         </span>
                                                     )}
                                                 </div>

@@ -24,7 +24,8 @@ const MasterAudit = ({ onBack, currentUser }) => {
         barcode: '',
         product_name_la: '',
         category_1: '',
-        category_2: ''
+        category_2: '',
+        rack_location: ''
     });
     const [isSaving, setIsSaving] = useState(false);
     const itemsPerPage = 50;
@@ -124,14 +125,22 @@ const MasterAudit = ({ onBack, currentUser }) => {
             barcode: p.barcode || '',
             product_name_la: p.product_name_la || '',
             category_1: p.category_1 || '',
-            category_2: p.category_2 || ''
+            category_2: p.category_2 || '',
+            rack_location: p.rack_location || ''
         });
     };
 
     const handleSaveEdit = async () => {
         if (!editForm.barcode) return alert('ກະລຸນາໃສ່ Barcode');
         setIsSaving(true);
+
+        console.log('🔧 Starting Save Edit...');
+        console.log('📦 Edit Form:', editForm);
+        console.log('📦 Original Product:', editingProduct);
+
         try {
+            // Update master_data
+            console.log('💾 Updating master_data...');
             const { error } = await supabase
                 .from('master_data')
                 .update({
@@ -139,21 +148,83 @@ const MasterAudit = ({ onBack, currentUser }) => {
                     product_name_la: editForm.product_name_la,
                     category_1: editForm.category_1,
                     category_2: editForm.category_2,
+                    rack_location: editForm.rack_location,
                     updated_at: new Date().toISOString(),
                     updated_by: currentUser?.name || 'Audit Admin'
                 })
                 .eq('barcode', editingProduct.barcode);
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ Master Data Update Error:', error);
+                throw error;
+            }
+            console.log('✅ Master data updated successfully');
+
+            // --- SMART HISTORY LOGGING ---
+            const hasRackChanged = (editingProduct.rack_location || '') !== (editForm.rack_location || '');
+            const hasCatChanged = (editingProduct.category_1 || '') !== (editForm.category_1 || '') ||
+                (editingProduct.category_2 || '') !== (editForm.category_2 || '');
+
+            console.log('🔍 Change Detection:', {
+                hasRackChanged,
+                hasCatChanged,
+                oldRack: editingProduct.rack_location,
+                newRack: editForm.rack_location,
+                oldCat1: editingProduct.category_1,
+                newCat1: editForm.category_1,
+                oldCat2: editingProduct.category_2,
+                newCat2: editForm.category_2
+            });
+
+            if (hasRackChanged || hasCatChanged) {
+                let reason = '';
+                if (hasRackChanged && hasCatChanged) reason = 'ແກ້ໄຂຜັງ Rack ແລະ ໝວດໝູ່';
+                else if (hasRackChanged) reason = `ຍ້າຍຈາກ ${editingProduct.rack_location || 'N/A'} ໄປ ${editForm.rack_location || 'N/A'}`;
+                else reason = 'ແກ້ໄຂໝວດໝູ່ສິນຄ້າ (Category Update)';
+
+                console.log('📝 Reason Generated:', reason);
+
+                const historyData = {
+                    item_name: editForm.product_name_la,
+                    barcode: editForm.barcode,
+                    old_qty: 0,
+                    new_qty: 0,
+                    change_reason: reason,
+                    old_rack: editingProduct.rack_location || null,
+                    new_rack: editForm.rack_location || null,
+                    details: reason,
+                    updated_by: currentUser?.name || 'Admin',
+                    updated_at: new Date().toISOString()
+                };
+
+                console.log('📤 Attempting to insert history:', historyData);
+
+                const { data: insertedData, error: historyError } = await supabase
+                    .from('inventory_history')
+                    .insert([historyData])
+                    .select();
+
+                if (historyError) {
+                    console.error('❌ History Insert Error:', historyError);
+                    console.error('❌ Error Details:', JSON.stringify(historyError, null, 2));
+                    alert('⚠️ Warning: Could not save history log: ' + historyError.message);
+                } else {
+                    console.log('✅ History saved successfully!', insertedData);
+                }
+            } else {
+                console.log('ℹ️ No significant changes detected (Rack/Category), skipping history log');
+            }
 
             alert('✅ ອັບເດດຂໍ້ມູນສຳເລັດ!');
             setEditingProduct(null);
             fetchMasterData();
         } catch (err) {
-            console.error('Update Error:', err);
+            console.error('❌ Save Edit Error:', err);
+            console.error('❌ Error Stack:', err.stack);
             alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
         } finally {
             setIsSaving(false);
+            console.log('🏁 Save Edit Complete');
         }
     };
 
@@ -185,6 +256,7 @@ const MasterAudit = ({ onBack, currentUser }) => {
                 { header: 'Product Name (LA)', key: 'product_name_la', width: 40 },
                 { header: 'Category 1', key: 'category_1', width: 20 },
                 { header: 'Category 2', key: 'category_2', width: 20 },
+                { header: 'Rack Location', key: 'rack_location', width: 15 },
                 { header: 'Status', key: 'status', width: 15 },
                 { header: 'Audit Findings', key: 'issues', width: 50 }
             ];
@@ -197,6 +269,7 @@ const MasterAudit = ({ onBack, currentUser }) => {
                     product_name_la: p.product_name_la,
                     category_1: p.category_1,
                     category_2: p.category_2,
+                    rack_location: p.rack_location || 'N/A',
                     status: audit.label,
                     issues: audit.issues.join(', ') || 'Normal'
                 });
@@ -666,6 +739,16 @@ const MasterAudit = ({ onBack, currentUser }) => {
                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                                         </div>
                                     </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Rack / Location (ພິກັດສິນຄ້າ)</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.rack_location}
+                                        onChange={(e) => setEditForm({ ...editForm, rack_location: e.target.value })}
+                                        className="w-full px-5 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                                        placeholder="EX: A1-02-B"
+                                    />
                                 </div>
                             </div>
 
