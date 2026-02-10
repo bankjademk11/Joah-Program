@@ -48,6 +48,7 @@ function AppContent() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [dbSource, setDbSource] = useState('excel');
   const [dataSourceLabel, setDataSourceLabel] = useState('Local Mode (Excel)');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [loadedFileName, setLoadedFileName] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -299,7 +300,10 @@ function AppContent() {
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}
           isProcessing={isProcessing}
-          onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
+          onRefresh={() => {
+            handleValidate({ locationSheet: locationSheetName });
+            setRefreshTrigger(Date.now());
+          }}
           onShowHistory={() => setShowHistory(true)}
           onReset={handleReset}
           currentUser={user}
@@ -505,7 +509,11 @@ function AppContent() {
                 filterStatus={filterStatus}
                 onFilterChange={setFilterStatus}
                 dbSource={dbSource}
-                onRefresh={() => handleValidate({ locationSheet: locationSheetName })}
+                onRefresh={() => {
+                  handleValidate({ locationSheet: locationSheetName });
+                  setRefreshTrigger(Date.now());
+                }}
+                refreshTrigger={refreshTrigger}
                 onUpdateRowQty={handleUpdateResultRowQty}
                 currentUser={user}
                 onAddNewProduct={handleGotoProductManager}

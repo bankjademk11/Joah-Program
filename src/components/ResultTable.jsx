@@ -16,7 +16,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 const ResultTable = ({
     results, masterData, rawFile, locationSheetName, filterStatus,
-    onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct
+    onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
     const { success, error: showError } = useToast(); // Initialize Toast
@@ -39,6 +39,38 @@ const ResultTable = ({
     const [diagnosticRow, setDiagnosticRow] = useState(null);
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false); // State for skeleton loading
+
+    // Skeleton Loader Component
+    const SkeletonLoader = () => (
+        <div className="w-full space-y-4 animate-pulse px-2">
+            {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="flex-1 space-y-3">
+                        <div className="flex gap-4">
+                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+                        </div>
+                        <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-1/2"></div>
+                    </div>
+                    <div className="w-24 h-10 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                </div>
+            ))}
+        </div>
+    );
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        // Artificial delay for better UX (so the skeleton is seen)
+        await new Promise(r => setTimeout(r, 600));
+
+        if (onRefresh) {
+            await onRefresh();
+        }
+        setIsRefreshing(false);
+    };
+
     const [isFoundInMaster, setIsFoundInMaster] = useState(false); // New state to track if barcode exists in Master Data
     const [quickAddForm, setQuickAddForm] = useState({
         barcode_no: '',
@@ -227,6 +259,14 @@ const ResultTable = ({
             }
         }
     }, [quickAddForm.barcode_no, showQuickAdd, masterData]);
+
+    // Listen for external refresh trigger (Navbar Refresh)
+    useEffect(() => {
+        if (refreshTrigger) {
+            setIsRefreshing(true);
+            setTimeout(() => setIsRefreshing(false), 1000); // Show skeleton for at least 1s
+        }
+    }, [refreshTrigger]);
 
     const itemsPerPage = 50;
     const rowRefs = useRef({}); // Store refs for each barcode row
@@ -541,8 +581,10 @@ const ResultTable = ({
                 success(t('results.saveSuccess')); // Standardized success message
                 setShowQuickAdd(false);
 
-                // Refresh background data
-                if (onRefresh) onRefresh();
+                setShowQuickAdd(false);
+
+                // Refresh background data with skeleton feedback
+                handleManualRefresh();
             } else {
                 alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + result.error);
             }
@@ -968,9 +1010,9 @@ const ResultTable = ({
                             )}
                         </div>
                         {onRefresh && (
-                            <button onClick={onRefresh} className="btn-secondary py-3 text-[10px] min-w-[120px] font-bold">
-                                <RotateCw size={16} />
-                                <span>{t('navbar.refresh')}</span>
+                            <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-secondary py-3 text-[10px] min-w-[120px] font-bold">
+                                <RotateCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                                <span>{isRefreshing ? t('results.loading') : t('navbar.refresh')}</span>
                             </button>
                         )}
                     </div>
@@ -1005,87 +1047,102 @@ const ResultTable = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                                {currentResults.length > 0 ? currentResults.map((row) => (
-                                    <tr
-                                        key={row.rowIndex}
-                                        ref={el => rowRefs.current[row.barcode] = el}
-                                        className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
-                                    >
-                                        <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
-                                        <td className="px-6 py-6">
-                                            <div className="flex flex-col gap-1.5 min-w-[200px]">
-                                                <span className="text-sm font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
-                                                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.masterItemName || row.itemName}>{row.masterItemName || row.itemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6">
-                                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-joah-orange/30 transition-colors">
-                                                <MapPin size={12} className="text-joah-orange/50" />
-                                                <span className="text-xs font-black tracking-tighter uppercase">{row.rackLocation}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6">
-                                            <div className="flex flex-col items-center">
-                                                <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
-                                                    <Database size={8} className="text-sky-500" />
-                                                    <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                                {isRefreshing ? (
+                                    /* SKELETON LOADER ROWS */
+                                    [...Array(5)].map((_, i) => (
+                                        <tr key={`skeleton-${i}`} className="animate-pulse bg-white/5">
+                                            <td className="px-8 py-6"><div className="h-4 w-8 bg-slate-200 dark:bg-slate-800 rounded"></div></td>
+                                            <td className="px-6 py-6"><div className="space-y-2"><div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div><div className="h-3 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-6 py-6 hidden lg:table-cell"><div className="space-y-2"><div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded"></div><div className="h-3 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-6 w-12 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-8 py-6 text-right"><div className="h-10 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl ml-auto"></div></td>
+                                        </tr>
+                                    ))
+                                ) : currentResults.length > 0 ? (
+                                    currentResults.map((row) => (
+                                        <tr
+                                            key={row.rowIndex}
+                                            ref={el => rowRefs.current[row.barcode] = el}
+                                            className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
+                                        >
+                                            <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
+                                            <td className="px-6 py-6">
+                                                <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                                    <span className="text-sm font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
+                                                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.masterItemName || row.itemName}>{row.masterItemName || row.itemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6 hidden lg:table-cell">
-                                            <div className="flex flex-col gap-1 max-w-[150px]">
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate">{row.category1 || '-'}</span>
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter opacity-50 truncate">{row.category2 || '-'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-6 text-center">
-                                            <button
-                                                onClick={() => setDiagnosticRow(row)}
-                                                className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}
-                                            >
-                                                {getStatusHint(row).icon}
-                                                {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
-                                            </button>
-                                        </td>
-                                        {/* Odoo Qty Column */}
-                                        <td className="px-6 py-6 text-center">
-                                            {row.odooQty !== undefined && row.odooQty !== null ? (
+                                            </td>
+                                            <td className="px-6 py-6">
+                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-joah-orange/30 transition-colors">
+                                                    <MapPin size={12} className="text-joah-orange/50" />
+                                                    <span className="text-xs font-black tracking-tighter uppercase">{row.rackLocation}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-6">
                                                 <div className="flex flex-col items-center">
-                                                    <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                        {row.odooQty}
-                                                    </span>
-                                                    {Number(row.qty) !== Number(row.odooQty) && (
-                                                        <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Diff</span>
-                                                    )}
+                                                    <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
+                                                    <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
+                                                        <Database size={8} className="text-sky-500" />
+                                                        <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                                                    </div>
                                                 </div>
-                                            ) : (
-                                                <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
-                                            )}
-                                        </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
-                                                    <Info size={18} />
+                                            </td>
+                                            <td className="px-6 py-6 hidden lg:table-cell">
+                                                <div className="flex flex-col gap-1 max-w-[150px]">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate">{row.category1 || '-'}</span>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter opacity-50 truncate">{row.category2 || '-'}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-6 text-center">
+                                                <button
+                                                    onClick={() => setDiagnosticRow(row)}
+                                                    className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}
+                                                >
+                                                    {getStatusHint(row).icon}
+                                                    {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                                 </button>
-                                                {dbSource === 'supabase' && (
-                                                    <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
-                                                        <History size={18} />
-                                                    </button>
+                                            </td>
+                                            {/* Odoo Qty Column */}
+                                            <td className="px-6 py-6 text-center">
+                                                {row.odooQty !== undefined && row.odooQty !== null ? (
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                            {row.odooQty}
+                                                        </span>
+                                                        {Number(row.qty) !== Number(row.odooQty) && (
+                                                            <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Diff</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
                                                 )}
-                                                <button onClick={() => {
-                                                    setSelectedRow(row);
-                                                    setEditQty(row.qty || 0);
-                                                    setEditLocation(row.rackLocation || '');
-                                                    setEditCat1(row.category1 || '');
-                                                    setEditCat2(row.category2 || '');
-                                                }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
-                                                    <Edit2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )) : (
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
+                                                        <Info size={18} />
+                                                    </button>
+                                                    {dbSource === 'supabase' && (
+                                                        <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
+                                                            <History size={18} />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => {
+                                                        setSelectedRow(row);
+                                                        setEditQty(row.qty || 0);
+                                                        setEditLocation(row.rackLocation || '');
+                                                        setEditCat1(row.category1 || '');
+                                                        setEditCat2(row.category2 || '');
+                                                    }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
+                                                        <Edit2 size={18} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))) : (
                                     <tr>
                                         <td colSpan="7" className="py-24 text-center">
                                             <div className="flex flex-col items-center gap-6 text-slate-300 dark:text-slate-700 animate-fade-in">
@@ -1639,6 +1696,10 @@ const ResultTable = ({
                                             disabled={!isFoundInMaster}
                                         >
                                             <option value="">{isFoundInMaster ? "Select Category" : "🔒 Locked"}</option>
+                                            {/* Dynamic Option for Master Data value if not in list */}
+                                            {quickAddForm.category_1_actual && !Object.keys(CATEGORY_RACK_RULES).includes(quickAddForm.category_1_actual) && (
+                                                <option value={quickAddForm.category_1_actual}>{quickAddForm.category_1_actual} (Original)</option>
+                                            )}
                                             {Object.keys(CATEGORY_RACK_RULES).map(cat => (
                                                 <option key={cat} value={cat}>{cat}</option>
                                             ))}
