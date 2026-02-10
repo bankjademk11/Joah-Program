@@ -27,6 +27,7 @@ import { ToastProvider, useToast } from './components/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/MasterAudit';
 import ProductManager from './components/ProductManager';
+import Footer from './components/Footer';
 
 
 function AppContent() {
@@ -513,10 +514,7 @@ function AppContent() {
           )}
         </main>
 
-        {/* Footer */}
-        <footer className="py-6 px-8 text-center bg-white/30 dark:bg-slate-900/30 backdrop-blur-md">
-          <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.4em]">Built with ❤️ by JOAH Team Santisouk Laxayphone</p>
-        </footer>
+        <Footer />
 
         {/* History Modal */}
         {showHistory && <HistoryLog onClose={() => setShowHistory(false)} />}
