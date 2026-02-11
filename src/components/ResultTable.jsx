@@ -15,6 +15,7 @@ import { useToast } from './ToastProvider';
 import { useLanguage } from '../contexts/LanguageContext';
 import DiagnosticPanel from './DiagnosticPanel';
 import EditPanel from './EditPanel';
+import QuickAddPanel from './QuickAddPanel';
 import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
 
 const ResultTable = ({
@@ -198,40 +199,6 @@ const ResultTable = ({
     const ALL_DISTINCT_ZONES = Array.from(new Set(Object.values(CATEGORY_RACK_RULES).flatMap(group => group.flatMap(rule => rule.zones))));
 
     // Auto-fill from Master Data when Barcode changes
-    useEffect(() => {
-        if (showQuickAdd && quickAddForm.barcode_no) {
-            const barcode = String(quickAddForm.barcode_no).trim();
-            const masterItem = masterData.find(m =>
-                String(m.barcode || m.Barcode || m['Barcode No.'] || '').trim() === barcode
-            );
-
-            if (masterItem) {
-                setIsFoundInMaster(true); // Found in Master Data
-                const itemNameValue = masterItem.item_name || masterItem.product_name_la || masterItem['Product Name(LA)'] || masterItem['Item Name'] || '';
-                const cat1Value = masterItem.category_1 || masterItem['CATEGORIES 1'] || masterItem['Category 1'] || '';
-                const cat2Value = masterItem.category_2 || masterItem['CATEGORIES 2'] || masterItem['Category 2'] || '';
-
-                setQuickAddForm(prev => ({
-                    ...prev,
-                    item_name: String(itemNameValue).trim(),
-                    category_1_actual: String(cat1Value).trim(),
-                    category_2_actual: String(cat2Value).trim()
-                }));
-            } else {
-                setIsFoundInMaster(false); // NOT found in Master Data - Lock fields
-                // BUG FIX: If not found in master, clear the fields so they don't 'ghost' from the previous item
-                setQuickAddForm(prev => ({
-                    ...prev,
-                    item_name: '',
-                    category_1_actual: '',
-                    category_2_actual: '',
-                    qty: 0,
-                    rack_location: ''
-                }));
-            }
-        }
-    }, [quickAddForm.barcode_no, showQuickAdd, masterData]);
-
     // Listen for external refresh trigger (Navbar Refresh)
     useEffect(() => {
         if (refreshTrigger) {
@@ -546,7 +513,7 @@ const ResultTable = ({
     };
 
     const handleQuickAddSave = async () => {
-        if (!quickAddForm.barcode_no || !quickAddForm.rack_location) {
+        if (!quickAddForm.barcode_no || !quickAddForm.rack_location || !quickAddForm.remarks) {
             alert(t('results.fillRequired'));
             return;
         }
@@ -1291,7 +1258,7 @@ const ResultTable = ({
                                                                 category_1_actual: '',
                                                                 category_2_actual: '',
                                                                 qty: 0,
-                                                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                                remarks: ''
                                                             });
                                                             setShowQuickAdd(true);
                                                         }}
@@ -1416,200 +1383,23 @@ const ResultTable = ({
                     </div>
                 )}
 
-                {/* Quick Add to Inventory Modal - Fixed Layout & Scrolling */}
-                {showQuickAdd && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-950/40 animate-fade-in">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-2xl animate-scale-in relative overflow-hidden flex flex-col max-h-[90vh]">
-                            {/* Header - Fixed */}
-                            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 z-10">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-4 rounded-[1.25rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
-                                        <Plus size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory ໂດຍກົງ</h3>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Add to location_inventory</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => setShowQuickAdd(false)} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">
-                                    <X size={24} />
-                                </button>
-                            </div>
-
-                            {/* Scrollable Content Area */}
-                            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
-                                {/* Warning Banner when NOT found in Master */}
-                                {!isFoundInMaster && quickAddForm.barcode_no && (
-                                    <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-950/20 border-2 border-rose-200 dark:border-rose-900/30 rounded-2xl">
-                                        <div className="flex items-start gap-3">
-                                            <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl shrink-0">
-                                                <AlertTriangle className="text-rose-600 dark:text-rose-400" size={20} />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h4 className="text-sm font-black text-rose-700 dark:text-rose-400 mb-1">⚠️ ບໍ່ພົບໃນ Master Data</h4>
-                                                <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mb-2">ບາໂຄ້ດນີ້ຍັງບໍ່ທັນຖືກເພີ່ມເຂົ້າໃນລະບົບຫຼັກ. <span className="underline">ກະລຸນາເພີ່ມຂໍ້ມູນໃນ "Product Manager" ກ່ອນ.</span></p>
-                                                <button
-                                                    onClick={() => {
-                                                        setShowQuickAdd(false);
-                                                        if (onAddNewProduct) onAddNewProduct(quickAddForm.barcode_no);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-2 w-fit"
-                                                >
-                                                    <Plus size={12} />
-                                                    ໄປທີ່ Product Manager
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Barcode</label>
-                                        <input
-                                            type="text"
-                                            value={quickAddForm.barcode_no}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setQuickAddForm(prev => ({ ...prev, barcode_no: val }));
-                                            }}
-                                            className="input-field py-3 font-mono font-bold focus:ring-4 focus:ring-joah-orange/10 transition-all"
-                                            placeholder="ຍິງບາໂຄ້ດ ຫຼື ພິມຢູ່ທີ່ນີ້..."
-                                            autoFocus
-                                        />
-                                        <div className="mt-1 flex justify-between items-center px-1">
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Instant Detect Active</span>
-                                            {masterData.find(m => String(m.barcode || m.Barcode || '').trim() === String(quickAddForm.barcode_no).trim()) && (
-                                                <span className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1 animate-pulse">
-                                                    <CheckCircle size={10} /> Found in Master
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Name {!isFoundInMaster && <span className="text-rose-500">(Locked - Add to Master First)</span>}</label>
-                                        <input
-                                            type="text"
-                                            value={quickAddForm.item_name}
-                                            onChange={(e) => setQuickAddForm({ ...quickAddForm, item_name: e.target.value })}
-                                            className="input-field py-3 font-bold disabled:bg-slate-50 dark:disabled:bg-slate-800/40 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400"
-                                            placeholder={isFoundInMaster ? "ຊື່ສິນຄ້າ..." : "🔒 Locked - Add to Master First"}
-                                            disabled={!isFoundInMaster}
-                                        />
-                                    </div>
-
-                                    {/* Rack Location (Full Width for better space) */}
-                                    <div className="space-y-2 md:col-span-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800">
-                                        <label className="text-[10px] font-black text-joah-orange uppercase tracking-[0.2em] flex items-center gap-2">
-                                            <MapPin size={14} /> Rack Location (Auto-suggest / Custom)
-                                        </label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter ml-1">Select from Suggestions</p>
-                                                <div className="flex gap-2">
-                                                    <select
-                                                        className="input-field !py-2.5 !px-3 font-bold bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 focus:border-joah-orange outline-none transition-all flex-1 text-sm"
-                                                        value={quickAddForm.rack_location}
-                                                        onChange={(e) => setQuickAddForm({ ...quickAddForm, rack_location: e.target.value })}
-                                                    >
-                                                        <option value="">-- ເລືອກໂລເຄຊັ້ນ --</option>
-                                                        {getRackSuggestions(quickAddForm.category_1_actual).map(loc => {
-                                                            const count = results.filter(r => r.rackLocation === loc).length;
-                                                            return (
-                                                                <option key={loc} value={loc}>
-                                                                    {loc} {count > 0 ? `\u00A0\u00A0\u00A0|\u00A0\u00A0\u00A0 ${count} SKU` : ''}
-                                                                </option>
-                                                            );
-                                                        })}
-                                                        <option value="CUSTOM">-- ປ້ອນເອງ (Custom) --</option>
-                                                    </select>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => quickAddForm.rack_location && setInspectedLocation(quickAddForm.rack_location)}
-                                                        disabled={!quickAddForm.rack_location}
-                                                        className="p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-slate-500 hover:text-joah-orange disabled:opacity-50 transition-colors border border-slate-100 dark:border-slate-800"
-                                                    >
-                                                        <Eye size={18} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter ml-1">Or Type Manually</p>
-                                                <input
-                                                    type="text"
-                                                    value={quickAddForm.rack_location}
-                                                    onChange={(e) => setQuickAddForm({ ...quickAddForm, rack_location: e.target.value.toUpperCase() })}
-                                                    className="input-field py-2.5 font-bold uppercase w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 text-sm"
-                                                    placeholder="G01-L1-1..."
-                                                />
-                                            </div>
-                                        </div>
-                                        <p className="text-[9px] text-slate-400 font-medium ml-1 italic">
-                                            ຕົວຢ່າງໂລເຄຊັ້ນ: {getRackSuggestions(quickAddForm.category_1_actual)[0] || 'H01-L1-1'}
-                                        </p>
-                                    </div>
-
-                                    {/* Qty */}
-                                    <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                value={quickAddForm.qty}
-                                                onChange={(e) => setQuickAddForm({ ...quickAddForm, qty: Number(e.target.value) })}
-                                                className="input-field py-3 font-black text-joah-orange text-2xl text-center bg-orange-50/30 dark:bg-orange-950/10 border-orange-100 dark:border-orange-900/30 tracking-widest"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1.5 font-bold">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category 1 {!isFoundInMaster && <span className="text-rose-500">(Locked)</span>}</label>
-                                        <select
-                                            className="input-field py-3 font-bold appearance-none disabled:bg-slate-50 dark:disabled:bg-slate-800/40 disabled:cursor-not-allowed disabled:text-slate-400 text-sm"
-                                            value={quickAddForm.category_1_actual}
-                                            onChange={(e) => setQuickAddForm({ ...quickAddForm, category_1_actual: e.target.value })}
-                                            disabled={!isFoundInMaster}
-                                        >
-                                            <option value="">{isFoundInMaster ? "Select Category" : "🔒 Locked"}</option>
-                                            {/* Dynamic Option for Master Data value if not in list */}
-                                            {quickAddForm.category_1_actual && !Object.keys(CATEGORY_RACK_RULES).includes(quickAddForm.category_1_actual) && (
-                                                <option value={quickAddForm.category_1_actual}>{quickAddForm.category_1_actual} (Original)</option>
-                                            )}
-                                            {Object.keys(CATEGORY_RACK_RULES).map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1.5 font-bold">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category 2 {!isFoundInMaster && <span className="text-rose-500">(Locked)</span>}</label>
-                                        <input
-                                            type="text"
-                                            value={quickAddForm.category_2_actual}
-                                            onChange={(e) => setQuickAddForm({ ...quickAddForm, category_2_actual: e.target.value })}
-                                            className="input-field py-3 disabled:bg-slate-50 dark:disabled:bg-slate-800/40 disabled:cursor-not-allowed disabled:text-slate-400 text-sm"
-                                            placeholder={isFoundInMaster ? "ໝວດໝູ່ຍ່ອຍ..." : "🔒 Locked"}
-                                            disabled={!isFoundInMaster}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Footer - Fixed Actions */}
-                            <div className="p-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/50 dark:bg-slate-900/50 flex gap-4 z-10">
-                                <button onClick={() => setShowQuickAdd(false)} className="flex-1 btn-secondary py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-white dark:bg-slate-800 shadow-sm border-slate-200 dark:border-slate-700">Cancel</button>
-                                <button
-                                    onClick={handleQuickAddSave}
-                                    disabled={isSavingQuickAdd}
-                                    className="flex-[2] btn-primary py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-emerald-500/20 bg-emerald-600 hover:bg-emerald-700 border-none text-white"
-                                >
-                                    {isSavingQuickAdd ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                                    <span>{isSavingQuickAdd ? 'Saving...' : 'Add to Inventory'}</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div >
+                <QuickAddPanel
+                    isOpen={showQuickAdd}
+                    onClose={() => setShowQuickAdd(false)}
+                    quickAddForm={quickAddForm}
+                    setQuickAddForm={setQuickAddForm}
+                    isFoundInMaster={isFoundInMaster}
+                    setIsFoundInMaster={setIsFoundInMaster}
+                    isSaving={isSavingQuickAdd}
+                    onSave={handleQuickAddSave}
+                    masterData={masterData}
+                    results={results}
+                    allResults={allResults}
+                    t={t}
+                    setInspectedLocation={setInspectedLocation}
+                    onAddNewProduct={onAddNewProduct}
+                />
+            </div>
         </>
     );
 };

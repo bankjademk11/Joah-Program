@@ -90,16 +90,32 @@ const HistoryLog = ({ onClose }) => {
                     };
                 });
 
-                const formattedAdds = (addData || []).map(item => ({
-                    ...item,
-                    type: 'added',
-                    timestamp: item.created_at,
-                    user: item.added_by,
-                    old_qty: 0,
-                    new_qty: item.qty,
-                    change_qty: item.qty,
-                    details: 'ເພີ່ມສິນຄ້າໃໝ່ຜ່ານ Dashboard' // Translate here
-                }));
+                const formattedAdds = (addData || []).map(item => {
+                    // Cross-reference: find the matching inventory_history entry
+                    // to get the REAL reason (added_items_log doesn't store it)
+                    const addedTime = new Date(item.created_at).getTime();
+                    const matchingHistory = (editData || []).find(e =>
+                        e.barcode === item.barcode &&
+                        e.old_qty === 0 &&
+                        Math.abs(new Date(e.updated_at).getTime() - addedTime) < 120000 // within 2 minutes
+                    );
+
+                    const realReason = matchingHistory?.change_reason ||
+                        matchingHistory?.details ||
+                        item.reason || item.remarks ||
+                        'ເພີ່ມສິນຄ້າໃໝ່ຜ່ານ Dashboard';
+
+                    return {
+                        ...item,
+                        type: 'added',
+                        timestamp: item.created_at,
+                        user: item.added_by,
+                        old_qty: 0,
+                        new_qty: item.qty,
+                        change_qty: item.qty,
+                        details: realReason
+                    };
+                });
 
                 // Combine and Sort
                 const combined = [...formattedEdits, ...formattedAdds].sort((a, b) =>

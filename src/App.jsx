@@ -13,9 +13,9 @@ import {
   suggestSheetMapping
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
-import { fetchMasterFromSupabase, syncMasterDataToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
+import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2 } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
@@ -313,6 +313,35 @@ function AppContent() {
     }
   };
 
+  const [locationSynced, setLocationSynced] = useState(false);
+
+  const handleSyncLocationToCloud = async () => {
+    if (validationResults.length === 0) {
+      alert('ບໍ່ມີຂໍ້ມູນທີ່ຈະ Sync');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `ທ່ານຕ້ອງການ Sync ${validationResults.length} ລາຍການ ໄປ Cloud ບໍ?\n\n⚠️ ຂໍ້ມູນເກົ່າໃນ location_inventory ຈະຖືກລຶບ ແລະ ແທນທີ່ດ້ວຍຂໍ້ມູນໃໝ່ທັງໝົດ.`
+    );
+    if (!confirmed) return;
+
+    setIsProcessing(true);
+    try {
+      const result = await syncLocationResultsToSupabase(validationResults);
+      if (result.success) {
+        setLocationSynced(true);
+        alert(`✅ Sync ສຳເລັດ! ${result.synced} ລາຍການ ຖືກບັນທຶກເຂົ້າ Cloud ແລ້ວ`);
+      } else {
+        alert('❌ Sync ລົ້ມເຫຼວ: ' + result.error);
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   if (!isLoggedIn) {
     return <Login onLogin={handleLogin} />;
   }
@@ -529,6 +558,42 @@ function AppContent() {
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
               <Dashboard stats={dashboardStats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
+
+              {/* Sync Location to Cloud Button */}
+              {dbSource === 'excel' && validationResults.length > 0 && (
+                <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-2xl ${locationSynced ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-orange-100 dark:bg-orange-900/30 text-joah-orange'} transition-all`}>
+                        {locationSynced ? <CheckCircle size={24} /> : <UploadCloud size={24} />}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 dark:text-white">
+                          {locationSynced ? 'ຂໍ້ມູນຖືກ Sync ແລ້ວ!' : 'ຂໍ້ມູນ Location ຍັງບໍ່ທັນ Sync ໄປ Cloud'}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-0.5">
+                          {locationSynced
+                            ? `${validationResults.length} ລາຍການ ຖືກບັນທຶກເຂົ້າ Supabase ແລ້ວ`
+                            : `${validationResults.length} ລາຍການ ພ້ອມ Sync ໄປ location_inventory`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleSyncLocationToCloud}
+                      disabled={isProcessing}
+                      className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg ${locationSynced
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30'
+                        : 'bg-gradient-to-r from-joah-orange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-orange-500/30'
+                        } disabled:opacity-50`}
+                    >
+                      {isProcessing ? <RefreshCw className="animate-spin" size={18} /> : locationSynced ? <CheckCircle size={18} /> : <UploadCloud size={18} />}
+                      <span>{locationSynced ? 'Sync ອີກຄັ້ງ' : 'Sync Location ໄປ Cloud'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <ResultTable
                 results={filteredResults}
                 allResults={validationResults} // Pass all results for generating filter options
