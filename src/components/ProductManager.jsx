@@ -430,7 +430,7 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
                                             <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ຊື່ສິນค้า</th>
                                             <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ໝວດໝູ່ 1</th>
                                             <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ໝວດໝູ່ 2</th>
-                                            <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ຕຳແໜ່ງ</th>
+                                            <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ໂລເຄຊັ້ນ</th>
                                             <th className="px-6 py-6 text-center text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">ຈຳນວນ</th>
                                             <th className="px-6 py-6 text-left text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Updated By</th>
                                             <th className="px-6 py-6 text-right text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Actions</th>

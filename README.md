@@ -1,6 +1,6 @@
 # Warehouse Rack Validator (Joah Tools)
 
-ລະບົບກວດສອບຄວາມຖືກຕ້ອງຂອງຂໍ້ມູນຕຳແໜ່ງ Rack ໃນສາງສິນຄ້າ (Warehouse Validation Tool).
+ລະບົບກວດສອບຄວາມຖືກຕ້ອງຂອງຂໍ້ມູນໂລເຄຊັ້ນ Rack ໃນສາງສິນຄ້າ (Warehouse Validation Tool).
 
 ## 🌟 ຄຸນສົມບັດ (Features)
 

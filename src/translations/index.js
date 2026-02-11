@@ -47,7 +47,7 @@ const translations = {
         results: {
             title: 'ຜົນການກວດສອບ',
             subtitle: 'Validation Results',
-            searchPlaceholder: '🔍 ຄົ້ນຫາ: ບາໂຄ້ດ, ຊື່ສິນຄ້າ, ຕຳແໜ່ງ...',
+            searchPlaceholder: '🔍 ຄົ້ນຫາ: ບາໂຄ້ດ, ຊື່ສິນຄ້າ, ໂລເຄຊັ້ນ...',
             filterAll: 'ທັງໝົດ (All Status)',
             filterPassed: '✅ ຖືກຕ້ອງ (Passed)',
             filterMismatch: '❌ ບໍ່ກົງກັນ (Mismatch)',
@@ -61,7 +61,7 @@ const translations = {
             deselectAll: 'ຍົກເລີກທັງໝົດ',
             barcode: 'ບາໂຄ້ດ',
             itemName: 'ຊື່ສິນຄ້າ',
-            location: 'ຕຳແໜ່ງ',
+            location: 'ໂລເຄຊັ້ນ',
             category1: 'ໝວດໝູ່ 1',
             category2: 'ໝວດໝູ່ 2',
             actualQty: 'ຈຳນວນQTY',
@@ -86,7 +86,7 @@ const translations = {
             systemCount: 'System Count',
             currentLocation: 'Current Location',
             newActualQty: 'New Actual Qty',
-            selectLocation: '-- ເລືອກຕຳແໜ່ງ --',
+            selectLocation: '-- ເລືອກໂລເຄຊັ້ນ --',
             customLocation: '-- ປ້ອນເອງ (Custom) --',
             reason: 'ເຫດຜົນ / ລາຍລະອຽດ',
             reasonPrompt: 'ເຫດຜົນການແກ້ໄຂ (Required)',
@@ -148,7 +148,7 @@ const translations = {
             of: 'ຈາກ',
             logs: 'ລາຍການ',
             qty: 'ຈຳນວນ',
-            location: 'ຕຳແໜ່ງ',
+            location: 'ໂລເຄຊັ້ນ',
             detailsReason: 'ລາຍລະອຽດ/ເຫດຜົນ'
         },
         // Login

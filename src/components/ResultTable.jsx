@@ -13,9 +13,12 @@ import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProc
 import databaseUrl from '../assets/DataBaseJoah.xlsx';
 import { useToast } from './ToastProvider';
 import { useLanguage } from '../contexts/LanguageContext';
+import DiagnosticPanel from './DiagnosticPanel';
+import EditPanel from './EditPanel';
+import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
 
 const ResultTable = ({
-    results, masterData, rawFile, locationSheetName, filterStatus,
+    results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,
     onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
@@ -39,6 +42,34 @@ const ResultTable = ({
     const [diagnosticRow, setDiagnosticRow] = useState(null);
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
+    const [showLocationFilter, setShowLocationFilter] = useState(false);
+    const [locationSearchTerm, setLocationSearchTerm] = useState('');
+    const locationFilterRef = useRef(null);
+
+    // --- Helper: Extract & Filter Locations ---
+    const uniqueLocations = useMemo(() => {
+        if (!allResults) return [];
+
+        // 1. Get all unique locations
+        const locs = Array.from(new Set(allResults.map(r => r.rackLocation).filter(Boolean)));
+
+        // 2. Filter by search term inside dropdown
+        return locs
+            .filter(loc => loc.toLowerCase().includes(locationSearchTerm.toLowerCase()))
+            .sort();
+    }, [allResults, locationSearchTerm]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (locationFilterRef.current && !locationFilterRef.current.contains(event.target)) {
+                setShowLocationFilter(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const [isRefreshing, setIsRefreshing] = useState(false); // State for skeleton loading
 
     // Skeleton Loader Component
@@ -89,13 +120,14 @@ const ResultTable = ({
     const renderLocationInspector = () => {
         if (!inspectedLocation) return null;
 
-        const itemsInLocation = results.filter(r => r.rackLocation === inspectedLocation);
+        // Use allResults instead of results to see EVERYTHING in this location regardless of current search
+        const itemsInLocation = allResults.filter(r => r.rackLocation === inspectedLocation);
 
         return (
             // Changed from centered modal to Right Side Floating Card
-            // High Z-Index ensures it floats above everything else
+            // High Z-Index ensures it floats above everything else (including Edit Modal at 99999)
             // Vertically centered to match the Edit Modal position
-            <div className="fixed top-1/2 right-6 -translate-y-1/2 w-96 z-[9999] animate-slide-in-right pointer-events-none">
+            <div className="fixed top-1/2 right-6 -translate-y-1/2 w-96 z-[100001] animate-slide-in-right pointer-events-none">
                 {/* pointer-events-auto inside card so user can scroll/click close */}
                 <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[75vh] pointer-events-auto relative overflow-hidden">
                     {/* Decorative Background Blob to match Edit Modal */}
@@ -161,67 +193,7 @@ const ResultTable = ({
 
     // --- Smart Automation Rules (Mapdata.MD - NEW FORMAT with Section Numbers) ---
     // Each location now has format: ZONE-LEVEL-SECTION (e.g., G01-L1-1, G01-L1-2, ...)
-    const CATEGORY_RACK_RULES = {
-        'KITCHEN': [
-            { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'H02', 'H03', 'H04'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນ G9', 'ໂລພື້ນ G10', 'ໂລພື້ນ G11'], maxLevel: 0, maxSections: 0 }
-        ],
-        'BEAUTY': [
-            { zones: ['E01', 'E02', 'E03', 'E04'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນE 5', 'ໂລພື້ນE 7', 'ໂລພື້ນE 8'], maxLevel: 0, maxSections: 0 }
-        ],
-        'STATIONERY': [
-            { zones: ['S01', 'S02', 'S03', 'S05', 'S06', 'S07', 'S08'], maxLevel: 5, maxSections: 4 },
-            { zones: ['S10'], maxLevel: 4, maxSections: 4 }
-        ],
-        'TOYS': [
-            { zones: ['S09'], maxLevel: 5, maxSections: 4 }
-        ],
-        'CLEANING/BATH': [
-            { zones: ['A01', 'A02', 'A03', 'A05'], maxLevel: 5, maxSections: 4 },
-            { zones: ['A04'], maxLevel: 6, maxSections: 4 }
-        ],
-        'INTERIOR': [
-            { zones: ['B01'], maxLevel: 3, maxSections: 4 },
-            { zones: ['B02', 'B03', 'B04'], maxLevel: 4, maxSections: 4 }
-        ],
-        'TOOL/DIGITAL': [
-            { zones: ['F01', 'F02', 'F03', 'F04'], maxLevel: 5, maxSections: 5 }
-        ],
-        'STORAGE': [
-            { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນ D07', 'ໂລພື້ນ D08'], maxLevel: 0, maxSections: 0 }
-        ],
-        'FASHION': [
-            { zones: ['C01', 'C02', 'C03', 'C04'], maxLevel: 5, maxSections: 4 }
-        ],
-        'SPORTS/LEISURE': [
-            { zones: ['H01'], maxLevel: 5, maxSections: 4 }
-        ]
-    };
 
-    const getRackSuggestions = (category) => {
-        const rules = CATEGORY_RACK_RULES[String(category).toUpperCase()];
-        if (!rules) return [];
-
-        const suggestions = [];
-        rules.forEach(rule => {
-            rule.zones.forEach(zone => {
-                if (rule.maxLevel === 0) {
-                    // Floor storage - no level/section
-                    suggestions.push(zone);
-                } else {
-                    // Generate ZONE-LEVEL-SECTION format (e.g., G01-L1-1, G01-L1-2)
-                    for (let level = 1; level <= rule.maxLevel; level++) {
-                        for (let section = 1; section <= rule.maxSections; section++) {
-                            suggestions.push(`${zone}-L${level}-${section}`);
-                        }
-                    }
-                }
-            });
-        });
-        return suggestions;
-    };
 
     const ALL_DISTINCT_ZONES = Array.from(new Set(Object.values(CATEGORY_RACK_RULES).flatMap(group => group.flatMap(rule => rule.zones))));
 
@@ -412,6 +384,51 @@ const ResultTable = ({
         }
     };
 
+    const handleQuickUpdate = async (row, newQty, reason) => {
+        const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const now = new Date().toISOString();
+        const oldQty = row.qty || 0;
+
+        // Update local state
+        if (onUpdateRowQty) {
+            onUpdateRowQty(row.rowIndex, {
+                qty: newQty,
+                updatedAt: now,
+                updatedBy: activeUser,
+                manualReason: reason
+            });
+        }
+
+        try {
+            if (dbSource === 'supabase') {
+                if (!row.id) throw new Error("Missing ID");
+                const { error } = await supabase
+                    .from('location_inventory')
+                    .update({
+                        qty: newQty,
+                        remarks: `Quick Merge from Diagnostic by ${activeUser}`,
+                        uploaded_by: activeUser
+                    })
+                    .eq('id', row.id);
+                if (error) throw error;
+
+                await logInventoryHistory({
+                    barcode: row.barcode,
+                    itemName: row.masterItemName || row.itemName,
+                    oldQty: oldQty,
+                    newQty: newQty,
+                    oldRack: row.rackLocation,
+                    newRack: row.rackLocation,
+                    updatedBy: activeUser,
+                    reason: reason
+                });
+            }
+            success(t('results.saveSuccess'));
+        } catch (err) {
+            showError("Update failed: " + err.message);
+        }
+    };
+
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
         const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
@@ -458,7 +475,7 @@ const ResultTable = ({
                     .from('location_inventory')
                     .update({
                         qty: newQtyValue,
-                        rack_location: editLocation || selectedRow.rackLocation,
+                        rack_location: newQtyValue === 0 ? null : (editLocation || selectedRow.rackLocation),
                         category_1_actual: editCat1 || selectedRow.category1,
                         category_2_actual: editCat2 || selectedRow.category2,
                         remarks: `Updated by ${activeUser} at ${now}`,
@@ -537,7 +554,15 @@ const ResultTable = ({
         setIsSavingQuickAdd(true);
         try {
             const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
-            const result = await addLocationRecord({ ...quickAddForm, uploaded_by: activeUser });
+
+            // Logic: If Qty is 0, clear Location to NULL
+            const finalPayload = {
+                ...quickAddForm,
+                rack_location: Number(quickAddForm.qty) === 0 ? null : quickAddForm.rack_location,
+                uploaded_by: activeUser
+            };
+
+            const result = await addLocationRecord(finalPayload);
             if (result.success) {
                 // Log History for New Item
                 await logInventoryHistory({
@@ -555,7 +580,7 @@ const ResultTable = ({
                     item_name: quickAddForm.item_name,
                     qty: quickAddForm.qty,
                     added_by: activeUser,
-                    location: quickAddForm.rack_location
+                    location: finalPayload.rack_location // Use the sanitized location
                 });
                 if (logError) console.error("Failed to log added item:", logError);
                 // --------------------------------------------------------------------------
@@ -566,7 +591,7 @@ const ResultTable = ({
                     barcode: quickAddForm.barcode_no,
                     itemName: quickAddForm.item_name,
                     qty: Number(quickAddForm.qty),
-                    rackLocation: quickAddForm.rack_location,
+                    rackLocation: finalPayload.rack_location, // Use sanitized location (null if qty 0)
                     category1: quickAddForm.category_1_actual,
                     category2: quickAddForm.category_2_actual,
                     masterItemName: quickAddForm.item_name, // Assume same as entered
@@ -891,7 +916,7 @@ const ResultTable = ({
                         <div className="relative group">
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
                             <input
-                                type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ຕຳແໜ່ງ..."
+                                type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
                                 className="input-field pl-14 font-bold"
                                 value={searchTerm}
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
@@ -1026,7 +1051,102 @@ const ResultTable = ({
                                 <tr className="bg-slate-50/80 dark:bg-slate-800/50">
                                     <th className="px-8 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">#</th>
                                     <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.barcode')} / {t('results.itemName')}</th>
-                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.location')}</th>
+                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 relative group/loc">
+                                        <div className="flex items-center gap-2">
+                                            {t('results.location')}
+                                            <div className="relative" ref={locationFilterRef}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowLocationFilter(!showLocationFilter);
+                                                        // Auto focus search input logic could go here
+                                                    }}
+                                                    className={`p-1.5 rounded-lg transition-all ${locationFilter || showLocationFilter ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600'}`}
+                                                >
+                                                    <Filter size={14} strokeWidth={2.5} />
+                                                </button>
+
+                                                {/* Location Filter Dropdown */}
+                                                {showLocationFilter && (
+                                                    <div className="absolute top-full left-0 mt-2 w-72 max-h-[400px] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 z-[120] animate-scale-in flex flex-col overflow-hidden">
+                                                        <div className="p-3 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-10 space-y-2">
+                                                            <div className="flex justify-between items-center px-1">
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter by Location</span>
+                                                                {locationFilter && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (onLocationFilterChange) onLocationFilterChange('');
+                                                                            setShowLocationFilter(false);
+                                                                            setLocationSearchTerm('');
+                                                                        }}
+                                                                        className="text-[10px] font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1"
+                                                                    >
+                                                                        <X size={10} /> Clear
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="relative">
+                                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search location..."
+                                                                    value={locationSearchTerm}
+                                                                    onChange={(e) => setLocationSearchTerm(e.target.value)}
+                                                                    className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-joah-orange/20 outline-none transition-all placeholder:font-medium"
+                                                                    autoFocus
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-y-auto custom-scrollbar flex-1 p-2 space-y-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (onLocationFilterChange) onLocationFilterChange('');
+                                                                    setShowLocationFilter(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${!locationFilter ? 'bg-joah-orange/10 text-joah-orange' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                                            >
+                                                                <span className="flex items-center gap-2">
+                                                                    <Database size={14} className={!locationFilter ? 'text-joah-orange' : 'text-slate-400'} />
+                                                                    Show All Locations
+                                                                </span>
+                                                                {!locationFilter && <CheckCircle size={14} />}
+                                                            </button>
+
+                                                            {uniqueLocations.length > 0 ? (
+                                                                uniqueLocations.map(loc => {
+                                                                    const count = allResults ? allResults.filter(r => r.rackLocation === loc).length : 0;
+                                                                    const isActive = locationFilter === loc;
+                                                                    return (
+                                                                        <button
+                                                                            key={loc}
+                                                                            onClick={() => {
+                                                                                if (onLocationFilterChange) onLocationFilterChange(loc);
+                                                                                setShowLocationFilter(false);
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${isActive ? 'bg-joah-orange/10 text-joah-orange' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                                                        >
+                                                                            <span className="flex items-center gap-2">
+                                                                                <MapPin size={14} className={isActive ? 'text-joah-orange' : 'text-slate-300 group-hover:text-slate-500'} />
+                                                                                {loc}
+                                                                            </span>
+                                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black min-w-[24px] text-center ${isActive ? 'bg-white/50 text-joah-orange' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                                                                {count}
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="text-center py-8 text-slate-400">
+                                                                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">No locations found</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </th>
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:text-joah-orange transition-colors group/head"
@@ -1202,287 +1322,42 @@ const ResultTable = ({
 
 
 
-                {/* Diagnostic Modal */}
-                {diagnosticRow && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/60 animate-fade-in">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3rem] overflow-hidden border-2 border-slate-100 dark:border-slate-800 shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
-                            <div className={`p-8 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 ${getStatusHint(diagnosticRow).bg}/10`}>
-                                <div className="flex items-center gap-6">
-                                    <div className={`p-4 rounded-3xl text-white ${getStatusHint(diagnosticRow).bg} shadow-xl`}>
-                                        {getStatusHint(diagnosticRow).icon}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-slate-900 dark:text-white">{getStatusHint(diagnosticRow).title}</h3>
-                                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Validation Analysis Report</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => setDiagnosticRow(null)} className="p-4 hover:bg-white dark:hover:bg-slate-800 rounded-2xl transition-all shadow-inner">
-                                    <X size={24} />
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
-                                <div className="p-6 rounded-[2rem] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">ສາເຫດ (Root Cause)</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-slate-200 leading-relaxed">{getStatusHint(diagnosticRow).reason}</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <p className="px-2 text-xs font-black text-slate-400 uppercase tracking-widest text-center">ຂໍ້ມູນທີ່ກວດພົບ (Actual)</p>
-                                        <div className="p-5 rounded-[2rem] bg-rose-50/30 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-900/30 space-y-4">
-                                            <div>
-                                                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ໝວດໝູ່ 1</p>
-                                                <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.category1 || '-'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ໝວດໝູ່ 2</p>
-                                                <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.category2 || '-'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">ບ່ອນວາງ (Rack)</p>
-                                                <p className="text-base font-bold text-slate-700 dark:text-slate-300">{diagnosticRow.rackLocation}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <p className="px-2 text-xs font-black text-emerald-500 uppercase tracking-widest text-center">ຂໍ້ມູນທີ່ຖືກຕ້ອງ (Master)</p>
-                                        <div className="p-5 rounded-[2rem] bg-emerald-50/30 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-900/30 space-y-4">
-                                            <div>
-                                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໝວດໝູ່ 1</p>
-                                                <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.masterCategory1 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໝວດໝູ່ 2</p>
-                                                <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.masterCategory2 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໂຊນທີ່ຄວນຢູ່</p>
-                                                <p className="text-base font-bold text-slate-800 dark:text-white">{diagnosticRow.status === 'passed' ? diagnosticRow.rackLocation : (diagnosticRow.reason?.includes('ຄວນແມ່ນ') ? diagnosticRow.reason.split('ຄວນແມ່ນ ')[1].split(')')[0] : '-')}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="p-8 rounded-[2rem] bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-xl shadow-indigo-500/20">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <HelpCircle size={20} />
-                                        <p className="text-sm font-black uppercase tracking-widest">ວິທີແກ້ໄຂ (Solution Steps)</p>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <p className="text-base font-medium opacity-90">{getStatusHint(diagnosticRow).action}</p>
-                                        {getStatusHint(diagnosticRow).fixSteps?.length > 0 && (
-                                            <div className="pt-4 space-y-3">
-                                                {getStatusHint(diagnosticRow).fixSteps.map((step, idx) => (
-                                                    <div key={idx} className="flex gap-4 items-center bg-white/10 p-4 rounded-2xl border border-white/10">
-                                                        <div className="w-8 h-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-black flex-shrink-0">{idx + 1}</div>
-                                                        <p className="text-sm font-bold">{step}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-4">
-                                <button onClick={() => setDiagnosticRow(null)} className="px-8 h-14 rounded-2xl font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:bg-white dark:hover:bg-slate-800 transition-all text-xs">ປິດໜ້າຕ່າງ</button>
-                                {diagnosticRow.status !== 'passed' && (
-                                    <button
-                                        onClick={() => {
-                                            setDiagnosticRow(null);
-                                            setSelectedRow(diagnosticRow);
-                                            setEditQty(diagnosticRow.qty || 0);
-                                            setEditLocation(diagnosticRow.rackLocation || '');
-                                            setEditCat1(diagnosticRow.category1 || '');
-                                            setEditCat2(diagnosticRow.category2 || '');
-                                        }}
-                                        className="px-8 h-14 rounded-2xl bg-joah-orange text-white font-black uppercase tracking-widest hover:scale-105 transition-all text-xs shadow-lg shadow-orange-500/30 flex items-center gap-2"
-                                    >
-                                        <Edit2 size={16} />
-                                        ແກ้ໄຂຂໍ້ມູນ
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* Diagnostic Side Panel */}
+                <DiagnosticPanel
+                    diagnosticRow={diagnosticRow}
+                    onClose={() => setDiagnosticRow(null)}
+                    onEdit={(row) => {
+                        setSelectedRow(row);
+                        setEditQty(row.qty || 0);
+                        setEditLocation(row.rackLocation || '');
+                        setEditCat1(row.category1 || '');
+                        setEditCat2(row.category2 || '');
+                    }}
+                    getStatusHint={getStatusHint}
+                />
 
-                {/* Edit Modal */}
-                {selectedRow && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-slate-950/40 animate-fade-in">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl animate-scale-in relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-joah-orange/10 blur-[60px] rounded-full pointer-events-none"></div>
-                            <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800 relative z-10">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-xl bg-joah-orange text-white shadow-lg shadow-orange-500/20"><Edit2 size={20} /></div>
-                                    <div>
-                                        <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">ແກ້ໄຂຂໍ້ມູນ</h3>
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Manual Adjustment</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedRow(null)}
-                                    className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-all transform hover:scale-105 active:scale-95 shadow-sm"
-                                >
-                                    <X size={28} strokeWidth={2.5} />
-                                </button>
-                            </div>
-                            <div className="space-y-6 relative z-10">
-                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-3">
-                                    <div className="flex justify-between items-start text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                        <span>Item Info</span>
-                                        <span className="text-joah-orange">#{selectedRow.rowIndex}</span>
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <p className="text-base font-black text-slate-800 dark:text-white font-mono tracking-tight">{selectedRow.barcode}</p>
-                                        <p className="text-xs font-bold text-slate-500 truncate">{selectedRow.masterItemName || selectedRow.itemName}</p>
-                                    </div>
-                                    <div className="pt-3 grid grid-cols-2 gap-4 border-t border-slate-200 dark:border-slate-700/50">
-                                        <div className="space-y-0.5">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">System Count</p>
-                                            <div className="flex items-center gap-1.5"><Database size={10} className="text-sky-500" /><span className="text-sm font-black text-slate-700 dark:text-slate-300">{selectedRow.masterQty || 0}</span></div>
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Current Location</p>
-                                            <div className="flex items-center gap-1.5"><MapPin size={10} className="text-joah-orange" /><span className="text-sm font-black text-slate-700 dark:text-slate-300">{selectedRow.rackLocation}</span></div>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                {/* 2-Column Grid for better space utilization */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="relative group md:col-span-2">
-                                        <span className="floating-label group-focus-within:text-joah-orange">New Actual Qty</span>
-                                        <input
-                                            type="number"
-                                            value={editQty}
-                                            onChange={(e) => setEditQty(e.target.value)}
-                                            className="input-field !text-xl text-center py-4 font-black caret-joah-orange text-joah-orange focus:text-joah-orange transition-all duration-300 focus:ring-4 focus:ring-joah-orange/10"
-                                            autoFocus
-                                        />
-                                    </div>
-
-                                    {/* Rack Location with Dropdown + Manual Input */}
-                                    <div className="relative group md:col-span-2">
-                                        <span className="floating-label group-focus-within:text-joah-orange">Rack Location (Auto-suggest or Custom)</span>
-                                        <div className="flex gap-2">
-                                            <select
-                                                className="input-field !py-3 !px-3 font-bold bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 focus:border-joah-orange outline-none transition-all flex-1"
-                                                value={editLocation}
-                                                onChange={(e) => setEditLocation(e.target.value)}
-                                                onFocus={(e) => {
-                                                    if (!editLocation) setEditLocation(selectedRow.rackLocation);
-                                                }}
-                                            >
-                                                <option value="">-- ເລືອກຕຳແໜ່ງ --</option>
-                                                {getRackSuggestions(editCat1 || selectedRow.category1).map(loc => {
-                                                    const count = results.filter(r => r.rackLocation === loc).length;
-                                                    return (
-                                                        <option key={loc} value={loc}>
-                                                            {loc} {count > 0 ? `\u00A0\u00A0\u00A0|\u00A0\u00A0\u00A0 ${count} SKU` : ''}
-                                                        </option>
-                                                    );
-                                                })}
-                                                <option value="CUSTOM">-- ປ້ອນເອງ (Custom) --</option>
-                                            </select>
-                                            <button
-                                                type="button"
-                                                onClick={() => editLocation && setInspectedLocation(editLocation)}
-                                                disabled={!editLocation}
-                                                className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-500 hover:text-joah-orange disabled:opacity-50 transition-colors"
-                                                title="View items in this location"
-                                            >
-                                                <Eye size={20} />
-                                            </button>
-                                            <input
-                                                type="text"
-                                                value={editLocation}
-                                                onChange={(e) => setEditLocation(e.target.value.toUpperCase())}
-                                                onFocus={(e) => {
-                                                    if (!editLocation) setEditLocation(selectedRow.rackLocation);
-                                                }}
-                                                className={`input-field py-3 font-bold uppercase w-1/3 transition-all ${editLocation !== selectedRow.rackLocation ? 'ring-2 ring-joah-orange bg-orange-50/10' : ''}`}
-                                                placeholder={selectedRow.rackLocation}
-                                            />
-                                        </div>
-
-                                        {/* Rack Location Reason Input Removed - Consolidated below */}
-                                    </div>
-
-                                    {/* Category 1 Editor */}
-                                    <div className="relative group">
-                                        <span className="floating-label group-focus-within:text-joah-orange">Category 1</span>
-                                        <select
-                                            value={editCat1}
-                                            onChange={(e) => setEditCat1(e.target.value)}
-                                            onFocus={(e) => {
-                                                if (!editCat1) setEditCat1(selectedRow.category1);
-                                            }}
-                                            className="input-field py-3.5 font-bold appearance-none"
-                                        >
-                                            <option value="">{selectedRow.category1 || 'Select Category'}</option>
-                                            {Object.keys(CATEGORY_RACK_RULES).map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Category 2 Editor */}
-                                    <div className="relative group">
-                                        <span className="floating-label group-focus-within:text-joah-orange">Category 2</span>
-                                        <input
-                                            type="text"
-                                            value={editCat2}
-                                            onChange={(e) => setEditCat2(e.target.value)}
-                                            onFocus={(e) => {
-                                                if (!editCat2) setEditCat2(selectedRow.category2);
-                                            }}
-                                            className="input-field py-3.5 font-bold"
-                                            placeholder={selectedRow.category2 || 'Category 2'}
-                                        />
-                                    </div>
-
-                                    {/* Consolidated Reason Input for ANY change */}
-                                    <div className="md:col-span-2 relative group mt-2">
-                                        <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-900/30 space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Info size={14} className="text-joah-orange" />
-                                                    <span className="text-[10px] font-black text-joah-orange uppercase tracking-widest">{t('results.reasonPrompt')}</span>
-                                                </div>
-                                                <span className="text-[10px] font-bold text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 rounded-md uppercase tracking-wide">{t('results.mustFill')}</span>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={editReason}
-                                                onChange={(e) => setEditReason(e.target.value)}
-                                                placeholder={t('results.reasonPlaceholder')}
-                                                className="w-full bg-transparent border-b border-orange-300 dark:border-orange-800 focus:border-joah-orange outline-none py-2 text-sm font-bold placeholder:text-slate-400/70"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="relative group mt-4 md:col-span-2">
-                                        <span className="absolute -top-3 left-4 px-2 bg-white dark:bg-slate-900 text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-joah-orange z-10 transition-colors">{t('results.verifier')}</span>
-                                        <div className="relative">
-                                            <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-joah-orange transition-colors" size={16} />
-                                            <input
-                                                type="text"
-                                                value={currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown')}
-                                                readOnly
-                                                className="input-field pl-12 py-3.5 text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 pt-6">
-                                    <button onClick={() => setSelectedRow(null)} disabled={isUpdating} className="btn-secondary bg-slate-800 text-white border-slate-700 hover:bg-slate-700 h-16 uppercase text-xs tracking-widest shadow-none disabled:opacity-50">{t('common.cancel')}</button>
-                                    <button onClick={handleUpdateMasterQty} disabled={isUpdating} className={`btn-primary h-16 uppercase text-xs tracking-widest shadow-orange-500/10 ${isUpdating ? 'opacity-70 cursor-wait' : ''}`}>
-                                        {isUpdating ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                                        <span>{isUpdating ? t('results.saving') : t('results.saveChanges')}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* Edit Modal / Manual Adjustment Panel */}
+                <EditPanel
+                    selectedRow={selectedRow}
+                    onClose={() => setSelectedRow(null)}
+                    editQty={editQty}
+                    setEditQty={setEditQty}
+                    editLocation={editLocation}
+                    setEditLocation={setEditLocation}
+                    setInspectedLocation={setInspectedLocation}
+                    editCat1={editCat1}
+                    setEditCat1={setEditCat1}
+                    editCat2={editCat2}
+                    setEditCat2={setEditCat2}
+                    editReason={editReason}
+                    setEditReason={setEditReason}
+                    currentUser={currentUser}
+                    isUpdating={isUpdating}
+                    handleUpdate={handleUpdateMasterQty}
+                    results={results}
+                    t={t}
+                />
 
                 {/* History Modal */}
                 {showHistory && (
@@ -1637,7 +1512,7 @@ const ResultTable = ({
                                                         value={quickAddForm.rack_location}
                                                         onChange={(e) => setQuickAddForm({ ...quickAddForm, rack_location: e.target.value })}
                                                     >
-                                                        <option value="">-- ເລືອກຕຳແໜ່ງ --</option>
+                                                        <option value="">-- ເລືອກໂລເຄຊັ້ນ --</option>
                                                         {getRackSuggestions(quickAddForm.category_1_actual).map(loc => {
                                                             const count = results.filter(r => r.rackLocation === loc).length;
                                                             return (
@@ -1670,7 +1545,7 @@ const ResultTable = ({
                                             </div>
                                         </div>
                                         <p className="text-[9px] text-slate-400 font-medium ml-1 italic">
-                                            ຕົວຢ່າງຕຳແໜ່ງ: {getRackSuggestions(quickAddForm.category_1_actual)[0] || 'H01-L1-1'}
+                                            ຕົວຢ່າງໂລເຄຊັ້ນ: {getRackSuggestions(quickAddForm.category_1_actual)[0] || 'H01-L1-1'}
                                         </p>
                                     </div>
 
@@ -1734,7 +1609,7 @@ const ResultTable = ({
                         </div>
                     </div>
                 )}
-            </div>
+            </div >
         </>
     );
 };

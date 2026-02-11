@@ -61,6 +61,22 @@ function AppContent() {
   const [showStoreRequestManager, setShowStoreRequestManager] = useState(false);
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
+
+  // Filter Results based on Location
+  const filteredResults = locationFilter
+    ? validationResults.filter(r => r.rackLocation === locationFilter)
+    : validationResults;
+
+  // Recalculate Stats based on Filtered Results (Dynamic Dashboard)
+  const dashboardStats = {
+    total: filteredResults.length,
+    passed: filteredResults.filter(r => r.status === 'passed').length,
+    mismatch: filteredResults.filter(r => r.status === 'mismatch').length,
+    missing: filteredResults.filter(r => r.status === 'missing').length,
+    zeroQty: filteredResults.filter(r => Number(r.qty) === 0).length,
+    hasQty: filteredResults.filter(r => Number(r.qty) > 0).length
+  };
 
   // 🔄 Auto-Login from LocalStorage
   useEffect(() => {
@@ -199,6 +215,18 @@ function AppContent() {
       let odooRows = [];
 
       if (activeSource === 'supabase') {
+        // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
+        try {
+          await supabase
+            .from('location_inventory')
+            .update({ rack_location: null })
+            .eq('qty', 0)
+            .not('rack_location', 'is', null);
+          console.log('✅ Auto-cleanup: Cleared locations for qty=0 items');
+        } catch (cleanupErr) {
+          console.warn('⚠️ Auto-cleanup failed (non-critical):', cleanupErr);
+        }
+
         const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
           fetchMasterFromSupabase(),
           fetchLocationFromSupabase(),
@@ -500,9 +528,12 @@ function AppContent() {
 
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
-              <Dashboard stats={stats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
+              <Dashboard stats={dashboardStats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
               <ResultTable
-                results={validationResults}
+                results={filteredResults}
+                allResults={validationResults} // Pass all results for generating filter options
+                locationFilter={locationFilter}
+                onLocationFilterChange={setLocationFilter}
                 masterData={masterData}
                 rawFile={rawFile}
                 locationSheetName={locationSheetName}

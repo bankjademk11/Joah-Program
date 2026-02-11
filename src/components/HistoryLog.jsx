@@ -63,7 +63,7 @@ const HistoryLog = ({ onClose }) => {
                     // 1. If reason is missing/empty
                     if (!reasonDisplay) {
                         // If Qty didn't change, it must be a Data/Location update
-                        if (changeVal === 0) reasonDisplay = 'ແກ້ໄຂຂໍ້ມູນ/ຕຳແໜ່ງ';
+                        if (changeVal === 0) reasonDisplay = 'ແກ້ໄຂຂໍ້ມູນ/ໂລເຄຊັ້ນ';
                         else reasonDisplay = 'ແກ້ໄຂຈຳນວນ';
                     }
 
