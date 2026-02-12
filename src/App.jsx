@@ -321,29 +321,48 @@ function AppContent() {
     }
   };
 
-  // --- Dedicated Cloud Refresh (No Cleanup = No Double Refresh) ---
-  const refreshFromCloud = useCallback(async () => {
-    if (isRefreshingRef.current) return; // Prevent overlapping refreshes
+  // --- Dedicated Cloud Refresh (Smart & Optimized) ---
+  const refreshFromCloud = useCallback(async (options = { skipMaster: true }) => {
+    if (isRefreshingRef.current) return;
     isRefreshingRef.current = true;
     setIsProcessing(true);
     try {
-      const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
-        fetchMasterFromSupabase(),
+      console.log(`🔄 Refreshing cloud data (skipMaster: ${options.skipMaster})...`);
+
+      // Fetch dynamic data always
+      const fetchTasks = [
         fetchLocationFromSupabase(),
         fetchOdooFromSupabase()
-      ]);
+      ];
 
-      const dataRows = (cloudMaster || []).map(d => ({
-        'CATEGORIES 1': d.category_1,
-        'CATEGORIES 2': d.category_2,
-        'Barcode': d.barcode,
-        'product_name_la': d.product_name_la,
-        'item_name': d.item_name,
-        'Item Name': d.product_name_la || d.item_name,
-        'Qty': d.qty,
-        'updated_at': d.updated_at,
-        'updated_by': d.updated_by
-      }));
+      // Only fetch master if explicitly asked or if we don't have it yet
+      const shouldFetchMaster = !options.skipMaster || masterData.length === 0;
+      if (shouldFetchMaster) {
+        fetchTasks.push(fetchMasterFromSupabase());
+      }
+
+      const results = await Promise.all(fetchTasks);
+      const cloudLocation = results[0];
+      const cloudOdoo = results[1];
+      const cloudMaster = shouldFetchMaster ? results[2] : null;
+
+      // Update master data state if we fetched it
+      let activeMasterData = masterData;
+      if (shouldFetchMaster && cloudMaster) {
+        const mappedMaster = cloudMaster.map(d => ({
+          'CATEGORIES 1': d.category_1,
+          'CATEGORIES 2': d.category_2,
+          'Barcode': d.barcode,
+          'product_name_la': d.product_name_la,
+          'item_name': d.item_name,
+          'Item Name': d.product_name_la || d.item_name,
+          'Qty': d.qty,
+          'updated_at': d.updated_at,
+          'updated_by': d.updated_by
+        }));
+        setMasterData(mappedMaster);
+        activeMasterData = mappedMaster;
+      }
 
       const locationRows = (cloudLocation || []).map(l => ({
         id: l.id,
@@ -362,13 +381,11 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      const { results, stats } = validateData(locationRows, dataRows, odooRows);
-      setValidationResults(results);
-      setMasterData(dataRows);
-      setStats(stats);
+      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows);
+      setValidationResults(validatedResults);
+      setStats(validatedStats);
       setRefreshTrigger(Date.now());
 
-      // Clear banner after successful refresh
       setPendingChanges(0);
       setShowRealtimeBanner(false);
     } catch (err) {
@@ -377,7 +394,7 @@ function AppContent() {
       setIsProcessing(false);
       isRefreshingRef.current = false;
     }
-  }, []);
+  }, [masterData]);
 
   // --- Supabase Realtime Subscription ---
   useEffect(() => {
@@ -411,7 +428,7 @@ function AppContent() {
             // Auto-refresh after 3 seconds of inactivity (debounced)
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             debounceTimerRef.current = setTimeout(() => {
-              refreshFromCloud();
+              refreshFromCloud({ skipMaster: true });
             }, 3000);
           }
         }
@@ -479,7 +496,8 @@ function AppContent() {
           isProcessing={isProcessing}
           onRefresh={() => {
             if (dbSource === 'supabase') {
-              refreshFromCloud();
+              // Manual refresh button from Navbar clears EVERYTHING and reloads all
+              refreshFromCloud({ skipMaster: false });
             } else {
               handleValidate({ locationSheet: locationSheetName });
               setRefreshTrigger(Date.now());
@@ -689,10 +707,10 @@ function AppContent() {
                   {/* Connection Status Pill */}
                   <div className="flex items-center justify-between">
                     <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider border transition-all ${realtimeStatus === 'connected'
-                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-                        : realtimeStatus === 'connecting'
-                          ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                      : realtimeStatus === 'connecting'
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                       }`}>
                       {realtimeStatus === 'connected' ? (
                         <><Wifi size={14} /><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /><span>Realtime Connected</span></>
@@ -785,7 +803,8 @@ function AppContent() {
                 dbSource={dbSource}
                 onRefresh={() => {
                   if (dbSource === 'supabase') {
-                    refreshFromCloud();
+                    // Smart refresh from table only updates counts
+                    refreshFromCloud({ skipMaster: true });
                   } else {
                     handleValidate({ locationSheet: locationSheetName });
                     setRefreshTrigger(Date.now());
