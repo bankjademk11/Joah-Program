@@ -205,7 +205,7 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                         onClick={onClose}
                         className="w-full sm:w-auto px-8 h-12 rounded-2xl font-black text-slate-500 dark:text-slate-400 uppercase text-xs tracking-widest hover:bg-white dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                     >
-                        ปิดหน้าต่าง
+                        ປິດໜ້າຕ່າງ
                     </button>
                     {diagnosticRow.status !== 'passed' && (
                         <button
@@ -216,7 +216,7 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                             className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-joah-orange text-white font-black uppercase text-xs tracking-widest hover:translate-y--1 hover:shadow-xl transition-all shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2"
                         >
                             <Edit2 size={16} />
-                            แก้ไขข้อมูลทันที
+                            ເເກ້ໄຂຂໍ້ມູນທັນທີ
                         </button>
                     )}
                 </div>

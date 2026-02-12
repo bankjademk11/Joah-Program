@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import FileUpload from './components/FileUpload';
 import SheetMapper from './components/SheetMapper';
 import Dashboard from './components/Dashboard';
@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
@@ -62,6 +62,14 @@ function AppContent() {
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
+
+  // --- Realtime State ---
+  const [realtimeStatus, setRealtimeStatus] = useState('disconnected'); // 'connected', 'disconnected', 'connecting'
+  const [pendingChanges, setPendingChanges] = useState(0);
+  const [lastChangeBy, setLastChangeBy] = useState('');
+  const [showRealtimeBanner, setShowRealtimeBanner] = useState(false);
+  const debounceTimerRef = useRef(null);
+  const isRefreshingRef = useRef(false);
 
   // Filter Results based on Location
   const filteredResults = locationFilter
@@ -313,6 +321,118 @@ function AppContent() {
     }
   };
 
+  // --- Dedicated Cloud Refresh (No Cleanup = No Double Refresh) ---
+  const refreshFromCloud = useCallback(async () => {
+    if (isRefreshingRef.current) return; // Prevent overlapping refreshes
+    isRefreshingRef.current = true;
+    setIsProcessing(true);
+    try {
+      const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
+        fetchMasterFromSupabase(),
+        fetchLocationFromSupabase(),
+        fetchOdooFromSupabase()
+      ]);
+
+      const dataRows = (cloudMaster || []).map(d => ({
+        'CATEGORIES 1': d.category_1,
+        'CATEGORIES 2': d.category_2,
+        'Barcode': d.barcode,
+        'product_name_la': d.product_name_la,
+        'item_name': d.item_name,
+        'Item Name': d.product_name_la || d.item_name,
+        'Qty': d.qty,
+        'updated_at': d.updated_at,
+        'updated_by': d.updated_by
+      }));
+
+      const locationRows = (cloudLocation || []).map(l => ({
+        id: l.id,
+        'Barcode': l.barcode_no,
+        'Rack Location': l.rack_location,
+        'Category-1': l.category_1_actual,
+        'Category-2': l.category_2_actual,
+        'QTY': l.qty,
+        'Item Name': l.item_name,
+        'uploaded_by': l.uploaded_by,
+        'created_at': l.created_at
+      }));
+
+      const odooRows = (cloudOdoo || []).map(o => ({
+        barcode: o.barcode,
+        qty: o.qty_odoo
+      }));
+
+      const { results, stats } = validateData(locationRows, dataRows, odooRows);
+      setValidationResults(results);
+      setMasterData(dataRows);
+      setStats(stats);
+      setRefreshTrigger(Date.now());
+
+      // Clear banner after successful refresh
+      setPendingChanges(0);
+      setShowRealtimeBanner(false);
+    } catch (err) {
+      console.error('Refresh from cloud error:', err);
+    } finally {
+      setIsProcessing(false);
+      isRefreshingRef.current = false;
+    }
+  }, []);
+
+  // --- Supabase Realtime Subscription ---
+  useEffect(() => {
+    // Only subscribe when on results page AND using Supabase
+    if (step !== 'results' || dbSource !== 'supabase') {
+      setRealtimeStatus('disconnected');
+      return;
+    }
+
+    setRealtimeStatus('connecting');
+    console.log('🔌 Setting up Realtime subscription...');
+
+    const channel = supabase
+      .channel('realtime-location-inventory')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'location_inventory' },
+        (payload) => {
+          console.log('📡 Realtime change detected:', payload.eventType, payload);
+
+          // Show notification banner
+          const changedBy = payload.new?.uploaded_by || payload.old?.uploaded_by || 'Unknown';
+          const currentUserName = user?.name || localStorage.getItem('joah_employee_name') || '';
+
+          // Only show banner if change was made by someone else
+          if (changedBy !== currentUserName) {
+            setLastChangeBy(changedBy);
+            setPendingChanges(prev => prev + 1);
+            setShowRealtimeBanner(true);
+
+            // Auto-refresh after 3 seconds of inactivity (debounced)
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = setTimeout(() => {
+              refreshFromCloud();
+            }, 3000);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime status:', status);
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('disconnected');
+        }
+      });
+
+    return () => {
+      console.log('🔌 Cleaning up Realtime subscription...');
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      supabase.removeChannel(channel);
+      setRealtimeStatus('disconnected');
+    };
+  }, [step, dbSource, user?.name, refreshFromCloud]);
+
   const [locationSynced, setLocationSynced] = useState(false);
 
   const handleSyncLocationToCloud = async () => {
@@ -358,8 +478,12 @@ function AppContent() {
           setIsDarkMode={setIsDarkMode}
           isProcessing={isProcessing}
           onRefresh={() => {
-            handleValidate({ locationSheet: locationSheetName });
-            setRefreshTrigger(Date.now());
+            if (dbSource === 'supabase') {
+              refreshFromCloud();
+            } else {
+              handleValidate({ locationSheet: locationSheetName });
+              setRefreshTrigger(Date.now());
+            }
           }}
           onShowHistory={() => setShowHistory(true)}
           onReset={handleReset}
@@ -559,6 +683,60 @@ function AppContent() {
             <div className="w-full h-full space-y-8 animate-fade-in-up">
               <Dashboard stats={dashboardStats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
 
+              {/* Realtime Status & Notification Banner */}
+              {dbSource === 'supabase' && (
+                <div className="flex flex-col gap-3">
+                  {/* Connection Status Pill */}
+                  <div className="flex items-center justify-between">
+                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider border transition-all ${realtimeStatus === 'connected'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                        : realtimeStatus === 'connecting'
+                          ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                      }`}>
+                      {realtimeStatus === 'connected' ? (
+                        <><Wifi size={14} /><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /><span>Realtime Connected</span></>
+                      ) : realtimeStatus === 'connecting' ? (
+                        <><RefreshCw size={14} className="animate-spin" /><span>Connecting...</span></>
+                      ) : (
+                        <><WifiOff size={14} /><span>Offline</span></>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pending Changes Banner */}
+                  {showRealtimeBanner && pendingChanges > 0 && (
+                    <div className="glass-card rounded-2xl p-4 border-2 border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 shadow-lg shadow-sky-500/10 animate-fade-in">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 animate-pulse">
+                            <Bell size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-sky-800 dark:text-sky-200">
+                              📡 ມີການອັບເດດຈາກຜູ້ໃຊ້ອື່ນ!
+                            </p>
+                            <p className="text-xs font-bold text-sky-600 dark:text-sky-400 mt-0.5">
+                              {lastChangeBy} ໄດ້ແກ້ໄຂ {pendingChanges} ລາຍການ — ກຳລັງ refresh ອັດຕະໂນມັດ...
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                            refreshFromCloud();
+                          }}
+                          className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-2 flex-shrink-0"
+                        >
+                          <RefreshCw size={14} />
+                          <span>Refresh ເລີຍ</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Sync Location to Cloud Button */}
               {dbSource === 'excel' && validationResults.length > 0 && (
                 <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
@@ -606,8 +784,12 @@ function AppContent() {
                 onFilterChange={setFilterStatus}
                 dbSource={dbSource}
                 onRefresh={() => {
-                  handleValidate({ locationSheet: locationSheetName });
-                  setRefreshTrigger(Date.now());
+                  if (dbSource === 'supabase') {
+                    refreshFromCloud();
+                  } else {
+                    handleValidate({ locationSheet: locationSheetName });
+                    setRefreshTrigger(Date.now());
+                  }
                 }}
                 refreshTrigger={refreshTrigger}
                 onUpdateRowQty={handleUpdateResultRowQty}
