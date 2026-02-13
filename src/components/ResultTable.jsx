@@ -99,7 +99,8 @@ const ResultTable = ({
         await new Promise(r => setTimeout(r, 600));
 
         if (onRefresh) {
-            await onRefresh();
+            // Pass silent: true to avoid global LoadingOverlay / Elephant
+            await onRefresh({ skipMaster: false, silent: true });
         }
         setIsRefreshing(false);
     };
@@ -578,8 +579,17 @@ const ResultTable = ({
 
                 setShowQuickAdd(false);
 
-                // Refresh background data with skeleton feedback
-                handleManualRefresh();
+                // Refresh background data with Loading Overlay (Show Elephant, No Progress Bar)
+                if (onRefresh) {
+                    await onRefresh({
+                        skipMaster: false,
+                        silent: false,
+                        loadingText: 'ກຳລັງບັນທຶກຂໍ້ມູນລົງ Server...',
+                        showProgress: false
+                    });
+                } else {
+                    handleManualRefresh();
+                }
             } else {
                 alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + result.error);
             }

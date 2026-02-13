@@ -29,6 +29,7 @@ import MasterAudit from './components/MasterAudit';
 import ProductManager from './components/ProductManager';
 import Footer from './components/Footer';
 import RubikNetworkParticles from './components/RubikNetworkParticles';
+import LoadingOverlay from './components/LoadingOverlay';
 
 
 function AppContent() {
@@ -46,6 +47,9 @@ function AppContent() {
   const [masterData, setMasterData] = useState([]);
   const [stats, setStats] = useState({ total: 0, passed: 0, mismatch: 0, missing: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0); // For LoadingOverlay percentage
+  const [loadingOverlayMessage, setLoadingOverlayMessage] = useState(null); // Custom message
+  const [showProgressBar, setShowProgressBar] = useState(true); // Toggle progress bar visibility
   const [filterStatus, setFilterStatus] = useState('all');
   const [dbSource, setDbSource] = useState('excel');
   const [dataSourceLabel, setDataSourceLabel] = useState('Local Mode (Excel)');
@@ -174,12 +178,37 @@ function AppContent() {
 
   const handleDatabaseLoad = async () => {
     setIsProcessing(true);
+    setLoadingProgress(0);
+
+    // Simulate progress bar animation (0% -> 90%) over ~3.5s
+    const progressInterval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev;
+        // Slow down as it gets higher
+        const increment = prev < 50 ? 5 : prev < 80 ? 2 : 1;
+        return prev + increment;
+      });
+    }, 100);
+
+    // Add artificial delay to show the mascot (min 4 seconds)
+    const mascotDelay = new Promise(resolve => setTimeout(resolve, 4000));
+
     try {
       // Check for both Master Data and Location Counting data
-      const [cloudMaster, cloudLocation] = await Promise.all([
-        fetchMasterFromSupabase(),
-        fetchLocationFromSupabase()
+      const [[cloudMaster, cloudLocation]] = await Promise.all([
+        Promise.all([
+          fetchMasterFromSupabase(),
+          fetchLocationFromSupabase()
+        ]),
+        mascotDelay
       ]);
+
+      // Complete the progress bar (100%)
+      clearInterval(progressInterval);
+      setLoadingProgress(100);
+
+      // Small delay to let user see 100%
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       if ((cloudMaster && cloudMaster.length > 0) || (cloudLocation && cloudLocation.length > 0)) {
         setDbSource('supabase');
@@ -197,7 +226,7 @@ function AppContent() {
         if (isError) {
           alert('❌ ບໍ່ສາມາດເຊື່ອມຕໍ່ກັບ Cloud ໄດ້. ກະລຸນາກວດສອບ Internet ຫຼື Supabase Connection.');
         } else {
-          alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud (ທັງ Master ແລະ Inventory). ກະລຸນາ Sync ຂໍ້ມູນກ່อน หรือ ใช้ข้อมูลจากไฟล์ส่วนตัวแทน.');
+          alert('ℹ️ ຍັງບໍ່ມີຂໍ້ມູນໃນ Cloud (ທັງ Master ແລະ Inventory). ກະລຸນາ Sync ຂໍ້ມູນກ່ອນ ຫຼື ໃຊ້ຂໍ້ມູນຈາກໄຟລ໌ສ່ວນຕົວແທນ.');
         }
       }
 
@@ -215,6 +244,8 @@ function AppContent() {
       alert('Error: ' + error.message);
     } finally {
       setIsProcessing(false);
+      setLoadingProgress(0);
+      clearInterval(progressInterval); // Ensure interval is cleared on error
     }
   };
 
@@ -281,7 +312,7 @@ function AppContent() {
 
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
-        dataRows = sheetToJSON(workbook, dataSheet || 'DATA');
+        dataRows = sheetToJSON(workbook, 'DATA');
         locationRows = sheetToJSON(workbook, locationSheet);
         // Local mode doesn't support Odoo file yet, or we assume Odoo upload via the new button goes to Supabase only.
         // If user is in Excel mode but uploaded Odoo via the specific button, it went to Supabase.
@@ -327,10 +358,15 @@ function AppContent() {
   };
 
   // --- Dedicated Cloud Refresh (Smart & Optimized) ---
-  const refreshFromCloud = useCallback(async (options = { skipMaster: true }) => {
+  const refreshFromCloud = useCallback(async (options = { skipMaster: true, silent: false }) => {
     if (isRefreshingRef.current) return;
     isRefreshingRef.current = true;
-    setIsProcessing(true);
+
+    // Only show loading overlay if NOT silent
+    if (!options.silent) {
+      setIsProcessing(true);
+      setLoadingProgress(0); // Reset progress if showing overlay
+    }
     try {
       console.log(`🔄 Refreshing cloud data (skipMaster: ${options.skipMaster})...`);
 
@@ -396,7 +432,12 @@ function AppContent() {
     } catch (err) {
       console.error('Refresh from cloud error:', err);
     } finally {
-      setIsProcessing(false);
+      if (!options.silent) {
+        setIsProcessing(false);
+        setLoadingProgress(0);
+        setLoadingOverlayMessage(null); // Reset to default
+        setShowProgressBar(true); // Reset to default
+      }
       isRefreshingRef.current = false;
     }
   }, [masterData]);
@@ -490,6 +531,15 @@ function AppContent() {
 
   return (
     <ToastProvider>
+      {/* 🐘 Elephant Mascot Loading Overlay with Progress */}
+      <LoadingOverlay
+        isVisible={isProcessing}
+        message={loadingOverlayMessage || (loadingProgress < 100 ? 'ກຳລັງເຊື່ອມຕໍ່ຖານຂໍ້ມູນ Cloud' : 'ເຊື່ອມຕໍ່ສຳເລັດ!')}
+        subtitle="JOAH Data Sync"
+        progress={loadingProgress}
+        showProgressBar={showProgressBar}
+      />
+
       <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots">
         {/* Navigation */}
         <Navbar
@@ -499,10 +549,16 @@ function AppContent() {
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}
           isProcessing={isProcessing}
-          onRefresh={() => {
+          onRefresh={(options) => {
             if (dbSource === 'supabase') {
               // Manual refresh button from Navbar clears EVERYTHING and reloads all
-              refreshFromCloud({ skipMaster: false });
+              // Silent mode defaults to true unless specified
+              refreshFromCloud({
+                skipMaster: false,
+                silent: options?.silent ?? true,
+                loadingText: options?.loadingText,
+                showProgress: options?.showProgress
+              });
             } else {
               handleValidate({ locationSheet: locationSheetName });
               setRefreshTrigger(Date.now());

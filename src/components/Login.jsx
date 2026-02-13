@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../assets/Joah.jpeg';
 import joahWarehouseImg from '../assets/joah warehosue.png';
+import LoadingOverlay from './LoadingOverlay';
 import elephantMascot from '../assets/elephant_perfect_transparent_v2 (1).gif';
 import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
@@ -108,51 +109,10 @@ const Login = ({ onLogin }) => {
     return (
         <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white dark:bg-slate-950 font-inter relative overflow-hidden bg-blueprint-grid">
             {/* 🐘 Elephant Mascot Loading Overlay */}
-            {isLoading && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center mascot-overlay">
-                    {/* Backdrop blur layer — Dark Glassmorphism */}
-                    <div className="absolute inset-0 backdrop-blur-3xl bg-slate-950/60" style={{ backdropFilter: 'blur(40px) saturate(150%)' }} />
-
-                    {/* Decorative background orbs */}
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-orange-200/30 dark:bg-orange-500/10 blur-[80px] animate-pulse-slow" />
-                        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-blue-200/30 dark:bg-blue-500/10 blur-[60px] animate-pulse-slow" style={{ animationDelay: '1s' }} />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-orange-100/20 dark:bg-orange-900/10 blur-[100px]" />
-                    </div>
-
-                    {/* Content */}
-                    <div className="relative z-10 flex flex-col items-center gap-6 animate-fade-in-up">
-                        {/* Elephant GIF with glow */}
-                        <div className="mascot-bounce mascot-glow">
-                            <img
-                                src={elephantMascot}
-                                alt="Loading Mascot"
-                                className="w-44 h-44 md:w-56 md:h-56 object-contain"
-                            />
-                        </div>
-
-                        {/* Loading Text */}
-                        <div className="text-center space-y-2">
-                            <h3 className="text-xl md:text-2xl font-black text-white tracking-tight">
-                                {isRegistering ? 'ກຳລັງລົງທະບຽນ' : 'ກຳລັງເຂົ້າສູ່ລະບົບ'}
-                                <span className="loading-dots inline-flex ml-1">
-                                    <span className="text-joah-orange text-3xl leading-none">.</span>
-                                    <span className="text-joah-orange text-3xl leading-none">.</span>
-                                    <span className="text-joah-orange text-3xl leading-none">.</span>
-                                </span>
-                            </h3>
-                            <p className="text-sm text-slate-400 font-bold">
-                                JOAH Warehouse System
-                            </p>
-                        </div>
-
-                        {/* Progress wave bar */}
-                        <div className="w-48 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                            <div className="h-full w-full rounded-full progress-wave" />
-                        </div>
-                    </div>
-                </div>
-            )}
+            <LoadingOverlay
+                isVisible={isLoading}
+                message={isRegistering ? 'ກຳລັງລົງທະບຽນ' : 'ກຳລັງເຂົ້າສູ່ລະບົບ'}
+            />
             {/* === LEFT SIDE: Image Section === */}
             <div className="hidden lg:flex lg:w-[58%] relative overflow-hidden bg-slate-100">
                 <img
