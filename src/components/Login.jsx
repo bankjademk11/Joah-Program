@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../assets/Joah.jpeg';
 import joahWarehouseImg from '../assets/joah warehosue.png';
+import elephantMascot from '../assets/elephant_perfect_transparent_v2 (1).gif';
 import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
@@ -33,17 +34,21 @@ const Login = ({ onLogin }) => {
         setError('');
 
         try {
-            const { error: regError } = await supabase
-                .from('employees')
-                .insert([{
-                    employee_id: regEmployeeId.trim().toUpperCase(),
-                    password: regPassword, // In a real app, hash this!
-                    name: regEmployeeId.trim(), // Placeholder for name, user can edit later
-                    role: 'staff',
-                    workplace: regWorkplace
-                }]);
+            // Run API call + minimum 4s delay in parallel
+            const [result] = await Promise.all([
+                supabase
+                    .from('employees')
+                    .insert([{
+                        employee_id: regEmployeeId.trim().toUpperCase(),
+                        password: regPassword,
+                        name: regEmployeeId.trim(),
+                        role: 'staff',
+                        workplace: regWorkplace
+                    }]),
+                new Promise(resolve => setTimeout(resolve, 4000))
+            ]);
 
-            if (regError) throw regError;
+            if (result.error) throw result.error;
 
             alert('✅ ລົງທະບຽນສຳເລັດ! ສາມາດເຂົ້າສູ່ລະບົບໄດ້ທັນທີ.');
             setIsRegistering(false);
@@ -61,17 +66,21 @@ const Login = ({ onLogin }) => {
         setError('');
 
         if (!password || password.trim() === '') {
-            setError('ກະລຸນາໃສ່ລະຫັດຜ່ານ');
+            setError('ກະລຸນາໃສ່ລະຫັດຜ່ານ ');
             setIsLoading(false);
             return;
         }
 
         try {
-            const { data: employee, error: dbError } = await supabase
-                .from('employees')
-                .select('*')
-                .ilike('employee_id', employeeId.trim())
-                .maybeSingle(); // Use maybeSingle to avoid 406/unhandled errors
+            // Run API call + minimum 4s delay in parallel
+            const [{ data: employee, error: dbError }] = await Promise.all([
+                supabase
+                    .from('employees')
+                    .select('*')
+                    .ilike('employee_id', employeeId.trim())
+                    .maybeSingle(),
+                new Promise(resolve => setTimeout(resolve, 4000))
+            ]);
 
             if (dbError || !employee) {
                 throw new Error('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
@@ -97,7 +106,53 @@ const Login = ({ onLogin }) => {
     };
 
     return (
-        <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white dark:bg-slate-950 font-inter">
+        <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white dark:bg-slate-950 font-inter relative overflow-hidden bg-blueprint-grid">
+            {/* 🐘 Elephant Mascot Loading Overlay */}
+            {isLoading && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center mascot-overlay">
+                    {/* Backdrop blur layer — Dark Glassmorphism */}
+                    <div className="absolute inset-0 backdrop-blur-3xl bg-slate-950/60" style={{ backdropFilter: 'blur(40px) saturate(150%)' }} />
+
+                    {/* Decorative background orbs */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-orange-200/30 dark:bg-orange-500/10 blur-[80px] animate-pulse-slow" />
+                        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-blue-200/30 dark:bg-blue-500/10 blur-[60px] animate-pulse-slow" style={{ animationDelay: '1s' }} />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-orange-100/20 dark:bg-orange-900/10 blur-[100px]" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col items-center gap-6 animate-fade-in-up">
+                        {/* Elephant GIF with glow */}
+                        <div className="mascot-bounce mascot-glow">
+                            <img
+                                src={elephantMascot}
+                                alt="Loading Mascot"
+                                className="w-44 h-44 md:w-56 md:h-56 object-contain"
+                            />
+                        </div>
+
+                        {/* Loading Text */}
+                        <div className="text-center space-y-2">
+                            <h3 className="text-xl md:text-2xl font-black text-white tracking-tight">
+                                {isRegistering ? 'ກຳລັງລົງທະບຽນ' : 'ກຳລັງເຂົ້າສູ່ລະບົບ'}
+                                <span className="loading-dots inline-flex ml-1">
+                                    <span className="text-joah-orange text-3xl leading-none">.</span>
+                                    <span className="text-joah-orange text-3xl leading-none">.</span>
+                                    <span className="text-joah-orange text-3xl leading-none">.</span>
+                                </span>
+                            </h3>
+                            <p className="text-sm text-slate-400 font-bold">
+                                JOAH Warehouse System
+                            </p>
+                        </div>
+
+                        {/* Progress wave bar */}
+                        <div className="w-48 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            <div className="h-full w-full rounded-full progress-wave" />
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* === LEFT SIDE: Image Section === */}
             <div className="hidden lg:flex lg:w-[58%] relative overflow-hidden bg-slate-100">
                 <img
@@ -130,10 +185,10 @@ const Login = ({ onLogin }) => {
 
             {/* === RIGHT SIDE: Form Section === */}
             <div className="flex-1 flex items-center justify-center p-8 md:p-16 lg:px-20 relative overflow-hidden">
-                {/* Subtle Background Elements for depth */}
-                <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
-                    <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-orange-100 dark:bg-orange-950/20 rounded-full blur-[120px]"></div>
-                    <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100 dark:bg-blue-950/20 rounded-full blur-[120px]"></div>
+                {/* Background Decor Blobs */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-100/40 dark:bg-orange-950/20 blur-[120px] animate-blob-pulse" />
+                    <div className="absolute bottom-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full bg-blue-100/30 dark:bg-blue-950/20 blur-[100px] animate-blob-pulse" style={{ animationDelay: '2s' }} />
                 </div>
 
                 <div className="w-full max-w-md relative z-10 animate-fade-in-up">

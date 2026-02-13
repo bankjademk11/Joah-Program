@@ -28,6 +28,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/MasterAudit';
 import ProductManager from './components/ProductManager';
 import Footer from './components/Footer';
+import RubikNetworkParticles from './components/RubikNetworkParticles';
 
 
 function AppContent() {
@@ -62,6 +63,7 @@ function AppContent() {
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
+  const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
 
   // --- Realtime State ---
   const [realtimeStatus, setRealtimeStatus] = useState('disconnected'); // 'connected', 'disconnected', 'connecting'
@@ -72,9 +74,12 @@ function AppContent() {
   const isRefreshingRef = useRef(false);
 
   // Filter Results based on Location
-  const filteredResults = locationFilter
-    ? validationResults.filter(r => r.rackLocation === locationFilter)
-    : validationResults;
+  // Filter Results based on Location and Zero Qty
+  const filteredResults = validationResults.filter(r => {
+    const matchesLocation = locationFilter ? r.rackLocation === locationFilter : true;
+    const matchesHideZero = hideZeroQty ? Number(r.qty) !== 0 : true;
+    return matchesLocation && matchesHideZero;
+  });
 
   // Recalculate Stats based on Filtered Results (Dynamic Dashboard)
   const dashboardStats = {
@@ -513,143 +518,149 @@ function AppContent() {
         {/* Main Content */}
         <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center">
           {step === 'upload' && (
-            <div className="max-w-5xl w-full animate-fade-in-up flex flex-col items-center">
-              <div className="text-center mb-10 max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
-                  <Sparkles size={14} className="animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
-                </div>
-                <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
-                  {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
-                </h1>
-                <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                  {t('home.description')}
-                </p>
-
-                {/* Admin Toggle Button (Only for back store or admin) */}
-                {user?.workplace !== 'front' && (
-                  <div className="mt-8">
-                    <button
-                      onClick={() => setShowAdminMenu(!showAdminMenu)}
-                      className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
-                        ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                    >
-                      <ShieldCheck size={18} />
-                      <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
-                    </button>
-                  </div>
-                )}
+            <div className="max-w-5xl w-full animate-fade-in-up flex flex-col items-center relative">
+              {/* Rubik Network Particles Background */}
+              <div className="absolute inset-0 -inset-x-[50vw] -inset-y-32 overflow-hidden" style={{ zIndex: 0 }}>
+                <RubikNetworkParticles />
               </div>
-
-              <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
-                {/* Always show: File Upload (only if admin) */}
-                {showAdminMenu && <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />}
-
-                {/* Cloud Database (Hidden for Front Store) */}
-                {user?.workplace !== 'front' && (
-                  <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
-                    }`}>
-                    <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                      <DBIcon size={32} strokeWidth={2.5} />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
-                    </div>
-                    <button
-                      onClick={handleDatabaseLoad}
-                      disabled={isProcessing}
-                      className="w-full btn-primary mt-2 group py-4"
-                    >
-                      {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
-                      <span>{t('home.continueWithCloud')}</span>
-                    </button>
+              <div className="relative" style={{ zIndex: 1 }}>
+                <div className="text-center mb-10 max-w-2xl">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
+                    <Sparkles size={14} className="animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
                   </div>
-                )}
+                  <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
+                    {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
+                  </h1>
+                  <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                    {t('home.description')}
+                  </p>
 
-                {/* Store Request Card (Only for Front Store or when not in Admin Menu) */}
-                {!showAdminMenu && user?.workplace !== 'back' && (
-                  <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 max-w-md mx-auto">
-                    <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                      <ShieldCheck size={32} strokeWidth={2.5} />
+                  {/* Admin Toggle Button (Only for back store or admin) */}
+                  {user?.workplace !== 'front' && (
+                    <div className="mt-8">
+                      <button
+                        onClick={() => setShowAdminMenu(!showAdminMenu)}
+                        className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
+                          ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                      >
+                        <ShieldCheck size={18} />
+                        <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
+                      </button>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
-                    </div>
-                    <button
-                      onClick={() => setStep('store-request')}
-                      className="w-full btn-primary mt-2 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30"
-                    >
-                      <Play size={18} />
-                      <span>{t('home.enterStore')}</span>
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Admin only: Product Management */}
-                {showAdminMenu && (
-                  <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500">
-                    <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                      <LayoutDashboard size={32} strokeWidth={2.5} />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
-                    </div>
-                    <button
-                      onClick={() => setStep('product-manager')}
-                      className="w-full btn-primary mt-2 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
-                    >
-                      <LayoutDashboard size={18} />
-                      <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
-                    </button>
-                  </div>
-                )}
+                <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
+                  {/* Always show: File Upload (only if admin) */}
+                  {showAdminMenu && <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />}
 
-                {/* Admin only: Master Data Audit */}
-                {showAdminMenu && (
-                  <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500">
-                    <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                      <Database size={32} strokeWidth={2.5} />
+                  {/* Cloud Database (Hidden for Front Store) */}
+                  {user?.workplace !== 'front' && (
+                    <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
+                      }`}>
+                      <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <DBIcon size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
+                      </div>
+                      <button
+                        onClick={handleDatabaseLoad}
+                        disabled={isProcessing}
+                        className="w-full btn-primary mt-2 group py-4"
+                      >
+                        {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
+                        <span>{t('home.continueWithCloud')}</span>
+                      </button>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
-                    </div>
-                    <button
-                      onClick={() => setStep('master-audit')}
-                      className="w-full btn-primary mt-2 group py-4 bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
-                    >
-                      <Database size={18} />
-                      <span>ກວດສອບ Master Data</span>
-                    </button>
-                  </div>
-                )}
+                  )}
 
-                {/* Admin only: Odoo Sync Card */}
-                {showAdminMenu && (
-                  <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative">
-                    <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                      <RotateCw size={32} strokeWidth={2.5} />
+                  {/* Store Request Card (Only for Front Store or when not in Admin Menu) */}
+                  {!showAdminMenu && user?.workplace !== 'back' && (
+                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <ShieldCheck size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
+                      </div>
+                      <button
+                        onClick={() => setStep('store-request')}
+                        className="w-full btn-primary mt-2 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30"
+                      >
+                        <Play size={18} />
+                        <span>{t('home.enterStore')}</span>
+                      </button>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
-                    </div>
+                  )}
 
-                    <button
-                      onClick={() => setStep('odoo-monitor')}
-                      disabled={isProcessing}
-                      className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
-                    >
-                      <LayoutDashboard size={18} />
-                      <span>Open Monitor</span>
-                    </button>
-                  </div>
-                )}
+                  {/* Admin only: Product Management */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500">
+                      <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <LayoutDashboard size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
+                      </div>
+                      <button
+                        onClick={() => setStep('product-manager')}
+                        className="w-full btn-primary mt-2 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
+                      >
+                        <LayoutDashboard size={18} />
+                        <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Admin only: Master Data Audit */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500">
+                      <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <Database size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
+                      </div>
+                      <button
+                        onClick={() => setStep('master-audit')}
+                        className="w-full btn-primary mt-2 group py-4 bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
+                      >
+                        <Database size={18} />
+                        <span>ກວດສອບ Master Data</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Admin only: Odoo Sync Card */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative">
+                      <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <RotateCw size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                      </div>
+
+                      <button
+                        onClick={() => setStep('odoo-monitor')}
+                        disabled={isProcessing}
+                        className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
+                      >
+                        <LayoutDashboard size={18} />
+                        <span>Open Monitor</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -699,7 +710,13 @@ function AppContent() {
 
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
-              <Dashboard stats={dashboardStats} activeFilter={filterStatus} onFilterChange={setFilterStatus} />
+              <Dashboard
+                stats={dashboardStats}
+                activeFilter={filterStatus}
+                onFilterChange={setFilterStatus}
+                hideZeroQty={hideZeroQty}
+                onHideZeroQtyChange={setHideZeroQty}
+              />
 
               {/* Realtime Status & Notification Banner */}
               {dbSource === 'supabase' && (

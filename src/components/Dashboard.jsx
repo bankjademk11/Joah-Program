@@ -1,7 +1,7 @@
-import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen } from 'lucide-react';
+import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 
-const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
+const Dashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHideZeroQtyChange }) => {
     const [isZeroMode, setIsZeroMode] = useState(true);
 
     const cards = [
@@ -78,9 +78,28 @@ const Dashboard = ({ stats, activeFilter, onFilterChange }) => {
                         <p className="text-xs font-medium text-slate-400 dark:text-slate-500">Validation Statistics</p>
                     </div>
                 </div>
-                <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Live Data</span>
+                <div className="flex items-center gap-3">
+                    {/* Zero Qty Toggle */}
+                    {onHideZeroQtyChange && (
+                        <button
+                            onClick={() => onHideZeroQtyChange(!hideZeroQty)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all hover:shadow-md active:scale-95 ${hideZeroQty
+                                    ? 'bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400 shadow-rose-500/10'
+                                    : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                                }`}
+                            title={hideZeroQty ? "Show items with 0 Qty" : "Hide items with 0 Qty"}
+                        >
+                            {hideZeroQty ? <EyeOff size={16} /> : <Eye size={16} />}
+                            <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">
+                                {hideZeroQty ? 'Hide Zero Qty (ON)' : 'Hide Zero Qty (OFF)'}
+                            </span>
+                        </button>
+                    )}
+
+                    <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Live</span>
+                    </div>
                 </div>
             </div>
 

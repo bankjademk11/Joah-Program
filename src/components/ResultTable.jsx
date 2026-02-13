@@ -35,6 +35,7 @@ const ResultTable = ({
     const [editCat1, setEditCat1] = useState('');
     const [editCat2, setEditCat2] = useState('');
     const [editReason, setEditReason] = useState('');
+    const [mergeAmount, setMergeAmount] = useState(''); // New state for pending merge amount
     const [employeeName, setEmployeeName] = useState(localStorage.getItem('joah_employee_name') || '');
     const [showExportDropdown, setShowExportDropdown] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
@@ -407,7 +408,8 @@ const ResultTable = ({
 
         setIsUpdating(true);
         const now = new Date().toISOString();
-        const newQtyValue = Number(editQty);
+        // Calculate the final quantity: current edited qty + the pending merge amount
+        const newQtyValue = Number(editQty) + (Number(mergeAmount) || 0);
         const oldQtyValue = selectedRow.qty || 0;
 
         if (onUpdateRowQty) {
@@ -505,6 +507,7 @@ const ResultTable = ({
             success(t('results.saveSuccess'));
             setSelectedRow(null);
             setEditReason(''); // Reset reason
+            setMergeAmount(''); // Reset merge amount after save
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -1223,6 +1226,7 @@ const ResultTable = ({
                                                         setEditLocation(row.rackLocation || '');
                                                         setEditCat1(row.category1 || '');
                                                         setEditCat2(row.category2 || '');
+                                                        setMergeAmount(''); // Reset merge amount when opening edit
                                                     }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
                                                         <Edit2 size={18} />
                                                     </button>
@@ -1295,10 +1299,9 @@ const ResultTable = ({
                     onClose={() => setDiagnosticRow(null)}
                     onEdit={(row) => {
                         setSelectedRow(row);
-                        setEditQty(row.qty || 0);
-                        setEditLocation(row.rackLocation || '');
                         setEditCat1(row.category1 || '');
                         setEditCat2(row.category2 || '');
+                        setMergeAmount(''); // Reset merge amount when opening edit
                     }}
                     getStatusHint={getStatusHint}
                 />
@@ -1323,6 +1326,8 @@ const ResultTable = ({
                     isUpdating={isUpdating}
                     handleUpdate={handleUpdateMasterQty}
                     results={results}
+                    mergeAmount={mergeAmount}
+                    setMergeAmount={setMergeAmount}
                     t={t}
                 />
 

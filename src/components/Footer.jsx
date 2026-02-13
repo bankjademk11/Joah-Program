@@ -21,7 +21,7 @@ const Footer = () => {
                 {/* Center: Credits */}
                 <div className="flex flex-col items-center md:items-start gap-0.5">
                     <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center md:text-left">
-                        Developed by <span className="text-slate-600 dark:text-slate-300 font-black">JOAH Santisouk Laxayphone</span>
+                        Developed by <span className="text-slate-600 dark:text-slate-300 font-black">JOAH ❤️ Santisouk Laxayphone</span>
                     </p>
                 </div>
 
