@@ -29,6 +29,7 @@ const EditPanel = ({
     const [viewingCategories, setViewingCategories] = useState(false);
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null);
     const dropdownRef = useRef(null);
+    const [locationSearch, setLocationSearch] = useState('');
 
     // --- Helpers ---
     const getAllLocations = () => {
@@ -258,127 +259,141 @@ const EditPanel = ({
 
                                     {/* CUSTOM DROPDOWN MENU */}
                                     {dropdownOpen && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col">
+                                            {/* Search Input */}
+                                            <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-20 flex-shrink-0">
+                                                <input
+                                                    type="text"
+                                                    value={locationSearch}
+                                                    onChange={(e) => setLocationSearch(e.target.value)}
+                                                    placeholder="🔍 ຄົ້ນຫາ Location..."
+                                                    className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
+                                                    autoFocus
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto flex-1">
 
-                                            {/* State 1: Custom Mode - Select Category (Only if VIEWING CATEGORIES) */}
-                                            {customMode && viewingCategories && (
-                                                <>
-                                                    <div
-                                                        className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 sticky top-0 z-10 border-b border-indigo-100 flex items-center gap-2"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setViewingCategories(false); // Back to All Locations
-                                                        }}
-                                                    >
-                                                        <ChevronDown size={14} className="rotate-90" />
-                                                        {t('quickAdd.backToAll')}
-                                                    </div>
-
-                                                    <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
-                                                        {t('quickAdd.selectCategoryFilter')}
-                                                    </div>
-
-                                                    {Object.keys(CATEGORY_RACK_RULES).map(cat => (
+                                                {/* State 1: Custom Mode - Select Category (Only if VIEWING CATEGORIES) */}
+                                                {customMode && viewingCategories && (
+                                                    <>
                                                         <div
-                                                            key={cat}
-                                                            className="px-3 py-2.5 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 group transition-colors"
+                                                            className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 sticky top-0 z-10 border-b border-indigo-100 flex items-center gap-2"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setSelectedCategory(cat);
-                                                                setViewingCategories(false); // Switch to Location View
-                                                                setEditLocation(''); // Clear location when changing category
+                                                                setViewingCategories(false); // Back to All Locations
                                                             }}
                                                         >
-                                                            <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400">📦 {cat}</span>
-                                                            <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-indigo-500" />
+                                                            <ChevronDown size={14} className="rotate-90" />
+                                                            {t('quickAdd.backToAll')}
                                                         </div>
-                                                    ))}
-                                                </>
-                                            )}
 
-                                            {/* State 2: Select Location (Normal, or Custom All, or Custom Filtered) */}
-                                            {(!customMode || (customMode && !viewingCategories)) && (
-                                                <>
-                                                    {/* Custom Mode Header Actions */}
-                                                    {customMode && (
-                                                        <div className="sticky top-0 z-10">
-                                                            {/* If Filtered by Category -> Show Back to All */}
-                                                            {selectedCategory && (
-                                                                <div
-                                                                    className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 border-b border-rose-100 flex items-center gap-2"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedCategory(''); // Clear Filter
-                                                                    }}
-                                                                >
-                                                                    <X size={12} /> {t('quickAdd.clearFilter')} ({selectedCategory})
-                                                                </div>
-                                                            )}
+                                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
+                                                            {t('quickAdd.selectCategoryFilter')}
+                                                        </div>
 
-                                                            {/* Filter Button (To Category View) */}
+                                                        {Object.keys(CATEGORY_RACK_RULES).map(cat => (
                                                             <div
-                                                                className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border-b border-indigo-100 flex items-center justify-between"
+                                                                key={cat}
+                                                                className="px-3 py-2.5 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 group transition-colors"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    setViewingCategories(true); // Switch to Category View
+                                                                    setSelectedCategory(cat);
+                                                                    setViewingCategories(false); // Switch to Location View
+                                                                    setEditLocation(''); // Clear location when changing category
                                                                 }}
                                                             >
-                                                                <span className="flex items-center gap-2"><Database size={12} /> {selectedCategory ? t('quickAdd.changeCategory') : t('quickAdd.customSelf')}</span>
-                                                                <ChevronRight size={12} />
+                                                                <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400">📦 {cat}</span>
+                                                                <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-indigo-500" />
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        ))}
+                                                    </>
+                                                )}
 
-                                                    {!customMode && (
-                                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b dark:border-slate-700">
-                                                            {t('quickAdd.suggestedLocations')}
-                                                        </div>
-                                                    )}
+                                                {/* State 2: Select Location (Normal, or Custom All, or Custom Filtered) */}
+                                                {(!customMode || (customMode && !viewingCategories)) && (
+                                                    <>
+                                                        {/* Custom Mode Header Actions */}
+                                                        {customMode && (
+                                                            <div className="sticky top-0 z-10">
+                                                                {/* If Filtered by Category -> Show Back to All */}
+                                                                {selectedCategory && (
+                                                                    <div
+                                                                        className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 border-b border-rose-100 flex items-center gap-2"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedCategory(''); // Clear Filter
+                                                                        }}
+                                                                    >
+                                                                        <X size={12} /> {t('quickAdd.clearFilter')} ({selectedCategory})
+                                                                    </div>
+                                                                )}
 
-                                                    {currentSuggestions.length > 0 ? (
-                                                        currentSuggestions.map(loc => {
-                                                            const count = inspectorData.filter(r => r.rackLocation === loc).length;
-                                                            return (
+                                                                {/* Filter Button (To Category View) */}
                                                                 <div
-                                                                    key={loc}
-                                                                    className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${editLocation === loc ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-                                                                    onClick={() => {
-                                                                        setEditLocation(loc);
-                                                                        setDropdownOpen(false); // Close after selection
+                                                                    className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border-b border-indigo-100 flex items-center justify-between"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setViewingCategories(true); // Switch to Category View
                                                                     }}
                                                                 >
-                                                                    <span>{loc}</span>
-                                                                    {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                    <span className="flex items-center gap-2"><Database size={12} /> {selectedCategory ? t('quickAdd.changeCategory') : t('quickAdd.customSelf')}</span>
+                                                                    <ChevronRight size={12} />
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+
+
+                                                        {(() => {
+                                                            const filtered = currentSuggestions.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
+                                                            return filtered.length > 0 ? (
+                                                                filtered.map(loc => {
+                                                                    const count = inspectorData.filter(r => r.rackLocation === loc).length;
+                                                                    return (
+                                                                        <div
+                                                                            key={loc}
+                                                                            className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${editLocation === loc ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                            onClick={() => {
+                                                                                setEditLocation(loc);
+                                                                                setDropdownOpen(false);
+                                                                                setLocationSearch('');
+                                                                            }}
+                                                                        >
+                                                                            <span>{loc}</span>
+                                                                            {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
+                                                                    {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}<br />
+                                                                    <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
                                                                 </div>
                                                             );
-                                                        })
-                                                    ) : (
-                                                        <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
-                                                            {t('quickAdd.noLocationsFound')}<br />
-                                                            <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
-                                                        </div>
-                                                    )}
+                                                        })()}
 
-                                                    {/* Start Custom Mode Option (Only in Normal Mode) */}
-                                                    {!customMode && (
-                                                        <div
-                                                            className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setCustomMode(true);
-                                                                setSelectedCategory('');
-                                                                setViewingCategories(false); // Default to ALL LOCATIONS view
-                                                                setDropdownOpen(true);
-                                                            }}
-                                                        >
-                                                            <div className="px-3 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 font-medium">
-                                                                <CornerDownRight size={14} />
-                                                                {t('quickAdd.customOption')}
+                                                        {/* Start Custom Mode Option (Only in Normal Mode) */}
+                                                        {!customMode && (
+                                                            <div
+                                                                className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setCustomMode(true);
+                                                                    setSelectedCategory('');
+                                                                    setViewingCategories(false); // Default to ALL LOCATIONS view
+                                                                    setDropdownOpen(true);
+                                                                }}
+                                                            >
+                                                                <div className="px-3 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 font-medium">
+                                                                    <CornerDownRight size={14} />
+                                                                    {t('quickAdd.customOption')}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
