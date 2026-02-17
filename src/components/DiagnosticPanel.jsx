@@ -166,10 +166,17 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໂຊນທີຄວນຢູ່</p>
                                     <p className="text-base font-black text-emerald-600 dark:text-emerald-400">
                                         {diagnosticRow.status === 'passed'
-                                            ? diagnosticRow.rackLocation
-                                            : (diagnosticRow.reason?.includes('ควรแม่น')
-                                                ? diagnosticRow.reason.split('ควรแม่น ')[1].split(')')[0]
-                                                : '-')}
+                                            ? (diagnosticRow.rackLocation || '-')
+                                            : (hint && hint.fixSteps && hint.fixSteps.length > 0
+                                                ? (hint.fixSteps.reduce(function (found, step) {
+                                                    if (found) return found;
+                                                    if (!step) return null;
+                                                    var idx = step.indexOf('Rack:');
+                                                    if (idx !== -1) return step.substring(idx + 5).trim();
+                                                    return null;
+                                                }, null) || '-')
+                                                : '-')
+                                        }
                                     </p>
                                 </div>
                             </div>

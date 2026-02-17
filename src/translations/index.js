@@ -191,7 +191,7 @@ const translations = {
         // Reasons Options (Shared)
         reasons: {
             newStock: 'ສິນຄ້າເຂົ້າໃໝ່ (New Stock In)',
-            stockOut: 'ຈ່າຍສິນຄ້າອອກ (Stock Out)',
+            stockOut: 'ຈ່າຍສິນຄ້າອອກ (Goods Issued Out)',
             actualCount: 'ອ້າງອີງຈາກສິນຄ້າຕົວຈິງ (Based on Actual Count)',
             noSpace: 'ບໍ່ມີທີ່ຈັດເກັບ (No Storage Space)',
             actualLocation: 'ອ້າງອີງບ່ອນຈັດເກັບຈາກຂໍ້ມູນຈິງ (Based on Actual Location)',
@@ -467,7 +467,7 @@ const translations = {
         // Reasons Options (Shared)
         reasons: {
             newStock: 'New Stock In',
-            stockOut: 'Stock Out',
+            stockOut: 'Goods Issued Out',
             actualCount: 'Based on Actual Count',
             noSpace: 'No Storage Space',
             actualLocation: 'Based on Actual Location',
