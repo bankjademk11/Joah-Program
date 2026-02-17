@@ -164,20 +164,136 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                                 </div>
                                 <div className="pt-3 border-t border-emerald-100 dark:border-emerald-900/20">
                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໂຊນທີຄວນຢູ່</p>
-                                    <p className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                                        {diagnosticRow.status === 'passed'
-                                            ? (diagnosticRow.rackLocation || '-')
-                                            : (hint && hint.fixSteps && hint.fixSteps.length > 0
-                                                ? (hint.fixSteps.reduce(function (found, step) {
-                                                    if (found) return found;
+                                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 flex flex-wrap gap-2">
+                                        {(() => {
+                                            let rackText = '-';
+                                            if (diagnosticRow.status === 'passed') {
+                                                rackText = diagnosticRow.rackLocation || '-';
+                                            } else if (hint && hint.fixSteps && hint.fixSteps.length > 0) {
+                                                const found = hint.fixSteps.reduce((acc, step) => {
+                                                    if (acc) return acc;
                                                     if (!step) return null;
-                                                    var idx = step.indexOf('Rack:');
+                                                    const idx = step.indexOf('Rack:');
                                                     if (idx !== -1) return step.substring(idx + 5).trim();
                                                     return null;
-                                                }, null) || '-')
-                                                : '-')
-                                        }
-                                    </p>
+                                                }, null);
+                                                if (found) rackText = found;
+                                            }
+
+                                            if (rackText === '-') return '-';
+
+                                            // --- Smart Merge Logic ---
+                                            try {
+                                                // Check for Lao/Thai characters or complex text
+                                                // If found, DO NOT re-sort or merge aggressively to preserve context (e.g. "E 5/7/8")
+                                                const hasLaoOrThai = /[\u0E80-\u0EFF\u0E00-\u0E7F]/.test(rackText);
+
+                                                if (hasLaoOrThai) {
+                                                    // Simple mode: Just split by | for major separators, keep the rest distinct
+                                                    // This fixes: "E01-E04 ຫຼື ໂລພື້ນ E 5/7/8" staying together
+                                                    const parts = rackText.split('|').map(s => s.trim()).filter(Boolean);
+
+                                                    return parts.map((opt, i) => (
+                                                        <span key={i} className="px-2 py-1 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                                                            {opt}
+                                                        </span>
+                                                    ));
+                                                }
+
+                                                // Clean mode (Standard Racks): Apply Smart Merge & Sort
+                                                // 1. Split by delimiters |, /, , (BUT NOT SPACE to avoid breaking sentences/Lao text)
+                                                // Clean up multiple spaces first
+                                                const cleanText = rackText.replace(/\s+/g, ' ').trim();
+                                                const rawParts = cleanText.split(/[|/,]+/).map(s => s.trim()).filter(Boolean);
+
+                                                let standardLocs = new Set();
+                                                let otherText = new Set(); // Keep non-standard text separate
+
+                                                rawParts.forEach(part => {
+                                                    // Check if it looks like a rack range (A01-A05)
+                                                    const rangeMatch = part.match(/^([A-Z]+)(\d+)-([A-Z]+)(\d+)$/);
+                                                    // Check if it looks like a single rack (A01, B-02, etc) - looser check
+                                                    const singleMatch = part.match(/^[A-Z0-9\-]+$/);
+
+                                                    if (rangeMatch && rangeMatch[1] === rangeMatch[3]) {
+                                                        // Expand Range
+                                                        const prefix = rangeMatch[1];
+                                                        const start = parseInt(rangeMatch[2]);
+                                                        const end = parseInt(rangeMatch[4]);
+                                                        const length = rangeMatch[2].length;
+
+                                                        if (end >= start && (end - start) < 100) {
+                                                            for (let i = start; i <= end; i++) {
+                                                                standardLocs.add(`${prefix}${i.toString().padStart(length, '0')}`);
+                                                            }
+                                                        } else {
+                                                            otherText.add(part);
+                                                        }
+                                                    } else if (singleMatch) {
+                                                        // It's a code-like string (e.g. A01, 5, 7, E01) - Add to be sorted
+                                                        standardLocs.add(part);
+                                                    } else {
+                                                        // It's descriptive text (e.g. ໂລພື້ນ, ຫຼັກ, Zone B) - Keep valid
+                                                        otherText.add(part);
+                                                    }
+                                                });
+
+                                                // 3. Sort standard locations
+                                                const sortedLocs = Array.from(standardLocs).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+                                                // 4. Re-collapse standard locations
+                                                const collapsed = [];
+                                                if (sortedLocs.length > 0) {
+                                                    let rangeStart = sortedLocs[0];
+                                                    let prev = sortedLocs[0];
+
+                                                    for (let i = 1; i < sortedLocs.length; i++) {
+                                                        const curr = sortedLocs[i];
+                                                        let isSeq = false;
+                                                        const matchPrev = prev.match(/^([A-Z]+)(\d+)$/);
+                                                        const matchCurr = curr.match(/^([A-Z]+)(\d+)$/);
+
+                                                        if (matchPrev && matchCurr && matchPrev[1] === matchCurr[1]) {
+                                                            const numPrev = parseInt(matchPrev[2]);
+                                                            const numCurr = parseInt(matchCurr[2]);
+                                                            if (numCurr === numPrev + 1) isSeq = true;
+                                                        }
+
+                                                        if (isSeq) {
+                                                            prev = curr;
+                                                        } else {
+                                                            if (rangeStart === prev) collapsed.push(rangeStart);
+                                                            else collapsed.push(`${rangeStart}-${prev}`);
+                                                            rangeStart = curr;
+                                                            prev = curr;
+                                                        }
+                                                    }
+                                                    if (rangeStart === prev) collapsed.push(rangeStart);
+                                                    else collapsed.push(`${rangeStart}-${prev}`);
+                                                }
+
+                                                // Combine with other text
+                                                const finalDisplay = [...collapsed, ...Array.from(otherText)];
+
+                                                // Return Display
+                                                return finalDisplay.map((opt, i) => (
+                                                    <span key={i} className="px-2 py-1 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                                                        {opt}
+                                                    </span>
+                                                ));
+
+                                            } catch (e) {
+                                                console.error("Rack parse error", e);
+                                                // Fallback to simple split if error
+                                                const options = rackText.split(/[|,]/).map(s => s.trim()).filter(Boolean);
+                                                return options.map((opt, i) => (
+                                                    <span key={i} className="px-2 py-1 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-200 dark:border-emerald-800">
+                                                        {opt}
+                                                    </span>
+                                                ));
+                                            }
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                         </div>

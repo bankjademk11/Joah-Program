@@ -100,8 +100,17 @@ const EditPanel = ({
         if (!selectedRow) {
             setSelectedReasonOption('');
             setOtherReasonText('');
+            setDropdownOpen(false);
+            setLocationSearch('');
         }
     }, [selectedRow]);
+
+    // Reset search when dropdown closes
+    useEffect(() => {
+        if (!dropdownOpen) {
+            setLocationSearch('');
+        }
+    }, [dropdownOpen]);
 
     if (!selectedRow) return null;
 

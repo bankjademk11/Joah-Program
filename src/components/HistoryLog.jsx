@@ -209,20 +209,20 @@ const HistoryLog = ({ onClose }) => {
 
             // Columns
             sheet.columns = [
-                { header: 'ເວລາ', key: 'time', width: 20 },
+                { header: 'ບາໂຄ້ດ', key: 'barcode', width: 15 },
                 { header: 'ປະເພດ', key: 'type', width: 15 },
                 { header: 'ຜູ້ດຳເນີນການ', key: 'user', width: 25 },
-                { header: 'ບາໂຄ້ດ', key: 'barcode', width: 15 },
+                { header: 'ເວລາ', key: 'time', width: 20 },
                 { header: 'ຊື່ສິນຄ້າ', key: 'item', width: 40 },
-                { header: 'ພິກັດເກົ່າ (Old Rack)', key: 'old_rack', width: 15 },  // ✅ New
-                { header: 'ພິກັດໃໝ່ (New Rack)', key: 'new_rack', width: 15 },  // ✅ New
-                { header: 'Category 1 ເກົ່າ', key: 'old_cat1', width: 18 },  // ✅ New
-                { header: 'Category 1 ໃໝ່', key: 'new_cat1', width: 18 },   // ✅ New
-                { header: 'Category 2 ເກົ່າ', key: 'old_cat2', width: 18 },  // ✅ New
-                { header: 'Category 2 ໃໝ່', key: 'new_cat2', width: 18 },   // ✅ New
-                { header: 'ຈໍານວນເກົ່າ', key: 'old', width: 10 },
-                { header: 'ຈໍານວນໃໝ່', key: 'new', width: 10 },
-                { header: 'ປ່ຽນແປງ', key: 'change', width: 10 },
+                { header: 'ພິກັດເກົ່າ (Old Rack)', key: 'old_rack', width: 15 },
+                { header: 'ພິກັດໃໝ່ (New Rack)', key: 'new_rack', width: 15 },
+                { header: 'Category 1 ເກົ່າ', key: 'old_cat1', width: 18 },
+                { header: 'Category 1 ໃໝ່', key: 'new_cat1', width: 18 },
+                { header: 'Category 2 ເກົ່າ', key: 'old_cat2', width: 18 },
+                { header: 'Category 2 ໃໝ່', key: 'new_cat2', width: 18 },
+                { header: 'ຈຳນວນເກົ່າ', key: 'old', width: 10 },
+                { header: 'ຈຳນວນໃຫມ່', key: 'new', width: 10 },
+                { header: 'ປ່ຽນເເປງ', key: 'change', width: 10 },
                 { header: 'ລາຍລະອຽດ/ເຫດຜົນ', key: 'details', width: 30 },
             ];
 

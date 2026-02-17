@@ -46,8 +46,17 @@ const QuickAddPanel = ({
         if (!isOpen) {
             setSelectedReasonOption('');
             setOtherReasonText('');
+            setDropdownOpen(false);
+            setLocationSearch('');
         }
     }, [isOpen]);
+
+    // Reset search when dropdown closes
+    useEffect(() => {
+        if (!dropdownOpen) {
+            setLocationSearch('');
+        }
+    }, [dropdownOpen]);
 
     useEffect(() => {
         if (isOpen && quickAddForm.barcode_no) {
