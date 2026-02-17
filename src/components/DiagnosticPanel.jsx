@@ -130,7 +130,7 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                         {/* Actual Data */}
                         <div className="space-y-3">
                             <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-2 justify-center">
-                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> ข้อมูลที่ตรวจพบ (Actual)
+                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> ຂໍ້ມູນທີຕວດພົບ (Actual)
                             </p>
                             <div className="p-5 rounded-[1.5rem] bg-rose-50/30 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-900/20 space-y-4">
                                 <div>
@@ -151,16 +151,16 @@ const DiagnosticPanel = ({ diagnosticRow, onClose, onEdit, getStatusHint }) => {
                         {/* Master Data */}
                         <div className="space-y-3">
                             <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2 justify-center">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ข้อมูลที่ถูกต้อง (Master)
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ຂໍ້ມູນທີ່ຖືກຕ້ອງ (Master)
                             </p>
                             <div className="p-5 rounded-[1.5rem] bg-emerald-50/30 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-900/20 space-y-4">
                                 <div>
                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">ຫມວດໝູ່ 1</p>
-                                    <p className="text-sm font-black text-slate-800 dark:text-white">{diagnosticRow.masterCategory1 || 'ยังไม่มีข้อมูล'}</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">{diagnosticRow.masterCategory1 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
                                 </div>
                                 <div>
                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">ຫມວດໝູ່ 2</p>
-                                    <p className="text-sm font-black text-slate-800 dark:text-white">{diagnosticRow.masterCategory2 || 'ยังไม่มีข้อมูล'}</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">{diagnosticRow.masterCategory2 || 'ຍັງບໍ່ມີຂໍ້ມູນ'}</p>
                                 </div>
                                 <div className="pt-3 border-t border-emerald-100 dark:border-emerald-900/20">
                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">ໂຊນທີຄວນຢູ່</p>

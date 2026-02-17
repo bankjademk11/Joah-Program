@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
+import LocationInspector from './LocationInspector';
 
 const QuickAddPanel = ({
     isOpen,
@@ -19,10 +20,34 @@ const QuickAddPanel = ({
     setInspectedLocation,
     onAddNewProduct
 }) => {
-    const [customMode, setCustomMode] = React.useState(false);
-    const [selectedCategory, setSelectedCategory] = React.useState('');
+    // Custom Dropdown States
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [customMode, setCustomMode] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [viewingCategories, setViewingCategories] = useState(false); // New state to toggle Category Selection View
+    const [localInspectedLocation, setLocalInspectedLocation] = useState(null); // Local inspector state
+    const dropdownRef = useRef(null);
+    // Reason Logic
+    const [selectedReasonOption, setSelectedReasonOption] = useState('');
+    const [otherReasonText, setOtherReasonText] = useState('');
 
-    // --- Detect if barcode exists in Master Data ---
+    // Sync reason to form
+    useEffect(() => {
+        if (selectedReasonOption === 'Other') {
+            setQuickAddForm(prev => ({ ...prev, remarks: otherReasonText ? `Other: ${otherReasonText}` : 'Other' }));
+        } else {
+            setQuickAddForm(prev => ({ ...prev, remarks: selectedReasonOption }));
+        }
+    }, [selectedReasonOption, otherReasonText, setQuickAddForm]);
+
+    // Reset reason when panel opens/closes
+    useEffect(() => {
+        if (!isOpen) {
+            setSelectedReasonOption('');
+            setOtherReasonText('');
+        }
+    }, [isOpen]);
+
     useEffect(() => {
         if (isOpen && quickAddForm.barcode_no) {
             const barcode = String(quickAddForm.barcode_no).trim();
@@ -47,7 +72,7 @@ const QuickAddPanel = ({
                 setQuickAddForm(prev => ({
                     ...prev,
                     item_name: '',
-                    category_1_actual: '', // Will be set by Location Selection
+                    category_1_actual: '',
                     category_2_actual: '',
                     qty: 0,
                     rack_location: ''
@@ -66,18 +91,46 @@ const QuickAddPanel = ({
         };
     }, [isOpen]);
 
-    // Close on Escape
+    // Close on Escape & Click Outside Logic (For Custom Dropdown)
     useEffect(() => {
         const handleEsc = (e) => {
-            if (e.key === 'Escape' && !isSaving) onClose();
+            if (e.key === 'Escape') {
+                if (dropdownOpen) setDropdownOpen(false);
+                else if (!isSaving) onClose();
+            }
         };
+
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setDropdownOpen(false);
+            }
+        };
+
         if (isOpen) {
             document.addEventListener('keydown', handleEsc);
+            document.addEventListener('mousedown', handleClickOutside);
         }
-        return () => document.removeEventListener('keydown', handleEsc);
-    }, [isOpen, onClose, isSaving]);
+        return () => {
+            document.removeEventListener('keydown', handleEsc);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen, onClose, isSaving, dropdownOpen]);
 
     if (!isOpen) return null;
+
+    // Helper to get ALL locations
+    const getAllLocations = () => {
+        const allLocs = [];
+        Object.keys(CATEGORY_RACK_RULES).forEach(cat => {
+            allLocs.push(...getRackSuggestions(cat));
+        });
+        return [...new Set(allLocs)].sort(); // Unique and Sorted
+    };
+
+    // Helper to get Rack Suggestions based on current mode
+    const currentSuggestions = !customMode
+        ? getRackSuggestions(quickAddForm.category_1_actual || selectedCategory)
+        : (selectedCategory ? getRackSuggestions(selectedCategory) : getAllLocations());
 
     return createPortal(
         <div
@@ -106,335 +159,395 @@ const QuickAddPanel = ({
                 onClick={!isSaving ? onClose : undefined}
             />
 
-            {/* Compact Modal (Matched EditPanel Style) */}
-            <div
-                style={{
-                    position: 'relative',
-                    width: '100%',
-                    maxWidth: '520px',
-                    backgroundColor: 'white',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    maxHeight: '90vh',
-                    overflow: 'hidden',
-                }}
-                className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
-            >
-                {/* Minimal Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-sm">
-                            <Plus size={18} />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">ເພີ່ມຂໍ້ມູນເຂົ້າ Inventory</h3>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        disabled={isSaving}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors disabled:opacity-50"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
+            {/* Container for Side-by-Side Layout */}
+            <div className="relative z-10 flex items-start gap-4 max-h-[90vh]">
 
-                {/* Compact Content */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
-
-                    {/* Warning Banner when NOT found in Master */}
-                    {!isFoundInMaster && quickAddForm.barcode_no && (
-                        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 flex items-center gap-3">
-                            <AlertTriangle className="text-rose-600 dark:text-rose-400 shrink-0" size={18} />
-                            <div>
-                                <h4 className="text-xs font-bold text-rose-700 dark:text-rose-300">⚠️ ບໍ່ພົບໃນ Master Data</h4>
-                                <p className="text-[10px] font-medium text-rose-600 dark:text-rose-400">ກະລຸນາເພີ່ມຂໍ້ມູນໃນ "Product Manager" ກ່ອນ.</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Item Info Input Group */}
-                    <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
-                        <div className="flex justify-between items-center text-xs text-slate-500">
-                            <span>Item Details</span>
-                            {isFoundInMaster && (
-                                <span className="text-emerald-500 font-bold flex items-center gap-1">
-                                    <CheckCircle size={12} /> Master Verified
-                                </span>
-                            )}
-                        </div>
-
-                        {/* Barcode Input */}
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={quickAddForm.barcode_no}
-                                onChange={(e) => setQuickAddForm(prev => ({ ...prev, barcode_no: e.target.value }))}
-                                className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white font-mono outline-none placeholder:text-slate-300"
-                                placeholder="Scan Barcode..."
-                                autoFocus
-                            />
-                            <p className="text-[10px] text-slate-400 mt-1">Barcode</p>
-                        </div>
-
-                        <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
-
-                        {/* Name Input */}
-                        <div>
-                            <input
-                                type="text"
-                                value={quickAddForm.item_name}
-                                readOnly={isFoundInMaster}
-                                disabled={!isFoundInMaster}
-                                onChange={(e) => setQuickAddForm(prev => ({ ...prev, item_name: e.target.value }))}
-                                className={`w-full bg-transparent text-sm font-medium outline-none ${isFoundInMaster ? 'text-slate-600 dark:text-slate-400 cursor-default' : 'text-slate-800 dark:text-white'}`}
-                                placeholder={isFoundInMaster ? "Product Name" : "Enter Product Name..."}
-                            />
-                            <p className="text-[10px] text-slate-400 mt-1">Item Name</p>
-                        </div>
-                    </div>
-
-                    {/* Quantity Section */}
-                    <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
-                        <div className="flex items-center gap-2">
-                            <Database size={16} className="text-emerald-500" />
-                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">ຈຳນວນສິນຄ້າ (Quantity)</p>
-                        </div>
-
+                {/* Compact Modal (Matched EditPanel Style) */}
+                <div
+                    style={{
+                        width: '100%',
+                        maxWidth: '520px',
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        // maxHeight handled by parent
+                        overflow: 'hidden',
+                    }}
+                    className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
+                >
+                    {/* Minimal Header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                         <div className="flex items-center gap-3">
-                            {/* Total Preview (Current Value) */}
-                            <div className="flex-1 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-center">
-                                <p className="text-[10px] text-slate-500 mb-1">Total</p>
-                                <span className="text-xl font-bold text-slate-700 dark:text-slate-300">{quickAddForm.qty || 0}</span>
-                            </div>
-
-                            {/* Plus Icon */}
-                            <Plus size={16} className="text-slate-400" />
-
-                            {/* Merge/Add Input */}
-                            <div className="flex-1">
-                                <input
-                                    id="quick-merge-input"
-                                    type="number"
-                                    placeholder="0"
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border-2 border-emerald-100 dark:border-emerald-900/50 rounded-lg text-xl font-bold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 transition-colors"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            const val = parseFloat(e.target.value) || 0;
-                                            setQuickAddForm(prev => ({ ...prev, qty: (parseFloat(prev.qty) || 0) + val }));
-                                            e.target.value = '';
-                                            e.preventDefault();
-                                        }
-                                    }}
-                                />
-                                <p className="text-[9px] text-slate-400 mt-1 text-center">Add Amount</p>
-                            </div>
-
-                            {/* Merge Button (Small) */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const input = document.getElementById('quick-merge-input');
-                                    const val = parseFloat(input.value) || 0;
-                                    setQuickAddForm(prev => ({ ...prev, qty: (parseFloat(prev.qty) || 0) + val }));
-                                    input.value = '';
-                                }}
-                                className="p-3 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm active:scale-95 transition-all"
-                            >
+                            <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-sm">
                                 <Plus size={18} />
-                            </button>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('quickAdd.title')}</h3>
+                            </div>
                         </div>
+                        <button
+                            onClick={onClose}
+                            disabled={isSaving}
+                            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors disabled:opacity-50"
+                        >
+                            <X size={20} />
+                        </button>
                     </div>
 
-                    {/* Location Section (Unified with Category Logic) */}
-                    <div>
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-                            <MapPin size={14} className="text-emerald-500" /> Rack Location {customMode && <span className="text-[10px] text-emerald-500 font-normal">(Custom Mode)</span>}
-                        </p>
+                    {/* Compact Content */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
 
-                        <div className="flex gap-2">
-                            <select
-                                className="flex-1 py-2.5 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:border-emerald-500 outline-none transition-colors"
-                                value={!customMode ? quickAddForm.rack_location : (selectedCategory ? quickAddForm.rack_location : selectedCategory)}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-
-                                    // 1. Enter Custom Mode
-                                    if (value === 'CUSTOM') {
-                                        setCustomMode(true);
-                                        setSelectedCategory('');
-                                        return;
-                                    }
-
-                                    // 2. Custom Mode: Select Category
-                                    if (customMode && !selectedCategory) {
-                                        setSelectedCategory(value);
-                                        // Auto-update Category 1 in form
-                                        setQuickAddForm(prev => ({ ...prev, category_1_actual: value }));
-                                        return;
-                                    }
-
-                                    // 3. Custom Mode: Select Location (or Back)
-                                    if (customMode && selectedCategory) {
-                                        if (value === 'BACK') {
-                                            setSelectedCategory('');
-                                            return;
-                                        }
-                                        setQuickAddForm(prev => ({ ...prev, rack_location: value }));
-                                        return;
-                                    }
-
-                                    // 4. Normal Mode: Select Location directly
-                                    setQuickAddForm(prev => ({ ...prev, rack_location: value }));
-                                }}
-                            >
-                                {!customMode && (
-                                    <>
-                                        <option value="">-- ເລືອກໂລເຄຊັ້ນ --</option>
-                                        {/* Show suggestions based on current Cat 1 (if exists) or all? EditPanel logic suggests based on Cat 1 */}
-                                        {getRackSuggestions(quickAddForm.category_1_actual || selectedCategory).map(loc => {
-                                            const count = allResults.filter(r => r.rackLocation === loc).length;
-                                            return (
-                                                <option key={loc} value={loc}>
-                                                    {loc} {count > 0 ? `| ${count} SKU` : ''}
-                                                </option>
-                                            );
-                                        })}
-                                        <option value="CUSTOM">🔧 Custom (ເລືອກຕາມໝວດໝູ່)</option>
-                                    </>
-                                )}
-
-                                {customMode && !selectedCategory && (
-                                    <>
-                                        <option value="">-- ເລືອກໝວດໝູ່ --</option>
-                                        {Object.keys(CATEGORY_RACK_RULES).map(cat => (
-                                            <option key={cat} value={cat}>📦 {cat}</option>
-                                        ))}
-                                    </>
-                                )}
-
-                                {customMode && selectedCategory && (
-                                    <>
-                                        <option value="BACK">← ກັບໄປເລືອກໝວດໝູ່</option>
-                                        <option value="">-- ເລືອກໂລເຄຊັ້ນ ({selectedCategory}) --</option>
-                                        {getRackSuggestions(selectedCategory).map(loc => {
-                                            const count = allResults.filter(r => r.rackLocation === loc).length;
-                                            return (
-                                                <option key={loc} value={loc}>
-                                                    {loc} {count > 0 ? `| ${count} SKU` : ''}
-                                                </option>
-                                            );
-                                        })}
-                                    </>
-                                )}
-                            </select>
-
-                            <button
-                                type="button"
-                                onClick={() => quickAddForm.rack_location && setInspectedLocation(quickAddForm.rack_location)}
-                                disabled={!quickAddForm.rack_location}
-                                className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-emerald-500 disabled:opacity-50 transition-colors"
-                            >
-                                <Eye size={18} />
-                            </button>
-                        </div>
-
-                        {/* Show selected location chip & status */}
-                        {quickAddForm.rack_location && (
-                            <div className="mt-2 flex items-center gap-2">
-                                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                    <MapPin size={14} className="text-emerald-500" />
-                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{quickAddForm.rack_location}</span>
+                        {/* Warning Banner when NOT found in Master */}
+                        {!isFoundInMaster && quickAddForm.barcode_no && (
+                            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 flex items-center gap-3">
+                                <AlertTriangle className="text-rose-600 dark:text-rose-400 shrink-0" size={18} />
+                                <div>
+                                    <h4 className="text-xs font-bold text-rose-700 dark:text-rose-300">{t('quickAdd.notFoundMaster')}</h4>
+                                    <p className="text-[10px] font-medium text-rose-600 dark:text-rose-400">{t('quickAdd.pleaseAddMaster')}</p>
                                 </div>
-                                {customMode && (
-                                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-800">
-                                        Manual Select
+                            </div>
+                        )}
+
+                        {/* Item Info Input Group */}
+                        <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                            <div className="flex justify-between items-center text-xs text-slate-500">
+                                <span>{t('quickAdd.itemDetails')}</span>
+                                {isFoundInMaster && (
+                                    <span className="text-emerald-500 font-bold flex items-center gap-1">
+                                        <CheckCircle size={12} /> {t('quickAdd.masterVerified')}
                                     </span>
                                 )}
                             </div>
-                        )}
+
+                            {/* Barcode Input */}
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={quickAddForm.barcode_no}
+                                    onChange={(e) => setQuickAddForm(prev => ({ ...prev, barcode_no: e.target.value }))}
+                                    className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white font-mono outline-none placeholder:text-slate-300"
+                                    placeholder="Scan Barcode..."
+                                    autoFocus
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">{t('quickAdd.barcode')}</p>
+                            </div>
+
+                            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
+
+                            {/* Name Input */}
+                            <div>
+                                <input
+                                    type="text"
+                                    value={quickAddForm.item_name}
+                                    readOnly={isFoundInMaster}
+                                    disabled={!isFoundInMaster}
+                                    onChange={(e) => setQuickAddForm(prev => ({ ...prev, item_name: e.target.value }))}
+                                    className={`w-full bg-transparent text-sm font-medium outline-none ${isFoundInMaster ? 'text-slate-600 dark:text-slate-400 cursor-default' : 'text-slate-800 dark:text-white'}`}
+                                    placeholder={isFoundInMaster ? t('quickAdd.itemName') : t('quickAdd.enterItemName')}
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">{t('quickAdd.itemName')}</p>
+                            </div>
+                        </div>
+
+                        {/* Quantity Section (Direct Input) */}
+                        <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Database size={16} className="text-emerald-500" />
+                                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('quickAdd.quantity')}</p>
+                            </div>
+
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    value={quickAddForm.qty === 0 ? '' : quickAddForm.qty}
+                                    onChange={(e) => {
+                                        const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                        setQuickAddForm(prev => ({ ...prev, qty: val }));
+                                    }}
+                                    placeholder="0"
+                                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border-2 border-emerald-100 dark:border-emerald-900/50 rounded-xl text-3xl font-bold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
+                            </div>
+                        </div>
+
+                        {/* Location Section (CUSTOM DROPDOWN) */}
+                        <div>
+                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                                <MapPin size={14} className="text-emerald-500" />
+                                {t('quickAdd.targetLocation')}
+                                {customMode && <span className="text-[10px] text-emerald-500 font-normal">{t('quickAdd.customMode')}</span>}
+                            </p>
+
+                            <div className="flex gap-2" ref={dropdownRef}>
+                                {/* CUSTOM SELECT TRIGGER */}
+                                <div
+                                    className={`flex-1 relative cursor-pointer select-none`}
+                                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                                >
+                                    <div className={`w-full py-2.5 px-3 flex items-center justify-between text-sm font-medium bg-white dark:bg-slate-800 border ${dropdownOpen ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-700'} rounded-lg transition-all`}>
+                                        <span className={quickAddForm.rack_location || selectedCategory ? 'text-slate-800 dark:text-white' : 'text-slate-400'}>
+                                            {customMode && viewingCategories
+                                                ? t('quickAdd.selectCategory')
+                                                : (customMode && !viewingCategories && !quickAddForm.rack_location)
+                                                    ? (selectedCategory ? `${t('quickAdd.selectLocationIn')} ${selectedCategory}...` : t('quickAdd.selectLocationAll'))
+                                                    : (quickAddForm.rack_location || t('quickAdd.selectLocationPlaceholder'))
+                                            }
+                                        </span>
+                                        <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+
+                                    {/* CUSTOM DROPDOWN MENU */}
+                                    {dropdownOpen && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-100">
+
+                                            {/* State 1: Custom Mode - Select Category (Only if VIEWING CATEGORIES) */}
+                                            {customMode && viewingCategories && (
+                                                <>
+                                                    <div
+                                                        className="px-3 py-2 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 sticky top-0 z-10 border-b border-emerald-100 flex items-center gap-2"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setViewingCategories(false); // Back to All Locations
+                                                        }}
+                                                    >
+                                                        <ChevronDown size={14} className="rotate-90" />
+                                                        {t('quickAdd.backToAll')}
+                                                    </div>
+
+                                                    <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
+                                                        {t('quickAdd.selectCategoryFilter')}
+                                                    </div>
+
+                                                    {Object.keys(CATEGORY_RACK_RULES).map(cat => (
+                                                        <div
+                                                            key={cat}
+                                                            className="px-3 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/20 cursor-pointer flex items-center gap-2 group transition-colors"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedCategory(cat);
+                                                                setViewingCategories(false); // Switch to Location View
+                                                                // Logic: Set Category 1/2 to NULL
+                                                                setQuickAddForm(prev => ({ ...prev, category_1_actual: '', category_2_actual: '' }));
+                                                            }}
+                                                        >
+                                                            <span className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400">📦 {cat}</span>
+                                                            <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-emerald-500" />
+                                                        </div>
+                                                    ))}
+                                                </>
+                                            )}
+
+                                            {/* State 2: Select Location (Normal, or Custom All, or Custom Filtered) */}
+                                            {(!customMode || (customMode && !viewingCategories)) && (
+                                                <>
+                                                    {/* Custom Mode Header Actions */}
+                                                    {customMode && (
+                                                        <div className="sticky top-0 z-10">
+                                                            {/* If Filtered by Category -> Show Back to All */}
+                                                            {selectedCategory && (
+                                                                <div
+                                                                    className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 border-b border-rose-100 flex items-center gap-2"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedCategory(''); // Clear Filter
+                                                                        // Show All Locations again
+                                                                    }}
+                                                                >
+                                                                    <X size={12} /> {t('quickAdd.clearFilter')} ({selectedCategory})
+                                                                </div>
+                                                            )}
+
+                                                            {/* Filter Button (To Category View) */}
+                                                            <div
+                                                                className="px-3 py-2 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border-b border-emerald-100 flex items-center justify-between"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setViewingCategories(true); // Switch to Category View
+                                                                }}
+                                                            >
+                                                                <span className="flex items-center gap-2"><Database size={12} /> {selectedCategory ? t('quickAdd.changeCategory') : t('quickAdd.customSelf')}</span>
+                                                                <ChevronRight size={12} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {!customMode && (
+                                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b dark:border-slate-700">
+                                                            {t('quickAdd.suggestedLocations')}
+                                                        </div>
+                                                    )}
+
+                                                    {currentSuggestions.length > 0 ? (
+                                                        currentSuggestions.map(loc => {
+                                                            const count = allResults.filter(r => r.rackLocation === loc).length;
+                                                            return (
+                                                                <div
+                                                                    key={loc}
+                                                                    className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${quickAddForm.rack_location === loc ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                    onClick={() => {
+                                                                        setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                                        setDropdownOpen(false); // Close after selection
+                                                                    }}
+                                                                >
+                                                                    <span>{loc}</span>
+                                                                    {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
+                                                            {t('quickAdd.noLocationsFound')}<br />
+                                                            <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Start Custom Mode Option (Only in Normal Mode) */}
+                                                    {!customMode && (
+                                                        <div
+                                                            className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setCustomMode(true);
+                                                                setSelectedCategory('');
+                                                                setViewingCategories(false); // Default to ALL LOCATIONS view
+                                                                setDropdownOpen(true);
+                                                            }}
+                                                        >
+                                                            <div className="px-3 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 cursor-pointer flex items-center gap-2 font-medium">
+                                                                <CornerDownRight size={14} />
+                                                                {t('quickAdd.customOption')}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (quickAddForm.rack_location) {
+                                            setLocalInspectedLocation(localInspectedLocation === quickAddForm.rack_location ? null : quickAddForm.rack_location);
+                                        }
+                                    }}
+                                    disabled={!quickAddForm.rack_location}
+                                    className={`px-3 py-2.5 rounded-lg transition-colors border ${localInspectedLocation ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 border-transparent disabled:opacity-50'}`}
+                                >
+                                    <Eye size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Category Display (Compact & Read-Only / Auto-filled) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <p className="text-xs text-slate-500 mb-1.5">{t('results.category1')}</p>
+                                <div className={`px-3 py-2 border rounded-lg ${isFoundInMaster ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        {quickAddForm.category_1_actual || '-'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 mb-1.5">{t('results.category2')}</p>
+                                <div className={`px-3 py-2 border rounded-lg ${isFoundInMaster ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        {quickAddForm.category_2_actual || '-'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Reason/Remarks Dropdown */}
+                        <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/30">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5">
+                                    <Info size={14} className="text-joah-orange" />
+                                    <span className="text-xs font-semibold text-joah-orange">{t('quickAdd.reasonPrompt')}</span>
+                                </div>
+                                <span className="text-[9px] font-semibold text-rose-500">Required</span>
+                            </div>
+                            <select
+                                value={selectedReasonOption}
+                                onChange={(e) => setSelectedReasonOption(e.target.value)}
+                                className="w-full py-2 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800/50 rounded-lg focus:border-joah-orange outline-none"
+                            >
+                                <option value="">{t('quickAdd.selectReason')}</option>
+                                <option value={t('reasons.newStock')}>{t('reasons.newStock')}</option>
+                                <option value={t('reasons.stockOut')}>{t('reasons.stockOut')}</option>
+                                <option value={t('reasons.actualCount')}>{t('reasons.actualCount')}</option>
+                                <option value={t('reasons.noSpace')}>{t('reasons.noSpace')}</option>
+                                <option value={t('reasons.actualLocation')}>{t('reasons.actualLocation')}</option>
+                                <option value={t('reasons.defective')}>{t('reasons.defective')}</option>
+                                <option value="Other">{t('reasons.other')}</option>
+                            </select>
+
+                            {/* Conditional Other Reason Input */}
+                            {selectedReasonOption === 'Other' && (
+                                <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <input
+                                        type="text"
+                                        value={otherReasonText}
+                                        onChange={(e) => setOtherReasonText(e.target.value)}
+                                        placeholder={t('quickAdd.otherReasonPlaceholder')}
+                                        className="w-full py-2 px-3 text-sm bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800 custom-input-focus rounded-lg outline-none"
+                                        autoFocus
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Verifier */}
+                        <div>
+                            <p className="text-xs text-slate-500 mb-1.5">{t('results.verifier')}</p>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                                <User size={16} className="text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={localStorage.getItem('joah_employee_name') || 'Unknown Staff'}
+                                    readOnly
+                                    className="flex-1 bg-transparent text-sm font-medium text-slate-500 outline-none"
+                                />
+                            </div>
+                        </div>
+
                     </div>
 
-                    {/* Category Display (Compact & Read-Only / Auto-filled) */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <p className="text-xs text-slate-500 mb-1.5">Category 1</p>
-                            <div className={`px-3 py-2 border rounded-lg ${isFoundInMaster ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    {quickAddForm.category_1_actual || '-'}
-                                </span>
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 mb-1.5">Category 2</p>
-                            <div className={`px-3 py-2 border rounded-lg ${isFoundInMaster ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    {quickAddForm.category_2_actual || '-'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Reason/Remarks Dropdown */}
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/30">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                                <Info size={14} className="text-joah-orange" />
-                                <span className="text-xs font-semibold text-joah-orange">{t('results.reasonPrompt')}</span>
-                            </div>
-                            <span className="text-[9px] font-semibold text-rose-500">Required</span>
-                        </div>
-                        <select
-                            value={quickAddForm.remarks}
-                            onChange={(e) => setQuickAddForm({ ...quickAddForm, remarks: e.target.value })}
-                            className="w-full py-2 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800/50 rounded-lg focus:border-joah-orange outline-none"
+                    {/* Compact Footer */}
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 grid grid-cols-2 gap-3 flex-shrink-0">
+                        <button
+                            onClick={onClose}
+                            disabled={isSaving}
+                            className="px-4 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                         >
-                            <option value="">-- ເລືອກເຫດຜົນ (Select Reason) --</option>
-                            <option value="ພົບສິນຄ້າເພີ່ມ (Found Additional Stock)">ພົບສິນຄ້າເພີ່ມ (Found Additional Stock)</option>
-                            <option value="ຮັບສິນຄ້າເຂົ້າໃໝ່ (New Stock Received)">ຮັບສິນຄ້າເຂົ້າໃໝ່ (New Stock Received)</option>
-                            <option value="ບໍ່ມີພື້ນທີ່ຈັດເກັບ / ໂລເຕັມ (No Storage Space)">ບໍ່ມີພື້ນທີ່ຈັດເກັບ / ໂລເຕັມ (No Storage Space)</option>
-                            <option value="ສິນຄ້າເສຍຫາຍ (Damaged Goods)">ສິນຄ້າເສຍຫາຍ (Damaged Goods)</option>
-                            <option value="ข้อมูล Master ຜິດ (Incorrect Master Data)">ຂໍ້ມູນ Master ຜິດ (Incorrect Master Data)</option>
-                            <option value="ອື່ນໆ (Other)">ອື່ນໆ (Other)</option>
-                        </select>
-                    </div>
-
-                    {/* Verifier */}
-                    <div>
-                        <p className="text-xs text-slate-500 mb-1.5">{t('results.verifier')}</p>
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-                            <User size={16} className="text-slate-400" />
-                            <input
-                                type="text"
-                                value={localStorage.getItem('joah_employee_name') || 'Unknown Staff'}
-                                readOnly
-                                className="flex-1 bg-transparent text-sm font-medium text-slate-500 outline-none"
-                            />
-                        </div>
+                            {t('quickAdd.cancel')}
+                        </button>
+                        <button
+                            onClick={onSave}
+                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0}
+                            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                            <span>{isSaving ? t('quickAdd.saving') : t('quickAdd.save')}</span>
+                        </button>
                     </div>
 
                 </div>
 
-                {/* Compact Footer */}
-                <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 grid grid-cols-2 gap-3 flex-shrink-0">
-                    <button
-                        onClick={onClose}
-                        disabled={isSaving}
-                        className="px-4 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                    >
-                        {t('common.cancel')}
-                    </button>
-                    <button
-                        onClick={onSave}
-                        disabled={isSaving}
-                        className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
-                    >
-                        {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                        <span>{isSaving ? t('results.saving') : 'Add Inventory'}</span>
-                    </button>
-                </div>
+                {/* ATTACHED LOCATION INSPECTOR (Side Panel) */}
+                {localInspectedLocation && (
+                    <LocationInspector
+                        inspectedLocation={localInspectedLocation}
+                        onClose={() => setLocalInspectedLocation(null)}
+                        allResults={allResults}
+                        className="w-80 max-h-[85vh] shadow-2xl border border-slate-200 dark:border-slate-800 rounded-xl flex-shrink-0"
+                    />
+                )}
             </div>
         </div>,
         document.body

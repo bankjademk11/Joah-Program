@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus } from 'lucide-react';
+import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
 import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
+import LocationInspector from './LocationInspector';
 
 const EditPanel = ({
     selectedRow,
@@ -15,14 +16,48 @@ const EditPanel = ({
     currentUser,
     isUpdating,
     handleUpdate,
-    results,
+    results, // For backward compatibility
+    allResults, // Essential for Inspector
     mergeAmount,
     setMergeAmount,
     t
 }) => {
-    const [customMode, setCustomMode] = React.useState(false);
-    const [selectedCategory, setSelectedCategory] = React.useState('');
+    // --- UI States matching QuickAddPanel ---
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [customMode, setCustomMode] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [viewingCategories, setViewingCategories] = useState(false);
+    const [localInspectedLocation, setLocalInspectedLocation] = useState(null);
+    const dropdownRef = useRef(null);
 
+    // --- Helpers ---
+    const getAllLocations = () => {
+        const allLocs = [];
+        Object.keys(CATEGORY_RACK_RULES).forEach(cat => {
+            allLocs.push(...getRackSuggestions(cat));
+        });
+        return [...new Set(allLocs)].sort();
+    };
+
+    // Determine current suggestions based on mode and categories
+    const currentSuggestions = !customMode
+        ? getRackSuggestions(editCat1 || selectedRow?.category1 || selectedCategory)
+        : (selectedCategory ? getRackSuggestions(selectedCategory) : getAllLocations());
+
+    // --- Effects ---
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Prevent body scroll
     useEffect(() => {
         if (selectedRow) {
             document.body.style.overflow = 'hidden';
@@ -32,17 +67,46 @@ const EditPanel = ({
         };
     }, [selectedRow]);
 
+    // Close on ESC
     useEffect(() => {
         const handleEsc = (e) => {
-            if (e.key === 'Escape' && !isUpdating) onClose();
+            if (e.key === 'Escape') {
+                if (dropdownOpen) setDropdownOpen(false);
+                else if (!isUpdating) onClose();
+            }
         };
         if (selectedRow) {
             document.addEventListener('keydown', handleEsc);
         }
         return () => document.removeEventListener('keydown', handleEsc);
-    }, [selectedRow, onClose, isUpdating]);
+    }, [selectedRow, onClose, isUpdating, dropdownOpen]);
+
+    // Reason Logic
+    const [selectedReasonOption, setSelectedReasonOption] = useState('');
+    const [otherReasonText, setOtherReasonText] = useState('');
+
+    // Sync reason to form
+    useEffect(() => {
+        if (selectedReasonOption === 'Other') {
+            setEditReason(otherReasonText ? `Other: ${otherReasonText}` : 'Other');
+        } else {
+            setEditReason(selectedReasonOption);
+        }
+    }, [selectedReasonOption, otherReasonText, setEditReason]);
+
+    // Reset reason when panel opens/closes (Update based on prop if editing existing reason, though usually empty)
+    useEffect(() => {
+        if (!selectedRow) {
+            setSelectedReasonOption('');
+            setOtherReasonText('');
+        }
+    }, [selectedRow]);
 
     if (!selectedRow) return null;
+
+
+    // Use allResults if available, fallback to filtered results for inspector
+    const inspectorData = allResults || results || [];
 
     return createPortal(
         <div
@@ -71,321 +135,374 @@ const EditPanel = ({
                 onClick={!isUpdating ? onClose : undefined}
             />
 
-            {/* Compact Modal */}
-            <div
-                style={{
-                    position: 'relative',
-                    width: '100%',
-                    maxWidth: '520px',
-                    backgroundColor: 'white',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    maxHeight: '90vh',
-                    overflow: 'hidden',
-                }}
-                className="dark:!bg-slate-900"
-            >
-                {/* Minimal Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-joah-orange text-white">
-                            <Edit2 size={18} />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">ແກ້ໄຂຂໍ້ມູນ</h3>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        disabled={isUpdating}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors disabled:opacity-50"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
+            {/* Container for Side-by-Side Layout */}
+            <div className="relative z-10 flex items-start gap-4 max-h-[90vh]">
 
-                {/* Compact Content */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
-
-                    {/* Item Info - Compact */}
-                    <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-2">
-                        <div className="flex justify-between items-center text-xs text-slate-500">
-                            <span>Item Info</span>
-                            <span className="text-joah-orange">#{selectedRow.rowIndex}</span>
-                        </div>
-                        <p className="text-lg font-bold text-slate-800 dark:text-white font-mono">{selectedRow.barcode}</p>
-                        <p className="text-xs text-slate-500 truncate">{selectedRow.masterItemName || selectedRow.itemName}</p>
-
-                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                {/* Compact Modal (Matched EditPanel Style) */}
+                <div
+                    style={{
+                        width: '100%',
+                        maxWidth: '520px',
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                    }}
+                    className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
+                >
+                    {/* Minimal Header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-indigo-500 text-white shadow-sm">
+                                <Edit2 size={18} />
+                            </div>
                             <div>
-                                <p className="text-[10px] text-slate-400 mb-1">Location</p>
-                                <div className="flex items-center gap-1.5">
-                                    <MapPin size={14} className="text-joah-orange" />
-                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedRow.rackLocation}</span>
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('editPanel.title')}</h3>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            disabled={isUpdating}
+                            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors disabled:opacity-50"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+
+                        {/* Item Info - Compact */}
+                        <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                            <div className="flex justify-between items-center text-xs text-slate-500">
+                                <span>{t('editPanel.itemDetails')}</span>
+                                <span className="bg-white dark:bg-slate-700 px-2 py-0.5 rounded text-indigo-500 font-mono font-bold border border-slate-200 dark:border-slate-600">#{selectedRow.rowIndex}</span>
+                            </div>
+
+                            {/* Barcode Display */}
+                            <div className="relative">
+                                <p className="text-lg font-bold text-slate-800 dark:text-white font-mono">{selectedRow.barcode}</p>
+                                <p className="text-[10px] text-slate-400">{t('results.barcode')}</p>
+                            </div>
+
+                            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
+
+                            {/* Name Display */}
+                            <div>
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{selectedRow.masterItemName || selectedRow.itemName}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{t('results.itemName')}</p>
+                            </div>
+                        </div>
+
+                        {/* Quantity Section (With Merge Logic GUI) */}
+                        <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Database size={16} className="text-indigo-500" />
+                                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('editPanel.quantityManagement')}</p>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {/* Current Qty Display */}
+                                <div className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center border border-transparent">
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{t('editPanel.current')}</p>
+                                    <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
+                                </div>
+
+                                {/* Plus Icon */}
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                    <Plus size={16} strokeWidth={3} />
+                                </div>
+
+                                {/* Additional Input */}
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="number"
+                                        placeholder="0"
+                                        className="w-full p-3 bg-white dark:bg-slate-950 border-2 border-indigo-100 dark:border-indigo-900/30 rounded-xl text-3xl font-bold text-indigo-600 dark:text-indigo-400 text-center outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
+                                        value={mergeAmount}
+                                        onChange={(e) => setMergeAmount(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">{t('editPanel.addAmount')}</p>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Quantity - Minimal Design */}
-                    <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
-                        <div className="flex items-center gap-2">
-                            <Database size={16} className="text-joah-orange" />
-                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">ສັງລວມຍອດສິນຄ້າ</p>
-                        </div>
+                        {/* Rack Location Section (MATCHING QUICKADDPANEL UI EXACTLY) */}
+                        <div>
+                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                                <MapPin size={14} className="text-indigo-500" />
+                                {t('editPanel.targetLocation')}
+                                {customMode && <span className="text-[10px] text-indigo-500 font-normal">{t('quickAdd.customMode')}</span>}
+                            </p>
 
-                        {/* Simple Calculation */}
-                        <div className="flex items-center gap-3">
-                            {/* Current */}
-                            <div className="flex-1 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-center">
-                                <p className="text-[10px] text-slate-500 mb-1">Current</p>
-                                <span className="text-xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
-                            </div>
-
-                            {/* Plus */}
-                            <Plus size={16} className="text-slate-400" />
-
-                            {/* Additional Input */}
-                            <div className="flex-1">
-                                <input
-                                    id="merge-input"
-                                    type="number"
-                                    placeholder="0"
-                                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 rounded-lg text-xl font-bold text-joah-orange text-center outline-none focus:border-joah-orange transition-colors"
-                                    value={mergeAmount}
-                                    onChange={(e) => setMergeAmount(e.target.value)}
-                                    autoFocus
-                                />
-                                <p className="text-[9px] text-slate-400 mt-1 text-center">Additional</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Rack Location with Direct Dropdown */}
-                    <div>
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-                            <MapPin size={14} className="text-joah-orange" /> Rack Location
-                        </p>
-
-                        {/* Location Dropdown */}
-                        <div className="space-y-3">
-                            <div className="flex gap-2">
-                                {/* Dynamic Dropdown */}
-                                <select
-                                    className="flex-1 py-2.5 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:border-joah-orange outline-none"
-                                    value={!customMode ? editLocation : (selectedCategory ? editLocation : selectedCategory)}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-
-                                        // If selecting CUSTOM option
-                                        if (value === 'CUSTOM') {
-                                            setCustomMode(true);
-                                            setSelectedCategory('');
-                                            setEditLocation('');
-                                            return;
-                                        }
-
-                                        // If in custom mode and no category selected yet (selecting category)
-                                        if (customMode && !selectedCategory) {
-                                            setSelectedCategory(value);
-                                            setEditLocation('');
-                                            return;
-                                        }
-
-                                        // If in custom mode with category selected (selecting location)
-                                        if (customMode && selectedCategory) {
-                                            if (value === 'BACK') {
-                                                setSelectedCategory('');
-                                                setEditLocation('');
-                                                return;
-                                            }
-                                            setEditLocation(value);
-                                            // KEEP CUSTOM MODE OPEN - Don't exit for continuous selection
-                                            // setCustomMode(false);
-                                            // setSelectedCategory('');
-                                            return;
-                                        }
-
-                                        // Normal mode - selecting location
-                                        setEditLocation(value);
-                                    }}
+                            <div className="flex gap-2" ref={dropdownRef}>
+                                {/* CUSTOM SELECT TRIGGER */}
+                                <div
+                                    className={`flex-1 relative cursor-pointer select-none`}
+                                    onClick={() => setDropdownOpen(!dropdownOpen)}
                                 >
-                                    {/* Normal Mode: Show current category locations + Custom */}
-                                    {!customMode && (
-                                        <>
-                                            <option value="">-- ເລືອກໂລເຄຊັ້ນ --</option>
-                                            {getRackSuggestions(editCat1 || selectedRow.category1).map(loc => {
-                                                const count = results.filter(r => r.rackLocation === loc).length;
-                                                return (
-                                                    <option key={loc} value={loc}>
-                                                        {loc} {count > 0 ? `| ${count} SKU` : ''}
-                                                    </option>
-                                                );
-                                            })}
-                                            <option value="CUSTOM">🔧 Custom (ທຸກໝວດໝູ່)</option>
-                                        </>
-                                    )}
+                                    <div className={`w-full py-2.5 px-3 flex items-center justify-between text-sm font-medium bg-white dark:bg-slate-800 border ${dropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-700'} rounded-lg transition-all`}>
+                                        <span className={editLocation || selectedCategory ? 'text-slate-800 dark:text-white' : 'text-slate-400'}>
+                                            {customMode && viewingCategories
+                                                ? t('quickAdd.selectCategory')
+                                                : (customMode && !viewingCategories && !editLocation)
+                                                    ? (selectedCategory ? `${t('quickAdd.selectLocationIn')} ${selectedCategory}...` : t('quickAdd.selectLocationAll'))
+                                                    : (editLocation || t('quickAdd.selectLocationPlaceholder'))
+                                            }
+                                        </span>
+                                        <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                                    </div>
 
-                                    {/* Custom Mode - Step 1: Show Categories */}
-                                    {customMode && !selectedCategory && (
-                                        <>
-                                            <option value="">-- ເລືອກໝວດໝູ່ --</option>
-                                            {Object.keys(CATEGORY_RACK_RULES).map(cat => (
-                                                <option key={cat} value={cat}>📦 {cat}</option>
-                                            ))}
-                                        </>
-                                    )}
+                                    {/* CUSTOM DROPDOWN MENU */}
+                                    {dropdownOpen && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-100">
 
-                                    {/* Custom Mode - Step 2: Show Locations in selected category */}
-                                    {customMode && selectedCategory && (
-                                        <>
-                                            <option value="BACK">← ກັບໄປເລືອກໝວດໝູ່</option>
-                                            <option value="">-- ເລືອກໂລເຄຊັ້ນ --</option>
-                                            {getRackSuggestions(selectedCategory).map(loc => {
-                                                const count = results.filter(r => r.rackLocation === loc).length;
-                                                return (
-                                                    <option key={loc} value={loc}>
-                                                        {loc} {count > 0 ? `| ${count} SKU` : ''}
-                                                    </option>
-                                                );
-                                            })}
-                                        </>
-                                    )}
-                                </select>
+                                            {/* State 1: Custom Mode - Select Category (Only if VIEWING CATEGORIES) */}
+                                            {customMode && viewingCategories && (
+                                                <>
+                                                    <div
+                                                        className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 sticky top-0 z-10 border-b border-indigo-100 flex items-center gap-2"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setViewingCategories(false); // Back to All Locations
+                                                        }}
+                                                    >
+                                                        <ChevronDown size={14} className="rotate-90" />
+                                                        {t('quickAdd.backToAll')}
+                                                    </div>
 
-                                {/* Eye Button */}
+                                                    <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b dark:border-slate-700">
+                                                        {t('quickAdd.selectCategoryFilter')}
+                                                    </div>
+
+                                                    {Object.keys(CATEGORY_RACK_RULES).map(cat => (
+                                                        <div
+                                                            key={cat}
+                                                            className="px-3 py-2.5 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 group transition-colors"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedCategory(cat);
+                                                                setViewingCategories(false); // Switch to Location View
+                                                                setEditLocation(''); // Clear location when changing category
+                                                            }}
+                                                        >
+                                                            <span className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400">📦 {cat}</span>
+                                                            <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-indigo-500" />
+                                                        </div>
+                                                    ))}
+                                                </>
+                                            )}
+
+                                            {/* State 2: Select Location (Normal, or Custom All, or Custom Filtered) */}
+                                            {(!customMode || (customMode && !viewingCategories)) && (
+                                                <>
+                                                    {/* Custom Mode Header Actions */}
+                                                    {customMode && (
+                                                        <div className="sticky top-0 z-10">
+                                                            {/* If Filtered by Category -> Show Back to All */}
+                                                            {selectedCategory && (
+                                                                <div
+                                                                    className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 border-b border-rose-100 flex items-center gap-2"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedCategory(''); // Clear Filter
+                                                                    }}
+                                                                >
+                                                                    <X size={12} /> {t('quickAdd.clearFilter')} ({selectedCategory})
+                                                                </div>
+                                                            )}
+
+                                                            {/* Filter Button (To Category View) */}
+                                                            <div
+                                                                className="px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border-b border-indigo-100 flex items-center justify-between"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setViewingCategories(true); // Switch to Category View
+                                                                }}
+                                                            >
+                                                                <span className="flex items-center gap-2"><Database size={12} /> {selectedCategory ? t('quickAdd.changeCategory') : t('quickAdd.customSelf')}</span>
+                                                                <ChevronRight size={12} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {!customMode && (
+                                                        <div className="px-3 py-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b dark:border-slate-700">
+                                                            {t('quickAdd.suggestedLocations')}
+                                                        </div>
+                                                    )}
+
+                                                    {currentSuggestions.length > 0 ? (
+                                                        currentSuggestions.map(loc => {
+                                                            const count = inspectorData.filter(r => r.rackLocation === loc).length;
+                                                            return (
+                                                                <div
+                                                                    key={loc}
+                                                                    className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${editLocation === loc ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                    onClick={() => {
+                                                                        setEditLocation(loc);
+                                                                        setDropdownOpen(false); // Close after selection
+                                                                    }}
+                                                                >
+                                                                    <span>{loc}</span>
+                                                                    {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
+                                                            {t('quickAdd.noLocationsFound')}<br />
+                                                            <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Start Custom Mode Option (Only in Normal Mode) */}
+                                                    {!customMode && (
+                                                        <div
+                                                            className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setCustomMode(true);
+                                                                setSelectedCategory('');
+                                                                setViewingCategories(false); // Default to ALL LOCATIONS view
+                                                                setDropdownOpen(true);
+                                                            }}
+                                                        >
+                                                            <div className="px-3 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 font-medium">
+                                                                <CornerDownRight size={14} />
+                                                                {t('quickAdd.customOption')}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Eye Inspection Button */}
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        const loc = editLocation || selectedRow.rackLocation;
-                                        if (loc) setInspectedLocation(loc);
+                                        const target = editLocation || selectedRow.rackLocation;
+                                        if (target) {
+                                            setLocalInspectedLocation(localInspectedLocation === target ? null : target);
+                                        }
                                     }}
                                     disabled={!editLocation && !selectedRow.rackLocation}
-                                    className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-joah-orange disabled:opacity-50 transition-colors"
+                                    className={`px-3 py-2.5 rounded-lg transition-colors border ${localInspectedLocation ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 border-indigo-200 dark:border-indigo-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 border-transparent disabled:opacity-50'}`}
                                 >
                                     <Eye size={18} />
                                 </button>
                             </div>
+                        </div>
 
-                            {/* Current Location Display */}
-                            {editLocation && (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                    <MapPin size={14} className="text-joah-orange" />
-                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{editLocation}</span>
-                                    {editLocation !== selectedRow.rackLocation && (
-                                        <span className="ml-auto text-[9px] font-semibold text-joah-orange bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 rounded-md">Changed</span>
-                                    )}
+                        {/* Static Categories Display */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t('results.category1')}</p>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{editCat1 || selectedRow.category1 || '-'}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t('results.category2')}</p>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{editCat2 || selectedRow.category2 || '-'}</p>
+                            </div>
+                        </div>
+
+                        {/* Reason Selection */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Info size={14} className="text-orange-500" /> {t('editPanel.reason')}
+                                </label>
+                                <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full">{t('editPanel.reasonRequired')}</span>
+                            </div>
+                            <div className="relative">
+                                <select
+                                    value={selectedReasonOption}
+                                    onChange={(e) => setSelectedReasonOption(e.target.value)}
+                                    className="w-full py-3 px-4 text-sm font-bold bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-900/50 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none appearance-none"
+                                >
+                                    <option value="">{t('editPanel.selectReason')}</option>
+                                    <option value={t('reasons.newStock')}>{t('reasons.newStock')}</option>
+                                    <option value={t('reasons.stockOut')}>{t('reasons.stockOut')}</option>
+                                    <option value={t('reasons.actualCount')}>{t('reasons.actualCount')}</option>
+                                    <option value={t('reasons.noSpace')}>{t('reasons.noSpace')}</option>
+                                    <option value={t('reasons.actualLocation')}>{t('reasons.actualLocation')}</option>
+                                    <option value={t('reasons.defective')}>{t('reasons.defective')}</option>
+                                    <option value="Other">{t('reasons.other')}</option>
+                                </select>
+                                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            </div>
+
+                            {/* Conditional Other Reason Input */}
+                            {selectedReasonOption === 'Other' && (
+                                <div className="mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <input
+                                        type="text"
+                                        value={otherReasonText}
+                                        onChange={(e) => setOtherReasonText(e.target.value)}
+                                        placeholder={t('editPanel.otherReasonPlaceholder')}
+                                        className="w-full py-2.5 px-4 text-sm bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800 rounded-xl outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all"
+                                        autoFocus
+                                    />
                                 </div>
                             )}
-
-                            {/* Status Indicator for Custom Mode */}
-                            {customMode && (
-                                <div className="flex items-center gap-2 text-xs text-joah-orange px-3 py-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-900/30">
-                                    <div className="w-2 h-2 bg-joah-orange rounded-full animate-pulse"></div>
-                                    <span className="font-semibold">
-                                        {!selectedCategory ? 'ກຳລັງເລືອກໝວດໝູ່...' : `ເລືອກໂລໃນ ${selectedCategory} (ຕໍ່ເນື່ອງ)`}
-                                    </span>
-                                </div>
-                            )}
                         </div>
-                    </div>
 
-                    {/* Categories - Compact */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <p className="text-xs text-slate-500 mb-1.5">Category 1</p>
-                            <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{editCat1 || selectedRow.category1 || '-'}</span>
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 mb-1.5">Category 2</p>
-                            <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{editCat2 || selectedRow.category2 || '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Reason - Minimal */}
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/30">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                                <Info size={14} className="text-joah-orange" />
-                                <span className="text-xs font-semibold text-joah-orange">{t('results.reasonPrompt')}</span>
-                            </div>
-                            <span className="text-[9px] font-semibold text-rose-500">Required</span>
-                        </div>
-                        <select
-                            value={editReason}
-                            onChange={(e) => setEditReason(e.target.value)}
-                            className="w-full py-2 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800/50 rounded-lg focus:border-joah-orange outline-none"
-                        >
-                            <option value="">-- ເລືອກເຫດຜົນ --</option>
-                            <optgroup label="📦 Quantity">
-                                <option value="ນັບສິນຄ້າໃໝ່ (Recount)">ນັບສິນຄ້າໃໝ່</option>
-                                <option value="ພົບສິນຄ້າເພີ່ມ (Found Additional Stock)">ພົບສິນຄ້າເພີ່ມ</option>
-                                <option value="ສິນຄ້າຫາຍ / ຂາດ (Missing / Shortage)">ສິນຄ້າຫາຍ / ຂາດ</option>
-                                <option value="ສິນຄ້າເສຍຫາຍ (Damaged Goods)">ສິນຄ້າເສຍຫາຍ</option>
-                                <option value="ຮັບສິນຄ້າເຂົ້າໃໝ່ (New Stock Received)">ຮັບສິນຄ້າເຂົ້າໃໝ່</option>
-                                <option value="ສົ່ງສິນຄ້າອອກ (Stock Out / Sold)">ສົ່ງສິນຄ້າອອກ</option>
-                            </optgroup>
-                            <optgroup label="📍 Location">
-                                <option value="ຍ້າຍໄປພື້ນທີ່ໃໝ່ (Relocated to New Area)">ຍ້າຍໄປພື້ນທີ່ໃໝ່</option>
-                                <option value="ຈັດລຽງຊ້ັນວາງຄືນໃໝ່ (Shelf Reorganization)">ຈັດລຽງຊ້ັນວາງຄືນໃໝ່</option>
-                                <option value="ສິນຄ້າວາງຜິດບ່ອນ (Misplaced Item)">ສິນຄ້າວາງຜິດບ່ອນ</option>
-                            </optgroup>
-                            <optgroup label="⚙️ Other">
-                                <option value="ແກ້ໄຂຂໍ້ມູນຜິດພາດ (Data Correction)">ແກ້ໄຂຂໍ້ມູນຜິດພາດ</option>
-                                <option value="ຄຳສັ່ງຈາກຜູ້ຈັດການ (Manager Request)">ຄຳສັ່ງຈາກຜູ້ຈັດການ</option>
-                                <option value="ອື່ນໆ (Other)">ອື່ນໆ</option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    {/* Verifier */}
-                    <div>
-                        <p className="text-xs text-slate-500 mb-1.5">{t('results.verifier')}</p>
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                        {/* Verifier (Read Only) */}
+                        <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                             <User size={16} className="text-slate-400" />
-                            <input
-                                type="text"
-                                value={currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown')}
-                                readOnly
-                                className="flex-1 bg-transparent text-sm font-medium text-slate-500 outline-none"
-                            />
+                            <div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-0.5">{t('editPanel.verifier')}</p>
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown')}</p>
+                            </div>
                         </div>
+
                     </div>
+
+                    {/* Footer - Compact & Matched */}
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 grid grid-cols-2 gap-3 flex-shrink-0">
+                        <button
+                            onClick={onClose}
+                            disabled={isUpdating}
+                            className="px-4 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        >
+                            {t('editPanel.cancel')}
+                        </button>
+                        <button
+                            onClick={handleUpdate}
+                            disabled={isUpdating}
+                            className="px-4 py-2.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                        >
+                            {isUpdating ? (
+                                <>
+                                    <Loader2 className="animate-spin" size={16} />
+                                    <span>{t('editPanel.saving')}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} />
+                                    <span>{t('editPanel.saveChanges')}</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+
                 </div>
 
-                {/* Simple Footer */}
-                <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 grid grid-cols-2 gap-3">
-                    <button
-                        onClick={onClose}
-                        disabled={isUpdating}
-                        className="px-4 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                    >
-                        {t('common.cancel')}
-                    </button>
-                    <button
-                        onClick={handleUpdate}
-                        disabled={isUpdating}
-                        className="px-4 py-2.5 rounded-lg bg-joah-orange text-white text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
-                    >
-                        {isUpdating ? (
-                            <>
-                                <Loader2 className="animate-spin" size={16} />
-                                <span>{t('results.saving')}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Save size={16} />
-                                <span>{t('results.saveChanges')}</span>
-                            </>
-                        )}
-                    </button>
-                </div>
+                {/* ATTACHED LOCATION INSPECTOR (Side Panel) */}
+                {localInspectedLocation && (
+                    <LocationInspector
+                        inspectedLocation={localInspectedLocation}
+                        onClose={() => setLocalInspectedLocation(null)}
+                        allResults={inspectorData} // Use prepared data
+                        className="w-80 max-h-[85vh] shadow-2xl border border-slate-200 dark:border-slate-800 rounded-xl flex-shrink-0"
+                    />
+                )}
             </div>
         </div>,
         document.body

@@ -16,6 +16,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import DiagnosticPanel from './DiagnosticPanel';
 import EditPanel from './EditPanel';
 import QuickAddPanel from './QuickAddPanel';
+import LocationInspector from './LocationInspector';
 import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
 
 const ResultTable = ({
@@ -119,80 +120,7 @@ const ResultTable = ({
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // New sort state
     const [optimisticItems, setOptimisticItems] = useState([]); // Optimistic UI for added items
 
-    // --- Helper to render Location Contents Inspector ---
-    const renderLocationInspector = () => {
-        if (!inspectedLocation) return null;
 
-        // Use allResults instead of results to see EVERYTHING in this location regardless of current search
-        const itemsInLocation = allResults.filter(r => r.rackLocation === inspectedLocation);
-
-        return (
-            // Changed from centered modal to Right Side Floating Card
-            // High Z-Index ensures it floats above everything else (including Edit Modal at 99999)
-            // Vertically centered to match the Edit Modal position
-            <div className="fixed top-1/2 right-6 -translate-y-1/2 w-96 z-[100001] animate-slide-in-right pointer-events-none">
-                {/* pointer-events-auto inside card so user can scroll/click close */}
-                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[75vh] pointer-events-auto relative overflow-hidden">
-                    {/* Decorative Background Blob to match Edit Modal */}
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-joah-orange/10 blur-[60px] rounded-full pointer-events-none"></div>
-
-                    <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50 rounded-t-[2rem] relative z-10">
-                        <div>
-                            <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                                <div className="p-2 bg-joah-orange text-white shadow-lg shadow-orange-500/20 rounded-xl">
-                                    <MapPin size={18} />
-                                </div>
-                                {inspectedLocation}
-                            </h3>
-                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest pl-1">
-                                {itemsInLocation.length} ITEMS FOUND
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setInspectedLocation(null)}
-                            className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-600 rounded-xl text-slate-400 transition-all"
-                        >
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="p-4 overflow-y-auto custom-scrollbar space-y-3 flex-1 min-h-0 relative z-10">
-                        {itemsInLocation.length === 0 ? (
-                            <div className="text-center py-10 text-slate-400">
-                                <Package size={40} className="mx-auto mb-3 opacity-40" />
-                                <p className="font-bold text-sm">Empty Rack</p>
-                                <p className="text-[10px]">No items found here.</p>
-                            </div>
-                        ) : (
-                            itemsInLocation.map((item, idx) => (
-                                <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-[9px] font-black rounded-lg text-slate-500 font-mono">
-                                            {item.barcode}
-                                        </span>
-                                        <span className="text-[9px] font-bold text-joah-orange bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg">
-                                            {item.category2 || item.category1}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-end gap-3">
-                                        <h4 className="font-bold text-slate-700 dark:text-slate-200 text-xs line-clamp-2 leading-tight flex-1" title={item.itemName || item.masterItemName}>
-                                            {item.itemName || item.masterItemName || 'Unknown Item'}
-                                        </h4>
-                                        <div className="text-right min-w-[3rem]">
-                                            <span className="block text-base font-black text-slate-900 dark:text-white leading-none">
-                                                {item.qty}
-                                            </span>
-                                            <span className="text-[8px] font-bold text-slate-400 uppercase">QTY</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
     // --- Smart Automation Rules (Mapdata.MD - NEW FORMAT with Section Numbers) ---
     // Each location now has format: ZONE-LEVEL-SECTION (e.g., G01-L1-1, G01-L1-2, ...)
@@ -888,7 +816,12 @@ const ResultTable = ({
 
     return (
         <>
-            {renderLocationInspector()}
+            <LocationInspector
+                inspectedLocation={inspectedLocation}
+                onClose={() => setInspectedLocation(null)}
+                allResults={allResults}
+            />
+
             <div className="space-y-6 animate-fade-in-up">
                 {/* Action Bar */}
                 <div className="glass-card rounded-[2.5rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-6 items-center border-white/50 relative z-50">
@@ -1336,6 +1269,7 @@ const ResultTable = ({
                     isUpdating={isUpdating}
                     handleUpdate={handleUpdateMasterQty}
                     results={results}
+                    allResults={allResults}
                     mergeAmount={mergeAmount}
                     setMergeAmount={setMergeAmount}
                     t={t}
