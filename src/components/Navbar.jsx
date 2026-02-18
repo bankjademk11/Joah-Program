@@ -3,8 +3,9 @@ import joahLogo from '../assets/Joah.jpeg';
 import laosFlag from '../assets/Laos.png';
 import englishFlag from '../assets/EnglishFlang.png';
 import { supabase } from '../utils/supabaseClient';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import notificationSound from '../assets/notification_compact.mp3';
 
 const Navbar = ({
     step,
@@ -21,6 +22,26 @@ const Navbar = ({
     onLogout
 }) => {
     const [pendingCount, setPendingCount] = useState(0);
+    const prevPendingCountRef = useRef(0);
+    const isFirstLoadRef = useRef(true);
+
+    // Play sound when pending count increases
+    useEffect(() => {
+        if (!isFirstLoadRef.current && pendingCount > prevPendingCountRef.current) {
+            try {
+                const audio = new Audio(notificationSound);
+                audio.volume = 1.0; // Set volume to MAX
+                audio.play().catch(e => console.error("Audio play failed", e));
+            } catch (error) {
+                console.error("Audio error:", error);
+            }
+        }
+        prevPendingCountRef.current = pendingCount;
+        if (isFirstLoadRef.current) {
+            isFirstLoadRef.current = false;
+        }
+    }, [pendingCount]);
+
 
     useEffect(() => {
         // Initial fetch
@@ -127,8 +148,8 @@ const Navbar = ({
                             <div className="hidden md:flex flex-col items-end mr-2">
                                 <div className="flex items-center gap-2">
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${currentUser.workplace === 'back'
-                                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                                            : 'bg-joah-orange text-white'
+                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                        : 'bg-joah-orange text-white'
                                         }`}>
                                         {currentUser.workplace === 'back' ? 'BACK' : 'FRONT'}
                                     </span>

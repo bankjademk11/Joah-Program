@@ -48,6 +48,10 @@ const QuickAddPanel = ({
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
+            setCustomMode(false); // Reset Custom Mode
+            setSelectedCategory(''); // Reset Category Filter
+            setViewingCategories(false); // Reset View
+            setLocalInspectedLocation(null); // Reset Local Inspector
         }
     }, [isOpen]);
 
