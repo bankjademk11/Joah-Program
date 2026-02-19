@@ -233,7 +233,7 @@ const ResultTable = ({
                 return {
                     title: 'ພົບຂໍ້ຜິດພາດ (Mismatch)',
                     reason: reason || 'ຂໍ້ມູນບໍ່ກົງກັບຖານຂໍ້ມູນ Master',
-                    action: 'ກະລຸນາແກ້ໄຂຂໍ້ມູນ ຫຼື ຍ້າຍສินຄ້າໄປວາງໃຫ້ຖືກຕ້ອງຕາມທີ່ລະບົບແນະນຳ.',
+                    action: 'ກະລຸນາແກ້ໄຂຂໍ້ມູນ ຫຼື ຍ້າຍສິນຄ້າໄປວາງໃຫ້ຖືກຕ້ອງຕາມທີ່ລະບົບແນະນຳ.',
                     fixSteps: [
                         isCat1Error && `ປ່ຽນ ໝວດໝູ່ 1 ເປັນ: "${masterCategory1}"`,
                         isCat2Error && `ປ່ຽນ ໝວດໝູ່ 2 ເປັນ: "${masterCategory2}"`,
@@ -283,7 +283,7 @@ const ResultTable = ({
     };
 
     const handleQuickUpdate = async (row, newQty, reason) => {
-        const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
         const now = new Date().toISOString();
         const oldQty = row.qty || 0;
 
@@ -329,7 +329,7 @@ const ResultTable = ({
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
-        const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
         if (dbSource === 'supabase' && !activeUser) {
             showError('Error: User not identified. Please login again.');
@@ -545,31 +545,30 @@ const ResultTable = ({
             const dataToExport = template === 'audit' ? results.filter(res => res.status !== 'passed') : [...results];
 
             if (dbSource === 'supabase') {
+                // Shared History Fetch for ALL templates (Audit, Standard, etc.)
+                const reasonMap = {};
+                const { data: histRows, error: histError } = await supabase
+                    .from('inventory_history')
+                    .select('barcode, change_reason, details, updated_at')
+                    .order('updated_at', { ascending: false })
+                    .limit(5000); // Increased limit for broader coverage
+
+                if (!histError && histRows) {
+                    histRows.forEach(row => {
+                        const key = String(row.barcode || '').trim();
+                        if (!reasonMap[key]) {
+                            // Priority: details -> change_reason (same as HistoryLog.jsx line 60)
+                            const reason = row.details || row.change_reason;
+                            if (reason) reasonMap[key] = reason;
+                        }
+                    });
+                } else if (histError) {
+                    console.warn('History fetch skipped:', histError.message);
+                }
+
                 if (template === 'audit') {
                     // --- SPLIT SHEET LOGIC FOR AUDIT ---
 
-                    // Step 1: Fetch history and build reason map (same approach as HistoryLog.jsx)
-                    const reasonMap = {}; // barcode -> latest reason
-                    try {
-                        const { data: histRows } = await supabase
-                            .from('inventory_history')
-                            .select('barcode, change_reason, details, updated_at')
-                            .order('updated_at', { ascending: false })
-                            .limit(1000);
-
-                        if (histRows) {
-                            histRows.forEach(row => {
-                                const key = String(row.barcode || '').trim();
-                                if (!reasonMap[key]) {
-                                    // Priority: details -> change_reason (same as HistoryLog.jsx line 60)
-                                    const reason = row.details || row.change_reason;
-                                    if (reason) reasonMap[key] = reason;
-                                }
-                            });
-                        }
-                    } catch (e) {
-                        console.warn('History fetch for export skipped:', e.message);
-                    }
 
                     // Step 2: Mismatch Sheet
                     const mismatchData = results.filter(res => res.status === 'mismatch');
@@ -696,12 +695,12 @@ const ResultTable = ({
 
                     let headers;
                     if (template === 'simple') {
-                        headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Verifier'];
+                        headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Verifier', 'Employee ID'];
                     } else {
                         headers = [
                             'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
                             'Actual QTY', 'System QTY', 'Status', 'Status Reason',
-                            'Last Update', 'Verifier', 'Manual Change Reason'
+                            'Last Update', 'Verifier', 'Employee ID', 'Manual Change Reason'
                         ];
                     }
 
@@ -714,6 +713,17 @@ const ResultTable = ({
                     });
 
                     dataToExport.forEach(res => {
+                        // Parse Verifier String format "Name (ID)"
+                        const rawVerifier = res.uploadedBy || res.updatedBy || '';
+                        let vName = rawVerifier;
+                        let vId = '';
+                        // Extract ID if present in parentheses
+                        const idMatch = rawVerifier.match(/^(.*?)\s*\((.*?)\)$/);
+                        if (idMatch) {
+                            vName = idMatch[1].trim();
+                            vId = idMatch[2].trim();
+                        }
+
                         let rowData;
                         if (template === 'simple') {
                             rowData = [
@@ -721,7 +731,8 @@ const ResultTable = ({
                                 sanitize(res.masterItemName || res.itemName || ''),
                                 sanitize(res.rackLocation || ''),
                                 isNaN(Number(res.qty)) ? 0 : Number(res.qty),
-                                sanitize(res.uploadedBy || res.updatedBy || '')
+                                sanitize(vName),
+                                sanitize(vId)
                             ];
                         } else {
                             rowData = [
@@ -735,8 +746,9 @@ const ResultTable = ({
                                 sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing'),
                                 sanitize(res.reason || ''),
                                 res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
-                                sanitize(res.uploadedBy || res.updatedBy || ''),
-                                sanitize(res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
+                                sanitize(vName),
+                                sanitize(vId),
+                                sanitize(reasonMap[String(res.barcode || '').trim()] || res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
                             ];
                         }
                         const row = locationSheet.addRow(rowData);
@@ -775,11 +787,11 @@ const ResultTable = ({
                     }
 
                     if (template === 'simple') {
-                        locationSheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }];
+                        locationSheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }, { width: 15 }];
                     } else {
                         locationSheet.columns = [
                             { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
-                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 30 }
+                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
                         ];
                     }
                 }
