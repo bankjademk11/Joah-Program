@@ -196,6 +196,8 @@ const translations = {
             noSpace: 'ບໍ່ມີທີ່ຈັດເກັບ (No Storage Space)',
             actualLocation: 'ອ້າງອີງບ່ອນຈັດເກັບຈາກຂໍ້ມູນຈິງ (Based on Actual Location)',
             defective: 'ສິນຄ້າມີບັນຫາ (Defective Item)',
+            supplyChainDelay: 'Sply-Chain ຊັບພາຍເຊນບໍ່ສົ່ງເຄື່ອງໃຫ້',
+            itemAtFront: 'ສີນຄ້າຢູ່ໜ້າຮ້ານ',
             other: 'ອື່ນໆ (Other)'
         },
         // Edit Panel
@@ -472,6 +474,8 @@ const translations = {
             noSpace: 'No Storage Space',
             actualLocation: 'Based on Actual Location',
             defective: 'Defective Item',
+            supplyChainDelay: 'Supply Chain Delay (Sply-Chain)',
+            itemAtFront: 'Item at Front of Store',
             other: 'Other'
         },
         // Edit Panel

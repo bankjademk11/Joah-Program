@@ -461,6 +461,8 @@ const EditPanel = ({
                                     <option value={t('reasons.noSpace')}>{t('reasons.noSpace')}</option>
                                     <option value={t('reasons.actualLocation')}>{t('reasons.actualLocation')}</option>
                                     <option value={t('reasons.defective')}>{t('reasons.defective')}</option>
+                                    <option value={t('reasons.supplyChainDelay')}>{t('reasons.supplyChainDelay')}</option>
+                                    <option value={t('reasons.itemAtFront')}>{t('reasons.itemAtFront')}</option>
                                     <option value="Other">{t('reasons.other')}</option>
                                 </select>
                                 <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
