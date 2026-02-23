@@ -163,30 +163,35 @@ export const validateData = (locationRows, dataRows, odooRows = []) => {
         const category1 = getRaw('Category-1') || getRaw('Category 1') || getRaw('CATEGORIES 1') || '';
         const category2 = getRaw('Category-2') || getRaw('Category 2') || getRaw('CATEGORIES 2') || '';
 
-        // พยายามดึง QTY จากหลายๆ ชื่อที่เป็นไปได้
-        // หรือถ้าข้อมูลมาเป็น __EMPTY_x (กรณีไม่มี Header) ก็ต้องเดา
+        // พยายามดึง QTY จากหลายๆ ชื่อที่เป็นไปได้ (ไม่ทำ numeric scan เพราะจะหยิบ Barcode ผิด)
         let qty = 0;
-        const possibleQtyKeys = ['QTY', 'Qty', 'qty', 'Quantity', 'quantity', 'จํานวน', 'จำนวน', 'Total'];
+        const possibleQtyKeys = [
+            'QTY', 'Qty', 'qty',
+            'Quantity', 'quantity', 'QUANTITY',
+            'จํานวน', 'จำนวน', 'ຈຳນວນ',
+            'Total', 'TOTAL', 'total',
+            'Count', 'COUNT', 'count',
+            'Amount', 'AMOUNT',
+            'ລວມ', 'ລວມທັງໝົດ'
+        ];
 
+        let foundQtyKey = null;
         for (const key of Object.keys(row)) {
-            if (possibleQtyKeys.includes(key) || key.toUpperCase() === 'QTY') {
+            const trimmedKey = key.trim(); // ← trim space ออกก่อนเปรียบเทียบ
+            if (possibleQtyKeys.includes(trimmedKey) || trimmedKey.toUpperCase() === 'QTY') {
                 qty = row[key];
+                foundQtyKey = key;
                 break;
             }
         }
 
-        // 2. ถ้าไม่เจอ ให้ลองดึงจาก Column Index ที่ 6 (Column G)
-        if (!qty) {
-            const values = Object.values(row);
-            // ถ้า keys เรียงตาม A, B, C... ค่าที่ 7 (index 6) น่าจะเป็น G
-            if (values.length > 6) {
-                const valAtG = values[6];
-                if (!isNaN(parseFloat(valAtG))) {
-                    qty = valAtG;
-                }
+        // Debug: แถวแรกแสดง keys ทั้งหมด เพื่อตรวจสอบชื่อ header ที่แท้จริง
+        if (index === 0) {
+            console.log('📋 Excel Headers:', Object.keys(row));
+            console.log('🎯 Found QTY Key:', foundQtyKey, '→ value:', qty);
+            if (!foundQtyKey) {
+                console.warn('⚠️ QTY column NOT FOUND! Headers are:', Object.keys(row).join(', '));
             }
-            // Fallback: เช็ค __EMPTY_6 (เผื่อมี)
-            if (!qty && row['__EMPTY_6']) qty = row['__EMPTY_6'];
         }
 
         // เพิ่มการตรวจจับสินค้าที่เป็น 0
@@ -306,6 +311,7 @@ export const validateData = (locationRows, dataRows, odooRows = []) => {
 
         results.push({
             id: row.id, // Preserve ID for potential database updates
+            branch_id: row.branch_id, // Preserve branch for warehouse filter
             rowIndex: index + 1,
             barcode,
             itemName, // Item name from Location sheet

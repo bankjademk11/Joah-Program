@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
-import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
+import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
 
 const QuickAddPanel = ({

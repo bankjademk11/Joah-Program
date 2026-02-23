@@ -23,7 +23,9 @@ const translations = {
             continueWithCloud: 'ສືບຕໍ່ດ້ວຍ Cloud Database',
             storeRequest: 'ຂໍສິນຄ້າຈາກສາງ',
             storeRequestSub: 'Store Request System',
-            enterStore: 'ເຂົ້າສູ່ໜ້າຮ້ານ'
+            enterStore: 'ເຂົ້າສູ່ໜ້າຮ້ານ',
+            storeClosing: 'Checklist ປິດຮ້ານ',
+            storeClosingSub: 'Store Closing Checklist'
         },
         // Dashboard
         dashboard: {
@@ -301,7 +303,9 @@ const translations = {
             continueWithCloud: 'Continue with Cloud Database',
             storeRequest: 'Request from Warehouse',
             storeRequestSub: 'Store Request System',
-            enterStore: 'Enter Store'
+            enterStore: 'Enter Store',
+            storeClosing: 'Closing Checklist',
+            storeClosingSub: 'Store Closing Checklist'
         },
         // Dashboard
         dashboard: {

@@ -1,11 +1,11 @@
 import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut } from 'lucide-react';
-import joahLogo from '../assets/Joah.jpeg';
-import laosFlag from '../assets/Laos.png';
-import englishFlag from '../assets/EnglishFlang.png';
-import { supabase } from '../utils/supabaseClient';
+import joahLogo from '../../assets/Joah.jpeg';
+import laosFlag from '../../assets/Laos.png';
+import englishFlag from '../../assets/EnglishFlang.png';
+import { supabase } from '../../utils/supabaseClient';
 import { useState, useEffect, useRef } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
-import notificationSound from '../assets/notification_compact.mp3';
+import { useLanguage } from '../../contexts/LanguageContext';
+import notificationSound from '../../assets/notification_compact.mp3';
 
 const Navbar = ({
     step,
@@ -156,6 +156,12 @@ const Navbar = ({
                                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('navbar.loggedInAs')}</p>
                                 </div>
                                 <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{currentUser.name}</p>
+                                {currentUser.branch_id && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                                        <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 tracking-wide">{currentUser.branch_id}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
 

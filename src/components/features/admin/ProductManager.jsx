@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../utils/supabaseClient';
-import { logInventoryHistory } from '../utils/supabaseSync';
+import { supabase } from '../../../utils/supabaseClient';
+import { logInventoryHistory } from '../../../utils/supabaseSync';
 import {
     Plus, Save, X, Edit2, Trash2, Search, Package,
     ArrowLeft, Loader2, CheckCircle, AlertCircle, Database, History, Calendar, User, ArrowRight,

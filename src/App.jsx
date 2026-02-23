@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import FileUpload from './components/FileUpload';
-import SheetMapper from './components/SheetMapper';
-import Dashboard from './components/Dashboard';
-import ResultTable from './components/ResultTable';
-import Navbar from './components/Navbar';
+import FileUpload from './components/features/admin/FileUpload';
+import SheetMapper from './components/features/admin/SheetMapper';
+import Dashboard from './components/features/inventory/Dashboard';
+import ResultTable from './components/features/inventory/ResultTable';
+import Navbar from './components/layout/Navbar';
 import {
   readExcelFile,
   readExcelFromUrl,
@@ -14,22 +14,23 @@ import {
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
-import HistoryLog from './components/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell } from 'lucide-react';
+import HistoryLog from './components/features/inventory/HistoryLog';
+import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
-import Login from './components/Login';
-import OdooMonitor from './components/OdooMonitor';
-import StoreRequest from './components/StoreRequest';
-import StoreRequestManager from './components/StoreRequestManager';
-import { ToastProvider, useToast } from './components/ToastProvider';
+import Login from './components/features/auth/Login';
+import OdooMonitor from './components/features/admin/OdooMonitor';
+import StoreRequest from './components/features/store/StoreRequest';
+import StoreRequestManager from './components/features/store/StoreRequestManager';
+import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
-import MasterAudit from './components/MasterAudit';
-import ProductManager from './components/ProductManager';
-import Footer from './components/Footer';
-import RubikNetworkParticles from './components/RubikNetworkParticles';
-import LoadingOverlay from './components/LoadingOverlay';
+import MasterAudit from './components/features/admin/MasterAudit';
+import ProductManager from './components/features/admin/ProductManager';
+import Footer from './components/layout/Footer';
+import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
+import LoadingOverlay from './components/ui/LoadingOverlay';
+import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 
 
 function AppContent() {
@@ -68,6 +69,9 @@ function AppContent() {
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
+  const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
+  const [warehouseFilter, setWarehouseFilter] = useState('all'); // PSN warehouse filter: 'all' | 'A' | 'B'
+  const [adminViewBranch, setAdminViewBranch] = useState(''); // Branch Admin เลือกดูใน Cloud
 
   // --- Realtime State ---
   const [realtimeStatus, setRealtimeStatus] = useState('disconnected'); // 'connected', 'disconnected', 'connecting'
@@ -77,12 +81,15 @@ function AppContent() {
   const debounceTimerRef = useRef(null);
   const isRefreshingRef = useRef(false);
 
-  // Filter Results based on Location
-  // Filter Results based on Location and Zero Qty
+  const isPSNUser = user?.branch_id === 'ໂພນສີນວນ';
+  const isAdmin = user?.role === 'HQ'; // เฉพาะ HQ เท่านั้นที่เข้า Admin menu ได้
   const filteredResults = validationResults.filter(r => {
     const matchesLocation = locationFilter ? r.rackLocation === locationFilter : true;
     const matchesHideZero = hideZeroQty ? Number(r.qty) !== 0 : true;
-    return matchesLocation && matchesHideZero;
+    const matchesWarehouse = isPSNUser && warehouseFilter !== 'all'
+      ? r.branch_id === `ໂພນສີນວນ ${warehouseFilter}`
+      : true;
+    return matchesLocation && matchesHideZero && matchesWarehouse;
   });
 
   // Recalculate Stats based on Filtered Results (Dynamic Dashboard)
@@ -101,14 +108,18 @@ function AppContent() {
     const storedName = localStorage.getItem('joah_employee_name');
     const storedRole = localStorage.getItem('joah_employee_role');
     const storedWorkplace = localStorage.getItem('joah_employee_workplace');
+    const storedBranch = localStorage.getItem('joah_branch_id');
 
     if (storedId && storedName) {
+      const branch = storedBranch || 'ຕະຫຼາດລາວ';
       setUser({
         id: storedId,
         name: storedName,
         role: storedRole || 'staff',
-        workplace: storedWorkplace || 'front' // Default to front
+        workplace: storedWorkplace || 'front',
+        branch_id: branch
       });
+      setImportBranch(branch === 'ໂພນສີນວນ' ? 'ໂພນສີນວນ A' : branch); // PSN default to A
       setIsLoggedIn(true);
     }
   }, []);
@@ -118,6 +129,7 @@ function AppContent() {
     localStorage.removeItem('joah_employee_name');
     localStorage.removeItem('joah_employee_role');
     localStorage.removeItem('joah_employee_workplace');
+    localStorage.removeItem('joah_branch_id');
     setIsLoggedIn(false);
     setUser(null);
     setStep('upload');
@@ -127,6 +139,8 @@ function AppContent() {
   const handleReset = () => {
     setStep('upload');
     setValidationResults([]);
+    setDbSource('excel');
+    setDataSourceLabel('Local Mode (Excel)');
   };
 
 
@@ -143,6 +157,8 @@ function AppContent() {
 
   const handleLogin = (userInfo) => {
     setUser(userInfo);
+    const loginBranch = userInfo.branch_id || 'ຕະຫຼາດລາວ';
+    setImportBranch(loginBranch === 'ໂພນສີນວນ' ? 'ໂພນສີນວນ A' : loginBranch);
     setIsLoggedIn(true);
   };
 
@@ -156,6 +172,8 @@ function AppContent() {
   const handleFileSelect = async (file) => {
     setIsProcessing(true);
     setRawFile(file);
+    setDbSource('excel');
+    setDataSourceLabel('Local Mode (Excel)');
     try {
       const wb = await readExcelFile(file);
       processWorkbook(wb);
@@ -194,11 +212,16 @@ function AppContent() {
     const mascotDelay = new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
-      // Check for both Master Data and Location Counting data
-      const [[cloudMaster, cloudLocation]] = await Promise.all([
+      // Admin ดูทุกสาขา ถ้าเลือก '' = ดู branch ตัวเอง, ถ้าเลือก branch = ดูสาขานั้น
+      const branchToLoad = isAdmin
+        ? (adminViewBranch || user?.branch_id)
+        : user?.branch_id;
+
+      const [[cloudMaster, cloudLocation, cloudOdoo]] = await Promise.all([
         Promise.all([
-          fetchMasterFromSupabase(),
-          fetchLocationFromSupabase()
+          fetchMasterFromSupabase(branchToLoad),
+          fetchLocationFromSupabase(branchToLoad),
+          fetchOdooFromSupabase(branchToLoad)
         ]),
         mascotDelay
       ]);
@@ -259,22 +282,28 @@ function AppContent() {
       let odooRows = [];
 
       if (activeSource === 'supabase') {
+        // Normalize branch for PSN A/B sharing
+        const branchToLoad = isAdmin
+          ? (adminViewBranch || user?.branch_id)
+          : (user?.branch_id === 'ໂພນສີນວນ' || user?.branch_id === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : user?.branch_id);
+
         // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
         try {
           await supabase
             .from('location_inventory')
             .update({ rack_location: null })
+            .eq('branch_id', branchToLoad)
             .eq('qty', 0)
             .not('rack_location', 'is', null);
-          console.log('✅ Auto-cleanup: Cleared locations for qty=0 items');
+          console.log(`✅ Auto-cleanup: Cleared locations for qty=0 items in branch ${branchToLoad}`);
         } catch (cleanupErr) {
           console.warn('⚠️ Auto-cleanup failed (non-critical):', cleanupErr);
         }
 
         const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
-          fetchMasterFromSupabase(),
-          fetchLocationFromSupabase(),
-          fetchOdooFromSupabase()
+          fetchMasterFromSupabase(branchToLoad),
+          fetchLocationFromSupabase(branchToLoad),
+          fetchOdooFromSupabase(branchToLoad)
         ]);
 
         if (!cloudMaster || cloudMaster.length === 0) {
@@ -295,6 +324,7 @@ function AppContent() {
 
         locationRows = (cloudLocation || []).map(l => ({
           id: l.id,
+          branch_id: l.branch_id,
           'Barcode': l.barcode_no,
           'Rack Location': l.rack_location,
           'Category-1': l.category_1_actual,
@@ -312,14 +342,25 @@ function AppContent() {
 
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
-        dataRows = sheetToJSON(workbook, 'DATA');
+
+        // Use the dataSheet selected by user in SheetMapper, fallback to 'DATA'
+        const resolvedDataSheet = dataSheet || 'DATA';
+        console.log('📂 Excel Mode — Reading sheets:');
+        console.log('  📊 DATA sheet:', resolvedDataSheet);
+        console.log('  📍 Location sheet:', locationSheet);
+        console.log('  📋 All sheets in file:', workbook.SheetNames);
+
+        dataRows = sheetToJSON(workbook, resolvedDataSheet);
         locationRows = sheetToJSON(workbook, locationSheet);
-        // Local mode doesn't support Odoo file yet, or we assume Odoo upload via the new button goes to Supabase only.
-        // If user is in Excel mode but uploaded Odoo via the specific button, it went to Supabase.
-        // For simplicity, let's try to fetch Odoo from Supabase even in Excel mode if available? 
-        // User asked for "Comparison from Odoo".
-        // Let's assume Odoo data is always in Supabase for now as per the added feature.
-        const cloudOdoo = await fetchOdooFromSupabase();
+
+        console.log(`  ✅ DATA rows loaded: ${dataRows.length}`);
+        console.log(`  ✅ Location rows loaded: ${locationRows.length}`);
+
+        if (dataRows.length === 0) {
+          console.warn(`  ⚠️ Sheet "${resolvedDataSheet}" is EMPTY or NOT FOUND. Available: ${workbook.SheetNames.join(', ')}`);
+        }
+
+        const cloudOdoo = await fetchOdooFromSupabase(user?.branch_id);
         odooRows = (cloudOdoo || []).map(o => ({
           barcode: o.barcode,
           qty: o.qty_odoo
@@ -344,11 +385,30 @@ function AppContent() {
 
   const handleSyncToCloud = async () => {
     if (!workbook) return;
+
+    const targetBranch = importBranch || user?.branch_id;
+    if (targetBranch === 'ໂພນສີນວນ') {
+      alert('⚠️ ກະລຸນາເລືອກລາຍການ "ໂພນສີນວນ A" ຫຼື "ໂພນສີນວນ B" ກ່ອນ Sync (ບໍ່ສາມາດ Sync ເຂົ້າຊື່ລວມໄດ້)');
+      return;
+    }
+
+    const confirmed = window.confirm(`ຈະ Sync Master Data ໄປທີ່ສາຂາ: "${targetBranch}" ແມ່ນບໍ?`);
+    if (!confirmed) return;
+
     setIsProcessing(true);
     try {
-      const dataRows = sheetToJSON(workbook, 'DATA');
-      const result = await syncMasterDataToSupabase(dataRows);
-      if (result.success) alert(`✅ Synced ${result.synced} items to Cloud!`);
+      // Smart detect DATA sheet name instead of hardcoding 'DATA'
+      const suggested = suggestSheetMapping(workbook.SheetNames);
+      const dataSheetName = suggested.dataSheet || 'DATA';
+      console.log('📂 Sync Master Data — Using sheet:', dataSheetName, '| Available:', workbook.SheetNames);
+      const dataRows = sheetToJSON(workbook, dataSheetName);
+      if (dataRows.length === 0) {
+        alert(`⚠️ Sheet "${dataSheetName}" is empty or not found.\n\nAvailable sheets: ${workbook.SheetNames.join(', ')}`);
+        setIsProcessing(false);
+        return;
+      }
+      const result = await syncMasterDataToSupabase(dataRows, targetBranch);
+      if (result.success) alert(`✅ Synced ${result.synced} items to "${targetBranch}"!`);
       else alert('❌ Sync Failed: ' + result.error);
     } catch (e) {
       alert('Error: ' + e.message);
@@ -372,14 +432,14 @@ function AppContent() {
 
       // Fetch dynamic data always
       const fetchTasks = [
-        fetchLocationFromSupabase(),
-        fetchOdooFromSupabase()
+        fetchLocationFromSupabase(user?.branch_id),
+        fetchOdooFromSupabase(user?.branch_id)
       ];
 
       // Only fetch master if explicitly asked or if we don't have it yet
       const shouldFetchMaster = !options.skipMaster || masterData.length === 0;
       if (shouldFetchMaster) {
-        fetchTasks.push(fetchMasterFromSupabase());
+        fetchTasks.push(fetchMasterFromSupabase(user?.branch_id));
       }
 
       const results = await Promise.all(fetchTasks);
@@ -407,6 +467,7 @@ function AppContent() {
 
       const locationRows = (cloudLocation || []).map(l => ({
         id: l.id,
+        branch_id: l.branch_id,
         'Barcode': l.barcode_no,
         'Rack Location': l.rack_location,
         'Category-1': l.category_1_actual,
@@ -499,19 +560,20 @@ function AppContent() {
   const [locationSynced, setLocationSynced] = useState(false);
 
   const handleSyncLocationToCloud = async () => {
-    if (validationResults.length === 0) {
-      alert('ບໍ່ມີຂໍ້ມູນທີ່ຈະ Sync');
+    if (validationResults.length === 0) return;
+
+    const targetBranch = importBranch || user?.branch_id;
+    if (targetBranch === 'ໂພນສີນວນ') {
+      alert('⚠️ กะลุนาเลือก "A" หรือ "B" ก่อน Sync');
       return;
     }
 
-    const confirmed = window.confirm(
-      `ທ່ານຕ້ອງການ Sync ${validationResults.length} ລາຍການ ໄປ Cloud ບໍ?\n\n⚠️ ຂໍ້ມູນເກົ່າໃນ location_inventory ຈະຖືກລຶບ ແລະ ແທນທີ່ດ້ວຍຂໍ້ມູນໃໝ່ທັງໝົດ.`
-    );
+    const confirmed = window.confirm(`Sync Location ໄປທີ່ສາຂາ: "${targetBranch}"\n\n${validationResults.length} ລາຍການ ຈະຖືກ Sync ໄປ Cloud.\n\n⚠️ ຂໍ້ມູນເກົ່າຂອງສາຂານີ້ຈະຖືກແທນທີ່.`);
     if (!confirmed) return;
 
     setIsProcessing(true);
     try {
-      const result = await syncLocationResultsToSupabase(validationResults);
+      const result = await syncLocationResultsToSupabase(validationResults, targetBranch);
       if (result.success) {
         setLocationSynced(true);
         alert(`✅ Sync ສຳເລັດ! ${result.synced} ລາຍການ ຖືກບັນທຶກເຂົ້າ Cloud ແລ້ວ`);
@@ -592,8 +654,8 @@ function AppContent() {
                     {t('home.description')}
                   </p>
 
-                  {/* Admin Toggle Button (Only for back store or admin) */}
-                  {user?.workplace !== 'front' && (
+                  {/* Admin Toggle Button (Only for HQ role) */}
+                  {isAdmin && (
                     <div className="mt-8">
                       <button
                         onClick={() => setShowAdminMenu(!showAdminMenu)}
@@ -610,8 +672,30 @@ function AppContent() {
                 </div>
 
                 <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
-                  {/* Always show: File Upload (only if admin) */}
-                  {showAdminMenu && <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />}
+                  {/* File Upload + Branch Selector (admin only) */}
+                  {showAdminMenu && (
+                    <div className="flex flex-col gap-3">
+                      {/* Branch Selector — sits on top of the upload zone */}
+                      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border-2 border-amber-300 dark:border-amber-500/40">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 shrink-0">Import ໃຫ້ສາຂາ:</span>
+                        <select
+                          value={importBranch}
+                          onChange={(e) => setImportBranch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1 min-w-[140px] h-8 px-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer focus:border-amber-500"
+                        >
+                          <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                          <option value="ສີວິໄລ">ສີວິໄລ</option>
+                          <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                          <option value="ໂພນສີນວນ A">ໂພນສີນວນ A</option>
+                          <option value="ໂພນສີນວນ B">ໂພນສີນວນ B</option>
+                        </select>
+                      </div>
+                      {/* File Upload zone */}
+                      <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
+                    </div>
+                  )}
 
                   {/* Cloud Database (Hidden for Front Store) */}
                   {user?.workplace !== 'front' && (
@@ -624,6 +708,24 @@ function AppContent() {
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
                       </div>
+                      {/* Admin Branch Selector — HQ only */}
+                      {isAdmin && (
+                        <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                          <select
+                            value={adminViewBranch}
+                            onChange={(e) => setAdminViewBranch(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                          >
+                            <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                            <option value="ສີວິໄລ">ສີວິໄລ</option>
+                            <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            <option value="ໂພນສີນວນ A">ໂພນສີນວນ A</option>
+                            <option value="ໂພນສີນວນ B">ໂພນສີນວນ B</option>
+                          </select>
+                        </div>
+                      )}
                       <button
                         onClick={handleDatabaseLoad}
                         disabled={isProcessing}
@@ -716,6 +818,26 @@ function AppContent() {
                       </button>
                     </div>
                   )}
+
+                  {/* Store Closing Checklist — ທຸກ role ທີ່ບໍ່ແມ່ນ front ສາມາດໃຊ້ໄດ້ */}
+                  {!showAdminMenu && user?.workplace !== 'front' && (
+                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 relative">
+                      <div className="w-16 h-16 rounded-3xl bg-yellow-50 dark:bg-yellow-500/10 flex items-center justify-center text-yellow-600 dark:text-yellow-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                        <ClipboardCheck size={32} strokeWidth={2.5} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeClosing')}</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeClosingSub')}</p>
+                      </div>
+                      <button
+                        onClick={() => setStep('store-closing')}
+                        className="w-full btn-primary mt-2 group py-4 bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 text-zinc-900 border-none"
+                      >
+                        <ClipboardCheck size={18} />
+                        <span>Open Checklist</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -747,6 +869,10 @@ function AppContent() {
             <OdooMonitor onBack={() => setStep('upload')} />
           )}
 
+          {step === 'store-closing' && (
+            <StoreClosingChecklist onBack={() => setStep('upload')} />
+          )}
+
           {step === 'store-request' && (
             <StoreRequest onBack={() => setStep('upload')} currentUser={user} />
           )}
@@ -766,6 +892,26 @@ function AppContent() {
 
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
+
+              {/* PSN Warehouse Filter — only shown for ໂພນສີນວນ users */}
+              {isPSNUser && (
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">ສາງ / Warehouse</span>
+                  {[['all', 'ທັງໝົດ (A+B)'], ['A', 'ສາງ A'], ['B', 'ສາງ B']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setWarehouseFilter(val)}
+                      className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${warehouseFilter === val
+                        ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/30 scale-105'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <Dashboard
                 stats={dashboardStats}
                 activeFilter={filterStatus}
@@ -898,14 +1044,16 @@ function AppContent() {
         {showHistory && <HistoryLog onClose={() => setShowHistory(false)} />}
 
         {/* Store Request Manager Modal */}
-        {showStoreRequestManager && (
-          <StoreRequestManager
-            onClose={() => setShowStoreRequestManager(false)}
-            currentUser={user}
-          />
-        )}
-      </div>
-    </ToastProvider>
+        {
+          showStoreRequestManager && (
+            <StoreRequestManager
+              onClose={() => setShowStoreRequestManager(false)}
+              currentUser={user}
+            />
+          )
+        }
+      </div >
+    </ToastProvider >
   );
 }
 

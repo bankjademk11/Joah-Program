@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import joahLogo from '../assets/Joah.jpeg';
-import joahWarehouseImg from '../assets/joah warehosue.png';
-import LoadingOverlay from './LoadingOverlay';
-import elephantMascot from '../assets/elephant_perfect_transparent_v2 (1).gif';
+import joahLogo from '../../../assets/Joah.jpeg';
+import joahWarehouseImg from '../../../assets/joah warehosue.png';
+import LoadingOverlay from '../../ui/LoadingOverlay';
+import elephantMascot from '../../../assets/elephant_perfect_transparent_v2 (1).gif';
 import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../../../utils/supabaseClient';
 
 const Login = ({ onLogin }) => {
     const [employeeId, setEmployeeId] = useState('');
@@ -41,10 +41,10 @@ const Login = ({ onLogin }) => {
                     .from('employees')
                     .insert([{
                         employee_id: regEmployeeId.trim().toUpperCase(),
-                        password: regPassword,
                         name: regEmployeeId.trim(),
                         role: 'staff',
-                        workplace: regWorkplace
+                        workplace: regWorkplace,
+                        branch_id: address
                     }]),
                 new Promise(resolve => setTimeout(resolve, 4000))
             ]);
@@ -91,12 +91,14 @@ const Login = ({ onLogin }) => {
             localStorage.setItem('joah_employee_name', employee.name || employee.employee_id);
             localStorage.setItem('joah_employee_role', employee.role);
             localStorage.setItem('joah_employee_workplace', employee.workplace || 'front');
+            localStorage.setItem('joah_branch_id', employee.branch_id || 'ໂພນສີນວນ');
 
             onLogin({
                 id: employee.employee_id,
                 name: employee.name || employee.employee_id,
                 role: employee.role,
-                workplace: employee.workplace || 'front'
+                workplace: employee.workplace || 'front',
+                branch_id: employee.branch_id || 'ໂພນສີນວນ'
             });
 
         } catch (err) {

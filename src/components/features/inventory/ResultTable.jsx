@@ -7,18 +7,18 @@ import {
     ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
-import { supabase } from '../utils/supabaseClient';
-import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../utils/supabaseSync';
-import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../utils/excelProcessor';
-import databaseUrl from '../assets/DataBaseJoah.xlsx';
-import { useToast } from './ToastProvider';
-import { useLanguage } from '../contexts/LanguageContext';
+import { supabase } from '../../../utils/supabaseClient';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../../../utils/supabaseSync';
+import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../../../utils/excelProcessor';
+import databaseUrl from '../../../assets/DataBaseJoah.xlsx';
+import { useToast } from '../../ui/ToastProvider';
+import { useLanguage } from '../../../contexts/LanguageContext';
 import DiagnosticPanel from './DiagnosticPanel';
 import EditPanel from './EditPanel';
 import QuickAddPanel from './QuickAddPanel';
 import LocationInspector from './LocationInspector';
-import AuditLogModal from './AuditLogModal';
-import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
+import AuditLogModal from '../../ui/AuditLogModal';
+import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtils';
 
 const ResultTable = ({
     results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,

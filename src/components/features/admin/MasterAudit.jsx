@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
-import { supabase } from '../utils/supabaseClient';
-import { fetchMasterFromSupabase } from '../utils/supabaseSync';
+import { supabase } from '../../../utils/supabaseClient';
+import { fetchMasterFromSupabase } from '../../../utils/supabaseSync';
 import {
     Database, Search, Filter, ArrowLeft, RefreshCw,
     AlertTriangle, CheckCircle, Info, Edit2, X,

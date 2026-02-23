@@ -1,5 +1,5 @@
 import React from 'react';
-import elephantMascot from '../assets/elephant_perfect_transparent_v2 (1).gif';
+import elephantMascot from '../../assets/elephant_perfect_transparent_v2 (1).gif';
 
 const LoadingOverlay = ({
     message = 'ກຳລັງເຂົ້າສູ່ລະບົບ',

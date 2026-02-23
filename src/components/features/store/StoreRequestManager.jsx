@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, CheckCircle, Clock, Package, User, Check, RefreshCw, FileSpreadsheet, ChevronDown, Undo2, Ban } from 'lucide-react';
-import { supabase } from '../utils/supabaseClient';
-import { useToast } from './ToastProvider';
+import { supabase } from '../../../utils/supabaseClient';
+import { useToast } from '../../ui/ToastProvider';
 import ExcelJS from 'exceljs';
 
 const StoreRequestManager = ({ onClose, currentUser }) => {

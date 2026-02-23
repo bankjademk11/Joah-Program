@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../../../utils/supabaseClient';
 import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, ChevronRight, Filter, FileSpreadsheet, PlusCircle, Edit3, ChevronDown } from 'lucide-react';
 import ExcelJS from 'exceljs';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../../../contexts/LanguageContext';
 
 const HistoryLog = ({ onClose }) => {
     const { t } = useLanguage();

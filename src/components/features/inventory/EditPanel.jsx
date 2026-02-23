@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
-import { CATEGORY_RACK_RULES, getRackSuggestions } from '../utils/rackUtils';
+import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
 
 const EditPanel = ({

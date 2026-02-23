@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, Trash2, Clock, Database, RefreshCw, FileSpreadsheet, CheckCircle, AlertTriangle } from 'lucide-react';
-import { readExcelFile, sheetToJSON, getSheetNames } from '../utils/excelProcessor';
-import { syncOdooToSupabase, clearOdooData, fetchOdooFromSupabase } from '../utils/supabaseSync';
-import { supabase } from '../utils/supabaseClient';
+import { readExcelFile, sheetToJSON, getSheetNames } from '../../../utils/excelProcessor';
+import { syncOdooToSupabase, clearOdooData, fetchOdooFromSupabase } from '../../../utils/supabaseSync';
+import { supabase } from '../../../utils/supabaseClient';
 
 const OdooMonitor = ({ onBack }) => {
     const [stats, setStats] = useState({
