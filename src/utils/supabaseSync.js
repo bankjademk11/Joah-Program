@@ -6,7 +6,7 @@ const PSN_BRANCHES = ['ໂພນສີນວນ A', 'ໂພນສີນວນ B'
 const isPSN = (branch) => PSN_BRANCHES.includes(branch);
 
 // Master data ของ PSN ทุก variant ให้ดึงจาก A เสมอ
-const normalizeMasterBranch = (branch) =>
+export const normalizeMasterBranch = (branch) =>
     isPSN(branch) ? 'ໂພນສີນວນ A' : branch;
 
 const applyBranchFilter = (query, branch) =>

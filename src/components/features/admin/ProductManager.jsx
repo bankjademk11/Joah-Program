@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../utils/supabaseClient';
-import { logInventoryHistory } from '../../../utils/supabaseSync';
+import { logInventoryHistory, normalizeMasterBranch } from '../../../utils/supabaseSync';
 import {
     Plus, Save, X, Edit2, Trash2, Search, Package,
     ArrowLeft, Loader2, CheckCircle, AlertCircle, Database, History, Calendar, User, ArrowRight,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 
-const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
+const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) => {
+    const masterBranch = normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ');
     // Basic States
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +71,7 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
             const { data, error } = await supabase
                 .from('master_data')
                 .select('*')
+                .eq('branch_id', masterBranch)
                 .order('barcode', { ascending: true });
 
             if (error) throw error;
@@ -134,7 +136,8 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
                         updated_at: new Date().toISOString(),
                         updated_by: currentUser?.name || 'Unknown'
                     })
-                    .eq('barcode', editingProduct.barcode);
+                    .eq('barcode', editingProduct.barcode)
+                    .eq('branch_id', masterBranch);
 
                 if (error) throw error;
 
@@ -160,6 +163,7 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
                         category_1: formData.category_1,
                         category_2: formData.category_2,
                         qty: formData.qty,
+                        branch_id: masterBranch,
                         updated_by: currentUser?.name || 'Unknown'
                     }]);
 
@@ -210,7 +214,8 @@ const ProductManager = ({ onBack, currentUser, initialBarcode }) => {
             const { error } = await supabase
                 .from('master_data')
                 .delete()
-                .eq('barcode', product.barcode);
+                .eq('barcode', product.barcode)
+                .eq('branch_id', masterBranch);
 
             if (error) throw error;
 

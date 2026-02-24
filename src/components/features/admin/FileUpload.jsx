@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Upload, FileSpreadsheet, Check } from 'lucide-react';
+import { Upload, Check } from 'lucide-react';
+import { UploadFileIcon } from '../../ui/AnimatedIcons';
 
 const FileUpload = ({ onFileSelect, isProcessing }) => {
     const [isDragging, setIsDragging] = useState(false);
@@ -43,7 +44,7 @@ const FileUpload = ({ onFileSelect, isProcessing }) => {
         >
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 transform group-hover:scale-110 group-hover:-rotate-3
                 ${fileName ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 group-hover:bg-orange-50 dark:group-hover:bg-orange-900/30 group-hover:text-joah-orange'}`}>
-                {fileName ? <Check size={28} /> : <FileSpreadsheet size={28} />}
+                {fileName ? <Check size={28} /> : <UploadFileIcon className="w-8 h-8 text-current" />}
             </div>
 
             <div className="space-y-1">

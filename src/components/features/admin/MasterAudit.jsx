@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
-import { fetchMasterFromSupabase } from '../../../utils/supabaseSync';
+import { fetchMasterFromSupabase, normalizeMasterBranch } from '../../../utils/supabaseSync';
 import {
     Database, Search, Filter, ArrowLeft, RefreshCw,
     AlertTriangle, CheckCircle, Info, Edit2, X,
@@ -10,7 +10,8 @@ import {
     FileSpreadsheet
 } from 'lucide-react';
 
-const MasterAudit = ({ onBack, currentUser }) => {
+const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
+    const masterBranch = normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ');
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -38,7 +39,7 @@ const MasterAudit = ({ onBack, currentUser }) => {
     const fetchMasterData = async () => {
         setIsLoading(true);
         try {
-            const data = await fetchMasterFromSupabase();
+            const data = await fetchMasterFromSupabase(masterBranch);
             setProducts(data || []);
         } catch (err) {
             console.error('Audit Fetch Error:', err);
@@ -152,7 +153,8 @@ const MasterAudit = ({ onBack, currentUser }) => {
                     updated_at: new Date().toISOString(),
                     updated_by: currentUser?.name || 'Audit Admin'
                 })
-                .eq('barcode', editingProduct.barcode);
+                .eq('barcode', editingProduct.barcode)
+                .eq('branch_id', masterBranch);
 
             if (error) {
                 console.error('❌ Master Data Update Error:', error);
@@ -228,13 +230,14 @@ const MasterAudit = ({ onBack, currentUser }) => {
         }
     };
 
-    const handleDelete = async (barcode) => {
+    const handleDelete = async (p) => {
         if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບສິນຄ້ານີ້?')) return;
         try {
             const { error } = await supabase
                 .from('master_data')
                 .delete()
-                .eq('barcode', barcode);
+                .eq('barcode', p.barcode)
+                .eq('branch_id', masterBranch);
             if (error) throw error;
             alert('✅ ລຶບສິນຄ້າສຳເລັດ!');
             fetchMasterData();

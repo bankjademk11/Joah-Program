@@ -31,6 +31,13 @@ import Footer from './components/layout/Footer';
 import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
+import {
+  CloudDatabaseIcon,
+  ProductBoxIcon,
+  AuditDatabaseIcon,
+  SyncOdooIcon,
+  StoreRequestIcon
+} from './components/ui/AnimatedIcons';
 
 
 function AppContent() {
@@ -702,7 +709,7 @@ function AppContent() {
                     <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
                       }`}>
                       <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <DBIcon size={32} strokeWidth={2.5} />
+                        <CloudDatabaseIcon className="w-8 h-8 text-current" />
                       </div>
                       <div className="space-y-2">
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
@@ -741,7 +748,7 @@ function AppContent() {
                   {!showAdminMenu && user?.workplace !== 'back' && (
                     <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 max-w-md mx-auto">
                       <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <ShieldCheck size={32} strokeWidth={2.5} />
+                        <StoreRequestIcon className="w-8 h-8 text-current" />
                       </div>
                       <div className="space-y-2">
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
@@ -761,7 +768,7 @@ function AppContent() {
                   {showAdminMenu && (
                     <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500">
                       <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <LayoutDashboard size={32} strokeWidth={2.5} />
+                        <ProductBoxIcon className="w-8 h-8 text-current" />
                       </div>
                       <div className="space-y-2">
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
@@ -781,7 +788,7 @@ function AppContent() {
                   {showAdminMenu && (
                     <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500">
                       <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <Database size={32} strokeWidth={2.5} />
+                        <AuditDatabaseIcon className="w-8 h-8 text-current" />
                       </div>
                       <div className="space-y-2">
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
@@ -801,7 +808,7 @@ function AppContent() {
                   {showAdminMenu && (
                     <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative">
                       <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <RotateCw size={32} strokeWidth={2.5} />
+                        <SyncOdooIcon className="w-8 h-8 text-current" />
                       </div>
                       <div className="space-y-2">
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
@@ -851,7 +858,8 @@ function AppContent() {
                     <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຂໍ້ມູນ</h2>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Configuration</p>
                   </div>
-                  {dbSource === 'excel' && (
+                  {/* ให้เฉพาะ HQ (isAdmin) มีสิทธิ์อัปเดต Master Data จาก Excel ขึ้น Cloud */}
+                  {dbSource === 'excel' && isAdmin && (
                     <button onClick={handleSyncToCloud} disabled={isProcessing} className="flex flex-col items-center gap-1 group">
                       <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center group-hover:bg-joah-orange group-hover:text-white transition-all duration-300 shadow-sm">
                         {isProcessing ? <RefreshCw className="animate-spin" width={18} /> : <UploadCloud width={18} />}
@@ -882,12 +890,17 @@ function AppContent() {
             <ProductManager
               onBack={() => { setStep('upload'); setPreFilledBarcode(null); }}
               currentUser={user}
+              activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
               initialBarcode={preFilledBarcode}
             />
           )}
 
           {step === 'master-audit' && (
-            <MasterAudit onBack={() => setStep('upload')} currentUser={user} />
+            <MasterAudit
+              onBack={() => setStep('upload')}
+              currentUser={user}
+              activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
+            />
           )}
 
           {step === 'results' && (
