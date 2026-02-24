@@ -22,7 +22,7 @@ import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtil
 
 const ResultTable = ({
     results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,
-    onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, onAddNewProduct, refreshTrigger
+    onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, currentBranch, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
     const { success, error: showError } = useToast(); // Initialize Toast
@@ -431,7 +431,8 @@ const ResultTable = ({
                     oldCat2: selectedRow.category2 || null,  // ✅ Category tracking
                     newCat2: editCat2 || null,               // ✅ Category tracking
                     updatedBy: activeUser,
-                    reason: detailedReason
+                    reason: detailedReason,
+                    branchId: currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id')
                 });
             }
             success(t('results.saveSuccess'));
@@ -462,7 +463,8 @@ const ResultTable = ({
                 uploaded_by: activeUser
             };
 
-            const result = await addLocationRecord(finalPayload);
+            const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
+            const result = await addLocationRecord(finalPayload, branchToSave);
             if (result.success) {
                 // Log History for New Item
                 await logInventoryHistory({
@@ -471,7 +473,8 @@ const ResultTable = ({
                     oldQty: 0,
                     newQty: quickAddForm.qty,
                     updatedBy: activeUser,
-                    reason: quickAddForm.remarks || 'Direct Addition to Inventory'
+                    reason: quickAddForm.remarks || 'Direct Addition to Inventory',
+                    branchId: branchToSave
                 });
 
                 // --- NEW: Log to dedicated "Added Items" Log (For Tracking New Insertions) ---
@@ -480,7 +483,8 @@ const ResultTable = ({
                     item_name: quickAddForm.item_name,
                     qty: quickAddForm.qty,
                     added_by: activeUser,
-                    location: finalPayload.rack_location // Use the sanitized location
+                    location: finalPayload.rack_location, // Use the sanitized location
+                    branch_id: branchToSave
                 });
                 if (logError) console.error("Failed to log added item:", logError);
                 // --------------------------------------------------------------------------
@@ -687,12 +691,7 @@ const ResultTable = ({
                 } else {
                     // --- STANDARD / SIMPLE LOGIC ---
                     const sheetName = template === 'simple' ? 'Inventory Summary' : 'Location Inventory';
-                    const locationSheet = workbook.addWorksheet(sheetName);
-
-                    if (template === 'standard') {
-                        workbook.addWorksheet('Master Data Reference');
-                    }
-
+                    // --- FUNCTION TO POPULATE A SHEET ---
                     let headers;
                     if (template === 'simple') {
                         headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Verifier', 'Employee ID'];
@@ -704,68 +703,96 @@ const ResultTable = ({
                         ];
                     }
 
-                    const hRow = locationSheet.addRow(headers);
-                    hRow.eachCell((cell) => {
-                        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                        let headerColor = 'FFEA580C';
-                        if (template === 'simple') headerColor = 'FF0284C7';
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerColor } };
-                    });
+                    const populateSheet = (sheet, dataList) => {
+                        const hRow = sheet.addRow(headers);
+                        hRow.eachCell((cell) => {
+                            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                            let headerColor = 'FFEA580C';
+                            if (template === 'simple') headerColor = 'FF0284C7';
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerColor } };
+                        });
 
-                    dataToExport.forEach(res => {
-                        // Parse Verifier String format "Name (ID)"
-                        const rawVerifier = res.uploadedBy || res.updatedBy || '';
-                        let vName = rawVerifier;
-                        let vId = '';
-                        // Extract ID if present in parentheses
-                        const idMatch = rawVerifier.match(/^(.*?)\s*\((.*?)\)$/);
-                        if (idMatch) {
-                            vName = idMatch[1].trim();
-                            vId = idMatch[2].trim();
-                        }
+                        dataList.forEach(res => {
+                            const rawVerifier = res.uploadedBy || res.updatedBy || '';
+                            let vName = rawVerifier;
+                            let vId = '';
+                            const idMatch = rawVerifier.match(/^(.*?)\s*\((.*?)\)$/);
+                            if (idMatch) {
+                                vName = idMatch[1].trim();
+                                vId = idMatch[2].trim();
+                            }
 
-                        let rowData;
+                            let rowData;
+                            if (template === 'simple') {
+                                rowData = [
+                                    sanitize(res.barcode),
+                                    sanitize(res.masterItemName || res.itemName || ''),
+                                    sanitize(res.rackLocation || ''),
+                                    isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                                    sanitize(vName),
+                                    sanitize(vId)
+                                ];
+                            } else {
+                                rowData = [
+                                    sanitize(res.barcode),
+                                    sanitize(res.masterItemName || res.itemName || ''),
+                                    sanitize(res.rackLocation || ''),
+                                    sanitize(res.category1 || ''),
+                                    sanitize(res.category2 || ''),
+                                    isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                                    isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
+                                    sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : (res.status === 'missing' ? 'Missing' : 'Incomplete')),
+                                    sanitize(res.reason || ''),
+                                    res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
+                                    sanitize(vName),
+                                    sanitize(vId),
+                                    sanitize(reasonMap[String(res.barcode || '').trim()] || res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
+                                ];
+                            }
+                            const row = sheet.addRow(rowData);
+
+                            if (template !== 'simple') {
+                                const statusCol = 8;
+                                const statusCell = row.getCell(statusCol);
+                                let bgColor = '';
+                                if (res.status === 'passed') bgColor = 'FFDCFCE7';
+                                else if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
+                                else if (res.status === 'missing' || res.status === 'incomplete') bgColor = 'FFE0F2FE';
+                                if (bgColor) statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                            }
+                        });
+
+                        // Set Columns width
                         if (template === 'simple') {
-                            rowData = [
-                                sanitize(res.barcode),
-                                sanitize(res.masterItemName || res.itemName || ''),
-                                sanitize(res.rackLocation || ''),
-                                isNaN(Number(res.qty)) ? 0 : Number(res.qty),
-                                sanitize(vName),
-                                sanitize(vId)
-                            ];
+                            sheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }, { width: 15 }];
                         } else {
-                            rowData = [
-                                sanitize(res.barcode),
-                                sanitize(res.masterItemName || res.itemName || ''),
-                                sanitize(res.rackLocation || ''),
-                                sanitize(res.category1 || ''),
-                                sanitize(res.category2 || ''),
-                                isNaN(Number(res.qty)) ? 0 : Number(res.qty),
-                                isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
-                                sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : 'Missing'),
-                                sanitize(res.reason || ''),
-                                res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
-                                sanitize(vName),
-                                sanitize(vId),
-                                sanitize(reasonMap[String(res.barcode || '').trim()] || res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
+                            sheet.columns = [
+                                { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
+                                { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
                             ];
                         }
-                        const row = locationSheet.addRow(rowData);
+                    };
 
-                        if (template !== 'simple') {
-                            const statusCol = 8;
-                            const statusCell = row.getCell(statusCol);
-                            let bgColor = '';
-                            if (res.status === 'passed') bgColor = 'FFDCFCE7';
-                            else if (res.status === 'mismatch') bgColor = 'FFFEE2E2';
-                            else if (res.status === 'missing') bgColor = 'FFE0F2FE';
-                            if (bgColor) statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-                        }
-                    });
+                    if (template === 'simple') {
+                        // SIMPLE mode only has one sheet
+                        const simpleSheet = workbook.addWorksheet('Inventory Summary');
+                        populateSheet(simpleSheet, dataToExport);
+                    } else if (template === 'standard') {
+                        // STANDARD mode breaks data into multiple detailed sheets
+                        const allSheet = workbook.addWorksheet('All Data');
+                        const correctSheet = workbook.addWorksheet('Passed');
+                        const mismatchSheet = workbook.addWorksheet('Mismatch');
+                        const missingSheet = workbook.addWorksheet('Missing or Incomplete');
+                        const zeroQtySheet = workbook.addWorksheet('Zero QTY');
 
-                    if (template === 'standard') {
-                        const dataSheet = workbook.getWorksheet('Master Data Reference');
+                        populateSheet(allSheet, dataToExport);
+                        populateSheet(correctSheet, dataToExport.filter(r => r.status === 'passed'));
+                        populateSheet(mismatchSheet, dataToExport.filter(r => r.status === 'mismatch'));
+                        populateSheet(missingSheet, dataToExport.filter(r => r.status === 'missing' || r.status === 'incomplete'));
+                        populateSheet(zeroQtySheet, dataToExport.filter(r => Number(r.qty || 0) === 0));
+
+                        // Fetch and populate Master Data Reference sheet
+                        const dataSheet = workbook.addWorksheet('Master Data Reference');
                         const cloudMaster = await fetchMasterFromSupabase();
                         if (cloudMaster && cloudMaster.length > 0) {
                             const mhRow = dataSheet.addRow(['Barcode', 'Item Name', 'Category 1', 'Category 2', 'Qty']);
@@ -784,15 +811,6 @@ const ResultTable = ({
                             });
                             dataSheet.columns = [{ width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 12 }];
                         }
-                    }
-
-                    if (template === 'simple') {
-                        locationSheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }, { width: 15 }];
-                    } else {
-                        locationSheet.columns = [
-                            { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
-                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
-                        ];
                     }
                 }
             } else {

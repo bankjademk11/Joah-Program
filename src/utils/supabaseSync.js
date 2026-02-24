@@ -9,10 +9,8 @@ const isPSN = (branch) => PSN_BRANCHES.includes(branch);
 export const normalizeMasterBranch = (branch) =>
     isPSN(branch) ? 'ໂພນສີນວນ A' : branch;
 
-const applyBranchFilter = (query, branch) =>
-    isPSN(branch)
-        ? query.in('branch_id', PSN_BRANCHES)
-        : query.eq('branch_id', branch);
+// For location_inventory specifically, we should NEVER mix A and B. They are separate physical spaces.
+const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 
 /**
  * 1. Sync Sheet "DATA" -> master_data (ข้อมูลอ้างอิง)
@@ -232,10 +230,12 @@ export const fetchLocationFromSupabase = async (branchId) => {
         let hasMore = true;
 
         while (hasMore) {
-            const { data, error } = await applyBranchFilter(
-                supabase.from('location_inventory').select('*').order('id', { ascending: true }),
-                branch
-            ).range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+            const { data, error } = await supabase
+                .from('location_inventory')
+                .select('*')
+                .eq('branch_id', branch)
+                .order('id', { ascending: true })
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
 
             if (error) throw error;
 
@@ -354,10 +354,11 @@ export const fetchOdooFromSupabase = async (branchId) => {
         let hasMore = true;
 
         while (hasMore) {
-            const { data, error } = await applyBranchFilter(
-                supabase.from('odoo_stocks').select('*'),
-                branch
-            ).range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+            const { data, error } = await supabase
+                .from('odoo_stocks')
+                .select('*')
+                .eq('branch_id', branch)
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
 
             if (error) throw error;
 

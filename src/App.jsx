@@ -88,7 +88,7 @@ function AppContent() {
   const debounceTimerRef = useRef(null);
   const isRefreshingRef = useRef(false);
 
-  const isPSNUser = user?.branch_id === 'ໂພນສີນວນ';
+  const isPSNUser = user?.branch_id?.startsWith('ໂພນສີນວນ');
   const isAdmin = user?.role === 'HQ'; // เฉพาะ HQ เท่านั้นที่เข้า Admin menu ได้
   const filteredResults = validationResults.filter(r => {
     const matchesLocation = locationFilter ? r.rackLocation === locationFilter : true;
@@ -219,14 +219,14 @@ function AppContent() {
     const mascotDelay = new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
-      // Admin ดูทุกสาขา ถ้าเลือก '' = ดู branch ตัวเอง, ถ้าเลือก branch = ดูสาขานั้น
-      const branchToLoad = isAdmin
-        ? (adminViewBranch || user?.branch_id)
-        : user?.branch_id;
+      // literal branch for locations and odoo. Default PSN staff to A if unspecified.
+      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id;
+      // normalized branch for master data
+      const masterBranch = branchToLoad === 'ໂພນສີນວນ' || branchToLoad === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : branchToLoad;
 
       const [[cloudMaster, cloudLocation, cloudOdoo]] = await Promise.all([
         Promise.all([
-          fetchMasterFromSupabase(branchToLoad),
+          fetchMasterFromSupabase(masterBranch),
           fetchLocationFromSupabase(branchToLoad),
           fetchOdooFromSupabase(branchToLoad)
         ]),
@@ -289,10 +289,8 @@ function AppContent() {
       let odooRows = [];
 
       if (activeSource === 'supabase') {
-        // Normalize branch for PSN A/B sharing
-        const branchToLoad = isAdmin
-          ? (adminViewBranch || user?.branch_id)
-          : (user?.branch_id === 'ໂພນສີນວນ' || user?.branch_id === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : user?.branch_id);
+        const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id;
+        const masterBranch = branchToLoad === 'ໂພນສີນວນ' || branchToLoad === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : branchToLoad;
 
         // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
         try {
@@ -308,7 +306,7 @@ function AppContent() {
         }
 
         const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
-          fetchMasterFromSupabase(branchToLoad),
+          fetchMasterFromSupabase(masterBranch),
           fetchLocationFromSupabase(branchToLoad),
           fetchOdooFromSupabase(branchToLoad)
         ]);
@@ -648,8 +646,8 @@ function AppContent() {
               <div className="absolute inset-0 -inset-x-[50vw] -inset-y-32 overflow-hidden" style={{ zIndex: 0 }}>
                 <RubikNetworkParticles />
               </div>
-              <div className="relative" style={{ zIndex: 1 }}>
-                <div className="text-center mb-10 max-w-2xl">
+              <div className="relative w-full" style={{ zIndex: 1 }}>
+                <div className="text-center mb-10 max-w-2xl mx-auto">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
                     <Sparkles size={14} className="animate-pulse" />
                     <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
@@ -681,7 +679,7 @@ function AppContent() {
                 <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
                   {/* File Upload + Branch Selector (admin only) */}
                   {showAdminMenu && (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 w-full sm:w-[340px]">
                       {/* Branch Selector — sits on top of the upload zone */}
                       <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border-2 border-amber-300 dark:border-amber-500/40">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
@@ -706,8 +704,7 @@ function AppContent() {
 
                   {/* Cloud Database (Hidden for Front Store) */}
                   {user?.workplace !== 'front' && (
-                    <div className={`glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 ${!showAdminMenu ? 'max-w-md mx-auto' : ''
-                      }`}>
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <CloudDatabaseIcon className="w-8 h-8 text-current" />
                       </div>
@@ -715,19 +712,19 @@ function AppContent() {
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
                       </div>
-                      {/* Admin Branch Selector — HQ only */}
-                      {isAdmin && (
+                      {/* Branch Selector — HQ or PSN Branch */}
+                      {(isAdmin || isPSNUser) && (
                         <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
                           <select
-                            value={adminViewBranch}
+                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ A' : '')}
                             onChange={(e) => setAdminViewBranch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
                           >
-                            <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
-                            <option value="ສີວິໄລ">ສີວິໄລ</option>
-                            <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
+                            {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
+                            {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
                             <option value="ໂພນສີນວນ A">ໂພນສີນວນ A</option>
                             <option value="ໂພນສີນວນ B">ໂພນສີນວນ B</option>
                           </select>
@@ -746,7 +743,7 @@ function AppContent() {
 
                   {/* Store Request Card (Only for Front Store or when not in Admin Menu) */}
                   {!showAdminMenu && user?.workplace !== 'back' && (
-                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 max-w-md mx-auto">
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <StoreRequestIcon className="w-8 h-8 text-current" />
                       </div>
@@ -766,7 +763,7 @@ function AppContent() {
 
                   {/* Admin only: Product Management */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500">
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <ProductBoxIcon className="w-8 h-8 text-current" />
                       </div>
@@ -786,7 +783,7 @@ function AppContent() {
 
                   {/* Admin only: Master Data Audit */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500">
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <AuditDatabaseIcon className="w-8 h-8 text-current" />
                       </div>
@@ -806,7 +803,7 @@ function AppContent() {
 
                   {/* Admin only: Odoo Sync Card */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative">
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <SyncOdooIcon className="w-8 h-8 text-current" />
                       </div>
@@ -828,7 +825,7 @@ function AppContent() {
 
                   {/* Store Closing Checklist — ທຸກ role ທີ່ບໍ່ແມ່ນ front ສາມາດໃຊ້ໄດ້ */}
                   {!showAdminMenu && user?.workplace !== 'front' && (
-                    <div className="glass-card rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 relative">
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-yellow-50 dark:bg-yellow-500/10 flex items-center justify-center text-yellow-600 dark:text-yellow-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <ClipboardCheck size={32} strokeWidth={2.5} />
                       </div>
@@ -1045,6 +1042,7 @@ function AppContent() {
                 refreshTrigger={refreshTrigger}
                 onUpdateRowQty={handleUpdateResultRowQty}
                 currentUser={user}
+                currentBranch={(isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id}
                 onAddNewProduct={handleGotoProductManager}
               />
             </div>

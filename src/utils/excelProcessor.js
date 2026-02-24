@@ -299,7 +299,7 @@ export const validateData = (locationRows, dataRows, odooRows = []) => {
                 stats.mismatch++;
             } else {
                 // ตรงกันทั้งหมด (Rack & Category Passed)
-                // แม้ Odoo Qty ไม่ตรง ก็ยังถือว่า Passed ในส่วนของ Warehouse Validator
+                // แม้ Odoo Qty ไม่ตรง ก็ยังถือว่า Passed ในส่วนของ 
                 status = 'passed';
                 stats.passed++;
 
