@@ -359,8 +359,8 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 { header: 'Status', key: 'status', width: 15 },
                 { header: 'Request By', key: 'request_by', width: 20 },
                 { header: 'Accepted By', key: 'accepted_by', width: 20 },
-                { header: 'Date', key: 'date', width: 15 },
-                { header: 'Time', key: 'time', width: 15 }
+                { header: 'Request Time', key: 'request_time', width: 20 },
+                { header: 'Action Time', key: 'action_time', width: 20 }
             ];
 
             // 4. Style Header
@@ -373,7 +373,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
 
             // 5. Add Rows and Apply Styles
             dataToExport.forEach(req => {
-                const dateObj = new Date(req.created_at);
+                const requestDate = new Date(req.created_at);
+                const actionDate = req.updated_at ? new Date(req.updated_at) : null;
+
                 const row = worksheet.addRow({
                     id: req.id,
                     product_name: req.product_name,
@@ -382,8 +384,8 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     status: req.status.toUpperCase(),
                     request_by: req.request_by,
                     accepted_by: req.accepted_by || '-',
-                    date: dateObj.toLocaleDateString('th-TH'),
-                    time: dateObj.toLocaleTimeString('th-TH')
+                    request_time: requestDate.toLocaleString('th-TH'),
+                    action_time: actionDate ? actionDate.toLocaleString('th-TH') : '-'
                 });
 
                 // Color coding based on status
