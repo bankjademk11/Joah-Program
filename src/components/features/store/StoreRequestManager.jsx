@@ -6,8 +6,13 @@ import ExcelJS from 'exceljs';
 
 const StoreRequestManager = ({ onClose, currentUser }) => {
     const [requests, setRequests] = useState([]);
-    const [groupedRequests, setGroupedRequests] = useState([]); // 🆕 Grouped State
+    const [groupedRequests, setGroupedRequests] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Determine if this user can see ALL branches (HQ/Admin) or only their own
+    // Matches App.jsx convention: role === 'HQ' means admin/HQ access
+    const isHQOrAdmin = currentUser?.role === 'HQ';
+    const managedBranch = isHQOrAdmin ? null : currentUser?.branch_id; // null = see all branches
 
     // Date Filter State (Default to today)
     const today = new Date().toISOString().split('T')[0];
@@ -81,33 +86,44 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .select('*')
                 .order('created_at', { ascending: false });
 
+            // 🔐 Non-HQ staff can only see their own branch's requests
+            if (managedBranch) {
+                query = query.eq('branch_id', managedBranch);
+            }
+
             // Apply Date Filter if selected
             if (startDate && endDate) {
                 query = query
                     .gte('created_at', `${startDate}T00:00:00`)
                     .lte('created_at', `${endDate}T23:59:59`);
             } else {
-                // Default limit if no filter
-                query = query.limit(200); // Increased limit for batches
+                query = query.limit(200);
             }
 
             const { data, error } = await query;
 
             if (error) throw error;
 
-            // 🆕 Fetch inventory data for each request
+            // Fetch inventory data for each request — filtered by the request's branch_id
             const requestsWithInventory = await Promise.all(
                 (data || []).map(async (request) => {
                     try {
-                        const { data: inventoryData } = await supabase
+                        // Build query — filter by branch_id if the request carries one
+                        let invQuery = supabase
                             .from('location_inventory')
-                            .select('qty, rack_location')
-                            .eq('barcode_no', request.barcode)
-                            .maybeSingle();
+                            .select('qty, rack_location, branch_id')
+                            .eq('barcode_no', request.barcode);
+
+                        // Use the branch_id recorded on the request (set when staff searched)
+                        if (request.branch_id) {
+                            invQuery = invQuery.eq('branch_id', request.branch_id);
+                        }
+
+                        const { data: inventoryData } = await invQuery.limit(1).maybeSingle();
 
                         return {
                             ...request,
-                            available_qty: inventoryData?.qty || 0,
+                            available_qty: inventoryData?.qty ?? 0,
                             rack_location: inventoryData?.rack_location || 'N/A'
                         };
                     } catch (err) {
@@ -372,7 +388,19 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
             };
 
             // 5. Add Rows and Apply Styles
+            // Sort data to ensure batches are together
+            dataToExport.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            let currentBatch = null;
+            let isAlternateColor = false;
+
             dataToExport.forEach(req => {
+                const reqBatch = req.batch_id || new Date(req.created_at).getTime();
+                if (currentBatch !== reqBatch) {
+                    currentBatch = reqBatch;
+                    isAlternateColor = !isAlternateColor;
+                }
+
                 const requestDate = new Date(req.created_at);
                 const actionDate = req.updated_at ? new Date(req.updated_at) : null;
 
@@ -388,7 +416,22 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     action_time: actionDate ? actionDate.toLocaleString('th-TH') : '-'
                 });
 
-                // Color coding based on status
+                // Apply borders and alternating colors for all cells FIRST
+                row.eachCell((cell, colNumber) => {
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: isAlternateColor ? { argb: 'FFDBEAFE' } : { argb: 'FFDCFCE7' } // Light Blue vs Light Green
+                    };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+                        left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+                        bottom: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+                        right: { style: 'thin', color: { argb: 'FF9CA3AF' } }
+                    };
+                });
+
+                // Override Color coding specifically for status column
                 const statusCell = row.getCell('status');
                 if (req.status === 'accepted') {
                     statusCell.fill = {
@@ -436,6 +479,13 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     <div>
                         <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Store Request Manager</h2>
                         <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">ຈັດການຄຳຂໍເບີກສິນຄ້າ</p>
+                        {/* Branch scope indicator */}
+                        <div className="mt-1">
+                            {isHQOrAdmin
+                                ? <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 uppercase tracking-widest">🌐 ທຸກສາຂາ (HQ)</span>
+                                : <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 uppercase tracking-widest">📍 {managedBranch}</span>
+                            }
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
@@ -551,21 +601,24 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-3">
+                                                    {/* REJECT ALL */}
                                                     <button
                                                         onClick={() => handleRejectBatch(group.batch_id, group.items)}
-                                                        className="px-4 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold transition-all active:scale-95 flex items-center gap-2"
+                                                        className="group/btn flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-900 text-rose-500 dark:text-rose-400 font-bold text-sm hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:hover:bg-rose-600 dark:hover:border-rose-600 transition-all duration-200 active:scale-95 shadow-sm"
                                                         title="Reject All"
                                                     >
-                                                        <Ban size={18} />
-                                                        <span>REJECT</span>
+                                                        <Ban size={16} className="transition-transform group-hover/btn:rotate-12 duration-200" />
+                                                        <span>ປະຕິເສດ</span>
                                                     </button>
+
+                                                    {/* ACCEPT ALL */}
                                                     <button
                                                         onClick={() => handleAcceptBatch(group.batch_id, group.items)}
-                                                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-95"
+                                                        className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-200 active:scale-95"
                                                     >
-                                                        <CheckCircle size={18} />
-                                                        <span>ACCEPT ALL ({pendingCount})</span>
+                                                        <CheckCircle size={16} className="transition-transform group-hover/btn:scale-110 duration-200" />
+                                                        <span>ຮັບ ({pendingCount})</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -598,26 +651,30 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                         ) : item.status === 'rejected' ? (
                                                             <span className="text-rose-500"><Ban size={16} /></span>
                                                         ) : (
-                                                            <div className="flex items-center gap-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {/* Item-level REJECT */}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleReject(item.id, item.product_name);
                                                                     }}
-                                                                    className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors border border-transparent hover:border-rose-100"
+                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-rose-200 dark:border-rose-800 text-rose-500 dark:text-rose-400 text-[11px] font-bold hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all duration-150 active:scale-95"
                                                                     title="Reject"
                                                                 >
-                                                                    <Ban size={14} />
+                                                                    <Ban size={11} />
+                                                                    ປະຕິເສດ
                                                                 </button>
+                                                                {/* Item-level ACCEPT */}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleAccept(item.id, item.product_name, item.barcode, item.qty);
                                                                     }}
-                                                                    className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-[11px] font-bold shadow shadow-emerald-500/30 transition-all duration-150 active:scale-95"
                                                                     title="Accept"
                                                                 >
-                                                                    <Check size={16} />
+                                                                    <Check size={11} />
+                                                                    ຮັບ
                                                                 </button>
                                                             </div>
                                                         )}

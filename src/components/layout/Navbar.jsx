@@ -44,7 +44,7 @@ const Navbar = ({
 
 
     useEffect(() => {
-        // Initial fetch
+        // Re-fetch when user changes (different branch)
         fetchPendingCount();
 
         // Subscribe to real-time changes
@@ -58,14 +58,24 @@ const Navbar = ({
         return () => {
             subscription.unsubscribe();
         };
-    }, []);
+    }, [currentUser]); // Re-subscribe when user/branch changes
 
     const fetchPendingCount = async () => {
         try {
-            const { count, error } = await supabase
+            const isHQ = currentUser?.role === 'HQ';
+            const userBranch = currentUser?.branch_id;
+
+            let query = supabase
                 .from('store_requests')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'pending');
+
+            // Non-HQ: only count requests from their own branch
+            if (!isHQ && userBranch) {
+                query = query.eq('branch_id', userBranch);
+            }
+
+            const { count, error } = await query;
 
             if (!error) {
                 setPendingCount(count || 0);
