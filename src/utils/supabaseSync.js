@@ -1,15 +1,11 @@
 import { supabase } from './supabaseClient';
+const PSN_BRANCHES = ['ໂພນສີນວນ', 'ໂພນສີນວນ A', 'ໂພນສີນວນ B'];
+const isPSN = (branch) => branch?.startsWith('ໂພນສີນວນ');
 
-// PSN branches share the SAME master_data (stored under ໂພນສີນວນ A)
-// location_inventory remains SEPARATE per A/B
-const PSN_BRANCHES = ['ໂພນສີນວນ A', 'ໂພນສີນວນ B', 'ໂພນສີນວນ'];
-const isPSN = (branch) => PSN_BRANCHES.includes(branch);
-
-// Master data ของ PSN ทุก variant ให้ดึงจาก A เสมอ
+// PSN now uses a single branch identity
 export const normalizeMasterBranch = (branch) =>
-    isPSN(branch) ? 'ໂພນສີນວນ A' : branch;
+    isPSN(branch) ? 'ໂພນສີນວນ' : branch;
 
-// For location_inventory specifically, we should NEVER mix A and B. They are separate physical spaces.
 const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 
 /**

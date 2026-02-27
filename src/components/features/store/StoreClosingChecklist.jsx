@@ -12,11 +12,12 @@ import {
 const RippleSVG = ({ active, color }) => {
     if (!active) return null;
     return (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" style={{ zIndex: 20 }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
             {[0, 1, 2].map(i => (
                 <circle key={i} cx="50%" cy="50%"
                     r="0" fill="none"
                     stroke={color} strokeWidth={3 - i * 0.8}
+                    className="animate-ripple"
                     style={{
                         animation: `rippleBurst 0.6s ease-out ${i * 0.1}s both`,
                         opacity: 1 - i * 0.25
@@ -28,56 +29,45 @@ const RippleSVG = ({ active, color }) => {
 };
 
 const AnimatedCheck = ({ playing }) => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mr-2">
         <circle cx="12" cy="12" r="10"
-            stroke="#1a73e8" strokeWidth="2"
-            fill={playing ? '#e8f0fe' : 'white'}
-            style={{ transition: 'fill 0.25s ease' }}
+            className={`stroke-blue-600 transition-fill duration-300 ${playing ? 'fill-blue-50' : 'fill-white'}`}
+            strokeWidth="2"
         />
         <path
             d="M7 12 L10.5 15.5 L17 9"
-            stroke="#1a73e8"
+            className={`stroke-blue-600 transition-all duration-500 delay-75 ${playing ? 'opacity-100' : 'opacity-0'}`}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
             strokeDasharray="22"
-            style={{
-                strokeDashoffset: playing ? 0 : 22,
-                transition: playing ? 'stroke-dashoffset 0.35s cubic-bezier(0.4,0,0.2,1) 0.05s' : 'none'
-            }}
+            style={{ strokeDashoffset: playing ? 0 : 22 }}
         />
     </svg>
 );
 
 const AnimatedX = ({ playing }) => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mr-2">
         <circle cx="12" cy="12" r="10"
-            stroke="#d93025" strokeWidth="2"
-            fill={playing ? '#fce8e6' : 'white'}
-            style={{ transition: 'fill 0.25s ease' }}
+            className={`stroke-red-600 transition-fill duration-300 ${playing ? 'fill-red-50' : 'fill-white'}`}
+            strokeWidth="2"
         />
         <path
             d="M9 9 L15 15"
-            stroke="#d93025"
+            className={`stroke-red-600 transition-all duration-300 ${playing ? 'opacity-100' : 'opacity-0'}`}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeDasharray="15"
-            style={{
-                strokeDashoffset: playing ? 0 : 15,
-                transition: playing ? 'stroke-dashoffset 0.25s cubic-bezier(0.4,0,0.2,1) 0.02s' : 'none'
-            }}
+            style={{ strokeDashoffset: playing ? 0 : 15 }}
         />
         <path
             d="M15 9 L9 15"
-            stroke="#d93025"
+            className={`stroke-red-600 transition-all duration-300 delay-100 ${playing ? 'opacity-100' : 'opacity-0'}`}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeDasharray="15"
-            style={{
-                strokeDashoffset: playing ? 0 : 15,
-                transition: playing ? 'stroke-dashoffset 0.25s cubic-bezier(0.4,0,0.2,1) 0.12s' : 'none'
-            }}
+            style={{ strokeDashoffset: playing ? 0 : 15 }}
         />
     </svg>
 );
@@ -85,7 +75,7 @@ const AnimatedX = ({ playing }) => (
 const ParticleBurst = ({ active, color, count = 8 }) => {
     if (!active) return null;
     return (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" style={{ zIndex: 20 }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
             {Array.from({ length: count }).map((_, i) => {
                 const angle = (i / count) * 360;
                 const rad = (angle * Math.PI) / 180;
@@ -111,44 +101,26 @@ const ParticleBurst = ({ active, color, count = 8 }) => {
 const LinearProgress = ({ value, total }) => {
     const pct = Math.min(100, Math.max(0, (value / total) * 100));
     return (
-        <div style={{ position: 'relative', height: 6, background: '#f1f3f4', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{
-                position: 'absolute', left: 0, top: 0, bottom: 0,
-                width: `${pct}%`,
-                background: 'linear-gradient(90deg, #1a73e8, #4285f4)',
-                borderRadius: 3,
-                transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)',
-                boxShadow: '0 0 10px rgba(26,115,232,0.3)'
-            }} />
+        <div className="relative h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500 ease-in-out shadow-sm"
+                style={{ width: `${pct}%` }} />
         </div>
     );
 };
 
 const StepDots = ({ total, current, answers, items, onJump }) => (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+    <div className="flex gap-1.5 items-center flex-wrap justify-center">
         {Array.from({ length: total }).map((_, i) => {
             const ans = answers[items[i].id];
             const isCur = i === current;
             return (
                 <button key={i} onClick={() => onJump(i)}
                     title={`ລາຍການ ${i + 1}`}
-                    style={{
-                        width: isCur ? 32 : 10,
-                        height: 10,
-                        borderRadius: 99,
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0,
-                        background: isCur
-                            ? '#1a73e8'
-                            : ans === 'pass' ? '#34a853'
-                                : ans === 'fail' ? '#d93025'
-                                    : '#e8eaed',
-                        transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)',
-                        outline: 'none',
-                        transform: isCur ? 'scale(1.2)' : 'scale(1)',
-                        opacity: isCur ? 1 : 0.6
-                    }}
+                    className={`h-2.5 rounded-full transition-all duration-300 transform outline-none
+                        ${isCur ? 'w-8 bg-blue-600 scale-110 opacity-100' : 'w-2.5 opacity-60'}
+                        ${!isCur && ans === 'pass' ? 'bg-emerald-500 opacity-80' : ''}
+                        ${!isCur && ans === 'fail' ? 'bg-rose-500 opacity-80' : ''}
+                        ${!isCur && !ans ? 'bg-slate-200' : ''}`}
                 />
             );
         })}
@@ -156,19 +128,20 @@ const StepDots = ({ total, current, answers, items, onJump }) => (
 );
 
 const TableCheckSVG = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
-        <circle cx="12" cy="12" r="10" fill="#e6f4ea" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="block">
+        <circle cx="12" cy="12" r="10" fill="#e6f4ea" className="animate-scale-in" />
         <path d="M7 12 L10.5 15.5 L17 9"
             stroke="#34a853" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
             strokeDasharray="14"
+            className="animate-path-flow"
             style={{ animation: 'svgDraw 0.4s ease forwards' }}
         />
     </svg>
 );
 
 const TableFailSVG = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
-        <circle cx="12" cy="12" r="10" fill="#fce8e6" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="block">
+        <circle cx="12" cy="12" r="10" fill="#fce8e6" className="animate-scale-in" />
         <path d="M9 9 L15 15" stroke="#d93025" strokeWidth="2.5" strokeLinecap="round"
             strokeDasharray="10"
             style={{ animation: 'svgDraw 0.3s ease forwards' }}
@@ -255,521 +228,340 @@ const StoreClosingChecklist = ({ onBack }) => {
     const progress = isWizardMode && currentTask ? Math.round(((currentStep + (answers[currentTask.id] ? 1 : 0)) / checklistItems.length) * 100) : 100;
 
     // Category chip color map
-    const catChipStyle = (color) => ({
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '4px 12px', borderRadius: 99,
-        background: color + '15', border: `1px solid ${color}30`,
-        fontSize: 12, fontWeight: 600, color: color,
-        letterSpacing: '0.02em', whiteSpace: 'nowrap'
-    });
+    const catChipStyle = (color) => `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap`;
 
     return (
-        <>
-            <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Noto+Sans+Lao:wght@400;500;700&display=swap');
-
-        :root {
-          --font-main: 'Google Sans', 'Noto Sans Lao', sans-serif;
-          --color-bg: #f8f9fa;
-          --color-surface: #ffffff;
-          --color-primary: #1a73e8;
-          --color-success: #34a853;
-          --color-danger: #d93025;
-          --color-warning: #f9ab00;
-          --color-text-main: #202124;
-          --color-text-sec: #5f6368;
-          --color-border: #e8eaed;
-          --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-          --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-          --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
-          --radius-md: 12px;
-          --radius-lg: 20px;
-          --radius-xl: 28px;
-        }
-
-        .cl3 { font-family: var(--font-main); color: var(--color-text-main); background: var(--color-bg); }
-        .cl3 * { box-sizing: border-box; }
-
-        /* Animations */
-        @keyframes cardIn {
-          from { opacity: 0; transform: translateY(20px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); } 
-        }
-        @keyframes rippleBurst {
-          0%   { r: 0;  opacity: 0.8; }
-          100% { r: 60px; opacity: 0; }
-        }
-        @keyframes particle {
-          0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-          100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
-        }
-        @keyframes svgDraw {
-          from { stroke-dashoffset: 14; }
-          to   { stroke-dashoffset: 0; }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes popIn {
-          0%   { transform: scale(0); opacity: 0; }
-          60%  { transform: scale(1.2); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes shakeX {
-          0%,100% { transform: translateX(0); }
-          20%     { transform: translateX(-6px); }
-          40%     { transform: translateX(6px); }
-          60%     { transform: translateX(-4px); }
-          80%     { transform: translateX(4px); }
-        }
-
-        .card-in     { animation: cardIn 0.4s cubic-bezier(0.2,0.8,0.2,1) both; }
-        .fade-up     { animation: fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) both; }
-        .pop-in      { animation: popIn  0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
-        .shake-x     { animation: shakeX 0.4s ease; }
-
-        /* Buttons */
-        .btn-google {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          border: none; cursor: pointer; border-radius: 100px;
-          font-family: inherit; font-weight: 500; font-size: 14px;
-          transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
-          position: relative; overflow: hidden;
-          outline: none; user-select: none;
-          padding: 10px 20px;
-        }
-        .btn-google:active { transform: scale(0.96); }
-        .btn-google:focus-visible { box-shadow: 0 0 0 2px rgba(26,115,232,0.4); }
-
-        .btn-pass-style {
-          background: white; color: var(--color-primary);
-          border: 1px solid var(--color-border);
-          box-shadow: var(--shadow-sm);
-        }
-        .btn-pass-style:hover, .btn-pass-style.active {
-          background: #e8f0fe; border-color: var(--color-primary);
-          box-shadow: 0 4px 12px rgba(26,115,232,0.2);
-        }
-
-        .btn-fail-style {
-          background: white; color: var(--color-danger);
-          border: 1px solid var(--color-border);
-          box-shadow: var(--shadow-sm);
-        }
-        .btn-fail-style:hover, .btn-fail-style.active {
-          background: #fce8e6; border-color: var(--color-danger);
-          box-shadow: 0 4px 12px rgba(217,48,37,0.2);
-        }
-
-        .btn-primary {
-          background: var(--color-primary); color: white;
-          box-shadow: 0 2px 8px rgba(26,115,232,0.3);
-        }
-        .btn-primary:hover { background: #1557b0; }
-
-        /* Cards */
-        .el-card {
-          background: var(--color-surface);
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-md);
-          border: 1px solid rgba(0,0,0,0.04);
-        }
-
-        /* Table */
-        .table-row:hover td { background: #f8f9fa !important; }
-        .table-row { transition: background 0.15s ease; }
-        
-        /* Input */
-        .input-underline {
-          background: transparent; border: none;
-          borderBottom: 1px solid var(--color-border);
-          padding: 6px 0; font-size: 13px; color: var(--color-text-main);
-          outline: none; font-family: inherit; width: 100%;
-          transition: border-color 0.2s;
-        }
-        .input-underline:focus { border-bottom-color: var(--color-primary); }
-
-        @media print {
-          .no-print { display: none !important; }
-          .cl3 { background: white; }
-          .el-card { box-shadow: none; border: 1px solid #ddd; }
-        }
-      `}</style>
-
-            <div className="cl3 fade-up" style={{ width: '100%', maxWidth: '1100px', margin: '0 auto', paddingBottom: 80, paddingLeft: 20, paddingRight: 20 }}>
-
-                {/* ── NAV ── */}
-                <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingTop: 20 }}>
-                    <button onClick={onBack} className="btn-google"
-                        style={{ background: 'white', color: '#3c4043', border: '1px solid #dadce0', boxShadow: 'var(--shadow-sm)' }}>
-                        <ChevronLeft size={20} /> ກັບຄືນ
+        <div className="w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 animate-fade-in">
+            {/* ── NAV ── */}
+            <div className="print:hidden flex justify-between items-center mb-8 pt-5">
+                <button onClick={onBack} className="btn-secondary px-5 py-2.5 rounded-full flex items-center gap-2">
+                    <ChevronLeft size={20} /> ກັບຄືນ
+                </button>
+                <div className="flex gap-3">
+                    {!isWizardMode && (
+                        <button onClick={resetWizard} className="btn-secondary px-5 py-2.5 rounded-full flex items-center gap-2 border-amber-400 text-amber-600 hover:bg-amber-50">
+                            <RotateCcw size={18} /> ເຮັດຄືນ
+                        </button>
+                    )}
+                    <button onClick={copyTable} className={`px-5 py-2.5 rounded-full flex items-center gap-2 transition-all duration-300 shadow-lg ${copyStatus ? 'bg-emerald-600 text-white shadow-emerald-500/20' : 'bg-blue-600 text-white shadow-blue-500/20'}`}>
+                        {copyStatus ? <Check size={18} /> : <Copy size={18} />}
+                        {copyStatus ? 'ຄັດລອກແລ້ວ!' : 'ຄັດລອກ Excel'}
                     </button>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                        {!isWizardMode && (
-                            <button onClick={resetWizard} className="btn-google"
-                                style={{ background: 'white', color: '#f9ab00', border: '1px solid #f9ab00', boxShadow: 'var(--shadow-sm)' }}>
-                                <RotateCcw size={18} /> ເຮັດຄືນ
-                            </button>
-                        )}
-                        <button onClick={copyTable} className="btn-google"
-                            style={{
-                                background: copyStatus ? '#34a853' : '#1a73e8',
-                                color: 'white', border: 'none',
-                                boxShadow: copyStatus ? 'none' : '0 2px 8px rgba(26,115,232,0.3)'
-                            }}>
-                            {copyStatus ? <Check size={18} /> : <Copy size={18} />}
-                            {copyStatus ? 'ຄັດລອກແລ້ວ!' : 'ຄັດລອກ Excel'}
-                        </button>
-                        <button onClick={() => window.print()} className="btn-google"
-                            style={{ background: 'white', color: '#3c4043', border: '1px solid #dadce0', boxShadow: 'var(--shadow-sm)' }}>
-                            <Printer size={18} /> Print
-                        </button>
-                    </div>
+                    <button onClick={() => window.print()} className="btn-secondary px-5 py-2.5 rounded-full flex items-center gap-2">
+                        <Printer size={18} /> Print
+                    </button>
                 </div>
-
-                {/* ══════ WIZARD MODE ══════ */}
-                {isWizardMode ? (
-                    <div>
-                        {/* Progress header card */}
-                        <div className="el-card" style={{ padding: '24px 32px', marginBottom: 24 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 20 }}>
-                                <div>
-                                    <div style={{ fontSize: 13, color: '#80868b', fontWeight: 700, letterSpacing: '0.08em', marginBottom: 6, textTransform: 'uppercase' }}>
-                                        Store Closing Checklist
-                                    </div>
-                                    <div style={{ fontSize: 28, fontWeight: 700, color: '#202124', display: 'flex', alignItems: 'baseline', gap: 12 }}>
-                                        ລາຍການທີ {currentStep + 1}
-                                        <span style={{ fontSize: 16, color: '#80868b', fontWeight: 500 }}>/ {checklistItems.length}</span>
-                                    </div>
-                                </div>
-
-                                {/* Score badges */}
-                                <div style={{ display: 'flex', gap: 16 }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', background: '#e6f4ea', borderRadius: 16, minWidth: 100 }}>
-                                        <span style={{ fontSize: 24, fontWeight: 700, color: '#34a853', lineHeight: 1 }}>{passCount}</span>
-                                        <span style={{ fontSize: 12, color: '#1e8e3e', fontWeight: 600, marginTop: 4 }}>ຜ່ານ</span>
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', background: '#fce8e6', borderRadius: 16, minWidth: 100 }}>
-                                        <span style={{ fontSize: 24, fontWeight: 700, color: '#d93025', lineHeight: 1 }}>{failCount}</span>
-                                        <span style={{ fontSize: 12, color: '#c5221f', fontWeight: 600, marginTop: 4 }}>ບໍ່ຜ່ານ</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <LinearProgress value={currentStep + (currentTask && answers[currentTask.id] ? 1 : 0)} total={checklistItems.length} />
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-                                <span style={{ fontSize: 13, color: '#80868b', fontWeight: 500 }}>{progress}% ສຳເລັດ</span>
-                            </div>
-                        </div>
-
-                        {/* Main question card */}
-                        <div key={cardKey} className="card-in el-card"
-                            style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 24, border: '1px solid rgba(0,0,0,0.05)' }}>
-
-                            {/* Category color bar */}
-                            <div style={{ height: 6, background: currentTask.catColor }} />
-
-                            <div style={{ padding: '40px 48px' }}>
-                                {/* Category chip */}
-                                <div style={{ marginBottom: 24 }}>
-                                    <span style={{ ...catChipStyle(currentTask.catColor), fontSize: 14, padding: '6px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: currentTask.catColor }} />
-                                        {currentTask.category}
-                                    </span>
-                                </div>
-
-                                {/* Task title */}
-                                <h2 style={{ fontSize: 32, fontWeight: 700, color: '#202124', margin: '0 0 40px', lineHeight: 1.4 }}>
-                                    {currentTask.task}
-                                </h2>
-
-                                {/* Criteria cards */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 48 }}>
-                                    {/* PASS criteria */}
-                                    <div style={{ padding: '28px', background: '#f8fffe', border: '1px solid #ceead6', borderRadius: 20, borderLeft: '5px solid #34a853' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                                            <CheckCircle2 size={24} color="#34a853" strokeWidth={2.5} />
-                                            <span style={{ fontSize: 15, fontWeight: 700, color: '#1e8e3e', letterSpacing: '0.02em' }}>ເກນ: ຜ່ານ</span>
-                                        </div>
-                                        <p style={{ fontSize: 16, color: '#3c4043', lineHeight: 1.7, margin: 0 }}>
-                                            {currentTask.criteriaPass}
-                                        </p>
-                                    </div>
-
-                                    {/* FAIL criteria */}
-                                    <div style={{ padding: '28px', background: '#fff8f7', border: '1px solid #f5c6c3', borderRadius: 20, borderLeft: '5px solid #d93025' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                                            <AlertCircle size={24} color="#d93025" strokeWidth={2.5} />
-                                            <span style={{ fontSize: 15, fontWeight: 700, color: '#c5221f', letterSpacing: '0.02em' }}>ເກນ: ບໍ່ຜ່ານ</span>
-                                        </div>
-                                        <p style={{ fontSize: 16, color: '#3c4043', lineHeight: 1.7, margin: 0 }}>
-                                            {currentTask.criteriaFail}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* ════ ACTION BUTTONS with SVG animation ════ */}
-                                <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
-
-                                    {/* FAIL button */}
-                                    <button
-                                        onClick={() => handleAnswer(currentTask.id, 'fail')}
-                                        className={`btn-google btn-fail-style ${failAnim ? 'active shake-x' : ''}`}
-                                        style={{ flex: 1, maxWidth: 320, height: 64, fontSize: 18, borderRadius: 32 }}
-                                    >
-                                        <RippleSVG active={failAnim} color="#d93025" />
-                                        <ParticleBurst active={failAnim} color="#d93025" count={7} />
-                                        <AnimatedX playing={failAnim} />
-                                        <span>ບໍ່ຜ່ານ</span>
-                                    </button>
-
-                                    {/* PASS button */}
-                                    <button
-                                        onClick={() => handleAnswer(currentTask.id, 'pass')}
-                                        className={`btn-google btn-pass-style ${passAnim ? 'active' : ''}`}
-                                        style={{ flex: 1, maxWidth: 320, height: 64, fontSize: 18, borderRadius: 32 }}
-                                    >
-                                        <RippleSVG active={passAnim} color="#1a73e8" />
-                                        <ParticleBurst active={passAnim} color="#34a853" count={8} />
-                                        <AnimatedCheck playing={passAnim} />
-                                        <span>ຜ່ານ</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Dot navigation card */}
-                        <div className="el-card no-print" style={{ padding: '20px 32px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <button onClick={() => { setCurrentStep(p => Math.max(0, p - 1)); setCardKey(k => k + 1); }}
-                                    disabled={currentStep === 0}
-                                    className="btn-google"
-                                    style={{
-                                        background: 'transparent', color: currentStep === 0 ? '#dadce0' : '#5f6368',
-                                        border: 'none', padding: '10px 20px', fontSize: 14,
-                                        opacity: currentStep === 0 ? 0.4 : 1, boxShadow: 'none'
-                                    }}>
-                                    <ArrowLeft size={20} /> ຍ້ອນກັບ
-                                </button>
-
-                                <StepDots
-                                    total={checklistItems.length}
-                                    current={currentStep}
-                                    answers={answers}
-                                    items={checklistItems}
-                                    onJump={(i) => { setCurrentStep(i); setCardKey(k => k + 1); }}
-                                />
-
-                                <button
-                                    onClick={() => { setCurrentStep(p => Math.min(checklistItems.length - 1, p + 1)); setCardKey(k => k + 1); }}
-                                    disabled={!answers[currentTask.id] || currentStep === checklistItems.length - 1}
-                                    className="btn-google"
-                                    style={{
-                                        background: 'transparent', color: '#1a73e8', border: 'none',
-                                        padding: '10px 20px', fontSize: 14,
-                                        opacity: (!answers[currentTask.id] || currentStep === checklistItems.length - 1) ? 0.4 : 1,
-                                        boxShadow: 'none'
-                                    }}>
-                                    ຕໍ່ໄປ  <ChevronRight size={20} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                ) : (
-                    /* ══════ SUMMARY / TABLE MODE ══════ */
-                    <div className="fade-up">
-
-                        {/* Document header */}
-                        <div className="el-card" style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 24 }}>
-
-                            {/* Top color accent */}
-                            <div style={{ height: 6, background: 'linear-gradient(90deg, #1a73e8 0%, #34a853 33%, #f9ab00 66%, #ea4335 100%)' }} />
-
-                            <div style={{ padding: '32px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
-
-                                {/* Logo + title */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                                        <svg width="80" height="28" viewBox="0 0 80 28">
-                                            <text x="0" y="22" fontFamily="'Google Sans', sans-serif" fontWeight="700" fontSize="22" fill="#202124">Joah</text>
-                                        </svg>
-                                        <span style={{ fontSize: 10, color: '#80868b', letterSpacing: '0.15em', fontWeight: 700 }}>JOB A RIUM</span>
-                                    </div>
-                                    <div style={{ fontSize: 14, color: '#5f6368', fontWeight: 500, marginBottom: 4 }}>ເຊັກລິສປິດຮ້ານ</div>
-                                    <div style={{ fontSize: 24, fontWeight: 700, color: '#202124' }}>Store Closing Checklist</div>
-                                </div>
-
-                                {/* Summary stats */}
-                                <div style={{ display: 'flex', gap: 24 }}>
-                                    {/* SVG donut chart */}
-                                    <div style={{ position: 'relative' }}>
-                                        <svg width="100" height="100" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)' }}>
-                                            <defs>
-                                                <linearGradient id="donutPass" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                    <stop offset="0%" stopColor="#34a853" />
-                                                    <stop offset="100%" stopColor="#1a73e8" />
-                                                </linearGradient>
-                                            </defs>
-                                            <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f3f4" strokeWidth="12" />
-                                            <circle cx="50" cy="50" r="40" fill="none"
-                                                stroke="url(#donutPass)" strokeWidth="12"
-                                                strokeLinecap="round"
-                                                strokeDasharray={`${(passCount / checklistItems.length) * 251} 251`}
-                                                style={{ transition: 'stroke-dasharray 1s cubic-bezier(0.4,0,0.2,1)' }}
-                                            />
-                                        </svg>
-                                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                            <span style={{ fontSize: 20, fontWeight: 700, color: '#202124' }}>{passCount}</span>
-                                            <span style={{ fontSize: 11, color: '#80868b', fontWeight: 500 }}>ຜ່ານ</span>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#34a853' }} />
-                                            <span style={{ fontSize: 14, color: '#3c4043' }}>ຜ່ານ: <strong style={{ color: '#34a853' }}>{passCount}</strong></span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#d93025' }} />
-                                            <span style={{ fontSize: 14, color: '#3c4043' }}>ບໍ່ຜ່ານ: <strong style={{ color: '#d93025' }}>{failCount}</strong></span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#dadce0' }} />
-                                            <span style={{ fontSize: 14, color: '#80868b' }}>ທັງໝົດ: {checklistItems.length}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Meta info */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f8f9fa', borderRadius: 12, border: '1px solid #e8eaed' }}>
-                                        <Calendar size={16} color="#5f6368" />
-                                        <input type="date" value={currentDate}
-                                            onChange={e => setCurrentDate(e.target.value)}
-                                            style={{ background: 'none', border: 'none', fontSize: 14, color: '#3c4043', outline: 'none', fontFamily: 'inherit', fontWeight: 500 }} />
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f8f9fa', borderRadius: 12, border: '1px solid #e8eaed' }}>
-                                        <Building2 size={16} color="#5f6368" />
-                                        <span style={{ fontSize: 14, color: '#3c4043', fontWeight: 500 }}>ສາຂາ: {branch}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f8f9fa', borderRadius: 12, border: '1px solid #e8eaed' }}>
-                                        <PenLine size={16} color="#5f6368" />
-                                        <span style={{ fontSize: 14, color: '#80868b', borderBottom: '1px solid #dadce0', flex: 1, minWidth: 100 }}> &nbsp; </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Table card */}
-                        <div className="el-card" style={{ borderRadius: 24, overflow: 'hidden' }}>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table id="checklistTable" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #e8eaed' }}>
-                                            {[
-                                                { label: 'ລ/ດ', w: 60, center: true },
-                                                { label: 'ໝວດ / ລາຍລະອຽດ', w: 'auto' },
-                                                { label: 'ຜ່ານ', w: 80, center: true },
-                                                { label: 'ບໍ່ຜ່ານ', w: 90, center: true },
-                                                { label: 'ໝາຍເຫດ', w: 200 }
-                                            ].map((h, i) => (
-                                                <th key={i} style={{
-                                                    padding: '16px', fontSize: 12, fontWeight: 700,
-                                                    color: '#5f6368', letterSpacing: '0.06em', textTransform: 'uppercase',
-                                                    textAlign: h.center ? 'center' : 'left', width: h.w
-                                                }}>
-                                                    {h.label}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {checklistItems.map((item, idx) => {
-                                            const ans = answers[item.id];
-                                            return (
-                                                <tr key={item.id} className="table-row"
-                                                    style={{ borderBottom: '1px solid #f1f3f4', background: 'white' }}>
-                                                    <td style={{ padding: '16px', textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#80868b' }}>
-                                                        {String(item.id).padStart(2, '0')}
-                                                    </td>
-                                                    <td style={{ padding: '16px' }}>
-                                                        <div style={catChipStyle(item.catColor)}>
-                                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.catColor }} />
-                                                            {item.category}
-                                                        </div>
-                                                        <div style={{ marginTop: 6, fontSize: 15, color: '#202124', fontWeight: 500 }}>{item.task}</div>
-                                                    </td>
-                                                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                                                        {ans === 'pass' && (
-                                                            <span className="pop-in" style={{ display: 'inline-block' }}>
-                                                                <TableCheckSVG />
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                                                        {ans === 'fail' && (
-                                                            <span className="pop-in" style={{ display: 'inline-block' }}>
-                                                                <TableFailSVG />
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '16px' }}>
-                                                        <input type="text"
-                                                            value={remarks[item.id] || ''}
-                                                            onChange={e => setRemarks(p => ({ ...p, [item.id]: e.target.value }))}
-                                                            placeholder="ໝາຍເຫດ..."
-                                                            className="input-underline"
-                                                        />
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Table footer */}
-                            <div style={{ padding: '20px 32px', background: '#f8f9fa', borderTop: '1px solid #e8eaed', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-                                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                                    {['ປອດໄພ', 'ສະອາດ', 'ຖືກຕ້ອງ', 'ເປັນລະບຽບ', 'ໃຊ້ງານໄດ້'].map((tag, i) => (
-                                        <span key={i} style={{ fontSize: 13, color: '#5f6368', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <Check size={14} color="#34a853" /> {tag}
-                                        </span>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                    {/* Animated mini score bar */}
-                                    <svg width="120" height="32" viewBox="0 0 120 32">
-                                        <rect x="0" y="10" width="120" height="12" rx="6" fill="#e8eaed" />
-                                        <rect x="0" y="10"
-                                            width={passCount > 0 ? (passCount / checklistItems.length) * 120 : 0}
-                                            height="12" rx="6" fill="#34a853"
-                                            style={{ transition: 'width 1s cubic-bezier(0.4,0,0.2,1)' }}
-                                        />
-                                        <text x="60" y="28" textAnchor="middle" fontSize="10" fill="#5f6368" fontFamily="'Google Sans', sans-serif" fontWeight="500">
-                                            {Math.round((passCount / checklistItems.length) * 100)}% ຜ່ານ
-                                        </text>
-                                    </svg>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Info tip ── */}
-                <div className="no-print" style={{ marginTop: 24, padding: '16px 24px', background: '#e8f0fe', borderRadius: 16, display: 'flex', gap: 16, alignItems: 'flex-start', border: '1px solid #d2e3fc' }}>
-                    <Info size={20} color="#1a73e8" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <p style={{ fontSize: 14, color: '#174ea6', margin: 0, lineHeight: 1.6 }}>
-                        {isWizardMode
-                            ? "ເລືອກ 'ຜ່ານ' ຫຼື 'ບໍ່ຜ່ານ' ໂດຍອີງຕາມເກນທີ່ສະແດງ. ກົດ dot ໄດ້ເພື່ອກະໂດດໄປລາຍການໃດກໍ່ໄດ້."
-                            : "Checklist ນີ້ຮັບປະກັນຄຸນນະພາບ ແລະ ຄວາມພ້ອມກ່ອນປິດຮ້ານ. ກວດໃຫ້ຄົບ 14 ລາຍການ."
-                        }
-                    </p>
-                </div>
-
             </div>
-        </>
+
+            {/* ══════ WIZARD MODE ══════ */}
+            {isWizardMode && currentTask ? (
+                <div className="space-y-6">
+                    {/* Progress header card */}
+                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-xl border-white/40">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+                            <div>
+                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
+                                    Store Closing Checklist
+                                </div>
+                                <div className="text-3xl font-black text-slate-800 dark:text-white flex items-baseline gap-3">
+                                    ລາຍການທີ {currentStep + 1}
+                                    <span className="text-lg text-slate-400 font-bold tracking-tight">/ {checklistItems.length}</span>
+                                </div>
+                            </div>
+
+                            {/* Score badges */}
+                            <div className="flex gap-4">
+                                <div className="flex flex-col items-center px-6 py-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl min-w-[100px] border border-emerald-100 dark:border-emerald-500/20">
+                                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{passCount}</span>
+                                    <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold uppercase tracking-widest mt-1">ຜ່ານ</span>
+                                </div>
+                                <div className="flex flex-col items-center px-6 py-3 bg-rose-50 dark:bg-rose-500/10 rounded-2xl min-w-[100px] border border-rose-100 dark:border-rose-500/20">
+                                    <span className="text-2xl font-black text-rose-600 dark:text-rose-400 leading-none">{failCount}</span>
+                                    <span className="text-[10px] text-rose-500 dark:text-rose-400 font-bold uppercase tracking-widest mt-1">ບໍ່ຜ່ານ</span>
+                                </div>
+                            </div>
+                        </div>
+                        <LinearProgress value={currentStep + (currentTask && answers[currentTask.id] ? 1 : 0)} total={checklistItems.length} />
+                        <div className="flex justify-end mt-3">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{progress}% ສຳເລັດ</span>
+                        </div>
+                    </div>
+
+                    {/* Main question card */}
+                    <div key={cardKey} className="animate-scale-in glass-card rounded-[2.5rem] overflow-hidden shadow-2xl border-white/60">
+                        {/* Category color bar */}
+                        <div className="h-2 w-full" style={{ backgroundColor: currentTask.catColor }} />
+
+                        <div className="p-8 md:p-12">
+                            {/* Category chip */}
+                            <div className="mb-8">
+                                <span className={catChipStyle(currentTask.catColor)} style={{ backgroundColor: `${currentTask.catColor}15`, color: currentTask.catColor, border: `1px solid ${currentTask.catColor}30` }}>
+                                    <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: currentTask.catColor }} />
+                                    {currentTask.category}
+                                </span>
+                            </div>
+
+                            {/* Task title */}
+                            <h2 className="text-3xl md:text-4xl font-black text-slate-800 dark:text-white mb-10 leading-relaxed md:leading-tight">
+                                {currentTask.task}
+                            </h2>
+
+                            {/* Criteria cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                                {/* PASS criteria */}
+                                <div className="p-7 bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 rounded-3xl border-l-[6px] border-l-emerald-500">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <CheckCircle2 size={24} className="text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">ເກນ: ຜ່ານ</span>
+                                    </div>
+                                    <p className="text-base text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+                                        {currentTask.criteriaPass}
+                                    </p>
+                                </div>
+
+                                {/* FAIL criteria */}
+                                <div className="p-7 bg-rose-50/50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/20 rounded-3xl border-l-[6px] border-l-rose-500">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <AlertCircle size={24} className="text-rose-600 dark:text-rose-400" strokeWidth={3} />
+                                        <span className="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">ເກນ: ບໍ່ຜ່ານ</span>
+                                    </div>
+                                    <p className="text-base text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+                                        {currentTask.criteriaFail}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* ACTION BUTTONS */}
+                            <div className="flex flex-col sm:flex-row gap-6 justify-center">
+                                {/* FAIL button */}
+                                <button
+                                    onClick={() => handleAnswer(currentTask.id, 'fail')}
+                                    className={`group flex-1 max-w-sm h-16 rounded-full flex items-center justify-center gap-3 font-black text-lg transition-all duration-300 shadow-xl relative overflow-hidden active:scale-95
+                                        ${failAnim ? 'bg-rose-600 text-white shadow-rose-500/40 ring-4 ring-rose-500/20' : 'bg-white dark:bg-slate-800 text-rose-600 border-2 border-rose-100 dark:border-rose-900 shadow-slate-200 dark:shadow-none hover:bg-rose-50 dark:hover:bg-rose-500/10'}`}
+                                >
+                                    <RippleSVG active={failAnim} color="#e11d48" />
+                                    <ParticleBurst active={failAnim} color="#e11d48" count={7} />
+                                    <AnimatedX playing={failAnim} />
+                                    <span>ບໍ່ຜ່ານ</span>
+                                </button>
+
+                                {/* PASS button */}
+                                <button
+                                    onClick={() => handleAnswer(currentTask.id, 'pass')}
+                                    className={`group flex-1 max-w-sm h-16 rounded-full flex items-center justify-center gap-3 font-black text-lg transition-all duration-300 shadow-xl relative overflow-hidden active:scale-95
+                                        ${passAnim ? 'bg-blue-600 text-white shadow-blue-500/40 ring-4 ring-blue-500/20' : 'bg-white dark:bg-slate-800 text-blue-600 border-2 border-blue-100 dark:border-blue-900 shadow-slate-200 dark:shadow-none hover:bg-blue-50 dark:hover:bg-blue-500/10'}`}
+                                >
+                                    <RippleSVG active={passAnim} color="#2563eb" />
+                                    <ParticleBurst active={passAnim} color="#10b981" count={8} />
+                                    <AnimatedCheck playing={passAnim} />
+                                    <span>ຜ່ານ</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dot navigation card */}
+                    <div className="glass-card print:hidden p-5 md:px-8 rounded-3xl shadow-lg border-white/40">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => { setCurrentStep(p => Math.max(0, p - 1)); setCardKey(k => k + 1); }}
+                                disabled={currentStep === 0}
+                                className={`flex items-center gap-2 font-bold text-sm transition-opacity ${currentStep === 0 ? 'opacity-30 cursor-not-allowed' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
+                            >
+                                <ArrowLeft size={20} /> <span className="hidden sm:inline">ຍ້ອນກັບ</span>
+                            </button>
+
+                            <StepDots
+                                total={checklistItems.length}
+                                current={currentStep}
+                                answers={answers}
+                                items={checklistItems}
+                                onJump={(i) => { setCurrentStep(i); setCardKey(k => k + 1); }}
+                            />
+
+                            <button
+                                onClick={() => { setCurrentStep(p => Math.min(checklistItems.length - 1, p + 1)); setCardKey(k => k + 1); }}
+                                disabled={!currentTask || !answers[currentTask.id] || currentStep === checklistItems.length - 1}
+                                className={`flex items-center gap-2 font-bold text-sm transition-opacity ${(!currentTask || !answers[currentTask.id] || currentStep === checklistItems.length - 1) ? 'opacity-30 cursor-not-allowed' : 'text-blue-600 dark:text-blue-400 hover:opacity-80'}`}
+                            >
+                                <span className="hidden sm:inline">ຕໍ່ໄປ</span> <ChevronRight size={20} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* ══════ SUMMARY / TABLE MODE ══════ */
+                <div className="animate-fade-in space-y-8">
+                    {/* Document header */}
+                    <div className="glass-card rounded-[2rem] overflow-hidden shadow-xl border-white/60">
+                        {/* Top color accent */}
+                        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-emerald-500 to-rose-500" />
+
+                        <div className="p-8 flex flex-col lg:flex-row items-center justify-between gap-10">
+                            {/* Logo + title */}
+                            <div className="text-center lg:text-left">
+                                <div className="flex items-baseline justify-center lg:justify-start gap-2 mb-2">
+                                    <span className="text-2xl font-black text-slate-800 dark:text-white">Joah</span>
+                                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">JOB A RIUM</span>
+                                </div>
+                                <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">ເຊັກລິສປິດຮ້ານ</div>
+                                <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Store Closing Checklist</h1>
+                            </div>
+
+                            {/* Summary stats */}
+                            <div className="flex items-center gap-8 bg-slate-50/50 dark:bg-slate-900/50 p-6 rounded-3xl border border-white/40 dark:border-slate-800">
+                                {/* SVG donut chart */}
+                                <div className="relative w-24 h-24">
+                                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                                        <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-100 dark:text-slate-800" />
+                                        <circle cx="50" cy="50" r="40" fill="none"
+                                            stroke="url(#donutPass)" strokeWidth="12"
+                                            strokeLinecap="round"
+                                            strokeDasharray={`${(passCount / checklistItems.length) * 251} 251`}
+                                            className="transition-all duration-1000 ease-out"
+                                        />
+                                        <defs>
+                                            <linearGradient id="donutPass" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" stopColor="#10b981" />
+                                                <stop offset="100%" stopColor="#3b82f6" />
+                                            </linearGradient>
+                                        </defs>
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                        <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{passCount}</span>
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ຜ່ານ</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full animate-pulse bg-emerald-500" />
+                                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">ຜ່ານ: <span className="text-emerald-600 dark:text-emerald-400">{passCount}</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">ບໍ່ຜ່ານ: <span className="text-rose-600 dark:text-rose-400">{failCount}</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                        <span className="text-sm font-bold text-slate-400">ທັງໝົດ: {checklistItems.length}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Meta info */}
+                            <div className="grid grid-cols-1 gap-3 sm:min-w-[240px]">
+                                <div className="flex items-center gap-3 p-3.5 bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 rounded-2xl">
+                                    <Calendar size={18} className="text-slate-400" />
+                                    <input type="date" value={currentDate}
+                                        onChange={e => setCurrentDate(e.target.value)}
+                                        className="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-white outline-none w-full" />
+                                </div>
+                                <div className="flex items-center gap-3 p-3.5 bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 rounded-2xl">
+                                    <Building2 size={18} className="text-slate-400" />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-white lowercase">ສາຂາ: {branch}</span>
+                                </div>
+                                <div className="flex items-center gap-3 p-3.5 bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 rounded-2xl">
+                                    <PenLine size={18} className="text-slate-400" />
+                                    <div className="flex-1 border-b border-dashed border-slate-200 dark:border-slate-700 h-4" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table card */}
+                    <div className="glass-card rounded-[2rem] overflow-hidden shadow-2xl border-white/60">
+                        <div className="overflow-x-auto min-h-[400px]">
+                            <table id="checklistTable" className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/80 dark:bg-slate-900/80 border-b-2 border-slate-200/50 dark:border-slate-800/50">
+                                        <th className="p-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 w-20">ລ/ດ</th>
+                                        <th className="p-5 text-left text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">ໝວດ / ລາຍລະອຽດ</th>
+                                        <th className="p-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 w-24">ຜ່ານ</th>
+                                        <th className="p-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 w-24">ບໍ່ຜ່ານ</th>
+                                        <th className="p-5 text-left text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 min-w-[200px]">ໝາຍເຫດ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100/50 dark:divide-slate-800/50">
+                                    {checklistItems.map((item, idx) => {
+                                        const ans = answers[item.id];
+                                        return (
+                                            <tr key={item.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-500/5 transition-colors duration-200">
+                                                <td className="p-5 text-center text-xs font-black text-slate-400 tracking-tighter">
+                                                    {String(item.id).padStart(2, '0')}
+                                                </td>
+                                                <td className="p-5">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className={catChipStyle(item.catColor)} style={{ backgroundColor: `${item.catColor}15`, color: item.catColor, border: `1px solid ${item.catColor}30` }}>
+                                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.catColor }} />
+                                                            {item.category}
+                                                        </span>
+                                                        <div className="text-sm font-bold text-slate-800 dark:text-white">{item.task}</div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-5 text-center">
+                                                    {ans === 'pass' && (
+                                                        <div className="flex justify-center animate-scale-in">
+                                                            <TableCheckSVG />
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-5 text-center">
+                                                    {ans === 'fail' && (
+                                                        <div className="flex justify-center animate-scale-in">
+                                                            <TableFailSVG />
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-5">
+                                                    <input type="text"
+                                                        value={remarks[item.id] || ''}
+                                                        onChange={e => setRemarks(p => ({ ...p, [item.id]: e.target.value }))}
+                                                        placeholder="ໝາຍເຫດ..."
+                                                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500/50 py-1 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700"
+                                                    />
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Table footer */}
+                        <div className="p-6 bg-slate-50/80 dark:bg-slate-900/80 border-t border-slate-200/50 dark:border-slate-800/50 flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex flex-wrap justify-center gap-4">
+                                {['ປອດໄພ', 'ສະອາດ', 'ຖືກຕ້ອງ', 'ເປັນລະບຽບ', 'ໃຊ້ງານໄດ້'].map((tag, i) => (
+                                    <span key={i} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                        <Check size={14} className="text-emerald-500 animate-pulse" /> {tag}
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{Math.round((passCount / checklistItems.length) * 100)}% ສຳເລັດ</span>
+                                    <div className="w-32 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                        <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full transition-all duration-1000 shadow-sm shadow-emerald-500/20"
+                                            style={{ width: `${(passCount / checklistItems.length) * 100}%` }} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Info tip ── */}
+            <div className="print:hidden mt-8 p-5 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-3xl flex gap-4 items-start shadow-sm">
+                <Info size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300 leading-relaxed">
+                    {isWizardMode
+                        ? "ເລືອກ 'ຜ່ານ' ຫຼື 'ບໍ່ຜ່ານ' ໂດຍອີງຕາມເກນທີ່ສະແດງ. ກົດ dot ໄດ້ເພື່ອກະໂດດໄປລາຍການໃດກໍ່ໄດ້."
+                        : "Checklist ນີ້ຮັບປະກັນຄຸນນະພາບ ແລະ ຄວາມພ້ອມກ່ອນປິດຮ້ານ. ກວດໃຫ້ຄົບ 14 ລາຍການ."
+                    }
+                </p>
+            </div>
+        </div>
     );
 };
+
 export default StoreClosingChecklist;

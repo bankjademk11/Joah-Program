@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
@@ -31,6 +31,7 @@ import Footer from './components/layout/Footer';
 import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
+import ExcelCompressor from './components/Tools/excel-compressor';
 import {
   CloudDatabaseIcon,
   ProductBoxIcon,
@@ -77,7 +78,6 @@ function AppContent() {
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
   const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
-  const [warehouseFilter, setWarehouseFilter] = useState('all'); // PSN warehouse filter: 'all' | 'A' | 'B'
   const [adminViewBranch, setAdminViewBranch] = useState(''); // Branch Admin เลือกดูใน Cloud
 
   // --- Realtime State ---
@@ -93,10 +93,7 @@ function AppContent() {
   const filteredResults = validationResults.filter(r => {
     const matchesLocation = locationFilter ? r.rackLocation === locationFilter : true;
     const matchesHideZero = hideZeroQty ? Number(r.qty) !== 0 : true;
-    const matchesWarehouse = isPSNUser && warehouseFilter !== 'all'
-      ? r.branch_id === `ໂພນສີນວນ ${warehouseFilter}`
-      : true;
-    return matchesLocation && matchesHideZero && matchesWarehouse;
+    return matchesLocation && matchesHideZero;
   });
 
   // Recalculate Stats based on Filtered Results (Dynamic Dashboard)
@@ -126,7 +123,7 @@ function AppContent() {
         workplace: storedWorkplace || 'front',
         branch_id: branch
       });
-      setImportBranch(branch === 'ໂພນສີນວນ' ? 'ໂພນສີນວນ A' : branch); // PSN default to A
+      setImportBranch(branch);
       setIsLoggedIn(true);
     }
   }, []);
@@ -165,7 +162,7 @@ function AppContent() {
   const handleLogin = (userInfo) => {
     setUser(userInfo);
     const loginBranch = userInfo.branch_id || 'ຕະຫຼາດລາວ';
-    setImportBranch(loginBranch === 'ໂພນສີນວນ' ? 'ໂພນສີນວນ A' : loginBranch);
+    setImportBranch(loginBranch);
     setIsLoggedIn(true);
   };
 
@@ -219,10 +216,10 @@ function AppContent() {
     const mascotDelay = new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
-      // literal branch for locations and odoo. Default PSN staff to A if unspecified.
-      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id;
+      // literal branch for locations and odoo.
+      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
       // normalized branch for master data
-      const masterBranch = branchToLoad === 'ໂພນສີນວນ' || branchToLoad === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : branchToLoad;
+      const masterBranch = branchToLoad;
 
       const [[cloudMaster, cloudLocation, cloudOdoo]] = await Promise.all([
         Promise.all([
@@ -289,8 +286,8 @@ function AppContent() {
       let odooRows = [];
 
       if (activeSource === 'supabase') {
-        const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id;
-        const masterBranch = branchToLoad === 'ໂພນສີນວນ' || branchToLoad === 'ໂພນສີນວນ B' ? 'ໂພນສີນວນ A' : branchToLoad;
+        const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+        const masterBranch = branchToLoad;
 
         // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
         try {
@@ -392,8 +389,8 @@ function AppContent() {
     if (!workbook) return;
 
     const targetBranch = importBranch || user?.branch_id;
-    if (targetBranch === 'ໂພນສີນວນ') {
-      alert('⚠️ ກະລຸນາເລືອກລາຍການ "ໂພນສີນວນ A" ຫຼື "ໂພນສີນວນ B" ກ່ອນ Sync (ບໍ່ສາມາດ Sync ເຂົ້າຊື່ລວມໄດ້)');
+    if (!targetBranch) {
+      alert('⚠️ ກະລຸນາເລືອກສາຂາກ່ອນ Sync');
       return;
     }
 
@@ -568,8 +565,8 @@ function AppContent() {
     if (validationResults.length === 0) return;
 
     const targetBranch = importBranch || user?.branch_id;
-    if (targetBranch === 'ໂພນສີນວນ') {
-      alert('⚠️ กะลุนาเลือก "A" หรือ "B" ก่อน Sync');
+    if (!targetBranch) {
+      alert('⚠️ กะลุนาเลือกสาขาก่อน Sync');
       return;
     }
 
@@ -693,8 +690,7 @@ function AppContent() {
                           <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
                           <option value="ສີວິໄລ">ສີວິໄລ</option>
                           <option value="ວັງຊາຍ">ວັງຊາຍ</option>
-                          <option value="ໂພນສີນວນ A">ໂພນສີນວນ A</option>
-                          <option value="ໂພນສີນວນ B">ໂພນສີນວນ B</option>
+                          <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                         </select>
                       </div>
                       {/* File Upload zone */}
@@ -717,7 +713,7 @@ function AppContent() {
                         <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
                           <select
-                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ A' : '')}
+                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
                             onChange={(e) => setAdminViewBranch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
@@ -725,8 +721,7 @@ function AppContent() {
                             {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
                             {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
                             {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
-                            <option value="ໂພນສີນວນ A">ໂພນສີນວນ A</option>
-                            <option value="ໂພນສີນວນ B">ໂພນສີນວນ B</option>
+                            <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                           </select>
                         </div>
                       )}
@@ -803,24 +798,44 @@ function AppContent() {
 
                   {/* Admin only: Odoo Sync Card */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <SyncOdooIcon className="w-8 h-8 text-current" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                    <>
+                      <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
+                        <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                          <SyncOdooIcon className="w-8 h-8 text-current" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                        </div>
+
+                        <button
+                          onClick={() => setStep('odoo-monitor')}
+                          disabled={isProcessing}
+                          className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
+                        >
+                          <LayoutDashboard size={18} />
+                          <span>Open Monitor</span>
+                        </button>
                       </div>
 
-                      <button
-                        onClick={() => setStep('odoo-monitor')}
-                        disabled={isProcessing}
-                        className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
-                      >
-                        <LayoutDashboard size={18} />
-                        <span>Open Monitor</span>
-                      </button>
-                    </div>
+                      {/* Admin only: Excel Compressor */}
+                      <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-slate-500 hover:shadow-slate-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
+                        <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
+                          <FileArchive size={32} strokeWidth={2.5} />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Excel Compressor</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Compress & Clean Files</p>
+                        </div>
+                        <button
+                          onClick={() => setStep('excel-compressor')}
+                          className="w-full btn-primary mt-2 group py-4 bg-slate-700 hover:bg-slate-800 shadow-slate-500/30 text-white border-none"
+                        >
+                          <FileArchive size={18} />
+                          <span>Open Tool</span>
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {/* Store Closing Checklist — ທຸກ role ທີ່ບໍ່ແມ່ນ front ສາມາດໃຊ້ໄດ້ */}
@@ -878,6 +893,10 @@ function AppContent() {
             <StoreClosingChecklist onBack={() => setStep('upload')} />
           )}
 
+          {step === 'excel-compressor' && (
+            <ExcelCompressor onBack={() => setStep('upload')} />
+          )}
+
           {step === 'store-request' && (
             <StoreRequest onBack={() => setStep('upload')} currentUser={user} />
           )}
@@ -903,24 +922,6 @@ function AppContent() {
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
 
-              {/* PSN Warehouse Filter — only shown for ໂພນສີນວນ users */}
-              {isPSNUser && (
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">ສາງ / Warehouse</span>
-                  {[['all', 'ທັງໝົດ (A+B)'], ['A', 'ສາງ A'], ['B', 'ສາງ B']].map(([val, label]) => (
-                    <button
-                      key={val}
-                      onClick={() => setWarehouseFilter(val)}
-                      className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${warehouseFilter === val
-                        ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/30 scale-105'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               <Dashboard
                 stats={dashboardStats}
