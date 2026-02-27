@@ -122,15 +122,21 @@ export default function ExcelCompressor({ onBack }) {
         for (const path of mediaFiles) {
           const originalBlob = await content.files[path].async("blob");
 
-          // Only compress if original is > 100KB to save processing time
-          if (originalBlob.size > 100 * 1024) {
+          // NEW: Lower threshold to 30KB to catch thousands of small images
+          if (originalBlob.size > 30 * 1024) {
+            // Quality 0.4 and smaller maxDim for aggressive thumbnail compression
             const compressedBlob = await compressImage(originalBlob, options.imageQuality);
-            // Replace the file in the zip
-            zip.file(path, compressedBlob);
+
+            // SAFETY: Only replace if it's actually smaller
+            if (compressedBlob.size < originalBlob.size) {
+              zip.file(path, compressedBlob);
+            }
           }
 
           count++;
-          setProgress(p => ({ ...p, current: count }));
+          if (count % 20 === 0 || count === mediaFiles.length) {
+            setProgress(p => ({ ...p, current: count }));
+          }
         }
       }
 
