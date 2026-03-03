@@ -369,7 +369,7 @@ function AppContent() {
         }));
       }
 
-      const { results, stats } = validateData(locationRows, dataRows, odooRows);
+      const { results, stats } = validateData(locationRows, dataRows, odooRows, user?.branch_id);
       setValidationResults(results);
       setMasterData(dataRows);
       setStats(stats);
@@ -485,7 +485,7 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows);
+      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, user?.branch_id);
       setValidationResults(validatedResults);
       setStats(validatedStats);
       setRefreshTrigger(Date.now());

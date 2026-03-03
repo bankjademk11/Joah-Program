@@ -1,0 +1,95 @@
+# 🗂️ Branch Rack Layout — สรุปงาน & สิ่งที่ต้องทำ
+
+> **วันที่สร้าง:** 2 มีนาคม 2026  
+> **อัพเดทล่าสุด:** 2 มีนาคม 2026  
+> **คาดว่าจะได้ข้อมูลสาขาที่เหลือ:** ประมาณ 7-8 มีนาคม 2026
+
+---
+
+## 📊 สถานะสาขาทั้ง 4
+
+| สาขา | สถานะ Rule | ไฟล์ Data | หมายเหตุ |
+|---|---|---|---|
+| **ສີວິໄລ** | ✅ เสร็จแล้ว | [MapLayoutData/Mapdata.MD](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/MapLayoutData/Mapdata.MD) | เดิมใช้ชื่อ Mapdata.MD (ไม่มีชื่อสาขา) |
+| **ໂພນສີນວນ** | ✅ เสร็จแล้ว | [MapLayoutData/MapdataPSN.MD](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/MapLayoutData/MapdataPSN.MD) | โครงสร้างต่างจาก ສີວິໄລ มาก |
+| **ຕະຫຼາດລາວ** | ⏳ รอข้อมูล | ยังไม่มี | รอส่ง Data มา |
+| **ວັງຊາຍ** | ⏳ รอข้อมูล | ยังไม่มี | รอส่ง Data มา |
+
+---
+
+## 🏗️ โครงสร้าง Code
+
+**ไฟล์หลัก:** [src/utils/rackUtils.js](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js)
+
+- `BRANCH_RACK_RULES` — Object ที่เก็บ Rule แยกตามสาขา
+- `CATEGORY_RACK_RULES` — Legacy export (ใช้ Rule ของ ສີວິໄລ เป็น Default)
+- [getRackSuggestions(category, branchId)](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js#125-190) — สร้างรายชื่อตำแหน่งชั้นวาง
+- [getBranchCategories(branchId)](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js#191-200) — ดึงรายชื่อหมวดหมู่ของสาขา
+
+---
+
+## 📐 รูปแบบ Rack Location ของแต่ละสาขา
+
+### ສີວິໄລ (Format: `legacy`)
+```
+รูปแบบ: ZONE-LEVEL-SECTION
+ตัวอย่าง: G01-L1-1, E04-L5-4, ໂລພື້ນ G9
+หมวด: KITCHEN, BEAUTY, STATIONERY, TOYS, CLEANING/BATH, 
+       INTERIOR, TOOL/DIGITAL, STORAGE, FASHION, SPORTS/LEISURE,
+       SEASONAL, DISPOSABLE, PET, GARDENING
+```
+
+### ໂພນສີນວນ (Format: `shelf`, `display`, `standalone`, `floor`)
+```
+ชั้นวาง A:    AXX-BX-LX-1   (เช่น A01-B3-L4-1)
+ตู้โชว์ B:    BX-MX          (เช่น B1-M5)
+ตู้โชว์ M:    M-X            (เช่น M-3)
+ໂລພື້ນ C:    CX             (เช่น C5)
+หมวด: KITCHEN, KITCHEN-STORAGE, CLEANING/BATH, STATIONERY,
+       FASHION&BEAUTY, INTERIOR&TOOL, STORAGE, SPORTS, TOYS,
+       TOOL/DIGITAL, FLOOR
+```
+
+---
+
+## 📝 ขั้นตอนเมื่อได้ข้อมูลสาขาใหม่
+
+### Step 1: สร้างไฟล์ Data
+สร้างไฟล์ `MapLayoutData/MapdataXXX.MD` (เช่น `MapdataTLL.MD` สำหรับ ຕະຫຼາດລາວ)
+
+### Step 2: วิเคราะห์ Format
+ดูรูปแบบตำแหน่งชั้นวางว่าเป็นแบบไหน:
+- เหมือน ສີວິໄລ → ใช้ format `legacy` (มี maxLevel + maxSections)
+- เหมือน ໂພນສີນວນ → ใช้ format `shelf`/`display`/`standalone`/`floor`
+- แบบใหม่ → เพิ่ม case ใหม่ใน [getRackSuggestions](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js#125-190)
+
+### Step 3: เพิ่ม Rule ใน rackUtils.js
+เปิด [src/utils/rackUtils.js](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js) → หา comment ของสาขานั้น → เพิ่ม Rule เข้าไป
+
+### Step 4: ทดสอบ
+ทดสอบว่า [getRackSuggestions('KITCHEN', 'ສາຂາໃໝ່')](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/utils/rackUtils.js#125-190) ให้ผลลัพธ์ถูกต้อง
+
+---
+
+## ⚠️ หมายเหตุสำคัญ
+
+1. **Backward Compatible:** Code ที่ใช้ `CATEGORY_RACK_RULES` โดยตรง (ไม่ส่ง branchId) จะใช้ Rule ของ ສີວິໄລ เป็น Default เสมอ
+2. **Component ที่ใช้ Rack Rules:**
+   - [EditPanel.jsx](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/components/features/inventory/EditPanel.jsx) — แก้ไขตำแหน่งสินค้า
+   - [QuickAddPanel.jsx](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/components/features/inventory/QuickAddPanel.jsx) — เพิ่มสินค้าใหม่
+   - [ResultTable.jsx](file:///c:/Users/ideapad%20sl%203i/OneDrive/Desktop/JoahToolsHelp/warehouse-validator/src/components/features/inventory/ResultTable.jsx) — ตรวจสอบตำแหน่ง
+3. **ยังไม่ได้ส่ง branchId เข้า getRackSuggestions** — ตอนนี้ Component เหล่านี้ยังเรียกแบบไม่ส่ง branchId (ใช้ Default) → ต้องแก้ให้ส่ง branch ของ user เข้าไปด้วยเมื่อพร้อม
+
+---
+
+## 🗃️ Supabase — สาขาที่เพิ่มแล้ว
+
+| สาขา | Employee IDs | สถานะ DB |
+|---|---|---|
+| ສີວິໄລ | `SWL001` (staff), `SWL002` (back) | ✅ พร้อม |
+| ວັງຊາຍ | `WCS001` (staff), `WCS002` (back) | ✅ พร้อม |
+| ຕະຫຼາດລາວ | (Account เดิม) | ✅ มีข้อมูลอยู่แล้ว |
+| ໂພນສີນວນ | (Account เดิม) | ✅ มีข้อมูลอยู่แล้ว |
+
+> **RLS Policies:** ทุก Table ตั้ง `qual = true` (ไม่บล็อก branch ใดๆ)  
+> **Check Constraints:** มีแค่ `check_workplace` (ค่า: `front`, `back`) ไม่มีการล็อค branch_id

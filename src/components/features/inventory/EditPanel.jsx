@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
-import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtils';
+import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
 
 const EditPanel = ({
@@ -20,7 +20,8 @@ const EditPanel = ({
     allResults, // Essential for Inspector
     mergeAmount,
     setMergeAmount,
-    t
+    t,
+    currentBranch
 }) => {
     // --- UI States matching QuickAddPanel ---
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -32,18 +33,21 @@ const EditPanel = ({
     const [locationSearch, setLocationSearch] = useState('');
 
     // --- Helpers ---
+    // Use branch-specific rules
+    const branchCategories = getBranchCategories(currentBranch);
+
     const getAllLocations = () => {
         const allLocs = [];
-        Object.keys(CATEGORY_RACK_RULES).forEach(cat => {
-            allLocs.push(...getRackSuggestions(cat));
+        branchCategories.forEach(cat => {
+            allLocs.push(...getRackSuggestions(cat, currentBranch));
         });
         return [...new Set(allLocs)].sort();
     };
 
     // Determine current suggestions based on mode and categories
     const currentSuggestions = !customMode
-        ? getRackSuggestions(editCat1 || selectedRow?.category1 || selectedCategory)
-        : (selectedCategory ? getRackSuggestions(selectedCategory) : getAllLocations());
+        ? getRackSuggestions(editCat1 || selectedRow?.category1 || selectedCategory, currentBranch)
+        : (selectedCategory ? getRackSuggestions(selectedCategory, currentBranch) : getAllLocations());
 
     // --- Effects ---
 
@@ -305,7 +309,7 @@ const EditPanel = ({
                                                             {t('quickAdd.selectCategoryFilter')}
                                                         </div>
 
-                                                        {Object.keys(CATEGORY_RACK_RULES).map(cat => (
+                                                        {branchCategories.map(cat => (
                                                             <div
                                                                 key={cat}
                                                                 className="px-3 py-2.5 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer flex items-center gap-2 group transition-colors"

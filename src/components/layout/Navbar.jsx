@@ -27,10 +27,10 @@ const Navbar = ({
 
     // Play sound when pending count increases
     useEffect(() => {
-        if (!isFirstLoadRef.current && pendingCount > prevPendingCountRef.current) {
+        if (step === 'results' && !isFirstLoadRef.current && pendingCount > prevPendingCountRef.current) {
             try {
                 const audio = new Audio(notificationSound);
-                audio.volume = 1.0; // Set volume to MAX
+                audio.volume = 1.0;
                 audio.play().catch(e => console.error("Audio play failed", e));
             } catch (error) {
                 console.error("Audio error:", error);
@@ -40,7 +40,7 @@ const Navbar = ({
         if (isFirstLoadRef.current) {
             isFirstLoadRef.current = false;
         }
-    }, [pendingCount]);
+    }, [pendingCount, step]);
 
 
     useEffect(() => {
@@ -90,48 +90,53 @@ const Navbar = ({
 
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
-            <div className="max-w-[1800px] mx-auto">
-                <div className="flex items-center justify-between h-28 px-8">
+            <div className="w-full">
+                <div className="flex items-center justify-between h-28 px-6 lg:px-12">
 
-                    {/* === LEFT: Brand Section === */}
-                    <div className="flex items-center gap-6 cursor-pointer group" onClick={onReset}>
-                        {/* Logo Image */}
-                        <div className="relative">
-                            <div className="w-24 h-24 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 group-hover:scale-105 transition-all duration-500">
-                                <img
-                                    src={joahLogo}
-                                    alt="JOAH Logo"
-                                    className="w-full h-full object-contain p-1"
-                                />
+                    {/* === LEFT: Brand Section with LED Border === */}
+                    <div className="relative rounded-[1.75rem] p-[2.5px] led-border-glow overflow-hidden">
+                        {/* Spinning gradient layer */}
+                        <div className="led-spinner absolute inset-[-50%] z-0"></div>
+                        {/* Inner content */}
+                        <div className="relative z-10 flex items-center gap-6 bg-white dark:bg-slate-950 rounded-[1.6rem] px-6 py-3">
+                            {/* Logo Image */}
+                            <div className="relative">
+                                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 transition-all duration-500">
+                                    <img
+                                        src={joahLogo}
+                                        alt="JOAH Logo"
+                                        className="w-full h-full object-contain p-1"
+                                    />
+                                </div>
+                                {/* Online Status Indicator */}
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-3 border-white dark:border-slate-950 flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
+                                </div>
                             </div>
-                            {/* Online Status Indicator */}
-                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-white dark:border-slate-950 flex items-center justify-center">
-                                <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
-                            </div>
-                        </div>
 
-                        {/* Brand Text */}
-                        <div className="flex flex-col">
-                            <div className="flex items-baseline gap-3">
-                                <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                                    JOAH
-                                </h1>
-                                <span className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-joah-orange via-orange-500 to-amber-500">
-                                    TOOLS
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-4 mt-2">
-                                <p className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em]">
-                                    {t('navbar.title')}
-                                </p>
-                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700"></div>
-                                {/* Mode Badge */}
-                                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${dbSource === 'supabase'
-                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-                                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                                    }`}>
-                                    {dbSource === 'supabase' ? <ShieldCheck size={14} /> : <Database size={14} />}
-                                    <span>{dbSource === 'supabase' ? t('navbar.cloudMode') : t('navbar.localMode')}</span>
+                            {/* Brand Text */}
+                            <div className="flex flex-col">
+                                <div className="flex items-baseline gap-3">
+                                    <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                                        JOAH
+                                    </h1>
+                                    <span className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-joah-orange via-orange-500 to-amber-500">
+                                        INVENTORY
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-4 mt-1.5">
+                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em]">
+                                        {t('navbar.title')}
+                                    </p>
+                                    <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700"></div>
+                                    {/* Mode Badge */}
+                                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${dbSource === 'supabase'
+                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                        }`}>
+                                        {dbSource === 'supabase' ? <ShieldCheck size={12} /> : <Database size={12} />}
+                                        <span>{dbSource === 'supabase' ? t('navbar.cloudMode') : t('navbar.localMode')}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -254,6 +259,23 @@ const Navbar = ({
                     </div>
                 </div>
             </div>
+
+            {/* LED Border Animation Styles */}
+            <style>{`
+                .led-border-glow {
+                    position: relative;
+                }
+                .led-spinner {
+                    background: conic-gradient(
+                        #f97316, #f59e0b, #10b981, #06b6d4, #6366f1, #a855f7, #f97316
+                    );
+                    animation: led-spin 4s linear infinite;
+                }
+                @keyframes led-spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </nav>
     );
 };

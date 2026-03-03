@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { BRANCH_RACK_RULES } from './rackUtils';
 
 /**
  * อ่านไฟล์ Excel และแปลงเป็น Workbook
@@ -122,7 +123,7 @@ const createMasterDataMap = (dataRows) => {
  * - สีแดง: Categories ไม่ตรงกัน
  * - ปกติ: ข้อมูลถูกต้องทั้งหมด
  */
-export const validateData = (locationRows, dataRows, odooRows = []) => {
+export const validateData = (locationRows, dataRows, odooRows = [], targetBranch = 'ສີວິໄລ') => {
     const masterMap = createMasterDataMap(dataRows);
 
     // Create Odoo Map for fast lookup
@@ -230,33 +231,71 @@ export const validateData = (locationRows, dataRows, odooRows = []) => {
         const masterData = masterMap.get(barcode);
         const odooQty = odooMap.has(barcode) ? odooMap.get(barcode) : null;
 
-        // --- เพิ่มระบบตรวจสอบ Rack ตาม Mapdata.MD ---
+        // --- Dynamic Rack Validation based on rackUtils.js ---
         const checkRackMatch = (cat1, rack) => {
-            if (!cat1 || !rack) return { match: true }; // ข้ามถ้าข้อมูลไม่ครบ
-            const c = cat1.toUpperCase().trim();
-            const r = rack.toUpperCase().trim();
+            if (!cat1 || !rack) return { match: true };
+            const branchRules = BRANCH_RACK_RULES[targetBranch] || BRANCH_RACK_RULES['ສີວິໄລ'];
+            const rules = branchRules[cat1.toUpperCase().trim()];
 
-            const RACK_RULES = [
-                { cats: ['KITCHEN'], pattern: /^((G0[1-8]|H0[2-4])-L[1-5]-[1-4]|ໂລພື້ນ\s?G(9|10|11))/i, label: 'G01-G08, H02-H04 ຫຼື ໂລພື້ນ G9/10/11' },
-                { cats: ['BEAUTY'], pattern: /^(E0[1-4]-L[1-5]-[1-4]|ໂລພື້ນE\s?[578])/i, label: 'E01-E04 ຫຼື ໂລພື້ນ E 5/7/8' },
-                { cats: ['STATIONERY'], pattern: /^(S0[1235678]-L[1-5]-[1-4]|S10-L[1-4]-[1-4])/i, label: 'S01-S08 | S10' },
-                { cats: ['TOYS'], pattern: /^S09-L[1-5]-[1-4]/i, label: 'S09' },
-                { cats: ['CLEANING/BATH'], pattern: /^(A0[1-35]-L[1-5]-[1-4]|A04-L[1-6]-[1-4])/i, label: 'A01-A03/A05 | A04' },
-                { cats: ['INTERIOR'], pattern: /^(B01-L[1-3]-[1-4]|B0[2-4]-L[1-4]-[1-4])/i, label: 'B01 | B02-B04' },
-                { cats: ['TOOL/DIGITAL'], pattern: /^F0[1-4]-L[1-5]-[1-5]/i, label: 'F01-F04' },
-                { cats: ['STORAGE'], pattern: /^(D0[1-6]-L[1-5]-[1-4]|ໂລພື້ນ\s?D0?[78])/i, label: 'D01-D06 ຫຼື ໂລພື້ນ D07/D08' },
-                { cats: ['FASHION'], pattern: /^C0[1-4]-L[1-5]-[1-4]/i, label: 'C01-C04' },
-                { cats: ['SPORTS/LEISURE', 'SPORT LEISURE', 'SPORT'], pattern: /^H01-L[1-5]-[1-4]/i, label: 'H01' },
-            ];
+            if (!rules) return { match: true };
 
-            const rule = RACK_RULES.find(rule => rule.cats.includes(c));
-            if (rule) {
-                return {
-                    match: rule.pattern.test(r),
-                    expected: rule.label
-                };
-            }
-            return { match: true }; // ถ้าไม่มีใน Rule ให้ถือว่าผ่าน
+            let isMatch = false;
+            let expectedLabels = [];
+
+            rules.forEach(rule => {
+                const format = rule.format || 'legacy';
+                const zones = rule.zones.join('|');
+                const firstZone = rule.zones[0];
+                const lastZone = rule.zones[rule.zones.length - 1];
+
+                let pattern;
+                let label = '';
+
+                switch (format) {
+                    case 'shelf':
+                        // Format: A01-B3-L4-X (Allow any digit for section)
+                        pattern = new RegExp(`^(${zones})-B[1-${rule.maxBay || 3}]-L[1-${rule.maxLevel || 4}]-(\\d+)$`, 'i');
+                        // Show in MapLayout format: A01-B1-L1 → A04-B3-L4
+                        label = `${firstZone}-B1-L1 → ${lastZone}-B${rule.maxBay || 3}-L${rule.maxLevel || 4}`;
+                        break;
+                    case 'display':
+                        // Format: B1-M1
+                        pattern = new RegExp(`^(${zones})-M(\\d+)$`, 'i');
+                        // Show: B1-M1 → B1-M14
+                        label = `${firstZone}-M1 → ${firstZone}-M${rule.maxModule || 14}`;
+                        break;
+                    case 'standalone':
+                        // Format: M-1
+                        pattern = new RegExp(`^(${zones})-(\\d+)$`, 'i');
+                        // Show: M-1 → M-8
+                        label = `${firstZone}-1 → ${firstZone}-${rule.maxModule || 8}`;
+                        break;
+                    case 'floor':
+                        // Format: C1
+                        pattern = new RegExp(`^(${zones})(\\d+)$`, 'i');
+                        // Show: C1 → C10
+                        label = `${firstZone}1 → ${firstZone}${rule.maxModule || 10}`;
+                        break;
+                    default:
+                        // Legacy: G01-L1-1 or Floor Label
+                        if (rule.maxLevel === 0) {
+                            pattern = new RegExp(`^(${zones})$`, 'i');
+                            label = rule.zones.join(', ');
+                        } else {
+                            pattern = new RegExp(`^(${zones})-L[1-${rule.maxLevel}]-[1-${rule.maxSections}]$`, 'i');
+                            // Show: G01-L1-1 → G08-L5-4
+                            label = `${firstZone}-L1-1 → ${lastZone}-L${rule.maxLevel}-${rule.maxSections}`;
+                        }
+                }
+
+                if (pattern.test(rack)) isMatch = true;
+                expectedLabels.push(label);
+            });
+
+            return {
+                match: isMatch,
+                expected: [...new Set(expectedLabels)].join(' ຫຼື ')
+            };
         };
 
         if (!masterData) {

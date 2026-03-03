@@ -4,7 +4,7 @@ import {
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     UploadCloud, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
@@ -18,7 +18,7 @@ import EditPanel from './EditPanel';
 import QuickAddPanel from './QuickAddPanel';
 import LocationInspector from './LocationInspector';
 import AuditLogModal from '../../ui/AuditLogModal';
-import { CATEGORY_RACK_RULES, getRackSuggestions } from '../../../utils/rackUtils';
+import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 
 const ResultTable = ({
     results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,
@@ -127,7 +127,8 @@ const ResultTable = ({
     // Each location now has format: ZONE-LEVEL-SECTION (e.g., G01-L1-1, G01-L1-2, ...)
 
 
-    const ALL_DISTINCT_ZONES = Array.from(new Set(Object.values(CATEGORY_RACK_RULES).flatMap(group => group.flatMap(rule => rule.zones))));
+    const currentBranchRules = BRANCH_RACK_RULES[resolveBranchId(currentBranch)] || CATEGORY_RACK_RULES;
+    const ALL_DISTINCT_ZONES = Array.from(new Set(Object.values(currentBranchRules).flatMap(group => group.flatMap(rule => rule.zones))));
 
     // Auto-fill from Master Data when Barcode changes
     // Listen for external refresh trigger (Navbar Refresh)
@@ -688,6 +689,67 @@ const ResultTable = ({
                         { width: 16 }, { width: 40 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 20 }, { width: 30 }
                     ];
 
+                } else if (template === 'auto-fix') {
+                    // --- AUTO-FIX: เหมือน Standard Report เป๊ะ แต่ทุกอย่างเป็น Passed ---
+                    // ⚠️ ไม่มีผลกับ Database! Preview เท่านั้น
+                    const headersStd = [
+                        'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
+                        'Actual QTY', 'System QTY', 'Status', 'Status Reason',
+                        'Last Update', 'Verifier', 'Employee ID', 'Manual Change Reason'
+                    ];
+
+                    const fixRow = (res) => {
+                        const rawVerifier = res.uploadedBy || res.updatedBy || '';
+                        let vName = rawVerifier;
+                        let vId = '';
+                        const idMatch = rawVerifier.match(/^(.*?)\s*\((.*?)\)$/);
+                        if (idMatch) { vName = idMatch[1].trim(); vId = idMatch[2].trim(); }
+
+                        // Force all to Passed: ใช้ Master Category แทน actual ถ้ามี
+                        const cat1 = res.masterCategory1 || res.category1 || '';
+                        const cat2 = res.masterCategory2 || res.category2 || '';
+
+                        return [
+                            sanitize(res.barcode),
+                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.rackLocation || ''),
+                            sanitize(cat1),
+                            sanitize(cat2),
+                            isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                            isNaN(Number(res.masterQty)) ? 0 : Number(res.masterQty),
+                            'Passed',  // ← Force ทุกอันเป็น Passed
+                            '',        // ← ไม่มี Reason เพราะ Passed หมด
+                            res.updatedAt ? new Date(res.updatedAt).toLocaleDateString() : '',
+                            sanitize(vName),
+                            sanitize(vId),
+                            sanitize(reasonMap[String(res.barcode || '').trim()] || '')
+                        ];
+                    };
+
+                    const addHeaderRow = (sheet) => {
+                        const hRow = sheet.addRow(headersStd);
+                        hRow.eachCell((cell) => {
+                            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } }; // Emerald
+                        });
+                    };
+
+                    const setStdColWidths = (sheet) => {
+                        sheet.columns = [
+                            { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
+                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
+                        ];
+                    };
+
+                    // Sheet: All Data (Fixed)
+                    const allSheet = workbook.addWorksheet('All Data (Auto-Fixed)');
+                    addHeaderRow(allSheet);
+                    results.forEach(res => {
+                        const row = allSheet.addRow(fixRow(res));
+                        row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; // Green
+                    });
+                    setStdColWidths(allSheet);
+
                 } else {
                     // --- STANDARD / SIMPLE LOGIC ---
                     const sheetName = template === 'simple' ? 'Inventory Summary' : 'Location Inventory';
@@ -999,6 +1061,18 @@ const ResultTable = ({
                                             <div className="flex-1">
                                                 <p className="text-xs font-black text-slate-800 dark:text-white uppercase">{t('results.odooAdj')}</p>
                                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">{t('results.odooAdjDesc')}</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportWithColor('auto-fix')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 group-hover:scale-110 transition-transform">
+                                                <Sparkles size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">Auto-Fix Preview</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">ແປງ Mismatch ທັງໝົດໃຫ້ຕົງ Master (Preview ເທົ່ານັ້ນ)</p>
                                             </div>
                                         </button>
                                     </div>
@@ -1331,6 +1405,7 @@ const ResultTable = ({
                     mergeAmount={mergeAmount}
                     setMergeAmount={setMergeAmount}
                     t={t}
+                    currentBranch={currentBranch}
                 />
 
                 {/* Audit Log Modal (Portal) */}
@@ -1356,6 +1431,7 @@ const ResultTable = ({
                     t={t}
                     setInspectedLocation={setInspectedLocation}
                     onAddNewProduct={onAddNewProduct}
+                    currentBranch={currentBranch}
                 />
             </div>
         </>
