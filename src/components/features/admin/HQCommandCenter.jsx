@@ -437,7 +437,11 @@ const HQCommandCenter = ({ onBack }) => {
                 if (error) throw error;
                 rows = d || [];
             } else if (activeTab === 'edits') {
-                let q = supabase.from('inventory_history').select('*').order('updated_at', { ascending: false }).limit(500);
+                // gt('old_qty', 0) — กรองออกรายการที่ old_qty=0 (สินค้าใหม่จาก QuickAdd)
+                // เพราะ logInventoryHistory write ด้วย old_qty=0 ซึ่งซ้อนกับ added_items_log
+                let q = supabase.from('inventory_history').select('*')
+                    .gt('old_qty', 0)
+                    .order('updated_at', { ascending: false }).limit(500);
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
                 const { data: d, error } = await q;

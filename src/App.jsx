@@ -15,9 +15,14 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3 } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3 } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
+import imgImportFile from './assets/ImportFile.png';
+import imgCloudDB from './assets/CloudRecordDatabase.png';
+import imgOdoo from './assets/OdooImage.png';
+import imgExcelResize from './assets/ExelResize.png';
+import imgStoreClosing from './assets/RequestfromWarehouse.png';
 
 import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
@@ -677,63 +682,87 @@ function AppContent() {
                 <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
                   {/* File Upload + Branch Selector (admin only) */}
                   {showAdminMenu && (
-                    <div className="flex flex-col gap-3 w-full sm:w-[340px]">
-                      {/* Branch Selector — sits on top of the upload zone */}
-                      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border-2 border-amber-300 dark:border-amber-500/40">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 shrink-0">Import ໃຫ້ສາຂາ:</span>
-                        <select
-                          value={importBranch}
-                          onChange={(e) => setImportBranch(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex-1 min-w-[140px] h-8 px-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer focus:border-amber-500"
-                        >
-                          <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
-                          <option value="ສີວິໄລ">ສີວິໄລ</option>
-                          <option value="ວັງຊາຍ">ວັງຊາຍ</option>
-                          <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
-                        </select>
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-400 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
+                        <img src={imgImportFile} alt="Import File" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
-                      {/* File Upload zone */}
-                      <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
-                    </div>
-                  )}
-
-                  {/* Cloud Database (Hidden for Front Store) */}
-                  {user?.workplace !== 'front' && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-joah-orange group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <CloudDatabaseIcon className="w-8 h-8 text-current" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
-                      </div>
-                      {/* Branch Selector — HQ or PSN Branch */}
-                      {(isAdmin || isPSNUser) && (
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ເລືອກໄຟລ໌ໜ້າວຽກ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">XLSX / CSV File</p>
+                        </div>
+                        {/* Branch Selector */}
                         <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                          <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 shrink-0">Import ໃຫ້:</span>
                           <select
-                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
-                            onChange={(e) => setAdminViewBranch(e.target.value)}
+                            value={importBranch}
+                            onChange={(e) => setImportBranch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
                           >
-                            {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
-                            {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
-                            {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
+                            <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                            <option value="ສີວິໄລ">ສີວິໄລ</option>
+                            <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                           </select>
                         </div>
-                      )}
-                      <button
-                        onClick={handleDatabaseLoad}
-                        disabled={isProcessing}
-                        className="w-full btn-primary mt-2 group py-4"
-                      >
-                        {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
-                        <span>{t('home.continueWithCloud')}</span>
-                      </button>
+                        {/* Hidden FileUpload — triggered by button below */}
+                        <div className="hidden">
+                          <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
+                        </div>
+                        {/* Upload button — same style as other cards */}
+                        <button
+                          onClick={() => !isProcessing && document.getElementById('file-input').click()}
+                          disabled={isProcessing}
+                          className="w-full btn-primary mt-1 group py-4 bg-joah-orange hover:bg-orange-600 shadow-orange-500/30"
+                        >
+                          {isProcessing ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
+                          <span>ເລືອກໄຟລ໌ / Upload</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cloud Database */}
+                  {(isAdmin || (user?.workplace !== 'front' && user?.branch_id)) && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-joah-orange hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
+                        <img src={imgCloudDB} alt="Cloud Database" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.cloudDatabase')}</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.cloudDatabaseSub')}</p>
+                        </div>
+                        {/* Branch Selector */}
+                        {(isAdmin || isPSNUser) && (
+                          <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                            <select
+                              value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
+                              onChange={(e) => setAdminViewBranch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                            >
+                              {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
+                              {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
+                              {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
+                              <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            </select>
+                          </div>
+                        )}
+                        <button onClick={handleDatabaseLoad} disabled={isProcessing} className="w-full btn-primary group py-4">
+                          {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
+                          <span>{t('home.continueWithCloud')}</span>
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -757,106 +786,46 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Admin only: Product Management */}
-                  {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
-                      {/* Premium Maintenance Overlay */}
-                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-amber-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
-                          <ShieldCheck size={12} />
-                          <span>Under Maintenance</span>
-                        </div>
-                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-amber-500 animate-bounce">
-                          <X size={24} strokeWidth={3} />
-                        </div>
-                      </div>
 
-                      {/* Content with Grayscale Effect */}
-                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
-                        <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner mx-auto mb-6">
-                          <ProductBoxIcon className="w-8 h-8 text-current" />
-                        </div>
-                        <div className="space-y-2 mb-6">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
-                        </div>
-                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
-                          <LayoutDashboard size={18} />
-                          <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Admin only: Master Data Audit */}
-                  {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
-                      {/* Premium Maintenance Overlay */}
-                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-                        <div className="bg-gradient-to-r from-blue-500 to-sky-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-blue-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
-                          <Database size={12} />
-                          <span>Coming Soon</span>
-                        </div>
-                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-blue-500 animate-bounce">
-                          <Sparkles size={24} strokeWidth={3} />
-                        </div>
-                      </div>
-
-                      {/* Content with Grayscale Effect */}
-                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
-                        <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-inner mx-auto mb-6">
-                          <AuditDatabaseIcon className="w-8 h-8 text-current" />
-                        </div>
-                        <div className="space-y-2 mb-6">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
-                        </div>
-                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
-                          <Database size={18} />
-                          <span>ກວດສອບ Master Data</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Admin only: Odoo Sync Card */}
+                  {/* Admin only: Odoo Sync + Excel Compressor */}
                   {showAdminMenu && (
                     <>
-                      <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
-                        <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                          <SyncOdooIcon className="w-8 h-8 text-current" />
+                      {/* Odoo Stock Sync */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-purple-50 dark:bg-slate-800 relative">
+                          <img src={imgOdoo} alt="Odoo Stock Sync" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                         </div>
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Stock Sync</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manage ERP Data</p>
+                          </div>
+                          <button onClick={() => setStep('odoo-monitor')} disabled={isProcessing}
+                            className="w-full btn-primary mt-1 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30">
+                            <LayoutDashboard size={18} />
+                            <span>Open Monitor</span>
+                          </button>
                         </div>
-
-                        <button
-                          onClick={() => setStep('odoo-monitor')}
-                          disabled={isProcessing}
-                          className="w-full btn-primary mt-2 group py-4 bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
-                        >
-                          <LayoutDashboard size={18} />
-                          <span>Open Monitor</span>
-                        </button>
                       </div>
 
-                      {/* Admin only: Excel Compressor */}
-                      <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-slate-500 hover:shadow-slate-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
-                        <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                          <FileArchive size={32} strokeWidth={2.5} />
+                      {/* Excel Compressor */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-emerald-50 dark:bg-slate-800 relative">
+                          <img src={imgExcelResize} alt="Excel Compressor" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                         </div>
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Excel Compressor</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Compress & Clean Files</p>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Excel Compressor</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Compress &amp; Clean Files</p>
+                          </div>
+                          <button onClick={() => setStep('excel-compressor')}
+                            className="w-full btn-primary mt-1 group py-4 bg-slate-700 hover:bg-slate-800 shadow-slate-500/30 text-white border-none">
+                            <FileArchive size={18} />
+                            <span>Open Tool</span>
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setStep('excel-compressor')}
-                          className="w-full btn-primary mt-2 group py-4 bg-slate-700 hover:bg-slate-800 shadow-slate-500/30 text-white border-none"
-                        >
-                          <FileArchive size={18} />
-                          <span>Open Tool</span>
-                        </button>
                       </div>
                     </>
                   )}
@@ -891,23 +860,82 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Store Closing Checklist — ທຸກ role ທີ່ບໍ່ແມ່ນ front ສາມາດໃຊ້ໄດ້ */}
+                  {/* Admin only: Product Management (locked — Under Maintenance) */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
+                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-amber-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
+                          <ShieldCheck size={12} />
+                          <span>Under Maintenance</span>
+                        </div>
+                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-amber-500 animate-bounce">
+                          <X size={24} strokeWidth={3} />
+                        </div>
+                      </div>
+                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
+                        <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner mx-auto mb-6">
+                          <ProductBoxIcon className="w-8 h-8 text-current" />
+                        </div>
+                        <div className="space-y-2 mb-6">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
+                        </div>
+                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
+                          <LayoutDashboard size={18} />
+                          <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Admin only: Master Data Audit (locked — Coming Soon) */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
+                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+                        <div className="bg-gradient-to-r from-blue-500 to-sky-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-blue-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
+                          <Database size={12} />
+                          <span>Coming Soon</span>
+                        </div>
+                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-blue-500 animate-bounce">
+                          <Sparkles size={24} strokeWidth={3} />
+                        </div>
+                      </div>
+                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
+                        <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-inner mx-auto mb-6">
+                          <AuditDatabaseIcon className="w-8 h-8 text-current" />
+                        </div>
+                        <div className="space-y-2 mb-6">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
+                        </div>
+                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
+                          <Database size={18} />
+                          <span>ກວດສອບ Master Data</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Store Closing Checklist */}
                   {!showAdminMenu && user?.workplace !== 'front' && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 relative w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-yellow-50 dark:bg-yellow-500/10 flex items-center justify-center text-yellow-600 dark:text-yellow-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <ClipboardCheck size={32} strokeWidth={2.5} />
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-yellow-50 dark:bg-slate-800 relative">
+                        <img src={imgStoreClosing} alt="Store Closing Checklist" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeClosing')}</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeClosingSub')}</p>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeClosing')}</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeClosingSub')}</p>
+                        </div>
+                        <button onClick={() => setStep('store-closing')}
+                          className="w-full btn-primary mt-1 group py-4 bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 text-zinc-900 border-none">
+                          <ClipboardCheck size={18} />
+                          <span>Open Checklist</span>
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setStep('store-closing')}
-                        className="w-full btn-primary mt-2 group py-4 bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 text-zinc-900 border-none"
-                      >
-                        <ClipboardCheck size={18} />
-                        <span>Open Checklist</span>
-                      </button>
                     </div>
                   )}
                 </div>
@@ -950,8 +978,13 @@ function AppContent() {
             <ExcelCompressor onBack={() => setStep('upload')} />
           )}
 
-          {step === 'hq-dashboard' && (
+          {step === 'hq-dashboard' && isAdmin && (
             <HQCommandCenter onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'hq-dashboard' && !isAdmin && (
+            // ถ้าไม่ใช่ HQ แล้วเข้ามา ให้ redirect กลับ
+            <>{setStep('upload')}</>
           )}
 
           {step === 'store-request' && (

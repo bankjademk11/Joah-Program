@@ -308,11 +308,32 @@ const StoreRequest = ({ onBack, currentUser }) => {
                                 <div className="flex-1"><p className="text-xs font-black uppercase tracking-wider">{product.available_qty > 0 ? t('storeRequest.available') : t('storeRequest.outOfStock')}</p><p className="text-lg font-black">{product.available_qty} {t('storeRequest.qty')}</p></div>
                             </div>
                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-2xl p-2 mb-6">
-                                <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm text-slate-600"><Minus size={20} /></button>
-                                <div className="text-center flex-1"><span className="text-xs font-bold text-slate-400 uppercase mb-1 block">QTY</span><span className="text-3xl font-black text-blue-600">{qty}</span></div>
-                                <button onClick={() => setQty(qty + 1)} className="w-12 h-12 bg-blue-600 text-white rounded-xl shadow-blue-500/30"><Plus size={20} /></button>
+                                <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm text-slate-600 flex items-center justify-center hover:bg-slate-100 transition-colors"><Minus size={20} /></button>
+                                <div className="text-center flex-1 px-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">QTY</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={qty}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            if (!isNaN(val) && val >= 1) setQty(val);
+                                            else if (e.target.value === '') setQty('');
+                                        }}
+                                        onBlur={() => { if (!qty || qty < 1) setQty(1); }}
+                                        className="w-full text-3xl font-black text-blue-600 dark:text-blue-400 text-center bg-transparent outline-none border-b-2 border-blue-200 dark:border-blue-800 focus:border-blue-500 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                </div>
+                                <button onClick={() => setQty((prev) => (Number(prev) || 1) + 1)} className="w-12 h-12 bg-blue-600 text-white rounded-xl shadow-blue-500/30 flex items-center justify-center hover:bg-blue-700 transition-colors"><Plus size={20} /></button>
                             </div>
-                            <button onClick={handleAddToCart} className="w-full py-4 bg-gradient-to-r from-joah-orange to-orange-600 hover:from-orange-500 hover:to-orange-500 text-white rounded-2xl font-black text-lg tracking-wide shadow-xl shadow-orange-500/30 transition-all flex items-center justify-center gap-3"><Plus size={24} /><span>{t('storeRequest.addToRequest')}</span></button>
+                            {product.available_qty <= 0 ? (
+                                <div className="w-full py-4 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex flex-col items-center justify-center gap-1 border-2 border-rose-200 dark:border-rose-700">
+                                    <span className="text-rose-600 dark:text-rose-400 font-black text-lg">🚫 Out of Stock</span>
+                                    <span className="text-rose-400 text-xs font-bold uppercase tracking-widest">ບໍ່ສາມາດ Request ໄດ້</span>
+                                </div>
+                            ) : (
+                                <button onClick={handleAddToCart} className="w-full py-4 bg-gradient-to-r from-joah-orange to-orange-600 hover:from-orange-500 hover:to-orange-500 text-white rounded-2xl font-black text-lg tracking-wide shadow-xl shadow-orange-500/30 transition-all flex items-center justify-center gap-3"><Plus size={24} /><span>{t('storeRequest.addToRequest')}</span></button>
+                            )}
                         </div>
                     )}
                 </div>
