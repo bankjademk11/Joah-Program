@@ -4,7 +4,7 @@ import { X, Search, Clock, ArrowUpDown, User, Calendar, Loader2, ChevronLeft, Ch
 import ExcelJS from 'exceljs';
 import { useLanguage } from '../../../contexts/LanguageContext';
 
-const HistoryLog = ({ onClose }) => {
+const HistoryLog = ({ onClose, currentUser }) => {
     const { t } = useLanguage();
     const [historyData, setHistoryData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -35,22 +35,26 @@ const HistoryLog = ({ onClose }) => {
         const fetchAllHistory = async () => {
             setIsLoading(true);
             try {
-                // 1. Fetch Edit History
-                const { data: editData, error: editError } = await supabase
+                // 1. Fetch Edit History (filtered by branch if available)
+                const userBranch = currentUser?.branch_id;
+                let editQuery = supabase
                     .from('inventory_history')
                     .select('*')
                     .order('updated_at', { ascending: false })
                     .limit(500);
+                if (userBranch) editQuery = editQuery.eq('branch_id', userBranch);
+                const { data: editData, error: editError } = await editQuery;
                 if (editError) throw editError;
 
-                // 2. Fetch Added Items History
-                const { data: addData, error: addError } = await supabase
+                // 2. Fetch Added Items History (filtered by branch if available)
+                let addQuery = supabase
                     .from('added_items_log')
                     .select('*')
                     .order('created_at', { ascending: false })
                     .limit(500);
+                if (userBranch) addQuery = addQuery.eq('branch_id', userBranch);
+                const { data: addData, error: addError } = await addQuery;
                 if (addError) {
-                    // If table doesn't exist yet, just ignore (for safety)
                     console.warn("Added items log table might not exist yet:", addError);
                 }
 

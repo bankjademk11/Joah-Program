@@ -266,7 +266,7 @@ export default function ExcelCompressor({ onBack }) {
                     fontWeight: 800, fontSize: "12px", transition: "all 0.2s"
                   }}
                 >
-                  {q === 0.2 ? "ນ້ອຍທີ່ສຸດ" : q === 0.4 ? "ສົມດູນ" : "ຊັດເຈນ"}
+                  {q === 0.2 ? "ນ້ອຍທີ່ສຸດ" : q === 0.4 ? "ສົມເບິ່ງນ" : "ຊັດເຈນ"}
                 </button>
               ))}
             </div>

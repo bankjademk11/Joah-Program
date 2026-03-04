@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3 } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 
@@ -27,6 +27,7 @@ import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/features/admin/MasterAudit';
 import ProductManager from './components/features/admin/ProductManager';
+import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
 import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -758,41 +759,63 @@ function AppContent() {
 
                   {/* Admin only: Product Management */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <ProductBoxIcon className="w-8 h-8 text-current" />
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
+                      {/* Premium Maintenance Overlay */}
+                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-amber-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
+                          <ShieldCheck size={12} />
+                          <span>Under Maintenance</span>
+                        </div>
+                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-amber-500 animate-bounce">
+                          <X size={24} strokeWidth={3} />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
+
+                      {/* Content with Grayscale Effect */}
+                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
+                        <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner mx-auto mb-6">
+                          <ProductBoxIcon className="w-8 h-8 text-current" />
+                        </div>
+                        <div className="space-y-2 mb-6">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
+                        </div>
+                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
+                          <LayoutDashboard size={18} />
+                          <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => setStep('product-manager')}
-                        className="w-full btn-primary mt-2 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
-                      >
-                        <LayoutDashboard size={18} />
-                        <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
-                      </button>
                     </div>
                   )}
 
                   {/* Admin only: Master Data Audit */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <AuditDatabaseIcon className="w-8 h-8 text-current" />
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
+                      {/* Premium Maintenance Overlay */}
+                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+                        <div className="bg-gradient-to-r from-blue-500 to-sky-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-blue-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
+                          <Database size={12} />
+                          <span>Coming Soon</span>
+                        </div>
+                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-blue-500 animate-bounce">
+                          <Sparkles size={24} strokeWidth={3} />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
+
+                      {/* Content with Grayscale Effect */}
+                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
+                        <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-inner mx-auto mb-6">
+                          <AuditDatabaseIcon className="w-8 h-8 text-current" />
+                        </div>
+                        <div className="space-y-2 mb-6">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
+                        </div>
+                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
+                          <Database size={18} />
+                          <span>ກວດສອບ Master Data</span>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => setStep('master-audit')}
-                        className="w-full btn-primary mt-2 group py-4 bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
-                      >
-                        <Database size={18} />
-                        <span>ກວດສອບ Master Data</span>
-                      </button>
                     </div>
                   )}
 
@@ -836,6 +859,26 @@ function AppContent() {
                         </button>
                       </div>
                     </>
+                  )}
+
+                  {/* Admin only: HQ Command Center */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-amber-500 hover:shadow-amber-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-xl shadow-orange-500/30">
+                        <BarChart3 size={32} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">HQ Command Center</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Analytics &amp; Monitoring</p>
+                      </div>
+                      <button
+                        onClick={() => setStep('hq-dashboard')}
+                        className="w-full btn-primary mt-2 group py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-orange-500/30"
+                      >
+                        <BarChart3 size={18} />
+                        <span>Open Dashboard</span>
+                      </button>
+                    </div>
                   )}
 
                   {/* Store Closing Checklist — ທຸກ role ທີ່ບໍ່ແມ່ນ front ສາມາດໃຊ້ໄດ້ */}
@@ -895,6 +938,10 @@ function AppContent() {
 
           {step === 'excel-compressor' && (
             <ExcelCompressor onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'hq-dashboard' && (
+            <HQCommandCenter onBack={() => setStep('upload')} />
           )}
 
           {step === 'store-request' && (
@@ -1053,7 +1100,7 @@ function AppContent() {
         <Footer />
 
         {/* History Modal */}
-        {showHistory && <HistoryLog onClose={() => setShowHistory(false)} />}
+        {showHistory && <HistoryLog onClose={() => setShowHistory(false)} currentUser={user} />}
 
         {/* Store Request Manager Modal */}
         {
