@@ -39,6 +39,30 @@ const fmt = (ts) => {
 
 const fmtExcel = (ts) => (!ts ? '-' : new Date(ts).toLocaleString('th-TH'));
 
+// Parse "Name (EMP-ID)" -> { name, empId }
+const parseUser = (str) => {
+    if (!str) return { name: '-', empId: null };
+    const m = str.match(/^(.+?)\s\(([^)]+)\)$/);
+    return m ? { name: m[1].trim(), empId: m[2].trim() } : { name: str, empId: null };
+};
+
+const UserCell = ({ value, iconColor = 'text-slate-400' }) => {
+    const { name, empId } = parseUser(value);
+    return (
+        <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+                <User size={15} className={`${iconColor} shrink-0`} />
+                <span className="text-sm font-black text-slate-700 dark:text-slate-200 leading-none">{name}</span>
+            </div>
+            {empId && (
+                <span className="ml-6 inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider font-mono">
+                    {empId}
+                </span>
+            )}
+        </div>
+    );
+};
+
 // ===================== EXCEL EXPORT =====================
 const exportToExcel = async (rows, activeTab, startDate, endDate) => {
     const workbook = new ExcelJS.Workbook();
@@ -62,8 +86,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'Barcode', key: 'barcode', width: 18 },
             { header: 'ຈຳນວນ', key: 'qty', width: 10 },
             { header: 'ສະຖານະ', key: 'status', width: 14 },
-            { header: 'ຜູ້ Request', key: 'request_by', width: 22 },
-            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by', width: 24 },
+            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
+            { header: 'Employee ID', key: 'request_by_id', width: 16 },
+            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
+            { header: 'Employee ID', key: 'accepted_by_id', width: 16 },
             { header: 'ເວລາ Request', key: 'created_at', width: 24 },
             { header: 'ເວລາ Action', key: 'updated_at', width: 24 },
         ];
@@ -71,11 +97,14 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         rows.forEach((r, i) => {
             const isAcc = r.status === 'accepted' || r.status === 'approved';
             const isRej = r.status === 'rejected';
+            const { name: reqName, empId: reqId } = parseUser(r.request_by);
+            const { name: accName, empId: accId } = parseUser(r.accepted_by);
             const row = ws.addRow({
                 branch_id: r.branch_id, product_name: r.product_name || r.barcode,
                 barcode: r.barcode, qty: r.qty,
                 status: isAcc ? 'ອານຸມັດ' : isRej ? 'ປະຕິເສດ' : 'ລໍຖ້າ',
-                request_by: r.request_by, accepted_by: r.accepted_by || '-',
+                request_by_name: reqName, request_by_id: reqId || r.request_by_id || '-',
+                accepted_by_name: accName, accepted_by_id: accId || '-',
                 created_at: fmtExcel(r.created_at), updated_at: fmtExcel(r.updated_at),
             });
             const bg = isAcc ? 'FFD1FAE5' : isRej ? 'FFFEE2E2' : 'FFFEFCE8';
@@ -90,18 +119,22 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'Qty ເກົ່າ', key: 'old_qty', width: 12 },
             { header: 'Qty ໃໝ່', key: 'new_qty', width: 12 },
             { header: 'ການປ່ຽນ', key: 'change', width: 14 },
-            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by', width: 22 },
+            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
+            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
             { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
         ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
             const ch = (r.new_qty || 0) - (r.old_qty || 0);
+            const { name: editName, empId: editId } = parseUser(r.updated_by);
             const row = ws.addRow({
                 branch_id: r.branch_id, item_name: r.item_name || r.barcode,
                 barcode: r.barcode, old_qty: r.old_qty, new_qty: r.new_qty,
                 change: ch > 0 ? `+${ch}` : ch,
-                updated_by: r.updated_by, details: r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ',
+                updated_by_name: editName,
+                updated_by_id: editId || r.updated_by_id || '-',
+                details: r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ',
                 updated_at: fmtExcel(r.updated_at),
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFEDE9FE' : 'FFFFFFFF' } }; });
@@ -113,14 +146,19 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
             { header: 'ຈຳນວນ', key: 'qty', width: 10 },
-            { header: 'ຜູ້ດຳເນີນ', key: 'added_by', width: 22 },
+            { header: 'ຜູ້ດຳເນີນ', key: 'added_by_name', width: 22 },
+            { header: 'Employee ID', key: 'added_by_id', width: 16 },
+            { header: 'ເຫດຜົນ', key: 'remarks', width: 32 },
             { header: 'ເວລາ', key: 'created_at', width: 24 },
         ];
         ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
+            const { name: addName, empId: addId } = parseUser(r.added_by);
             const row = ws.addRow({
                 branch_id: r.branch_id, item_name: r.item_name || r.barcode,
-                barcode: r.barcode, qty: r.qty, added_by: r.added_by,
+                barcode: r.barcode, qty: r.qty,
+                added_by_name: addName, added_by_id: addId || '-',
+                remarks: r.remarks || r.reason || 'ເພີ່ມເຂົ້າລະບົບໂດຍກົງ',
                 created_at: fmtExcel(r.created_at),
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFD1FAE5' : 'FFFFFFFF' } }; });
@@ -241,7 +279,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     const headers =
         activeTab === 'requests' ? ['ສິນຄ້າ', 'ຜູ້ Request', 'ຈຳນວນ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
             activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ເຫດຜົນ', 'ເວລາ'] :
-                ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເວລາ'];
+                ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ລໍຖ້າ', val: filtered.filter(r => r.status === 'pending').length, cls: 'bg-amber-400/30' },
@@ -268,23 +306,34 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             const isRejected = r.status === 'rejected';
             return (
                 <tr key={i} className={`transition-colors ${isAccepted ? 'bg-emerald-50/40' : isRejected ? 'bg-rose-50/40' : 'hover:bg-amber-50/40'}`}>
-                    <td className="px-6 py-4"><p className="text-base font-bold text-slate-800 dark:text-white">{r.product_name || r.barcode || '-'}</p><p className="text-sm text-slate-400 font-mono">{r.barcode}</p></td>
                     <td className="px-6 py-4">
-                        <div className="flex items-center gap-2"><User size={16} className="text-slate-400 shrink-0" /><span className="text-base font-bold text-slate-700 dark:text-slate-200">{r.request_by || '-'}</span></div>
-                        <p className="text-sm text-slate-400 mt-0.5">{fmt(r.created_at)}</p>
+                        <div className="flex items-center gap-2"><User size={16} className="text-slate-400 shrink-0" /><span className="text-base font-bold text-slate-700 dark:text-slate-200">{r.product_name || r.barcode || '-'}</span></div>
+                        <p className="text-sm text-slate-400 font-mono ml-6">{r.barcode}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                        <UserCell value={r.request_by} iconColor="text-slate-400" />
+                        <p className="text-xs text-slate-400 mt-1">{fmt(r.created_at)}</p>
                     </td>
                     <td className="px-6 py-4 text-center"><span className="text-3xl font-black text-blue-600 dark:text-blue-400">{r.qty ?? '-'}</span></td>
                     <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                     <td className="px-6 py-4">
-                        {r.accepted_by ? (
-                            <div className={`flex flex-col gap-0.5 px-3 py-2 rounded-xl ${(r.status === 'accepted' || r.status === 'approved') ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-                                <div className="flex items-center gap-1.5">
-                                    <User size={14} className={(r.status === 'accepted' || r.status === 'approved') ? 'text-emerald-600' : 'text-rose-500'} />
-                                    <span className={`text-sm font-black ${(r.status === 'accepted' || r.status === 'approved') ? 'text-emerald-700' : 'text-rose-700'}`}>{r.accepted_by}</span>
+                        {r.accepted_by ? (() => {
+                            const isAcc = r.status === 'accepted' || r.status === 'approved';
+                            const bgCls = isAcc ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-rose-100 dark:bg-rose-900/30';
+                            const { name, empId } = parseUser(r.accepted_by);
+                            return (
+                                <div className={`flex flex-col gap-1 px-3 py-2 rounded-xl ${bgCls}`}>
+                                    <div className="flex items-center gap-1.5">
+                                        <User size={14} className={isAcc ? 'text-emerald-600' : 'text-rose-500'} />
+                                        <span className={`text-sm font-black ${isAcc ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>{name}</span>
+                                    </div>
+                                    {empId && (
+                                        <span className={`ml-5 inline-block px-1.5 py-0.5 rounded text-[10px] font-black font-mono uppercase tracking-wider ${isAcc ? 'bg-emerald-200/70 text-emerald-800' : 'bg-rose-200/70 text-rose-800'}`}>{empId}</span>
+                                    )}
+                                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><Clock size={11} /> {fmt(r.updated_at)}</p>
                                 </div>
-                                <p className="text-xs text-slate-500 flex items-center gap-1"><Clock size={11} /> {fmt(r.updated_at)}</p>
-                            </div>
-                        ) : <span className="text-slate-300">-</span>}
+                            );
+                        })() : <span className="text-slate-300">-</span>}
                     </td>
                 </tr>
             );
@@ -294,7 +343,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             return (
                 <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                     <td className="px-6 py-4"><p className="text-base font-bold text-slate-800 dark:text-white">{r.item_name || r.barcode || '-'}</p><p className="text-sm text-slate-400 font-mono">{r.barcode}</p></td>
-                    <td className="px-6 py-4"><div className="flex items-center gap-2"><User size={16} className="text-indigo-400 shrink-0" /><span className="text-base font-bold text-slate-700 dark:text-slate-200">{r.updated_by || '-'}</span></div></td>
+                    <td className="px-6 py-4"><UserCell value={r.updated_by} iconColor="text-indigo-400" /></td>
                     <td className="px-6 py-4 text-center"><span className={`text-3xl font-black ${qtyChange > 0 ? 'text-emerald-500' : qtyChange < 0 ? 'text-rose-500' : 'text-slate-400'}`}>{qtyChange > 0 ? `+${qtyChange}` : qtyChange || '-'}</span></td>
                     <td className="px-6 py-4"><span className="text-sm text-slate-500 italic">{r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ'}</span></td>
                     <td className="px-6 py-4 text-slate-400 text-sm whitespace-nowrap">{fmt(r.updated_at)}</td>
@@ -304,8 +353,9 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         return (
             <tr key={i} className="hover:bg-emerald-50/30 transition-colors">
                 <td className="px-6 py-4"><p className="text-base font-bold text-slate-800 dark:text-white">{r.item_name || r.barcode || '-'}</p><p className="text-sm text-slate-400 font-mono">{r.barcode}</p></td>
-                <td className="px-6 py-4"><div className="flex items-center gap-2"><User size={16} className="text-emerald-400 shrink-0" /><span className="text-base font-bold text-slate-700 dark:text-slate-200">{r.added_by || '-'}</span></div></td>
+                <td className="px-6 py-4"><UserCell value={r.added_by} iconColor="text-emerald-400" /></td>
                 <td className="px-6 py-4 text-center"><span className="text-3xl font-black text-emerald-600">{r.qty ?? '-'}</span></td>
+                <td className="px-6 py-4"><span className="text-sm text-slate-500 italic">{r.remarks || r.reason || 'ເພີ່ມເຂົ້າລະບົບໂດຍກົງ'}</span></td>
                 <td className="px-6 py-4 text-slate-400 text-sm whitespace-nowrap">{fmt(r.created_at)}</td>
             </tr>
         );

@@ -319,7 +319,8 @@ const ResultTable = ({
                     oldRack: row.rackLocation,
                     newRack: row.rackLocation,
                     updatedBy: activeUser,
-                    reason: reason
+                    reason: reason,
+                    branchId: currentBranch || row.branch_id || currentUser?.branch_id || localStorage.getItem('joah_branch_id')
                 });
             }
             success(t('results.saveSuccess'));
@@ -363,7 +364,7 @@ const ResultTable = ({
                 // Validate Reason if changes detected
                 const hasRackChangedCheck = editLocation !== selectedRow.rackLocation;
                 const hasCatChangedCheck = (editCat1 !== selectedRow.category1) || (editCat2 !== selectedRow.category2);
-                const hasQtyChangedCheck = Number(editQty) !== (selectedRow.qty || 0);
+                const hasQtyChangedCheck = newQtyValue !== (selectedRow.qty || 0);
 
                 if ((hasRackChangedCheck || hasCatChangedCheck || hasQtyChangedCheck) && !editReason.trim()) {
                     showError(t('results.reasonRequired'));
@@ -455,7 +456,9 @@ const ResultTable = ({
 
         setIsSavingQuickAdd(true);
         try {
-            const activeUser = currentUser ? currentUser.name : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+            const activeUser = currentUser
+                ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
+                : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
             // Logic: If Qty is 0, clear Location to NULL
             const finalPayload = {
@@ -484,7 +487,8 @@ const ResultTable = ({
                     item_name: quickAddForm.item_name,
                     qty: quickAddForm.qty,
                     added_by: activeUser,
-                    location: finalPayload.rack_location, // Use the sanitized location
+                    location: finalPayload.rack_location,
+                    remarks: quickAddForm.remarks || 'Direct Addition to Inventory',
                     branch_id: branchToSave
                 });
                 if (logError) console.error("Failed to log added item:", logError);

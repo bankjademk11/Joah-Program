@@ -158,8 +158,10 @@ const StoreRequest = ({ onBack, currentUser }) => {
                 product_name: item.product_name,
                 qty: item.qty,
                 status: 'pending',
-                request_by: currentUser?.name || 'Store Staff',
-                branch_id: item.branch_id || currentUser?.branch_id || null, // 🔑 Save branch so manager shows correct stock
+                request_by: currentUser?.id
+                    ? `${currentUser.name} (${currentUser.id})`
+                    : (currentUser?.name || 'Store Staff'),
+                branch_id: item.branch_id || currentUser?.branch_id || null,
                 batch_id: batchId
             }));
             const { error } = await supabase.from('store_requests').insert(requests);

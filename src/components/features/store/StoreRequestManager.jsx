@@ -175,7 +175,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .from('store_requests')
                 .update({
                     status: 'accepted',
-                    accepted_by: currentUser?.name || 'Admin',
+                    accepted_by: currentUser?.id
+                        ? `${currentUser.name} (${currentUser.id})`
+                        : (currentUser?.name || 'Admin'),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', id);
@@ -219,7 +221,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .from('store_requests')
                 .update({
                     status: 'accepted',
-                    accepted_by: currentUser?.name || 'Admin',
+                    accepted_by: currentUser?.id
+                        ? `${currentUser.name} (${currentUser.id})`
+                        : (currentUser?.name || 'Admin'),
                     updated_at: new Date().toISOString()
                 })
                 .in('id', itemIdsToUpdate);
@@ -290,7 +294,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .from('store_requests')
                 .update({
                     status: 'rejected',
-                    accepted_by: currentUser?.name || 'Admin',
+                    accepted_by: currentUser?.id
+                        ? `${currentUser.name} (${currentUser.id})`
+                        : (currentUser?.name || 'Admin'),
                     updated_at: new Date().toISOString()
                 })
                 .in('id', itemIds);
@@ -313,7 +319,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .from('store_requests')
                 .update({
                     status: 'rejected',
-                    accepted_by: currentUser?.name || 'Admin',
+                    accepted_by: currentUser?.id
+                        ? `${currentUser.name} (${currentUser.id})`
+                        : (currentUser?.name || 'Admin'),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', id);

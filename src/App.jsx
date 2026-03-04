@@ -836,7 +836,7 @@ function AppContent() {
                       {/* Image Banner */}
                       <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-blue-100 to-sky-200 relative">
                         <img
-                          src="/src/assets/JoahHQcenter.png"
+                          src="/src/assets/JoahHQcentercompressed.png"
                           alt="HQ Command Center"
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                         />
