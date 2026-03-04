@@ -863,21 +863,31 @@ function AppContent() {
 
                   {/* Admin only: HQ Command Center */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-amber-500 hover:shadow-amber-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-xl shadow-orange-500/30">
-                        <BarChart3 size={32} />
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col items-center text-center gap-0 group hover:border-amber-500 hover:shadow-amber-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-blue-100 to-sky-200 relative">
+                        <img
+                          src="/src/assets/JoahHQcenter.png"
+                          alt="HQ Command Center"
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                        />
+                        {/* Overlay gradient at bottom */}
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">HQ Command Center</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Analytics &amp; Monitoring</p>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">HQ Command Center</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Analytics &amp; Monitoring</p>
+                        </div>
+                        <button
+                          onClick={() => setStep('hq-dashboard')}
+                          className="w-full btn-primary mt-1 group py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-orange-500/30"
+                        >
+                          <BarChart3 size={18} />
+                          <span>Open Dashboard</span>
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setStep('hq-dashboard')}
-                        className="w-full btn-primary mt-2 group py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-orange-500/30"
-                      >
-                        <BarChart3 size={18} />
-                        <span>Open Dashboard</span>
-                      </button>
                     </div>
                   )}
 
