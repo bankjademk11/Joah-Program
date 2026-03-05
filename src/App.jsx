@@ -23,6 +23,7 @@ import imgCloudDB from './assets/CloudRecordDatabase.png';
 import imgOdoo from './assets/OdooImage.png';
 import imgExcelResize from './assets/ExelResize.png';
 import imgStoreClosing from './assets/RequestfromWarehouse.png';
+import imgHQCenter from './assets/JoahHQcentercompressed.png';
 
 import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
@@ -836,7 +837,7 @@ function AppContent() {
                       {/* Image Banner */}
                       <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-blue-100 to-sky-200 relative">
                         <img
-                          src="/src/assets/JoahHQcentercompressed.png"
+                          src={imgHQCenter}
                           alt="HQ Command Center"
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                         />

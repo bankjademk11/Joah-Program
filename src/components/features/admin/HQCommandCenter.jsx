@@ -74,9 +74,9 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
 
     const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981' };
     const headerStyle = {
-        font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 },
+        font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 12, name: 'Phetsarath OT' },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: headerFill[activeTab] } },
-        alignment: { horizontal: 'center', vertical: 'middle' },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
     };
 
     if (activeTab === 'requests') {
@@ -86,10 +86,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'Barcode', key: 'barcode', width: 18 },
             { header: 'ຈຳນວນ', key: 'qty', width: 10 },
             { header: 'ສະຖານະ', key: 'status', width: 14 },
-            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
             { header: 'Employee ID', key: 'request_by_id', width: 16 },
-            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
+            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
             { header: 'Employee ID', key: 'accepted_by_id', width: 16 },
+            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
             { header: 'ເວລາ Request', key: 'created_at', width: 24 },
             { header: 'ເວລາ Action', key: 'updated_at', width: 24 },
         ];
@@ -119,8 +119,8 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'Qty ເກົ່າ', key: 'old_qty', width: 12 },
             { header: 'Qty ໃໝ່', key: 'new_qty', width: 12 },
             { header: 'ການປ່ຽນ', key: 'change', width: 14 },
-            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
             { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
             { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
@@ -165,7 +165,22 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         });
     }
 
-    ws.getRow(1).height = 28;
+    // Apply Phetsarath OT font + center alignment to ALL cells
+    ws.eachRow((row, rowNumber) => {
+        row.height = rowNumber === 1 ? 30 : 22;
+        row.eachCell(cell => {
+            cell.font = { ...cell.font, name: 'Phetsarath OT' };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            if (!cell.border) {
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                };
+            }
+        });
+    });
     const dateStr = startDate && endDate ? `${startDate}_to_${endDate}` : startDate || endDate || 'all';
     const fileName = `HQ_${tabNames[activeTab].replace(' ', '_')}_${dateStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer();
