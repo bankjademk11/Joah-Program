@@ -42,6 +42,7 @@ const Login = ({ onLogin }) => {
                     .insert([{
                         employee_id: regEmployeeId.trim().toUpperCase(),
                         name: regEmployeeId.trim(),
+                        password: regPassword,
                         role: 'staff',
                         workplace: regWorkplace,
                         branch_id: address
@@ -85,6 +86,14 @@ const Login = ({ onLogin }) => {
 
             if (dbError || !employee) {
                 throw new Error('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');
+            }
+
+            // Verify password
+            if (!employee.password) {
+                throw new Error('ບັນຊີນີ້ຍັງບໍ່ໄດ້ຕັ້ງລະຫັດຜ່ານ ກະລຸນາຕິດຕໍ່ຜູ້ດູແລລະບົບ');
+            }
+            if (employee.password !== password.trim()) {
+                throw new Error('ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ');
             }
 
             localStorage.setItem('joah_employee_id', employee.employee_id);
