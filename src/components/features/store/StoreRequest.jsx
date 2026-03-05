@@ -127,6 +127,13 @@ const StoreRequest = ({ onBack, currentUser }) => {
 
     const handleAddToCart = () => {
         if (!product) return;
+
+        // Limit to 5 items
+        if (cart.length >= 5) {
+            toast.error('ຂໍອະໄພ! ສາມາດຂໍໄດ້ສູງສຸດ 5 ລາຍການຕໍ່ຄັ້ງ');
+            return;
+        }
+
         const newItem = {
             id: Date.now(),
             barcode: product.barcode,
@@ -347,8 +354,15 @@ const StoreRequest = ({ onBack, currentUser }) => {
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <List className="text-joah-orange" />
-                            <h3 className="font-black text-slate-800 dark:text-white">{t('storeRequest.requestList')} ({cart.length})</h3>
+                            <h3 className="font-black text-slate-800 dark:text-white">
+                                {t('storeRequest.requestList')} ({cart.length}/5)
+                            </h3>
                         </div>
+                        {cart.length >= 5 && (
+                            <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-lg animate-pulse">
+                                ເຕັມແລ້ວ
+                            </span>
+                        )}
                         {cart.length > 0 && (
                             <button onClick={() => setCart([])} className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors">
                                 {t('storeRequest.remove')}
@@ -363,7 +377,17 @@ const StoreRequest = ({ onBack, currentUser }) => {
                             </div>
                         ))}
                     </div>
-                    <button onClick={handleSubmitCart} disabled={cart.length === 0 || isSending} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-50 transition-all">{isSending ? <RotateCw className="animate-spin" /> : <Send />}<span>{t('storeRequest.submitRequest')} ({cart.length})</span></button>
+                    <button
+                        onClick={handleSubmitCart}
+                        disabled={cart.length === 0 || cart.length > 5 || isSending}
+                        className={`w-full py-4 text-white rounded-xl font-black shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${cart.length > 5 ? 'bg-rose-500' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'
+                            }`}
+                    >
+                        {isSending ? <RotateCw className="animate-spin" /> : <Send />}
+                        <span>
+                            {cart.length > 5 ? 'ເກີນ 5 ລາຍການ' : `${t('storeRequest.submitRequest')} (${cart.length})`}
+                        </span>
+                    </button>
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col min-h-[350px]">
