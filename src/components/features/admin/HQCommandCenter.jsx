@@ -9,6 +9,8 @@ import {
     FileSpreadsheet, X, ChevronDown
 } from 'lucide-react';
 
+import imgSvl from '../../../assets/SVLJoah.png';
+
 // ===================== CONSTANTS =====================
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
 
@@ -246,18 +248,38 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
 
             return (
                 <button key={branch} onClick={() => onSelectBranch(branch)}
-                    className={`text-left p-7 rounded-3xl border-2 ${c.card} ${c.bdr} shadow-md hover:shadow-xl hover:scale-[1.025] active:scale-[0.99] transition-all duration-200 group focus:outline-none focus:ring-4 focus:ring-offset-1 focus:ring-orange-300`}>
-                    <div className="flex items-center justify-between mb-5">
-                        <span className={`text-xl font-black ${c.txt}`}>{branch}</span>
-                        <div className={`w-10 h-10 rounded-xl ${c.gr} flex items-center justify-center text-white`}><ChevronRight size={20} /></div>
+                    className={`text-left p-7 rounded-3xl border-2 ${c.card} ${c.bdr} shadow-md hover:shadow-xl hover:scale-[1.025] active:scale-[0.99] transition-all duration-200 group focus:outline-none focus:ring-4 focus:ring-offset-1 focus:ring-orange-300 relative overflow-hidden`}>
+
+                    {branch === 'ສີວິໄລ' && (
+                        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                            <img src={imgSvl} alt="Sivilay Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
+                        </div>
+                    )}
+
+                    <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-5">
+                            <span className={`text-xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : c.txt} drop-shadow-md`}>{branch}</span>
+                            <div className={`w-10 h-10 rounded-xl ${c.gr} flex items-center justify-center text-white shadow-sm`}><ChevronRight size={20} /></div>
+                        </div>
+                        <p className={`text-7xl font-black leading-none ${branch === 'ສີວິໄລ' ? 'text-white' : c.txt} drop-shadow-xl tracking-tighter`}>{mainVal}</p>
+                        <p className={`text-base font-bold ${branch === 'ສີວິໄລ' ? 'text-white/90' : 'text-slate-500'} mt-1 drop-shadow-md`}>{mainLabel}</p>
+
+                        <div className={`flex gap-6 pt-4 mt-4 border-t ${branch === 'ສີວິໄລ' ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
+                            <div>
+                                <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subA.color} drop-shadow-md`}>{subA.val}</p>
+                                <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subA.label}</p>
+                            </div>
+                            {subB && (
+                                <div>
+                                    <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subB.color} drop-shadow-md`}>{subB.val}</p>
+                                    <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subB.label}</p>
+                                </div>
+                            )}
+                        </div>
+                        <p className={`text-sm font-bold mt-4 transition-colors ${branch === 'ສີວິໄລ' ? 'text-white/70 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
+                            👆 ກົດເພື່ອເບິ່ງລາຍລະອຽດ
+                        </p>
                     </div>
-                    <p className={`text-7xl font-black leading-none ${c.txt}`}>{mainVal}</p>
-                    <p className="text-base font-bold text-slate-500 mt-1">{mainLabel}</p>
-                    <div className="flex gap-6 pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div><p className={`text-2xl font-black ${subA.color}`}>{subA.val}</p><p className="text-xs font-bold text-slate-400 uppercase">{subA.label}</p></div>
-                        {subB && <div><p className={`text-2xl font-black ${subB.color}`}>{subB.val}</p><p className="text-xs font-bold text-slate-400 uppercase">{subB.label}</p></div>}
-                    </div>
-                    <p className="text-sm font-bold text-slate-400 mt-4 group-hover:text-slate-600 transition-colors">👆 ກົດເພື່ອເບິ່ງລາຍລະອຽດ</p>
                 </button>
             );
         })}

@@ -514,20 +514,6 @@ const ResultTable = ({
 
                 success(t('results.saveSuccess')); // Standardized success message
                 setShowQuickAdd(false);
-
-                setShowQuickAdd(false);
-
-                // Refresh background data with Loading Overlay (Show Elephant, No Progress Bar)
-                if (onRefresh) {
-                    await onRefresh({
-                        skipMaster: false,
-                        silent: false,
-                        loadingText: 'ກຳລັງບັນທຶກຂໍ້ມູນລົງ Server...',
-                        showProgress: false
-                    });
-                } else {
-                    handleManualRefresh();
-                }
             } else {
                 alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + result.error);
             }

@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3 } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -541,11 +541,57 @@ function AppContent() {
             setPendingChanges(prev => prev + 1);
             setShowRealtimeBanner(true);
 
-            // Auto-refresh after 3 seconds of inactivity (debounced)
+            // Auto-hide banner after 3 seconds
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             debounceTimerRef.current = setTimeout(() => {
-              refreshFromCloud({ skipMaster: true });
+              setShowRealtimeBanner(false);
+              setPendingChanges(0);
             }, 3000);
+
+            // Delta update validation results
+            setValidationResults(prev => {
+              const targetBarcode = payload.new?.barcode_no || payload.old?.barcode_no;
+              if (!targetBarcode) return prev;
+
+              const existingIndex = prev.findIndex(r => r.barcode === targetBarcode);
+              if (existingIndex !== -1) {
+                if (payload.eventType === 'DELETE') {
+                  return prev.filter(r => r.barcode !== targetBarcode);
+                }
+                const updatedRow = prev[existingIndex];
+                const newData = payload.new;
+                const newResults = [...prev];
+                newResults[existingIndex] = {
+                  ...updatedRow,
+                  qty: newData.qty,
+                  rackLocation: newData.rack_location,
+                  category1: newData.category_1_actual,
+                  category2: newData.category_2_actual,
+                  uploadedBy: changedBy,
+                  updatedAt: new Date().toISOString()
+                };
+                return newResults;
+              } else if (payload.eventType === 'INSERT') {
+                const newData = payload.new;
+                return [
+                  {
+                    id: newData.id,
+                    barcode: newData.barcode_no,
+                    qty: newData.qty,
+                    rackLocation: newData.rack_location,
+                    category1: newData.category_1_actual,
+                    category2: newData.category_2_actual,
+                    itemName: newData.item_name,
+                    uploadedBy: changedBy,
+                    updatedAt: new Date().toISOString(),
+                    status: 'passed',
+                    rowIndex: prev.length + 1
+                  },
+                  ...prev
+                ];
+              }
+              return prev;
+            });
           }
         }
       )
@@ -861,59 +907,71 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Admin only: Product Management (locked — Under Maintenance) */}
+                  {/* Admin only: Product Management (Unlocked) */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
-                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-amber-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
-                          <ShieldCheck size={12} />
-                          <span>Under Maintenance</span>
-                        </div>
-                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-amber-500 animate-bounce">
-                          <X size={24} strokeWidth={3} />
-                        </div>
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px] hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 cursor-pointer" onClick={() => setStep('product-manager')}>
+                      <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner group-hover:scale-110 transition-transform duration-500 mb-2">
+                        <ProductBoxIcon className="w-8 h-8 text-current" />
                       </div>
-                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
-                        <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner mx-auto mb-6">
-                          <ProductBoxIcon className="w-8 h-8 text-current" />
-                        </div>
-                        <div className="space-y-2 mb-6">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Product Management</p>
-                        </div>
-                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
-                          <LayoutDashboard size={18} />
-                          <span>ເພີ່ມ/ແກ້ໄຂສິນຄ້າ</span>
-                        </div>
+                      <div className="space-y-2 mb-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] group-hover:text-emerald-500 transition-colors">Product Management</p>
                       </div>
+
+                      {isAdmin && (
+                        <div className="w-full relative z-20 mt-2 mb-4" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={adminViewBranch || user?.branch_id || 'ຕະຫຼາດລາວ'}
+                            onChange={(e) => setAdminViewBranch(e.target.value)}
+                            className="w-full h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-emerald-100 dark:border-emerald-900/50 text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-emerald-500 appearance-none shadow-sm cursor-pointer"
+                          >
+                            <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                            <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            <option value="ສີວິໄລ">ສີວິໄລ</option>
+                            <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                          </select>
+                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none" size={16} />
+                        </div>
+                      )}
+
+                      <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-emerald-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('product-manager'); }}>
+                        <LayoutDashboard size={18} />
+                        <span>ກົດເຂົ້າໃຊ້ງານ</span>
+                      </button>
                     </div>
                   )}
 
-                  {/* Admin only: Master Data Audit (locked — Coming Soon) */}
+                  {/* Admin only: Master Data Audit (Unlocked) */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px]">
-                      <div className="absolute inset-0 bg-slate-900/5 dark:bg-slate-100/5 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-                        <div className="bg-gradient-to-r from-blue-500 to-sky-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg shadow-blue-500/30 animate-pulse flex items-center gap-2 mb-2 uppercase tracking-[0.2em]">
-                          <Database size={12} />
-                          <span>Coming Soon</span>
-                        </div>
-                        <div className="w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-xl flex items-center justify-center text-blue-500 animate-bounce">
-                          <Sparkles size={24} strokeWidth={3} />
-                        </div>
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px] hover:border-sky-500 hover:shadow-sky-500/10 transition-all duration-500 cursor-pointer" onClick={() => setStep('master-audit')}>
+                      <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-inner group-hover:scale-110 transition-transform duration-500 mb-2">
+                        <AuditDatabaseIcon className="w-8 h-8 text-current" />
                       </div>
-                      <div className="grayscale opacity-40 pointer-events-none select-none filter blur-[1px]">
-                        <div className="w-16 h-16 rounded-3xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-inner mx-auto mb-6">
-                          <AuditDatabaseIcon className="w-8 h-8 text-current" />
-                        </div>
-                        <div className="space-y-2 mb-6">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Master Data Audit</p>
-                        </div>
-                        <div className="w-full btn-primary py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center gap-2">
-                          <Database size={18} />
-                          <span>ກວດສອບ Master Data</span>
-                        </div>
+                      <div className="space-y-2 mb-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບຖານຂໍ້ມູນ</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] group-hover:text-sky-500 transition-colors">Master Data Audit</p>
                       </div>
+
+                      {isAdmin && (
+                        <div className="w-full relative z-20 mt-2 mb-4" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={adminViewBranch || user?.branch_id || 'ຕະຫຼາດລາວ'}
+                            onChange={(e) => setAdminViewBranch(e.target.value)}
+                            className="w-full h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-sky-100 dark:border-sky-900/50 text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-sky-500 appearance-none shadow-sm cursor-pointer"
+                          >
+                            <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                            <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            <option value="ສີວິໄລ">ສີວິໄລ</option>
+                            <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                          </select>
+                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-sky-500 pointer-events-none" size={16} />
+                        </div>
+                      )}
+
+                      <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 shadow-blue-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('master-audit'); }}>
+                        <Database size={18} />
+                        <span>ກົດເຂົ້າໃຊ້ງານ</span>
+                      </button>
                     </div>
                   )}
 
@@ -999,6 +1057,7 @@ function AppContent() {
               currentUser={user}
               activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
               initialBarcode={preFilledBarcode}
+              isAdmin={isAdmin}
             />
           )}
 
@@ -1007,6 +1066,7 @@ function AppContent() {
               onBack={() => setStep('upload')}
               currentUser={user}
               activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
+              isAdmin={isAdmin}
             />
           )}
 
@@ -1045,31 +1105,21 @@ function AppContent() {
 
                   {/* Pending Changes Banner */}
                   {showRealtimeBanner && pendingChanges > 0 && (
-                    <div className="glass-card rounded-2xl p-4 border-2 border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 shadow-lg shadow-sky-500/10 animate-fade-in">
+                    <div className="glass-card rounded-2xl p-4 border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 shadow-lg shadow-emerald-500/10 animate-fade-in">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 animate-pulse">
-                            <Bell size={20} />
+                          <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle size={20} />
                           </div>
                           <div>
-                            <p className="text-sm font-black text-sky-800 dark:text-sky-200">
-                              📡 ມີການອັບເດດຈາກຜູ້ໃຊ້ອື່ນ!
+                            <p className="text-sm font-black text-emerald-800 dark:text-emerald-200">
+                              ອັບເດດຂໍ້ມູນລ່າສຸດສຳເລັດ!
                             </p>
-                            <p className="text-xs font-bold text-sky-600 dark:text-sky-400 mt-0.5">
-                              {lastChangeBy} ໄດ້ແກ້ໄຂ {pendingChanges} ລາຍການ — ກຳລັງ refresh ອັດຕະໂນມັດ...
+                            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                              {lastChangeBy} ໄດ້ແກ້ໄຂ {pendingChanges} ລາຍການ — ໜ້າຈໍຖືກອັບເດດໃຫ້ເປັນປັດຈຸບັນແລ້ວ.
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-                            refreshFromCloud();
-                          }}
-                          className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-2 flex-shrink-0"
-                        >
-                          <RefreshCw size={14} />
-                          <span>Refresh ເລີຍ</span>
-                        </button>
                       </div>
                     </div>
                   )}

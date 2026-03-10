@@ -10,8 +10,8 @@ import {
     FileSpreadsheet
 } from 'lucide-react';
 
-const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
-    const masterBranch = normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ');
+const MasterAudit = ({ onBack, currentUser, activeBranch, isAdmin }) => {
+    const [selectedBranch, setSelectedBranch] = useState(normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ'));
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -34,12 +34,12 @@ const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
 
     useEffect(() => {
         fetchMasterData();
-    }, []);
+    }, [selectedBranch]);
 
     const fetchMasterData = async () => {
         setIsLoading(true);
         try {
-            const data = await fetchMasterFromSupabase(masterBranch);
+            const data = await fetchMasterFromSupabase(selectedBranch);
             setProducts(data || []);
         } catch (err) {
             console.error('Audit Fetch Error:', err);
@@ -154,7 +154,7 @@ const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
                     updated_by: currentUser?.name || 'Audit Admin'
                 })
                 .eq('barcode', editingProduct.barcode)
-                .eq('branch_id', masterBranch);
+                .eq('branch_id', selectedBranch);
 
             if (error) {
                 console.error('❌ Master Data Update Error:', error);
@@ -237,7 +237,7 @@ const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
                 .from('master_data')
                 .delete()
                 .eq('barcode', p.barcode)
-                .eq('branch_id', masterBranch);
+                .eq('branch_id', selectedBranch);
             if (error) throw error;
             alert('✅ ລຶບສິນຄ້າສຳເລັດ!');
             fetchMasterData();
@@ -341,7 +341,22 @@ const MasterAudit = ({ onBack, currentUser, activeBranch }) => {
                     </p>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 mt-4 md:mt-0 items-center">
+                    {isAdmin && (
+                        <div className="relative">
+                            <select
+                                value={selectedBranch}
+                                onChange={(e) => setSelectedBranch(e.target.value)}
+                                className="h-14 pl-6 pr-12 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-black text-slate-800 dark:text-white shadow-sm appearance-none outline-none focus:border-joah-orange hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer"
+                            >
+                                <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                                <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                                <option value="ສີວິໄລ">ສີວິໄລ</option>
+                                <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                        </div>
+                    )}
                     <button
                         onClick={handleExportExcel}
                         className="btn-secondary !rounded-2xl h-14 bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-600 hover:text-white"

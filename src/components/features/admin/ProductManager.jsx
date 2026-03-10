@@ -7,8 +7,8 @@ import {
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 
-const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) => {
-    const masterBranch = normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ');
+const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode, isAdmin }) => {
+    const [selectedBranch, setSelectedBranch] = useState(normalizeMasterBranch(activeBranch || currentUser?.branch_id || 'ຕະຫຼາດລາວ'));
     // Basic States
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +63,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
         } else {
             fetchHistory();
         }
-    }, [viewMode]);
+    }, [viewMode, selectedBranch]);
 
     const fetchProducts = async () => {
         setIsLoading(true);
@@ -71,7 +71,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
             const { data, error } = await supabase
                 .from('master_data')
                 .select('*')
-                .eq('branch_id', masterBranch)
+                .eq('branch_id', selectedBranch)
                 .order('barcode', { ascending: true });
 
             if (error) throw error;
@@ -137,7 +137,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
                         updated_by: currentUser?.name || 'Unknown'
                     })
                     .eq('barcode', editingProduct.barcode)
-                    .eq('branch_id', masterBranch);
+                    .eq('branch_id', selectedBranch);
 
                 if (error) throw error;
 
@@ -163,7 +163,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
                         category_1: formData.category_1,
                         category_2: formData.category_2,
                         qty: formData.qty,
-                        branch_id: masterBranch,
+                        branch_id: selectedBranch,
                         updated_by: currentUser?.name || 'Unknown'
                     }]);
 
@@ -184,8 +184,23 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
 
             alert(`✅ ${editingProduct ? 'ອັບເດດ' : 'ເພີ່ມ'}ສິນຄ້າສຳເລັດ!`);
 
+            // Optimistic UI Update
+            if (editingProduct) {
+                setProducts(prev => prev.map(p =>
+                    p.barcode === formData.barcode
+                        ? { ...p, ...formData, updated_at: new Date().toISOString(), updated_by: currentUser?.name || 'Unknown' }
+                        : p
+                ));
+            } else {
+                setProducts(prev => [...prev, {
+                    ...formData,
+                    branch_id: selectedBranch,
+                    updated_at: new Date().toISOString(),
+                    updated_by: currentUser?.name || 'Unknown'
+                }]);
+            }
+
             resetForm();
-            fetchProducts();
         } catch (err) {
             console.error('Error saving product:', err);
             alert('❌ ບໍ່ສາມາດບັນທຶກໄດ້: ' + err.message);
@@ -215,7 +230,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
                 .from('master_data')
                 .delete()
                 .eq('barcode', product.barcode)
-                .eq('branch_id', masterBranch);
+                .eq('branch_id', selectedBranch);
 
             if (error) throw error;
 
@@ -232,7 +247,9 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
             });
 
             alert('✅ ລຶບສິນຄ້າສຳເລັດ!');
-            fetchProducts();
+
+            // Optimistic UI Update
+            setProducts(prev => prev.filter(p => p.barcode !== product.barcode));
         } catch (err) {
             console.error('Error deleting product:', err);
             alert('❌ ບໍ່ສາມາດລຶບໄດ້: ' + err.message);
@@ -327,7 +344,22 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode }) =
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        {isAdmin && (
+                            <div className="relative flex-1 md:flex-none">
+                                <select
+                                    value={selectedBranch}
+                                    onChange={(e) => setSelectedBranch(e.target.value)}
+                                    className="h-12 pl-6 pr-12 w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-black text-slate-800 dark:text-white shadow-sm appearance-none outline-none focus:border-joah-orange hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer"
+                                >
+                                    <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                                    <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                                    <option value="ສີວິໄລ">ສີວິໄລ</option>
+                                    <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                            </div>
+                        )}
                         <button
                             onClick={() => setViewMode(viewMode === 'list' ? 'history' : 'list')}
                             className={`flex-1 md:flex-none px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 border-2 ${viewMode === 'history'
