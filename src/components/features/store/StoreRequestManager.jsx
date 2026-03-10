@@ -9,6 +9,9 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
     const [groupedRequests, setGroupedRequests] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Group expansion state for History section
+    const [expandedGroups, setExpandedGroups] = useState({});
+
     // Determine if this user can see ALL branches (HQ/Admin) or only their own
     // Matches App.jsx convention: role === 'HQ' means admin/HQ access
     const isHQOrAdmin = currentUser?.role === 'HQ';
@@ -146,28 +149,38 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
         }
     };
 
-    const handleAccept = async (id, productName, barcode, qty) => {
+    const handleAccept = async (id, productName, barcode, qty, branchId) => {
         if (!window.confirm(`ຢືນຢັນການຮັບ ${productName} ຈຳນວນ ${qty}?`)) return;
 
         try {
-            // 1. Fetch current inventory
-            const { data: inv, error: invErr } = await supabase
+            // 1. Fetch current inventory using both barcode and branch_id
+            let invQuery = supabase
                 .from('location_inventory')
                 .select('qty')
-                .eq('barcode_no', barcode)
-                .maybeSingle();
+                .eq('barcode_no', barcode);
+
+            if (branchId) {
+                invQuery = invQuery.eq('branch_id', branchId);
+            }
+
+            const { data: inv, error: invErr } = await invQuery.maybeSingle();
 
             if (invErr) throw invErr;
-            if (!inv) throw new Error('ບໍ່ພົບຂໍ້ມູນສິນຄ້າໃນສາງ');
+            if (!inv) throw new Error('ບໍ່ພົບຂໍ້ມູນສິນຄ້າໃນສາງ (ອາດຈະຜິດສາຂາ)');
 
             const newQty = (inv.qty || 0) - qty;
 
             // 2. Transaction-ish update
-            // Note: In production, use RPC (PostgreSQL function) for true atomicity
-            const { error: invUpdateErr } = await supabase
+            let updateQuery = supabase
                 .from('location_inventory')
                 .update({ qty: newQty })
                 .eq('barcode_no', barcode);
+
+            if (branchId) {
+                updateQuery = updateQuery.eq('branch_id', branchId);
+            }
+
+            const { error: invUpdateErr } = await updateQuery;
 
             if (invUpdateErr) throw invUpdateErr;
 
@@ -202,17 +215,27 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
             // For batch, we'll iterate and update inventory
             // Ideally use an RPC for this to be atomic
             for (const item of pendingItems) {
-                const { data: inv } = await supabase
+                let invQuery = supabase
                     .from('location_inventory')
                     .select('qty')
-                    .eq('barcode_no', item.barcode)
-                    .maybeSingle();
+                    .eq('barcode_no', item.barcode);
+
+                if (item.branch_id) {
+                    invQuery = invQuery.eq('branch_id', item.branch_id);
+                }
+
+                const { data: inv } = await invQuery.maybeSingle();
 
                 if (inv) {
-                    await supabase
+                    let updateQuery = supabase
                         .from('location_inventory')
                         .update({ qty: (inv.qty || 0) - item.qty })
                         .eq('barcode_no', item.barcode);
+
+                    if (item.branch_id) {
+                        updateQuery = updateQuery.eq('branch_id', item.branch_id);
+                    }
+                    await updateQuery;
                 }
             }
 
@@ -246,17 +269,27 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
 
             // 1. Restore Inventory
             for (const item of group.items) {
-                const { data: inv } = await supabase
+                let invQuery = supabase
                     .from('location_inventory')
                     .select('qty')
-                    .eq('barcode_no', item.barcode)
-                    .maybeSingle();
+                    .eq('barcode_no', item.barcode);
+
+                if (item.branch_id) {
+                    invQuery = invQuery.eq('branch_id', item.branch_id);
+                }
+
+                const { data: inv } = await invQuery.maybeSingle();
 
                 if (inv) {
-                    await supabase
+                    let updateQuery = supabase
                         .from('location_inventory')
                         .update({ qty: (inv.qty || 0) + item.qty })
                         .eq('barcode_no', item.barcode);
+
+                    if (item.branch_id) {
+                        updateQuery = updateQuery.eq('branch_id', item.branch_id);
+                    }
+                    await updateQuery;
                 }
             }
 
@@ -676,7 +709,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        handleAccept(item.id, item.product_name, item.barcode, item.qty);
+                                                                        handleAccept(item.id, item.product_name, item.barcode, item.qty, item.branch_id);
                                                                     }}
                                                                     className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-[11px] font-bold shadow shadow-emerald-500/30 transition-all duration-150 active:scale-95"
                                                                     title="Accept"
@@ -706,29 +739,76 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
 
                         <div className="space-y-4">
                             {groupedRequests.filter(g => !g.items.some(i => i.status === 'pending')).slice(0, 10).map((group) => (
-                                <div key={group.batch_id} className="bg-white dark:bg-slate-800 rounded-3xl p-4 border border-slate-100 dark:border-slate-700 flex items-center justify-between group/history">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-500">
-                                            <CheckCircle size={20} />
+                                <div key={group.batch_id} className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-700">
+                                    <div
+                                        className="p-4 flex items-center justify-between group/history cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
+                                        onClick={() => setExpandedGroups(prev => ({ ...prev, [group.batch_id]: !prev[group.batch_id] }))}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-500">
+                                                <CheckCircle size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm flex items-center gap-2">
+                                                    ບິນດຳເນີນການແລ້ວ
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${group.items[0].status === 'accepted' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                                        {group.items[0].status === 'accepted' ? 'Accepted' : 'Rejected'}
+                                                    </span>
+                                                </h4>
+                                                <p className="text-xs text-slate-400">{new Date(group.created_at).toLocaleString('th-TH')}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm">ບິນທີ່ຮັບແລ້ວ</h4>
-                                            <p className="text-xs text-slate-400">{new Date(group.created_at).toLocaleString('th-TH')}</p>
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right flex items-center gap-6">
+                                                <div>
+                                                    <div className="text-sm font-black text-slate-800 dark:text-white">{group.items.length} Items</div>
+                                                    <div className="text-[10px] text-slate-400 font-bold uppercase">{group.request_by}</div>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCancelAccept(group);
+                                                    }}
+                                                    className="p-2 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-xl transition-all opacity-0 group-hover/history:opacity-100"
+                                                    title="ຍົກເລີກການຮັບ (ຄືນສາງ)"
+                                                >
+                                                    <Undo2 size={18} />
+                                                </button>
+                                            </div>
+                                            <ChevronDown size={20} className={`text-slate-400 transition-transform ${expandedGroups[group.batch_id] ? 'rotate-180' : ''}`} />
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-6 text-right">
-                                        <div>
-                                            <div className="text-sm font-black text-slate-800 dark:text-white">{group.items.length} Items</div>
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">{group.request_by}</div>
+
+                                    {/* Expanded History Details */}
+                                    {expandedGroups[group.batch_id] && (
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 p-4">
+                                            <div className="space-y-2">
+                                                {group.items.map(item => (
+                                                    <div key={`hist-${item.id}`} className="flex items-center justify-between py-2 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                                                {item.qty}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{item.product_name}</p>
+                                                                <p className="text-[10px] font-mono text-slate-500">{item.barcode}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                                                By: {item.accepted_by || '-'}
+                                                            </p>
+                                                            {item.status === 'accepted' ? (
+                                                                <span className="text-[10px] text-emerald-500 font-bold">✓ Accepted</span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-rose-500 font-bold">✗ Rejected</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={() => handleCancelAccept(group)}
-                                            className="p-2 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-xl transition-all opacity-0 group-hover/history:opacity-100"
-                                            title="ຍົກເລີກການຮັບ (ຄືນສາງ)"
-                                        >
-                                            <Undo2 size={18} />
-                                        </button>
-                                    </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
