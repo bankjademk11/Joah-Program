@@ -158,7 +158,11 @@ const StoreRequest = ({ onBack, currentUser }) => {
     const handleSubmitCart = async () => {
         if (cart.length === 0) return;
         setIsSending(true);
-        const batchId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+        const batchId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
         try {
             const requests = cart.map(item => ({
                 barcode: item.barcode,
