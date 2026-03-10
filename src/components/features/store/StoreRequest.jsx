@@ -158,7 +158,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
     const handleSubmitCart = async () => {
         if (cart.length === 0) return;
         setIsSending(true);
-        const batchId = crypto.randomUUID();
+        const batchId = Date.now().toString(36) + Math.random().toString(36).substring(2);
         try {
             const requests = cart.map(item => ({
                 barcode: item.barcode,
