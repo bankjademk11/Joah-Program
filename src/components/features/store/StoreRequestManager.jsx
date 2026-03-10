@@ -163,7 +163,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 invQuery = invQuery.eq('branch_id', branchId);
             }
 
-            const { data: inv, error: invErr } = await invQuery.maybeSingle();
+            const { data: inv, error: invErr } = await invQuery.limit(1).maybeSingle();
 
             if (invErr) throw invErr;
             if (!inv) throw new Error('ບໍ່ພົບຂໍ້ມູນສິນຄ້າໃນສາງ (ອາດຈະຜິດສາຂາ)');
@@ -224,7 +224,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     invQuery = invQuery.eq('branch_id', item.branch_id);
                 }
 
-                const { data: inv } = await invQuery.maybeSingle();
+                const { data: inv } = await invQuery.limit(1).maybeSingle();
 
                 if (inv) {
                     let updateQuery = supabase
@@ -278,7 +278,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     invQuery = invQuery.eq('branch_id', item.branch_id);
                 }
 
-                const { data: inv } = await invQuery.maybeSingle();
+                const { data: inv } = await invQuery.limit(1).maybeSingle();
 
                 if (inv) {
                     let updateQuery = supabase
