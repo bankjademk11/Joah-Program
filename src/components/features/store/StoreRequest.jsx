@@ -7,9 +7,10 @@ import ExcelJS from 'exceljs';
 import soundOK from '../../../assets/RequestOK.mp3';
 import soundError from '../../../assets/RequestEror.mp3';
 
-// ===================== HYBRID SUPER SCANNER (Native + ZXing Fallback) =====================
+// ===================== HYBRID SUPER SCANNER (Native + WASM Fallback) =====================
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
     const videoRef = useRef(null);
+    const canvasRef = useRef(null); // Used for WASM video decoding
     const streamRef = useRef(null);
     const fileInputRef = useRef(null);
     const mountedRef = useRef(true);
@@ -24,8 +25,8 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
     useEffect(() => {
         mountedRef.current = true;
-        let zxingReader = null;
         let nativeDetector = null;
+        let wasmReader = null;
 
         const initCameraAndScanner = async () => {
             try {
@@ -46,22 +47,14 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
                 if (!nativeDetector) {
                     try {
-                        // Fallback to ZXing
-                        const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
-                            import('@zxing/browser'),
-                            import('@zxing/library')
-                        ]);
-                        const hints = new Map();
-                        hints.set(DecodeHintType.TRY_HARDER, true);
-                        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-                            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.CODE_128,
-                            BarcodeFormat.CODE_39, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-                            BarcodeFormat.ITF, BarcodeFormat.QR_CODE
-                        ]);
-                        zxingReader = new BrowserMultiFormatReader(hints);
-                        if (mountedRef.current) setEngineType('ZXing Fallback');
+                        // iOS WASM Fallback (zxing-wasm)
+                        const zxingWasm = await import('zxing-wasm/reader');
+                        // Pre-warm the WASM module
+                        await zxingWasm.prepareZXingModule();
+                        wasmReader = zxingWasm;
+                        if (mountedRef.current) setEngineType('iOS WASM AI');
                     } catch (e) {
-                        console.error("ZXing load failed", e);
+                        console.error("WASM load failed", e);
                     }
                 }
 
@@ -70,7 +63,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 // 2. CAMERA SETUP (Fix iOS Blurry & Overconstrained errors!)
                 let stream = null;
                 try {
-                    // Try Best Quality with Continuous Focus (Works perfect on Android)
+                    // Try Best Quality with Continuous Focus (Works perfect on Android & Modern iOS WebKit)
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: { ideal: 'environment' },
@@ -82,10 +75,10 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     });
                 } catch (advancedErr) {
                     console.warn("Advanced constraints rejected by device/iOS, falling back to safe defaults...", advancedErr);
-                    // Absolute safe fallback for iOS Safari!
+                    // Safe fallback for strict iOS Safari/Chrome!
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: {
-                            facingMode: 'environment',
+                            facingMode: 'environment', // strict facing mode
                             width: { ideal: 1280 },
                             height: { ideal: 720 },
                         },
@@ -129,16 +122,37 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     try {
                         let textResult = null;
                         
-                        // Use Native Hardware AI if available
+                        // Engine 1: Native Hardware AI (Fastest)
                         if (nativeDetector) {
                             const barcodes = await nativeDetector.detect(videoRef.current);
                             if (barcodes.length > 0) textResult = barcodes[0].rawValue;
                         } 
-                        // Fallback to ZXing software decoder
-                        else if (zxingReader) {
+                        // Engine 2: WASM C++ Engine for iOS (Smooth & Accurate)
+                        else if (wasmReader && canvasRef.current) {
+                            const canvas = canvasRef.current;
+                            const video = videoRef.current;
+                            
+                            // Prevent out-of-memory on iOS by downscaling the canvas for scanning
+                            const scanWidth = 640;
+                            const scanHeight = Math.floor(video.videoHeight * (scanWidth / video.videoWidth));
+                            
+                            if (canvas.width !== scanWidth || canvas.height !== scanHeight) {
+                                canvas.width = scanWidth;
+                                canvas.height = scanHeight;
+                            }
+                            
+                            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                            ctx.drawImage(video, 0, 0, scanWidth, scanHeight);
+                            
+                            // Extract image data for WASM
+                            const imageData = ctx.getImageData(0, 0, scanWidth, scanHeight);
+                            
                             try {
-                                const result = zxingReader.decodeFromVideoElement(videoRef.current);
-                                if (result) textResult = result.getText();
+                                const barcodes = await wasmReader.readBarcodesFromImageData(imageData, {
+                                    tryHarder: true,
+                                    formats: ['EAN_13', 'EAN_8', 'CODE_128', 'CODE_39', 'UPC_A', 'UPC_E', 'QR_CODE']
+                                });
+                                if (barcodes.length > 0) textResult = barcodes[0].text;
                             } catch (_) {}
                         }
 
@@ -151,8 +165,8 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     }
 
                     if (mountedRef.current) {
-                        // Scan ~4 times per sec (Stable and less heat)
-                        requestRef.current = setTimeout(scanFrame, 250);
+                        // Scan 3-4 times per second to prevent iOS heat/throttle
+                        requestRef.current = setTimeout(scanFrame, 300);
                     }
                 };
 
@@ -213,41 +227,40 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         } catch (_) {}
     };
 
-    // 📸 Fallback: scan from captured photo using API safely
+    // 📸 Fallback: scan from captured photo using API/WASM safely
     const handleFileScan = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         
         try {
-            const url = URL.createObjectURL(file);
-            const img = new Image();
-            
-            // BULLETPROOF Image loading for iOS!
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error("Image failed to load"));
-                img.src = url; // Important: set src AFTER onload
-            });
-
-            // Give it to Native if we have it, else ZXing
+            setStatus('scanning'); // Show scanning overlay
             let textResult = null;
+
+            // Engine 1: Native API
             if ('BarcodeDetector' in window) {
                 try {
+                    const url = URL.createObjectURL(file);
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = url;
+                    });
                     const detector = new window.BarcodeDetector();
                     const barcodes = await detector.detect(img);
                     if (barcodes.length > 0) textResult = barcodes[0].rawValue;
                 } catch (_) {}
             }
 
+            // Engine 2: iOS WASM API
             if (!textResult) {
-                const [{ BrowserMultiFormatReader }, { DecodeHintType }] = await Promise.all([
-                    import('@zxing/browser'), import('@zxing/library')
-                ]);
-                const hints = new Map();
-                hints.set(DecodeHintType.TRY_HARDER, true);
-                const reader = new BrowserMultiFormatReader(hints);
-                const result = await reader.decodeFromImageUrl(url);
-                textResult = result.getText();
+                const zxingWasm = await import('zxing-wasm/reader');
+                await zxingWasm.prepareZXingModule();
+                const barcodes = await zxingWasm.readBarcodesFromImageFile(file, {
+                    tryHarder: true,
+                    formats: ['EAN_13', 'EAN_8', 'CODE_128', 'CODE_39', 'UPC_A', 'UPC_E', 'QR_CODE']
+                });
+                if (barcodes.length > 0) textResult = barcodes[0].text;
             }
 
             if (textResult) {
@@ -261,16 +274,19 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 }, 600);
             } else {
                 alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ຫຼຼື ອ່ານຍາກກວ່າປົກກະຕິ ກະລຸນາລອງໃໝ່');
+                setStatus('scanning');
             }
         } catch (err) {
             console.error(err);
             alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ຫຼຼື ຮູບພາບບໍ່ຊັດເຈນ');
+            setStatus('scanning');
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     return (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileScan} style={{ display: 'none' }} />
 
             {/* Header */}
