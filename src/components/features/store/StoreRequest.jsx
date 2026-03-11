@@ -53,8 +53,6 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     { facingMode: 'environment' },
                     {
                         fps: 10,
-                        qrbox: { width: 280, height: 120 },
-                        aspectRatio: 1.7778,
                         disableFlip: false,
                     },
                     (decodedText) => {
@@ -533,16 +531,6 @@ const StoreRequest = ({ onBack, currentUser }) => {
                         className="flex-1 text-xl sm:text-2xl font-bold bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 sm:px-6 sm:py-4 placeholder:text-slate-300 min-w-0"
                         autoFocus={window.innerWidth > 768}
                     />
-                    {/* Camera Scan Button */}
-                    <button
-                        type="button"
-                        onClick={() => setShowScanner(true)}
-                        title="ສະແກນດ້ວຍກ້ອງ"
-                        className="px-4 sm:px-5 bg-gradient-to-br from-joah-orange to-orange-600 hover:from-orange-500 hover:to-orange-500 text-white rounded-2xl shadow-lg shadow-orange-500/30 transition-all flex items-center gap-2 flex-shrink-0"
-                    >
-                        <ScanLine size={22} />
-                        <span className="hidden sm:inline text-sm font-black">ສະແກນ</span>
-                    </button>
                     {/* Search Button */}
                     <button
                         type="submit"
@@ -553,6 +541,16 @@ const StoreRequest = ({ onBack, currentUser }) => {
                     </button>
                 </div>
             </form>
+
+            {/* 📸 Big Centered Camera Scan Button */}
+            <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                className="relative z-10 w-full py-4 bg-gradient-to-r from-joah-orange via-orange-500 to-amber-500 hover:from-orange-500 hover:via-orange-400 hover:to-amber-400 active:scale-[0.98] text-white rounded-2xl shadow-lg shadow-orange-500/30 transition-all flex items-center justify-center gap-3 font-black text-base"
+            >
+                <ScanLine size={24} />
+                ສະແກນບາໂຄ້ດດ້ວຍກ້ອງ
+            </button>
 
             {product && (
                 <div className="animate-scale-in bg-white dark:bg-slate-800/50 rounded-3xl p-5 border-2 border-blue-100 dark:border-blue-500/30 relative z-10">
