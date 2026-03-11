@@ -23,12 +23,31 @@ const StoreRequest = ({ onBack, currentUser }) => {
     const barcodeInputRef = useRef(null);
     const exportMenuRef = useRef(null);
 
-    // Initial Fetch
+    // Initial Fetch & Realtime Subscription
     useEffect(() => {
         fetchRecentRequests();
-        const interval = setInterval(fetchRecentRequests, 10000);
-        return () => clearInterval(interval);
-    }, []);
+
+        // 🚀 Realtime listener for new updates instead of Polling every 10s
+        const channel = supabase
+            .channel('store_requests_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // Listen to All changes (Insert, Update, Delete)
+                    schema: 'public',
+                    table: 'store_requests'
+                },
+                (payload) => {
+                    // console.log('🔄 Realtime update received:', payload);
+                    fetchRecentRequests();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentUser?.branch_id]);
 
     // Focus barcode input
     useEffect(() => {
