@@ -241,6 +241,10 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
 
             let isMatch = false;
             let expectedLabels = [];
+            let allZonesForLabel = [];
+            let maxLevelForLabel = 0;
+            let maxSectionsForLabel = 0;
+            let hasFloorZone = false;
 
             rules.forEach(rule => {
                 const format = rule.format || 'legacy';
@@ -253,48 +257,62 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
 
                 switch (format) {
                     case 'shelf':
-                        // Format: A01-B3-L4-X (Allow any digit for section)
                         pattern = new RegExp(`^(${zones})-B[1-${rule.maxBay || 3}]-L[1-${rule.maxLevel || 4}]-(\\d+)$`, 'i');
-                        // Show in MapLayout format: A01-B1-L1 → A04-B3-L4
                         label = `${firstZone}-B1-L1 → ${lastZone}-B${rule.maxBay || 3}-L${rule.maxLevel || 4}`;
                         break;
                     case 'display':
-                        // Format: B1-M1
                         pattern = new RegExp(`^(${zones})-M(\\d+)$`, 'i');
-                        // Show: B1-M1 → B1-M14
                         label = `${firstZone}-M1 → ${firstZone}-M${rule.maxModule || 14}`;
                         break;
                     case 'standalone':
-                        // Format: M-1
                         pattern = new RegExp(`^(${zones})-(\\d+)$`, 'i');
-                        // Show: M-1 → M-8
                         label = `${firstZone}-1 → ${firstZone}-${rule.maxModule || 8}`;
                         break;
                     case 'floor':
-                        // Format: C1
                         pattern = new RegExp(`^(${zones})(\\d+)$`, 'i');
-                        // Show: C1 → C10
                         label = `${firstZone}1 → ${firstZone}${rule.maxModule || 10}`;
                         break;
                     default:
-                        // Legacy: G01-L1-1 or Floor Label
                         if (rule.maxLevel === 0) {
                             pattern = new RegExp(`^(${zones})$`, 'i');
                             label = rule.zones.join(', ');
+                            hasFloorZone = true;
                         } else {
                             pattern = new RegExp(`^(${zones})-L[1-${rule.maxLevel}]-[1-${rule.maxSections}]$`, 'i');
-                            // Show: G01-L1-1 → G08-L5-4
                             label = `${firstZone}-L1-1 → ${lastZone}-L${rule.maxLevel}-${rule.maxSections}`;
                         }
                 }
 
                 if (pattern.test(rack)) isMatch = true;
                 expectedLabels.push(label);
+
+                // Collect all zones and max values for building combined label
+                allZonesForLabel.push(...rule.zones);
+                if ((rule.maxLevel || 0) > maxLevelForLabel) maxLevelForLabel = rule.maxLevel || 0;
+                if ((rule.maxSections || 0) > maxSectionsForLabel) maxSectionsForLabel = rule.maxSections || 0;
             });
+
+            // Build a single clean combined label (no ຫຼື) for pure rack zones
+            // Only fall back to ຫຼື when mixing floor zones + rack zones (e.g., KITCHEN)
+            const ruleFormat = rules[0]?.format || 'legacy';
+            let combinedLabel;
+            if (ruleFormat === 'legacy' && !hasFloorZone && maxLevelForLabel > 0) {
+                // All rack groups → combine into single range e.g. "S01-L1-1 → S10-L5-4"
+                const firstAll = allZonesForLabel[0];
+                const lastAll = allZonesForLabel[allZonesForLabel.length - 1];
+                combinedLabel = `${firstAll}-L1-1 → ${lastAll}-L${maxLevelForLabel}-${maxSectionsForLabel}`;
+            } else if (ruleFormat === 'legacy' && hasFloorZone && maxLevelForLabel > 0) {
+                // Mixed rack + floor: show rack range first, then floor zones
+                const rackLabels = expectedLabels.filter(l => l.includes('→'));
+                const floorLabels = expectedLabels.filter(l => !l.includes('→'));
+                combinedLabel = [...new Set([...rackLabels, ...floorLabels])].join(' ຫຼື ');
+            } else {
+                combinedLabel = [...new Set(expectedLabels)].join(' ຫຼື ');
+            }
 
             return {
                 match: isMatch,
-                expected: [...new Set(expectedLabels)].join(' ຫຼື ')
+                expected: combinedLabel
             };
         };
 

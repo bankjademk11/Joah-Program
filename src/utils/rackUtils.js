@@ -17,11 +17,11 @@ const BRANCH_RACK_RULES = {
             { zones: ['ໂລພື້ນE 5', 'ໂລພື້ນE 7', 'ໂລພື້ນE 8'], maxLevel: 0, maxSections: 0 }
         ],
         'STATIONERY': [
-            { zones: ['S01', 'S02', 'S03', 'S05', 'S06', 'S07', 'S08'], maxLevel: 5, maxSections: 4 },
+            { zones: ['S01', 'S02', 'S03', 'S05', 'S06', 'S07', 'S08', 'S09'], maxLevel: 5, maxSections: 4 },
             { zones: ['S10'], maxLevel: 4, maxSections: 4 }
         ],
         'TOYS': [
-            { zones: ['S09'], maxLevel: 5, maxSections: 4 }
+            { zones: ['T09'], maxLevel: 5, maxSections: 4 }
         ],
         'CLEANING/BATH': [
             { zones: ['A01', 'A02', 'A03', 'A05'], maxLevel: 5, maxSections: 4 },

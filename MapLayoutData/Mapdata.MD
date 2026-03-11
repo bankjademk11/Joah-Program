@@ -1,4 +1,4 @@
-
+﻿
 | G01-L1-1 | Kitchen |
 | G01-L2-1 | Kitchen |
 | G01-L3-1 | Kitchen |
@@ -113,18 +113,30 @@
 | S10-L2-1 | Stationery |
 | S10-L3-1 | Stationery |
 | S10-L4-1 | Stationery |
-| S09-L1-1 | Toys |
-| S09-L2-1 | Toys |
-| S09-L3-1 | Toys |
-| S09-L4-1 | Toys |
-| S09-L5-1 | Toys |
-| S09-L3-1 | Toys |
-| S09-L2-1 | Toys |
-| S09-L1-1 | Toys |
-| S09-L5-1 | Toys |
-| S09-L4-1 | Toys |
-| S09-L3-1 | Toys |
-| S09-L2-1 | Toys |
+| S09-L1-1 | Stationery |
+| T09-L1-1 | Toys |
+| S09-L2-1 | Stationery |
+| T09-L2-1 | Toys |
+| S09-L3-1 | Stationery |
+| T09-L3-1 | Toys |
+| S09-L4-1 | Stationery |
+| T09-L4-1 | Toys |
+| S09-L5-1 | Stationery |
+| T09-L5-1 | Toys |
+| S09-L3-1 | Stationery |
+| T09-L3-1 | Toys |
+| S09-L2-1 | Stationery |
+| T09-L2-1 | Toys |
+| S09-L1-1 | Stationery |
+| T09-L1-1 | Toys |
+| S09-L5-1 | Stationery |
+| T09-L5-1 | Toys |
+| S09-L4-1 | Stationery |
+| T09-L4-1 | Toys |
+| S09-L3-1 | Stationery |
+| T09-L3-1 | Toys |
+| S09-L2-1 | Stationery |
+| T09-L2-1 | Toys |
 | A01-L1-1 | Cleaning/Bath |
 | A01-L2-1 | Cleaning/Bath |
 | A01-L3-1 | Cleaning/Bath |
@@ -356,18 +368,30 @@
 | S10-L2-2 | Stationery |
 | S10-L3-2 | Stationery |
 | S10-L4-2 | Stationery |
-| S09-L1-2 | Toys |
-| S09-L2-2 | Toys |
-| S09-L3-2 | Toys |
-| S09-L4-2 | Toys |
-| S09-L5-2 | Toys |
-| S09-L3-2 | Toys |
-| S09-L2-2 | Toys |
-| S09-L1-2 | Toys |
-| S09-L5-2 | Toys |
-| S09-L4-2 | Toys |
-| S09-L3-2 | Toys |
-| S09-L2-2 | Toys |
+| S09-L1-2 | Stationery |
+| T09-L1-2 | Toys |
+| S09-L2-2 | Stationery |
+| T09-L2-2 | Toys |
+| S09-L3-2 | Stationery |
+| T09-L3-2 | Toys |
+| S09-L4-2 | Stationery |
+| T09-L4-2 | Toys |
+| S09-L5-2 | Stationery |
+| T09-L5-2 | Toys |
+| S09-L3-2 | Stationery |
+| T09-L3-2 | Toys |
+| S09-L2-2 | Stationery |
+| T09-L2-2 | Toys |
+| S09-L1-2 | Stationery |
+| T09-L1-2 | Toys |
+| S09-L5-2 | Stationery |
+| T09-L5-2 | Toys |
+| S09-L4-2 | Stationery |
+| T09-L4-2 | Toys |
+| S09-L3-2 | Stationery |
+| T09-L3-2 | Toys |
+| S09-L2-2 | Stationery |
+| T09-L2-2 | Toys |
 | A01-L1-2 | Cleaning/Bath |
 | A01-L2-2 | Cleaning/Bath |
 | A01-L3-2 | Cleaning/Bath |
@@ -599,18 +623,30 @@
 | S10-L2-3 | Stationery |
 | S10-L3-3 | Stationery |
 | S10-L4-3 | Stationery |
-| S09-L1-3 | Toys |
-| S09-L2-3 | Toys |
-| S09-L3-3 | Toys |
-| S09-L4-3 | Toys |
-| S09-L5-3 | Toys |
-| S09-L3-3 | Toys |
-| S09-L2-3 | Toys |
-| S09-L1-3 | Toys |
-| S09-L5-3 | Toys |
-| S09-L4-3 | Toys |
-| S09-L3-3 | Toys |
-| S09-L2-3 | Toys |
+| S09-L1-3 | Stationery |
+| T09-L1-3 | Toys |
+| S09-L2-3 | Stationery |
+| T09-L2-3 | Toys |
+| S09-L3-3 | Stationery |
+| T09-L3-3 | Toys |
+| S09-L4-3 | Stationery |
+| T09-L4-3 | Toys |
+| S09-L5-3 | Stationery |
+| T09-L5-3 | Toys |
+| S09-L3-3 | Stationery |
+| T09-L3-3 | Toys |
+| S09-L2-3 | Stationery |
+| T09-L2-3 | Toys |
+| S09-L1-3 | Stationery |
+| T09-L1-3 | Toys |
+| S09-L5-3 | Stationery |
+| T09-L5-3 | Toys |
+| S09-L4-3 | Stationery |
+| T09-L4-3 | Toys |
+| S09-L3-3 | Stationery |
+| T09-L3-3 | Toys |
+| S09-L2-3 | Stationery |
+| T09-L2-3 | Toys |
 | A01-L1-3 | Cleaning/Bath |
 | A01-L2-3 | Cleaning/Bath |
 | A01-L3-3 | Cleaning/Bath |
@@ -842,18 +878,30 @@
 | S10-L2-4 | Stationery |
 | S10-L3-4 | Stationery |
 | S10-L4-4 | Stationery |
-| S09-L1-4 | Toys |
-| S09-L2-4 | Toys |
-| S09-L3-4 | Toys |
-| S09-L4-4 | Toys |
-| S09-L5-4 | Toys |
-| S09-L3-4 | Toys |
-| S09-L2-4 | Toys |
-| S09-L1-4 | Toys |
-| S09-L5-4 | Toys |
-| S09-L4-4 | Toys |
-| S09-L3-4 | Toys |
-| S09-L2-4 | Toys |
+| S09-L1-4 | Stationery |
+| T09-L1-4 | Toys |
+| S09-L2-4 | Stationery |
+| T09-L2-4 | Toys |
+| S09-L3-4 | Stationery |
+| T09-L3-4 | Toys |
+| S09-L4-4 | Stationery |
+| T09-L4-4 | Toys |
+| S09-L5-4 | Stationery |
+| T09-L5-4 | Toys |
+| S09-L3-4 | Stationery |
+| T09-L3-4 | Toys |
+| S09-L2-4 | Stationery |
+| T09-L2-4 | Toys |
+| S09-L1-4 | Stationery |
+| T09-L1-4 | Toys |
+| S09-L5-4 | Stationery |
+| T09-L5-4 | Toys |
+| S09-L4-4 | Stationery |
+| T09-L4-4 | Toys |
+| S09-L3-4 | Stationery |
+| T09-L3-4 | Toys |
+| S09-L2-4 | Stationery |
+| T09-L2-4 | Toys |
 | A01-L1-4 | Cleaning/Bath |
 | A01-L2-4 | Cleaning/Bath |
 | A01-L3-4 | Cleaning/Bath |
@@ -971,11 +1019,11 @@
 | H01-L3-4 | Sport Leisure |
 | H01-L4-4 | Sport Leisure |
 | H01-L5-4 | Sport Leisure |
-| ໂລພື້ນ D07 | Storage |
-| ໂລພື້ນ D08 | Storage |
-| ໂລພື້ນ G9 | Kitchen |
-| ໂລພື້ນ G10 | Kitchen |
-| ໂລພື້ນ G11 | Kitchen |
-| ໂລພື້ນE 5 | Beauty |
-| ໂລພື້ນE 7 | Beauty |
-| ໂລພື້ນE 8 | Beauty |
+| α╗éα║Ñα║₧α║╖α╗ëα║Ö D07 | Storage |
+| α╗éα║Ñα║₧α║╖α╗ëα║Ö D08 | Storage |
+| α╗éα║Ñα║₧α║╖α╗ëα║Ö G9 | Kitchen |
+| α╗éα║Ñα║₧α║╖α╗ëα║Ö G10 | Kitchen |
+| α╗éα║Ñα║₧α║╖α╗ëα║Ö G11 | Kitchen |
+| α╗éα║Ñα║₧α║╖α╗ëα║ÖE 5 | Beauty |
+| α╗éα║Ñα║₧α║╖α╗ëα║ÖE 7 | Beauty |
+| α╗éα║Ñα║₧α║╖α╗ëα║ÖE 8 | Beauty |
