@@ -10,11 +10,12 @@ import soundError from '../../../assets/RequestEror.mp3';
 // ===================== BARCODE SCANNER MODAL (html5-qrcode) =====================
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
     const scannerRef = useRef(null);
-    const containerRef = useRef(null);
+    const fileInputRef = useRef(null);
     const [status, setStatus] = useState('starting');
     const [detected, setDetected] = useState(false);
     const [torchOn, setTorchOn] = useState(false);
     const [torchSupported, setTorchSupported] = useState(false);
+    const [lastScanned, setLastScanned] = useState('');
 
     useEffect(() => {
         let scanner = null;
@@ -22,56 +23,63 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
         const startScanner = async () => {
             try {
-                const { Html5Qrcode } = await import('html5-qrcode');
+                const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
                 if (!mounted) return;
 
+                // ✅ FIX: formatsToSupport MUST be in constructor, NOT in start()
                 scanner = new Html5Qrcode('barcode-scanner-container', {
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.CODE_128,
+                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.CODE_93,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.ITF,
+                        Html5QrcodeSupportedFormats.CODABAR,
+                        Html5QrcodeSupportedFormats.QR_CODE,
+                        Html5QrcodeSupportedFormats.DATA_MATRIX,
+                    ],
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true
+                    },
                     verbose: false,
                 });
                 scannerRef.current = scanner;
 
-                const config = {
-                    fps: 15,
-                    qrbox: { width: 300, height: 150 },
-                    aspectRatio: 1.0,
-                    disableFlip: false,
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true  // Uses native BarcodeDetector API if available (Chrome/Android)
-                    },
-                    formatsToSupport: undefined, // Let it support ALL formats
-                };
-
                 await scanner.start(
                     { facingMode: 'environment' },
-                    config,
+                    {
+                        fps: 10,
+                        qrbox: { width: 280, height: 120 },
+                        aspectRatio: 1.7778,
+                        disableFlip: false,
+                    },
                     (decodedText) => {
                         if (!mounted) return;
                         mounted = false;
 
-                        // Vibrate
                         try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
-
                         setDetected(true);
+                        setLastScanned(decodedText);
 
-                        // Stop scanner and notify
                         setTimeout(async () => {
                             try { await scanner.stop(); } catch (_) {}
                             onDetected(decodedText);
                             onClose();
-                        }, 400);
+                        }, 500);
                     },
-                    () => {} // ignore scan failures (no barcode found in frame)
+                    () => {} // ignore per-frame failures
                 );
 
                 if (mounted) {
                     setStatus('scanning');
-                    // Check torch support
                     try {
-                        const capabilities = scanner.getRunningTrackCameraCapabilities();
-                        if (capabilities?.torchFeature?.()?.isSupported?.()) {
-                            setTorchSupported(true);
-                        }
+                        const caps = scanner.getRunningTrackCameraCapabilities();
+                        const torch = caps?.torchFeature?.();
+                        if (torch?.isSupported?.()) setTorchSupported(true);
                     } catch (_) {}
                 }
 
@@ -100,25 +108,65 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
     const toggleTorch = async () => {
         try {
-            const scanner = scannerRef.current;
-            if (!scanner) return;
-            const capabilities = scanner.getRunningTrackCameraCapabilities();
-            const torch = capabilities?.torchFeature?.();
-            if (torch) {
-                if (torchOn) {
-                    await torch.disable();
-                } else {
-                    await torch.enable();
-                }
-                setTorchOn(!torchOn);
-            }
+            const caps = scannerRef.current?.getRunningTrackCameraCapabilities();
+            const torch = caps?.torchFeature?.();
+            if (!torch) return;
+            torchOn ? await torch.disable() : await torch.enable();
+            setTorchOn(!torchOn);
+        } catch (_) {}
+    };
+
+    // 📸 Fallback: scan from captured photo
+    const handleFileScan = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+            const fileScanner = new Html5Qrcode('barcode-file-scanner-tmp', {
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.ITF,
+                    Html5QrcodeSupportedFormats.CODABAR,
+                ],
+                verbose: false,
+            });
+            const result = await fileScanner.scanFile(file, true);
+            try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
+            setDetected(true);
+            setLastScanned(result);
+            // Stop live scanner
+            try { await scannerRef.current?.stop(); } catch (_) {}
+            setTimeout(() => {
+                onDetected(result);
+                onClose();
+            }, 500);
         } catch (err) {
-            console.warn('Torch toggle error:', err);
+            console.error('File scan error:', err);
+            alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ກະລຸນາລອງໃໝ່');
         }
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     return (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
+            {/* Hidden elements */}
+            <div id="barcode-file-scanner-tmp" style={{ display: 'none' }} />
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileScan}
+                style={{ display: 'none' }}
+            />
+
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-black/90 backdrop-blur-sm z-10">
                 <div className="flex items-center gap-2">
@@ -127,17 +175,13 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 </div>
                 <div className="flex items-center gap-2">
                     {torchSupported && (
-                        <button
-                            onClick={toggleTorch}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${torchOn ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'}`}
-                        >
+                        <button onClick={toggleTorch}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${torchOn ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'}`}>
                             {torchOn ? '🔦' : '💡'}
                         </button>
                     )}
-                    <button
-                        onClick={handleClose}
-                        className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white"
-                    >
+                    <button onClick={handleClose}
+                        className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
                         <X size={20} />
                     </button>
                 </div>
@@ -145,24 +189,19 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
             {/* Scanner Area */}
             <div className="flex-1 relative overflow-hidden bg-black">
-                {/* html5-qrcode renders into this div */}
-                <div
-                    id="barcode-scanner-container"
-                    ref={containerRef}
-                    className="w-full h-full"
-                    style={{ minHeight: '300px' }}
-                />
+                <div id="barcode-scanner-container" className="w-full h-full" style={{ minHeight: '300px' }} />
 
-                {/* Success Flash */}
+                {/* Success Flash overlay */}
                 {detected && (
-                    <div className="absolute inset-0 bg-emerald-400/40 z-30 flex items-center justify-center animate-pulse">
-                        <div className="w-24 h-24 rounded-full bg-emerald-400 flex items-center justify-center shadow-2xl shadow-emerald-500/60">
-                            <span className="text-white text-5xl">✓</span>
+                    <div className="absolute inset-0 bg-emerald-500/30 z-30 flex flex-col items-center justify-center gap-3">
+                        <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center shadow-2xl">
+                            <span className="text-white text-4xl">✓</span>
                         </div>
+                        <p className="text-white font-black text-lg bg-black/60 rounded-xl px-4 py-2">{lastScanned}</p>
                     </div>
                 )}
 
-                {/* Status overlay */}
+                {/* loading overlay */}
                 {status === 'starting' && (
                     <div className="absolute inset-0 bg-black/70 z-20 flex flex-col items-center justify-center">
                         <RotateCw size={32} className="animate-spin text-joah-orange mb-3" />
@@ -173,19 +212,25 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center px-6">
                         <div className="bg-rose-900/60 rounded-2xl px-6 py-5 text-center">
                             <p className="text-rose-300 font-black text-base mb-2">⚠️ ເຂົ້າເຖິງກ້ອງບໍ່ໄດ້</p>
-                            <p className="text-white/50 text-xs mb-4">ກວດສອບການອະນຸຍາດ Camera ໃນ Browser Settings</p>
+                            <p className="text-white/50 text-xs mb-4">ກວດສອບການອະນຸຍາດ Camera ໃນ Browser</p>
                             <button onClick={handleClose} className="px-6 py-2 bg-white/20 rounded-xl text-white font-bold text-sm">ປິດ</button>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Bottom Hint */}
-            <div className="bg-black/90 text-center py-3 px-4">
-                <p className="text-white/40 text-xs">ຮອງຮັບ EAN-13, Code128, QR Code ແລະ ອື່ນໆ</p>
+            {/* Bottom: fallback photo button */}
+            <div className="bg-black/90 px-4 py-3 flex items-center justify-between z-10">
+                <p className="text-white/40 text-xs">EAN-13 · Code128 · QR</p>
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-all"
+                >
+                    📸 ຖ່າຍຮູບສະແກນ
+                </button>
             </div>
 
-            {/* Override html5-qrcode default styles */}
+            {/* Override html5-qrcode styles */}
             <style>{`
                 #barcode-scanner-container {
                     position: relative !important;
@@ -193,12 +238,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     padding: 0 !important;
                 }
                 #barcode-scanner-container video {
-                    width: 100% !important;
-                    height: 100% !important;
                     object-fit: cover !important;
-                }
-                #barcode-scanner-container > div {
-                    border: none !important;
                 }
                 #qr-shaded-region {
                     border-color: #f97316 !important;
@@ -213,9 +253,8 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
 
 
-
-
 const StoreRequest = ({ onBack, currentUser }) => {
+
     const { t } = useLanguage();
     const [barcode, setBarcode] = useState('');
     const [product, setProduct] = useState(null);
