@@ -11,26 +11,50 @@ import soundError from '../../../assets/RequestEror.mp3';
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
     const videoRef = useRef(null);
     const controlsRef = useRef(null);
-    const [status, setStatus] = useState('starting'); // starting | scanning | error
+    const streamRef = useRef(null);
+    const [status, setStatus] = useState('starting');
+    const [torchOn, setTorchOn] = useState(false);
+    const [detected, setDetected] = useState(false);
 
     useEffect(() => {
         let mounted = true;
 
         const startScanner = async () => {
             try {
-                const { BrowserMultiFormatReader } = await import('@zxing/browser');
-                const codeReader = new BrowserMultiFormatReader();
+                // Import both zxing packages for full hint support
+                const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] =
+                    await Promise.all([import('@zxing/browser'), import('@zxing/library')]);
+
+                // 🚀 Configure hints: TRY_HARDER + all common barcode formats
+                const hints = new Map();
+                hints.set(DecodeHintType.TRY_HARDER, true);
+                hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+                    BarcodeFormat.EAN_13,
+                    BarcodeFormat.EAN_8,
+                    BarcodeFormat.CODE_128,
+                    BarcodeFormat.CODE_39,
+                    BarcodeFormat.CODE_93,
+                    BarcodeFormat.UPC_A,
+                    BarcodeFormat.UPC_E,
+                    BarcodeFormat.ITF,
+                    BarcodeFormat.QR_CODE,
+                    BarcodeFormat.DATA_MATRIX,
+                    BarcodeFormat.CODABAR,
+                ]);
+
+                const codeReader = new BrowserMultiFormatReader(hints);
 
                 if (!mounted || !videoRef.current) return;
-
                 setStatus('scanning');
 
                 const controls = await codeReader.decodeFromConstraints(
                     {
                         video: {
-                            facingMode: 'environment',
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 },
+                            facingMode: { ideal: 'environment' },
+                            width: { min: 640, ideal: 1920, max: 2560 },
+                            height: { min: 480, ideal: 1080, max: 1440 },
+                            focusMode: { ideal: 'continuous' },
+                            exposureMode: { ideal: 'continuous' },
                         }
                     },
                     videoRef.current,
@@ -38,15 +62,28 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                         if (result && mounted) {
                             mounted = false;
                             const text = result.getText();
+
+                            // 📳 Vibrate on success (Android)
+                            try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
+
+                            setDetected(true);
                             if (controls) controls.stop();
-                            onDetected(text);
-                            onClose();
+
+                            setTimeout(() => {
+                                onDetected(text);
+                                onClose();
+                            }, 300); // brief flash before closing
                         }
                     }
                 );
 
                 if (mounted) {
                     controlsRef.current = controls;
+                    // Save raw stream for torch control
+                    try {
+                        const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
+                        if (track) streamRef.current = track;
+                    } catch (_) {}
                 }
 
             } catch (err) {
@@ -72,23 +109,46 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         onClose();
     };
 
+    const toggleTorch = async () => {
+        try {
+            const track = streamRef.current ||
+                videoRef.current?.srcObject?.getVideoTracks?.()[0];
+            if (!track) return;
+            const newState = !torchOn;
+            await track.applyConstraints({ advanced: [{ torch: newState }] });
+            setTorchOn(newState);
+        } catch (err) {
+            console.warn('Torch not supported:', err);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 bg-black/80 backdrop-blur-sm">
-                <div className="flex items-center gap-3">
-                    <Camera size={22} className="text-joah-orange" />
-                    <span className="text-white font-black text-lg">ສະແກນບາໂຄ້ດ</span>
+            <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur-sm z-10">
+                <div className="flex items-center gap-2">
+                    <Camera size={20} className="text-joah-orange" />
+                    <span className="text-white font-black text-base">ສະແກນບາໂຄ້ດ</span>
                 </div>
-                <button
-                    onClick={handleClose}
-                    className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all"
-                >
-                    <X size={22} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Torch Button */}
+                    <button
+                        onClick={toggleTorch}
+                        title="ໄຟສ່ອງ"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${torchOn ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'}`}
+                    >
+                        {torchOn ? '🔦' : '💡'}
+                    </button>
+                    <button
+                        onClick={handleClose}
+                        className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
             </div>
 
-            {/* Video */}
+            {/* Video Area */}
             <div className="flex-1 relative overflow-hidden">
                 <video
                     ref={videoRef}
@@ -98,60 +158,88 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     playsInline
                 />
 
-                {/* Scanning Overlay */}
+                {/* Success Flash */}
+                {detected && (
+                    <div className="absolute inset-0 bg-emerald-400/40 z-20 flex items-center justify-center animate-pulse">
+                        <div className="w-20 h-20 rounded-full bg-emerald-400 flex items-center justify-center shadow-2xl shadow-emerald-500/60">
+                            <span className="text-white text-4xl">✓</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Overlay with transparent scan zone */}
+                <div className="absolute inset-0 pointer-events-none" style={{
+                    background: 'radial-gradient(ellipse 85% 45% at 50% 45%, transparent 100%, rgba(0,0,0,0.55) 100%)'
+                }} />
+                <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+
+                {/* Scan Guide Frame - larger, centered */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    {/* Dark corners */}
-                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="relative" style={{ width: '85vw', maxWidth: '360px', height: '180px' }}>
+                        {/* Corners */}
+                        <div className="absolute top-0 left-0 w-10 h-10 border-t-[4px] border-l-[4px] border-joah-orange rounded-tl-xl" />
+                        <div className="absolute top-0 right-0 w-10 h-10 border-t-[4px] border-r-[4px] border-joah-orange rounded-tr-xl" />
+                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[4px] border-l-[4px] border-joah-orange rounded-bl-xl" />
+                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[4px] border-r-[4px] border-joah-orange rounded-br-xl" />
 
-                    {/* Scan window */}
-                    <div className="relative z-10 w-72 h-48">
-                        {/* Corner brackets */}
-                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-joah-orange rounded-tl-lg" />
-                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-joah-orange rounded-tr-lg" />
-                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-joah-orange rounded-bl-lg" />
-                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-joah-orange rounded-br-lg" />
-
-                        {/* Scanning line animation */}
-                        <div className="absolute inset-x-2 top-2 bottom-2 overflow-hidden">
-                            <div className="absolute left-0 right-0 h-0.5 bg-joah-orange shadow-lg shadow-orange-500/70"
-                                style={{ animation: 'scanline 2s ease-in-out infinite' }} />
+                        {/* Scan line */}
+                        <div className="absolute inset-x-3 top-2 bottom-2 overflow-hidden rounded-lg">
+                            <div
+                                className="absolute left-0 right-0 h-[3px] rounded-full"
+                                style={{
+                                    background: 'linear-gradient(90deg, transparent, #f97316, #ff6b00, #f97316, transparent)',
+                                    boxShadow: '0 0 12px 4px rgba(249,115,22,0.6)',
+                                    animation: 'scanline 1.8s ease-in-out infinite'
+                                }}
+                            />
                         </div>
                     </div>
 
-                    {/* Status text */}
-                    <div className="relative z-10 mt-6 text-center">
+                    {/* Status */}
+                    <div className="mt-6 text-center px-4">
                         {status === 'starting' && (
-                            <p className="text-white/80 font-bold text-sm flex items-center gap-2">
+                            <p className="text-white/80 font-bold text-sm flex items-center justify-center gap-2">
                                 <RotateCw size={14} className="animate-spin" />
                                 ກຳລັງເປີດກ້ອງ...
                             </p>
                         )}
                         {status === 'scanning' && (
-                            <p className="text-white/80 font-bold text-sm">📦 ວາງບາໂຄ້ດໃນກ່ອງ</p>
+                            <div>
+                                <p className="text-white font-black text-sm mb-1">📦 ຈ່ອບາໂຄ້ດໃສ່ກ່ອງ</p>
+                                <p className="text-white/50 text-xs">ລະບົບຈະສະແກນອັດຕະໂນມັດ</p>
+                            </div>
                         )}
                         {status === 'error' && (
-                            <div className="text-center">
-                                <p className="text-rose-400 font-bold text-sm mb-2">⚠️ ບໍ່ສາມາດເຂົ້າເຖິງກ້ອງໄດ້</p>
-                                <p className="text-white/60 text-xs">ກວດສອບການອະນຸຍາດກ້ອງໃນ Browser</p>
+                            <div className="bg-rose-900/60 rounded-2xl px-5 py-3">
+                                <p className="text-rose-300 font-black text-sm mb-1">⚠️ ເຂົ້າເຖິງກ້ອງບໍ່ໄດ້</p>
+                                <p className="text-white/50 text-xs">ກວດສອບການອະນຸຍາດ Camera ໃນ Browser Settings</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* Scan line keyframe style */}
+            {/* Bottom Hint */}
+            <div className="bg-black/80 text-center py-3 px-4">
+                <p className="text-white/40 text-xs">รองรับ EAN-13, Code128, QR Code และอื่นๆ</p>
+            </div>
+
             <style>{`
                 @keyframes scanline {
-                    0% { top: 0%; }
-                    50% { top: calc(100% - 2px); }
-                    100% { top: 0%; }
+                    0%   { top: 4px; }
+                    50%  { top: calc(100% - 7px); }
+                    100% { top: 4px; }
                 }
             `}</style>
         </div>
     );
 };
 
+
+
+
 // ===================== MAIN COMPONENT =====================
+
 const StoreRequest = ({ onBack, currentUser }) => {
     const { t } = useLanguage();
     const [barcode, setBarcode] = useState('');
