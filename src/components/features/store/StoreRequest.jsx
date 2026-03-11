@@ -7,82 +7,71 @@ import ExcelJS from 'exceljs';
 import soundOK from '../../../assets/RequestOK.mp3';
 import soundError from '../../../assets/RequestEror.mp3';
 
-// ===================== BARCODE SCANNER MODAL =====================
+// ===================== BARCODE SCANNER MODAL (html5-qrcode) =====================
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
-    const videoRef = useRef(null);
-    const controlsRef = useRef(null);
-    const streamRef = useRef(null);
+    const scannerRef = useRef(null);
+    const containerRef = useRef(null);
     const [status, setStatus] = useState('starting');
-    const [torchOn, setTorchOn] = useState(false);
     const [detected, setDetected] = useState(false);
+    const [torchOn, setTorchOn] = useState(false);
+    const [torchSupported, setTorchSupported] = useState(false);
 
     useEffect(() => {
+        let scanner = null;
         let mounted = true;
 
         const startScanner = async () => {
             try {
-                // Import both zxing packages for full hint support
-                const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] =
-                    await Promise.all([import('@zxing/browser'), import('@zxing/library')]);
+                const { Html5Qrcode } = await import('html5-qrcode');
 
-                // 🚀 Configure hints: TRY_HARDER + all common barcode formats
-                const hints = new Map();
-                hints.set(DecodeHintType.TRY_HARDER, true);
-                hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-                    BarcodeFormat.EAN_13,
-                    BarcodeFormat.EAN_8,
-                    BarcodeFormat.CODE_128,
-                    BarcodeFormat.CODE_39,
-                    BarcodeFormat.CODE_93,
-                    BarcodeFormat.UPC_A,
-                    BarcodeFormat.UPC_E,
-                    BarcodeFormat.ITF,
-                    BarcodeFormat.QR_CODE,
-                    BarcodeFormat.DATA_MATRIX,
-                    BarcodeFormat.CODABAR,
-                ]);
+                if (!mounted) return;
 
-                const codeReader = new BrowserMultiFormatReader(hints);
+                scanner = new Html5Qrcode('barcode-scanner-container', {
+                    verbose: false,
+                });
+                scannerRef.current = scanner;
 
-                if (!mounted || !videoRef.current) return;
-                setStatus('scanning');
-
-                const controls = await codeReader.decodeFromConstraints(
-                    {
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { min: 640, ideal: 1920, max: 2560 },
-                            height: { min: 480, ideal: 1080, max: 1440 },
-                            focusMode: { ideal: 'continuous' },
-                            exposureMode: { ideal: 'continuous' },
-                        }
+                const config = {
+                    fps: 15,
+                    qrbox: { width: 300, height: 150 },
+                    aspectRatio: 1.0,
+                    disableFlip: false,
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true  // Uses native BarcodeDetector API if available (Chrome/Android)
                     },
-                    videoRef.current,
-                    (result, error) => {
-                        if (result && mounted) {
-                            mounted = false;
-                            const text = result.getText();
+                    formatsToSupport: undefined, // Let it support ALL formats
+                };
 
-                            // 📳 Vibrate on success (Android)
-                            try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
+                await scanner.start(
+                    { facingMode: 'environment' },
+                    config,
+                    (decodedText) => {
+                        if (!mounted) return;
+                        mounted = false;
 
-                            setDetected(true);
-                            if (controls) controls.stop();
+                        // Vibrate
+                        try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
 
-                            setTimeout(() => {
-                                onDetected(text);
-                                onClose();
-                            }, 300); // brief flash before closing
-                        }
-                    }
+                        setDetected(true);
+
+                        // Stop scanner and notify
+                        setTimeout(async () => {
+                            try { await scanner.stop(); } catch (_) {}
+                            onDetected(decodedText);
+                            onClose();
+                        }, 400);
+                    },
+                    () => {} // ignore scan failures (no barcode found in frame)
                 );
 
                 if (mounted) {
-                    controlsRef.current = controls;
-                    // Save raw stream for torch control
+                    setStatus('scanning');
+                    // Check torch support
                     try {
-                        const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
-                        if (track) streamRef.current = track;
+                        const capabilities = scanner.getRunningTrackCameraCapabilities();
+                        if (capabilities?.torchFeature?.()?.isSupported?.()) {
+                            setTorchSupported(true);
+                        }
                     } catch (_) {}
                 }
 
@@ -96,49 +85,55 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
         return () => {
             mounted = false;
-            if (controlsRef.current) {
-                try { controlsRef.current.stop(); } catch (_) {}
+            if (scannerRef.current) {
+                try { scannerRef.current.stop(); } catch (_) {}
             }
         };
     }, []);
 
     const handleClose = () => {
-        if (controlsRef.current) {
-            try { controlsRef.current.stop(); } catch (_) {}
+        if (scannerRef.current) {
+            try { scannerRef.current.stop(); } catch (_) {}
         }
         onClose();
     };
 
     const toggleTorch = async () => {
         try {
-            const track = streamRef.current ||
-                videoRef.current?.srcObject?.getVideoTracks?.()[0];
-            if (!track) return;
-            const newState = !torchOn;
-            await track.applyConstraints({ advanced: [{ torch: newState }] });
-            setTorchOn(newState);
+            const scanner = scannerRef.current;
+            if (!scanner) return;
+            const capabilities = scanner.getRunningTrackCameraCapabilities();
+            const torch = capabilities?.torchFeature?.();
+            if (torch) {
+                if (torchOn) {
+                    await torch.disable();
+                } else {
+                    await torch.enable();
+                }
+                setTorchOn(!torchOn);
+            }
         } catch (err) {
-            console.warn('Torch not supported:', err);
+            console.warn('Torch toggle error:', err);
         }
     };
 
     return (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur-sm z-10">
+            <div className="flex items-center justify-between px-4 py-3 bg-black/90 backdrop-blur-sm z-10">
                 <div className="flex items-center gap-2">
                     <Camera size={20} className="text-joah-orange" />
                     <span className="text-white font-black text-base">ສະແກນບາໂຄ້ດ</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    {/* Torch Button */}
-                    <button
-                        onClick={toggleTorch}
-                        title="ໄຟສ່ອງ"
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${torchOn ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'}`}
-                    >
-                        {torchOn ? '🔦' : '💡'}
-                    </button>
+                    {torchSupported && (
+                        <button
+                            onClick={toggleTorch}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${torchOn ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'}`}
+                        >
+                            {torchOn ? '🔦' : '💡'}
+                        </button>
+                    )}
                     <button
                         onClick={handleClose}
                         className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white"
@@ -148,87 +143,67 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 </div>
             </div>
 
-            {/* Video Area */}
-            <div className="flex-1 relative overflow-hidden">
-                <video
-                    ref={videoRef}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    autoPlay
-                    muted
-                    playsInline
+            {/* Scanner Area */}
+            <div className="flex-1 relative overflow-hidden bg-black">
+                {/* html5-qrcode renders into this div */}
+                <div
+                    id="barcode-scanner-container"
+                    ref={containerRef}
+                    className="w-full h-full"
+                    style={{ minHeight: '300px' }}
                 />
 
                 {/* Success Flash */}
                 {detected && (
-                    <div className="absolute inset-0 bg-emerald-400/40 z-20 flex items-center justify-center animate-pulse">
-                        <div className="w-20 h-20 rounded-full bg-emerald-400 flex items-center justify-center shadow-2xl shadow-emerald-500/60">
-                            <span className="text-white text-4xl">✓</span>
+                    <div className="absolute inset-0 bg-emerald-400/40 z-30 flex items-center justify-center animate-pulse">
+                        <div className="w-24 h-24 rounded-full bg-emerald-400 flex items-center justify-center shadow-2xl shadow-emerald-500/60">
+                            <span className="text-white text-5xl">✓</span>
                         </div>
                     </div>
                 )}
 
-                {/* Overlay with transparent scan zone */}
-                <div className="absolute inset-0 pointer-events-none" style={{
-                    background: 'radial-gradient(ellipse 85% 45% at 50% 45%, transparent 100%, rgba(0,0,0,0.55) 100%)'
-                }} />
-                <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-
-                {/* Scan Guide Frame - larger, centered */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="relative" style={{ width: '85vw', maxWidth: '360px', height: '180px' }}>
-                        {/* Corners */}
-                        <div className="absolute top-0 left-0 w-10 h-10 border-t-[4px] border-l-[4px] border-joah-orange rounded-tl-xl" />
-                        <div className="absolute top-0 right-0 w-10 h-10 border-t-[4px] border-r-[4px] border-joah-orange rounded-tr-xl" />
-                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[4px] border-l-[4px] border-joah-orange rounded-bl-xl" />
-                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[4px] border-r-[4px] border-joah-orange rounded-br-xl" />
-
-                        {/* Scan line */}
-                        <div className="absolute inset-x-3 top-2 bottom-2 overflow-hidden rounded-lg">
-                            <div
-                                className="absolute left-0 right-0 h-[3px] rounded-full"
-                                style={{
-                                    background: 'linear-gradient(90deg, transparent, #f97316, #ff6b00, #f97316, transparent)',
-                                    boxShadow: '0 0 12px 4px rgba(249,115,22,0.6)',
-                                    animation: 'scanline 1.8s ease-in-out infinite'
-                                }}
-                            />
+                {/* Status overlay */}
+                {status === 'starting' && (
+                    <div className="absolute inset-0 bg-black/70 z-20 flex flex-col items-center justify-center">
+                        <RotateCw size={32} className="animate-spin text-joah-orange mb-3" />
+                        <p className="text-white/80 font-bold text-sm">ກຳລັງເປີດກ້ອງ...</p>
+                    </div>
+                )}
+                {status === 'error' && (
+                    <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center px-6">
+                        <div className="bg-rose-900/60 rounded-2xl px-6 py-5 text-center">
+                            <p className="text-rose-300 font-black text-base mb-2">⚠️ ເຂົ້າເຖິງກ້ອງບໍ່ໄດ້</p>
+                            <p className="text-white/50 text-xs mb-4">ກວດສອບການອະນຸຍາດ Camera ໃນ Browser Settings</p>
+                            <button onClick={handleClose} className="px-6 py-2 bg-white/20 rounded-xl text-white font-bold text-sm">ປິດ</button>
                         </div>
                     </div>
-
-                    {/* Status */}
-                    <div className="mt-6 text-center px-4">
-                        {status === 'starting' && (
-                            <p className="text-white/80 font-bold text-sm flex items-center justify-center gap-2">
-                                <RotateCw size={14} className="animate-spin" />
-                                ກຳລັງເປີດກ້ອງ...
-                            </p>
-                        )}
-                        {status === 'scanning' && (
-                            <div>
-                                <p className="text-white font-black text-sm mb-1">📦 ຈ່ອບາໂຄ້ດໃສ່ກ່ອງ</p>
-                                <p className="text-white/50 text-xs">ລະບົບຈະສະແກນອັດຕະໂນມັດ</p>
-                            </div>
-                        )}
-                        {status === 'error' && (
-                            <div className="bg-rose-900/60 rounded-2xl px-5 py-3">
-                                <p className="text-rose-300 font-black text-sm mb-1">⚠️ ເຂົ້າເຖິງກ້ອງບໍ່ໄດ້</p>
-                                <p className="text-white/50 text-xs">ກວດສອບການອະນຸຍາດ Camera ໃນ Browser Settings</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Bottom Hint */}
-            <div className="bg-black/80 text-center py-3 px-4">
-                <p className="text-white/40 text-xs">รองรับ EAN-13, Code128, QR Code และอื่นๆ</p>
+            <div className="bg-black/90 text-center py-3 px-4">
+                <p className="text-white/40 text-xs">ຮອງຮັບ EAN-13, Code128, QR Code ແລະ ອື່ນໆ</p>
             </div>
 
+            {/* Override html5-qrcode default styles */}
             <style>{`
-                @keyframes scanline {
-                    0%   { top: 4px; }
-                    50%  { top: calc(100% - 7px); }
-                    100% { top: 4px; }
+                #barcode-scanner-container {
+                    position: relative !important;
+                    border: none !important;
+                    padding: 0 !important;
+                }
+                #barcode-scanner-container video {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                }
+                #barcode-scanner-container > div {
+                    border: none !important;
+                }
+                #qr-shaded-region {
+                    border-color: #f97316 !important;
+                    border-width: 3px !important;
+                    border-radius: 12px !important;
                 }
             `}</style>
         </div>
@@ -238,7 +213,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
 
 
-// ===================== MAIN COMPONENT =====================
+
 
 const StoreRequest = ({ onBack, currentUser }) => {
     const { t } = useLanguage();
