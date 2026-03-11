@@ -7,28 +7,56 @@ import ExcelJS from 'exceljs';
 import soundOK from '../../../assets/RequestOK.mp3';
 import soundError from '../../../assets/RequestEror.mp3';
 
-// ===================== BARCODE SCANNER MODAL (html5-qrcode) =====================
+// ===================== BARCODE SCANNER MODAL (Frame-capture approach) =====================
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
-    const scannerRef = useRef(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
+    const scannerObjRef = useRef(null);
+    const intervalRef = useRef(null);
     const fileInputRef = useRef(null);
+    const mountedRef = useRef(true);
+
     const [status, setStatus] = useState('starting');
     const [detected, setDetected] = useState(false);
+    const [lastScanned, setLastScanned] = useState('');
     const [torchOn, setTorchOn] = useState(false);
     const [torchSupported, setTorchSupported] = useState(false);
-    const [lastScanned, setLastScanned] = useState('');
+    const [scanCount, setScanCount] = useState(0);
 
     useEffect(() => {
-        let scanner = null;
-        let mounted = true;
+        mountedRef.current = true;
 
-        const startScanner = async () => {
+        const init = async () => {
             try {
+                // 1. Open camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                    },
+                    audio: false,
+                });
+
+                if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+
+                streamRef.current = stream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+                }
+
+                // Check torch
+                const track = stream.getVideoTracks()[0];
+                try {
+                    const caps = track.getCapabilities?.();
+                    if (caps?.torch) setTorchSupported(true);
+                } catch (_) {}
+
+                // 2. Create scanner for scanFile
                 const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
-
-                if (!mounted) return;
-
-                // ✅ FIX: formatsToSupport MUST be in constructor, NOT in start()
-                scanner = new Html5Qrcode('barcode-scanner-container', {
+                const scanner = new Html5Qrcode('frame-scan-container', {
                     formatsToSupport: [
                         Html5QrcodeSupportedFormats.EAN_13,
                         Html5QrcodeSupportedFormats.EAN_8,
@@ -42,75 +70,95 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.DATA_MATRIX,
                     ],
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true
-                    },
                     verbose: false,
                 });
-                scannerRef.current = scanner;
+                scannerObjRef.current = scanner;
 
-                await scanner.start(
-                    { facingMode: 'environment' },
-                    {
-                        fps: 10,
-                        disableFlip: false,
-                    },
-                    (decodedText) => {
-                        if (!mounted) return;
-                        mounted = false;
+                if (!mountedRef.current) return;
+                setStatus('scanning');
 
-                        try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
-                        setDetected(true);
-                        setLastScanned(decodedText);
+                // 3. Start frame-capture scanning loop (every 350ms ≈ 3fps)
+                let frameCount = 0;
+                intervalRef.current = setInterval(async () => {
+                    if (!mountedRef.current || !videoRef.current || !canvasRef.current) return;
 
-                        setTimeout(async () => {
-                            try { await scanner.stop(); } catch (_) {}
-                            onDetected(decodedText);
-                            onClose();
-                        }, 500);
-                    },
-                    () => {} // ignore per-frame failures
-                );
+                    const video = videoRef.current;
+                    const canvas = canvasRef.current;
 
-                if (mounted) {
-                    setStatus('scanning');
-                    try {
-                        const caps = scanner.getRunningTrackCameraCapabilities();
-                        const torch = caps?.torchFeature?.();
-                        if (torch?.isSupported?.()) setTorchSupported(true);
-                    } catch (_) {}
-                }
+                    if (video.readyState < 2) return; // video not ready yet
+
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0);
+
+                    frameCount++;
+                    setScanCount(frameCount);
+
+                    // Convert canvas to blob and scan
+                    canvas.toBlob(async (blob) => {
+                        if (!blob || !mountedRef.current) return;
+                        try {
+                            const file = new File([blob], 'frame.png', { type: 'image/png' });
+                            const result = await scanner.scanFile(file, /* showImage */ false);
+                            if (result && mountedRef.current) {
+                                mountedRef.current = false;
+                                clearInterval(intervalRef.current);
+
+                                // Success!
+                                try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
+                                setDetected(true);
+                                setLastScanned(result);
+
+                                setTimeout(() => {
+                                    stopCamera();
+                                    onDetected(result);
+                                    onClose();
+                                }, 600);
+                            }
+                        } catch (_) {
+                            // No barcode in this frame — normal, keep scanning
+                        }
+                    }, 'image/png');
+
+                }, 350);
 
             } catch (err) {
-                console.error('Scanner error:', err);
-                if (mounted) setStatus('error');
+                console.error('Camera error:', err);
+                if (mountedRef.current) setStatus('error');
             }
         };
 
-        startScanner();
+        init();
 
         return () => {
-            mounted = false;
-            if (scannerRef.current) {
-                try { scannerRef.current.stop(); } catch (_) {}
-            }
+            mountedRef.current = false;
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            stopCamera();
         };
     }, []);
 
-    const handleClose = () => {
-        if (scannerRef.current) {
-            try { scannerRef.current.stop(); } catch (_) {}
+    const stopCamera = () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
         }
+    };
+
+    const handleClose = () => {
+        mountedRef.current = false;
+        stopCamera();
         onClose();
     };
 
     const toggleTorch = async () => {
         try {
-            const caps = scannerRef.current?.getRunningTrackCameraCapabilities();
-            const torch = caps?.torchFeature?.();
-            if (!torch) return;
-            torchOn ? await torch.disable() : await torch.enable();
-            setTorchOn(!torchOn);
+            const track = streamRef.current?.getVideoTracks?.()?.[0];
+            if (!track) return;
+            const newState = !torchOn;
+            await track.applyConstraints({ advanced: [{ torch: newState }] });
+            setTorchOn(newState);
         } catch (_) {}
     };
 
@@ -120,7 +168,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         if (!file) return;
         try {
             const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
-            const fileScanner = new Html5Qrcode('barcode-file-scanner-tmp', {
+            const fileScanner = new Html5Qrcode('frame-scan-container', {
                 formatsToSupport: [
                     Html5QrcodeSupportedFormats.EAN_13,
                     Html5QrcodeSupportedFormats.EAN_8,
@@ -134,36 +182,28 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 ],
                 verbose: false,
             });
-            const result = await fileScanner.scanFile(file, true);
+            const result = await fileScanner.scanFile(file, false);
             try { navigator.vibrate?.([100, 50, 100]); } catch (_) {}
             setDetected(true);
             setLastScanned(result);
-            // Stop live scanner
-            try { await scannerRef.current?.stop(); } catch (_) {}
+            stopCamera();
             setTimeout(() => {
                 onDetected(result);
                 onClose();
-            }, 500);
+            }, 600);
         } catch (err) {
-            console.error('File scan error:', err);
             alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ກະລຸນາລອງໃໝ່');
         }
-        // Reset input
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     return (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
             {/* Hidden elements */}
-            <div id="barcode-file-scanner-tmp" style={{ display: 'none' }} />
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileScan}
-                style={{ display: 'none' }}
-            />
+            <div id="frame-scan-container" style={{ display: 'none' }} />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                onChange={handleFileScan} style={{ display: 'none' }} />
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-black/90 backdrop-blur-sm z-10">
@@ -185,24 +225,74 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 </div>
             </div>
 
-            {/* Scanner Area */}
+            {/* Camera View */}
             <div className="flex-1 relative overflow-hidden bg-black">
-                <div id="barcode-scanner-container" className="w-full h-full" style={{ minHeight: '300px' }} />
+                <video
+                    ref={videoRef}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    autoPlay muted playsInline
+                />
 
-                {/* Success Flash overlay */}
-                {detected && (
-                    <div className="absolute inset-0 bg-emerald-500/30 z-30 flex flex-col items-center justify-center gap-3">
-                        <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center shadow-2xl">
-                            <span className="text-white text-4xl">✓</span>
+                {/* Scanning overlay with guide frame */}
+                {status === 'scanning' && !detected && (
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                        {/* Semi-transparent overlay */}
+                        <div className="absolute inset-0 bg-black/30" />
+
+                        {/* Scan guide frame */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="relative" style={{ width: '85vw', maxWidth: '360px', height: '160px' }}>
+                                {/* Clear window */}
+                                <div className="absolute inset-0 bg-transparent border-2 border-white/20 rounded-xl" />
+
+                                {/* Corners */}
+                                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[4px] border-l-[4px] border-joah-orange rounded-tl-xl" />
+                                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[4px] border-r-[4px] border-joah-orange rounded-tr-xl" />
+                                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[4px] border-l-[4px] border-joah-orange rounded-bl-xl" />
+                                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[4px] border-r-[4px] border-joah-orange rounded-br-xl" />
+
+                                {/* Scanning laser line */}
+                                <div className="absolute inset-x-3 top-1 bottom-1 overflow-hidden rounded-lg">
+                                    <div
+                                        className="absolute left-0 right-0 h-[3px] rounded-full"
+                                        style={{
+                                            background: 'linear-gradient(90deg, transparent 5%, #f97316, #ff6b00, #f97316, transparent 95%)',
+                                            boxShadow: '0 0 15px 5px rgba(249,115,22,0.5)',
+                                            animation: 'scanline 1.6s ease-in-out infinite'
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-white font-black text-lg bg-black/60 rounded-xl px-4 py-2">{lastScanned}</p>
+
+                        {/* Scan status indicator */}
+                        <div className="absolute bottom-24 left-0 right-0 flex flex-col items-center gap-2">
+                            <div className="flex items-center gap-2 bg-black/60 rounded-full px-4 py-2">
+                                <div className="w-2.5 h-2.5 rounded-full bg-joah-orange animate-pulse" />
+                                <span className="text-white/80 text-xs font-bold">
+                                    ກຳລັງສະແກນ... ({scanCount} ເຟຣມ)
+                                </span>
+                            </div>
+                            <p className="text-white/40 text-xs">ຈ່ໍບາໂຄ້ດໃສ່ກ່ອງສີສົ້ມ</p>
+                        </div>
                     </div>
                 )}
 
-                {/* loading overlay */}
+                {/* Success Flash */}
+                {detected && (
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3"
+                        style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.4) 0%, rgba(0,0,0,0.6) 100%)' }}>
+                        <div className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-2xl shadow-emerald-500/60 animate-bounce">
+                            <span className="text-white text-5xl">✓</span>
+                        </div>
+                        <p className="text-white font-black text-xl bg-black/60 rounded-2xl px-6 py-3 shadow-xl">{lastScanned}</p>
+                    </div>
+                )}
+
+                {/* Starting overlay */}
                 {status === 'starting' && (
                     <div className="absolute inset-0 bg-black/70 z-20 flex flex-col items-center justify-center">
-                        <RotateCw size={32} className="animate-spin text-joah-orange mb-3" />
+                        <RotateCw size={36} className="animate-spin text-joah-orange mb-3" />
                         <p className="text-white/80 font-bold text-sm">ກຳລັງເປີດກ້ອງ...</p>
                     </div>
                 )}
@@ -217,38 +307,27 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 )}
             </div>
 
-            {/* Bottom: fallback photo button */}
+            {/* Bottom bar */}
             <div className="bg-black/90 px-4 py-3 flex items-center justify-between z-10">
                 <p className="text-white/40 text-xs">EAN-13 · Code128 · QR</p>
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-joah-orange/80 hover:bg-joah-orange text-white rounded-xl text-xs font-black transition-all shadow-lg"
                 >
                     📸 ຖ່າຍຮູບສະແກນ
                 </button>
             </div>
 
-            {/* Override html5-qrcode styles */}
             <style>{`
-                #barcode-scanner-container {
-                    position: relative !important;
-                    border: none !important;
-                    padding: 0 !important;
-                }
-                #barcode-scanner-container video {
-                    object-fit: cover !important;
-                }
-                #qr-shaded-region {
-                    border-color: #f97316 !important;
-                    border-width: 3px !important;
-                    border-radius: 12px !important;
+                @keyframes scanline {
+                    0%   { top: 4px; }
+                    50%  { top: calc(100% - 7px); }
+                    100% { top: 4px; }
                 }
             `}</style>
         </div>
     );
 };
-
-
 
 
 const StoreRequest = ({ onBack, currentUser }) => {
