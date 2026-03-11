@@ -45,33 +45,53 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 }
 
                 if (!nativeDetector) {
-                    // Fallback to ZXing
-                    const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
-                        import('@zxing/browser'),
-                        import('@zxing/library')
-                    ]);
-                    const hints = new Map();
-                    hints.set(DecodeHintType.TRY_HARDER, true);
-                    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-                        BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.CODE_128,
-                        BarcodeFormat.CODE_39, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-                        BarcodeFormat.ITF, BarcodeFormat.QR_CODE
-                    ]);
-                    zxingReader = new BrowserMultiFormatReader(hints);
-                    if (mountedRef.current) setEngineType('ZXing Engine');
+                    try {
+                        // Fallback to ZXing
+                        const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+                            import('@zxing/browser'),
+                            import('@zxing/library')
+                        ]);
+                        const hints = new Map();
+                        hints.set(DecodeHintType.TRY_HARDER, true);
+                        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+                            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.CODE_128,
+                            BarcodeFormat.CODE_39, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+                            BarcodeFormat.ITF, BarcodeFormat.QR_CODE
+                        ]);
+                        zxingReader = new BrowserMultiFormatReader(hints);
+                        if (mountedRef.current) setEngineType('ZXing Fallback');
+                    } catch (e) {
+                        console.error("ZXing load failed", e);
+                    }
                 }
 
-                // 2. CAMERA SETUP (Fix Blurry Camera!)
-                // Force continuous auto-focus and high-resolution to ensure the barcode is readable.
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { ideal: 'environment' },
-                        width: { ideal: 1920, min: 1280 }, // Force crisp image
-                        height: { ideal: 1080, min: 720 },
-                        advanced: [{ focusMode: 'continuous' }] // Force Auto-Focus
-                    },
-                    audio: false
-                });
+                if (!mountedRef.current) return;
+
+                // 2. CAMERA SETUP (Fix iOS Blurry & Overconstrained errors!)
+                let stream = null;
+                try {
+                    // Try Best Quality with Continuous Focus (Works perfect on Android)
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 },
+                            advanced: [{ focusMode: 'continuous' }] // Force Auto-Focus
+                        },
+                        audio: false
+                    });
+                } catch (advancedErr) {
+                    console.warn("Advanced constraints rejected by device/iOS, falling back to safe defaults...", advancedErr);
+                    // Absolute safe fallback for iOS Safari!
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                        },
+                        audio: false
+                    });
+                }
 
                 if (!mountedRef.current) {
                     stream.getTracks().forEach(t => t.stop());
@@ -81,12 +101,18 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 streamRef.current = stream;
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
+                    
+                    // Safely wait for video to be ready on iOS
+                    await new Promise((resolve) => {
+                        videoRef.current.onloadedmetadata = () => {
+                            videoRef.current.play().then(resolve).catch(resolve);
+                        };
+                    });
                 }
 
-                // Setup Torch
-                const track = stream.getVideoTracks()[0];
+                // Setup Torch (If available)
                 try {
+                    const track = stream.getVideoTracks()[0];
                     const caps = track.getCapabilities?.();
                     if (caps?.torch) setTorchSupported(true);
                 } catch (_) {}
@@ -96,7 +122,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                 // 3. SCANNING LOOP
                 const scanFrame = async () => {
                     if (!mountedRef.current || !videoRef.current || videoRef.current.readyState < 2) {
-                        if (mountedRef.current) requestRef.current = setTimeout(scanFrame, 100);
+                        if (mountedRef.current) requestRef.current = setTimeout(scanFrame, 200);
                         return;
                     }
 
@@ -125,8 +151,8 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     }
 
                     if (mountedRef.current) {
-                        // Scan 5-10 times per sec
-                        requestRef.current = setTimeout(scanFrame, 150);
+                        // Scan ~4 times per sec (Stable and less heat)
+                        requestRef.current = setTimeout(scanFrame, 250);
                     }
                 };
 
@@ -135,7 +161,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
 
             } catch (err) {
                 console.error("Camera Error: ", err);
-                if (err.name === 'NotAllowedError') alert('ກະລຸນາອະນຸຍາດໃຫ້ໃຊ້ກ້ອງຖ່າຍຮູບ (Please allow camera access)');
+                if (err.name === 'NotAllowedError') alert('ກະລຸນາອະນຸຍາດໃຫ້ໃຊ້ກ້ອງຖ່າຍຮູບ (Please allow camera access in Settings)');
                 if (mountedRef.current) setStatus('error');
             }
         };
@@ -187,7 +213,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         } catch (_) {}
     };
 
-    // 📸 Fallback: scan from captured photo using ZXing API directly
+    // 📸 Fallback: scan from captured photo using API safely
     const handleFileScan = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -195,8 +221,13 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         try {
             const url = URL.createObjectURL(file);
             const img = new Image();
-            img.src = url;
-            await new Promise(r => img.onload = r);
+            
+            // BULLETPROOF Image loading for iOS!
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error("Image failed to load"));
+                img.src = url; // Important: set src AFTER onload
+            });
 
             // Give it to Native if we have it, else ZXing
             let textResult = null;
@@ -229,9 +260,10 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
                     onClose();
                 }, 600);
             } else {
-                alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ກະລຸນາລອງໃໝ່');
+                alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ຫຼຼື ອ່ານຍາກກວ່າປົກກະຕິ ກະລຸນາລອງໃໝ່');
             }
         } catch (err) {
+            console.error(err);
             alert('ບໍ່ພົບບາໂຄ້ດໃນຮູບ ຫຼຼື ຮູບພາບບໍ່ຊັດເຈນ');
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
