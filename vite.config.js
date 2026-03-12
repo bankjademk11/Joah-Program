@@ -36,9 +36,11 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Cache ไฟล์ static ทั้งหมดนานๆ (เพราะ Vite ใส่ hash ให้แล้ว)
+        // เพิ่ม limit เป็น 5MB เพราะไฟล์ JS app เราใหญ่กว่า default 2MB
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Cache ไฟล์ static (ยกเว้น legacy polyfill ที่ใหญ่มากและใช้แค่เบราว์เซอร์เก่า)
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // sw.js ตัวเองไม่ควร cache
+        globIgnores: ['**/index-legacy-*.js', '**/polyfills-legacy-*.js'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [
