@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import legacy from '@vitejs/plugin-legacy'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -9,6 +10,45 @@ export default defineConfig({
     legacy({
       targets: ['defaults', 'not IE 11', 'ios >= 12', 'safari >= 12'],
       additionalLegacyPolyfills: ['regenerator-runtime/runtime']
+    }),
+    VitePWA({
+      registerType: 'prompt', // ไม่บังคับ reload อัตโนมัติ แค่แจ้งเตือนพนักงาน
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: 'JOAH Warehouse System',
+        short_name: 'JOAH',
+        description: 'Warehouse Inventory Validation System',
+        theme_color: '#f97316',
+        background_color: '#ffffff',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      },
+      workbox: {
+        // Cache ไฟล์ static ทั้งหมดนานๆ (เพราะ Vite ใส่ hash ให้แล้ว)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // sw.js ตัวเองไม่ควร cache
+        navigateFallback: '/index.html',
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            // Supabase API — ไม่ cache (ต้องดึงข้อมูลสดเสมอ)
+            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            handler: 'NetworkOnly',
+          }
+        ]
+      }
     })
   ],
   build: {

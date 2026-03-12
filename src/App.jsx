@@ -39,6 +39,7 @@ import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 import ExcelCompressor from './components/Tools/excel-compressor';
+import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
   ProductBoxIcon,
@@ -648,6 +649,9 @@ function AppContent() {
 
   return (
     <ToastProvider>
+      {/* 🔄 PWA Auto-Update Prompt — แจ้งเตือนเมื่อมีเวอร์ชันใหม่ */}
+      <ReloadPrompt />
+
       {/* 🐘 Elephant Mascot Loading Overlay with Progress */}
       <LoadingOverlay
         isVisible={isProcessing}
