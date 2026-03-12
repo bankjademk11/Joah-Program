@@ -83,6 +83,7 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
 
     if (activeTab === 'requests') {
         ws.columns = [
+            { header: 'ເລກທີບິນ (Doc)', key: 'docNo', width: 22 },
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'product_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
@@ -102,7 +103,7 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             const { name: reqName, empId: reqId } = parseUser(r.request_by);
             const { name: accName, empId: accId } = parseUser(r.accepted_by);
             const row = ws.addRow({
-                branch_id: r.branch_id, product_name: r.product_name || r.barcode,
+                branch_id: r.branch_id, docNo: r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A', product_name: r.product_name || r.barcode,
                 barcode: r.barcode, qty: r.qty,
                 status: isAcc ? 'ອານຸມັດ' : isRej ? 'ປະຕິເສດ' : 'ລໍຖ້າ',
                 request_by_name: reqName, request_by_id: reqId || r.request_by_id || '-',
@@ -314,7 +315,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     });
 
     const headers =
-        activeTab === 'requests' ? ['ສິນຄ້າ', 'ຜູ້ Request', 'ຈຳນວນ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
+        activeTab === 'requests' ? ['ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຈຳນວນ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
             activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ເຫດຜົນ', 'ເວລາ'] :
                 ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
@@ -341,8 +342,17 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         if (activeTab === 'requests') {
             const isAccepted = r.status === 'accepted' || r.status === 'approved';
             const isRejected = r.status === 'rejected';
+
+            // Extract display docNo. Fallback for old UUIDs
+            const docNo = r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A';
+
             return (
                 <tr key={i} className={`transition-colors ${isAccepted ? 'bg-emerald-50/40' : isRejected ? 'bg-rose-50/40' : 'hover:bg-amber-50/40'}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 rounded-md text-[11px] font-black tracking-widest bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
+                            DOC: {docNo}
+                        </span>
+                    </td>
                     <td className="px-6 py-4">
                         <div className="flex items-center gap-2"><User size={16} className="text-slate-400 shrink-0" /><span className="text-base font-bold text-slate-700 dark:text-slate-200">{r.product_name || r.barcode || '-'}</span></div>
                         <p className="text-sm text-slate-400 font-mono ml-6">{r.barcode}</p>
@@ -516,7 +526,7 @@ const HQCommandCenter = ({ onBack }) => {
             let rows = [];
             if (activeTab === 'requests') {
                 let q = supabase.from('store_requests')
-                    .select('id, branch_id, status, created_at, updated_at, request_by, accepted_by, product_name, barcode, qty')
+                    .select('id, branch_id, status, created_at, updated_at, request_by, accepted_by, product_name, barcode, qty, batch_id')
                     .order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);

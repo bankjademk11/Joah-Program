@@ -601,11 +601,12 @@ const StoreRequest = ({ onBack, currentUser }) => {
     const handleSubmitCart = async () => {
         if (cart.length === 0) return;
         setIsSending(true);
-        const batchId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
+        const date = new Date();
+        const yy = String(date.getFullYear()).slice(-2);
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const batchId = `REQ${yy}${mm}${dd}-${randomStr}`;
         try {
             const requests = cart.map(item => ({
                 barcode: item.barcode,
@@ -642,6 +643,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Requests');
             worksheet.columns = [
+                { header: 'Doc No.', key: 'docNo', width: 22 },
                 { header: 'Date', key: 'date', width: 15 }, { header: 'Time', key: 'time', width: 15 },
                 { header: 'Requester', key: 'requester', width: 20 }, { header: 'Product', key: 'product', width: 40 },
                 { header: 'Barcode', key: 'barcode', width: 20 }, { header: 'Qty', key: 'qty', width: 10 },
@@ -655,7 +657,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
                 const reqBatch = req.batch_id || new Date(req.created_at).getTime();
                 if (currentBatch !== reqBatch) { currentBatch = reqBatch; isAlternateColor = !isAlternateColor; }
                 const dt = new Date(req.created_at);
-                const row = worksheet.addRow({ date: dt.toLocaleDateString(), time: dt.toLocaleTimeString(), requester: req.request_by, product: req.product_name, barcode: req.barcode, qty: req.qty, status: req.status.toUpperCase() });
+                const row = worksheet.addRow({ docNo: req.batch_id?.startsWith('REQ') ? req.batch_id : 'N/A', date: dt.toLocaleDateString(), time: dt.toLocaleTimeString(), requester: req.request_by, product: req.product_name, barcode: req.barcode, qty: req.qty, status: req.status.toUpperCase() });
                 row.eachCell(cell => {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: isAlternateColor ? { argb: 'FFDBEAFE' } : { argb: 'FFDCFCE7' } };
                     cell.border = { top: { style: 'thin', color: { argb: 'FF9CA3AF' } }, left: { style: 'thin', color: { argb: 'FF9CA3AF' } }, bottom: { style: 'thin', color: { argb: 'FF9CA3AF' } }, right: { style: 'thin', color: { argb: 'FF9CA3AF' } } };
@@ -847,13 +849,18 @@ const StoreRequest = ({ onBack, currentUser }) => {
                         return (
                             <div key={batch.batch_id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden text-xs">
                                 <div onClick={() => setExpandedBatchId(expandedBatchId === batch.batch_id ? null : batch.batch_id)} className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
-                                    <div className="flex flex-col">
-                                        <span className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                                            <span className="text-blue-500">{batch.request_by || 'Staff'}</span>
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold text-slate-400">
+                                                ເລກບິນ (Doc): <span className="font-mono text-slate-500">{batch.batch_id.startsWith('legacy') ? 'N/A' : batch.batch_id}</span>
+                                            </span>
+                                        </span>
+                                        <span className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5 mt-1 text-[11px]">
+                                            <span className="text-slate-500">{batch.request_by || 'Staff'}</span>
                                             <span>•</span>
                                             {new Date(batch.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> {batch.items.length} {t('storeRequest.items')}</span>
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5"><ShoppingCart size={10} /> {batch.items.length} {t('storeRequest.items')}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${statusInfo.cls}`}>{statusInfo.label}</span>
