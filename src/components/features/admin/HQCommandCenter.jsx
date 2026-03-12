@@ -315,7 +315,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     });
 
     const headers =
-        activeTab === 'requests' ? ['ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຈຳນວນ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
+        activeTab === 'requests' ? ['ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
             activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ເຫດຜົນ', 'ເວລາ'] :
                 ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
@@ -342,9 +342,27 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         if (activeTab === 'requests') {
             const isAccepted = r.status === 'accepted' || r.status === 'approved';
             const isRejected = r.status === 'rejected';
-
-            // Extract display docNo. Fallback for old UUIDs
             const docNo = r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A';
+
+            // 📸 ใช้ stock_at_request (snapshot ณ เวลา request) ไม่ใช่ realtime
+            const stockQty = r.stock_at_request ?? null;
+            const requestedQty = r.qty ?? 0;
+
+            // คงเหลือ: ถ้า rejected → stock ไม่ถูกตัด แสดงเท่าเดิม | pending/accepted → แสดง stock - qty
+            const remainQty = stockQty != null
+                ? isRejected ? stockQty : stockQty - requestedQty
+                : null;
+
+            const stockColor = stockQty == null ? 'text-slate-300'
+                : stockQty <= requestedQty ? 'text-rose-500 font-black'
+                : stockQty <= requestedQty * 2 ? 'text-amber-500 font-black'
+                : 'text-emerald-600 font-black';
+
+            const remainColor = remainQty == null ? 'text-slate-300'
+                : remainQty < 0 ? 'text-rose-600 font-black'
+                : remainQty === 0 ? 'text-orange-500 font-bold'
+                : isRejected ? 'text-slate-400 font-semibold'
+                : 'text-slate-700 dark:text-slate-200 font-semibold';
 
             return (
                 <tr key={i} className={`transition-colors ${isAccepted ? 'bg-emerald-50/40' : isRejected ? 'bg-rose-50/40' : 'hover:bg-amber-50/40'}`}>
@@ -361,7 +379,27 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         <UserCell value={r.request_by} iconColor="text-slate-400" />
                         <p className="text-xs text-slate-400 mt-1">{fmt(r.created_at)}</p>
                     </td>
-                    <td className="px-6 py-4 text-center"><span className="text-3xl font-black text-blue-600 dark:text-blue-400">{r.qty ?? '-'}</span></td>
+                    {/* ขอ */}
+                    <td className="px-4 py-4 text-center">
+                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{requestedQty}</span>
+                    </td>
+                    {/* สต็อกในระบบ */}
+                    <td className="px-4 py-4 text-center">
+                        <span className={`text-2xl ${stockColor}`}>
+                            {stockQty != null ? stockQty : <span className="text-sm text-slate-300">-</span>}
+                        </span>
+                    </td>
+                    {/* คงเหลือหลังจ่าย */}
+                    <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                            <span className={`text-2xl ${remainColor}`}>
+                                {remainQty != null ? remainQty : <span className="text-sm text-slate-300">-</span>}
+                            </span>
+                            {remainQty != null && remainQty < 0 && (
+                                <span className="text-[9px] font-black text-rose-500 uppercase">ບໍ່ພໍ!</span>
+                            )}
+                        </div>
+                    </td>
                     <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                     <td className="px-6 py-4">
                         {r.accepted_by ? (() => {
@@ -526,7 +564,7 @@ const HQCommandCenter = ({ onBack }) => {
             let rows = [];
             if (activeTab === 'requests') {
                 let q = supabase.from('store_requests')
-                    .select('id, branch_id, status, created_at, updated_at, request_by, accepted_by, product_name, barcode, qty, batch_id')
+                    .select('id, branch_id, status, created_at, updated_at, request_by, accepted_by, product_name, barcode, qty, batch_id, stock_at_request')
                     .order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);

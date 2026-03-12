@@ -608,14 +608,31 @@ const StoreRequest = ({ onBack, currentUser }) => {
         const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
         const batchId = `REQ${yy}${mm}${dd}-${randomStr}`;
         try {
+            // 📸 Snapshot stock ณ ตอนนี้จาก location_inventory ก่อน insert
+            const barcodes = cart.map(item => item.barcode).filter(Boolean);
+            const branchId = currentUser?.branch_id || null;
+            let stockSnapshot = {}; // barcode -> total qty
+
+            if (barcodes.length > 0 && branchId) {
+                const { data: stockData } = await supabase
+                    .from('location_inventory')
+                    .select('barcode_no, qty')
+                    .eq('branch_id', branchId)
+                    .in('barcode_no', barcodes);
+                (stockData || []).forEach(s => {
+                    stockSnapshot[s.barcode_no] = (stockSnapshot[s.barcode_no] || 0) + (s.qty || 0);
+                });
+            }
+
             const requests = cart.map(item => ({
                 barcode: item.barcode,
                 product_name: item.product_name,
                 qty: item.qty,
                 status: 'pending',
                 request_by: currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Store Staff'),
-                branch_id: item.branch_id || currentUser?.branch_id || null,
-                batch_id: batchId
+                branch_id: item.branch_id || branchId,
+                batch_id: batchId,
+                stock_at_request: stockSnapshot[item.barcode] ?? null, // 📸 snapshot ณ เวลานี้
             }));
             const { error } = await supabase.from('store_requests').insert(requests);
             if (error) throw error;
