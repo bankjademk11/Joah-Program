@@ -87,12 +87,14 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'product_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
-            { header: 'ຈຳນວນ', key: 'qty', width: 10 },
+            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
+            { header: 'ຂໍ (Qty)', key: 'qty', width: 10 },
+            { header: 'ສະຕ໋ອກ (Stock)', key: 'stock_qty', width: 14 },
+            { header: 'ຄົງເຫຼືອ (Remain)', key: 'remain_qty', width: 16 },
             { header: 'ສະຖານະ', key: 'status', width: 14 },
             { header: 'Employee ID', key: 'request_by_id', width: 16 },
-            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
-            { header: 'Employee ID', key: 'accepted_by_id', width: 16 },
             { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
+            { header: 'Employee ID', key: 'accepted_by_id', width: 16 },
             { header: 'ເວລາ Request', key: 'created_at', width: 24 },
             { header: 'ເວລາ Action', key: 'updated_at', width: 24 },
         ];
@@ -100,11 +102,24 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         rows.forEach((r, i) => {
             const isAcc = r.status === 'accepted' || r.status === 'approved';
             const isRej = r.status === 'rejected';
+            
+            // Stock calculation
+            const stockQty = r.stock_at_request ?? null;
+            const requestedQty = r.qty ?? 0;
+            const remainQty = stockQty != null 
+                ? (isRej ? stockQty : stockQty - requestedQty) 
+                : null;
+
             const { name: reqName, empId: reqId } = parseUser(r.request_by);
             const { name: accName, empId: accId } = parseUser(r.accepted_by);
             const row = ws.addRow({
-                branch_id: r.branch_id, docNo: r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A', product_name: r.product_name || r.barcode,
-                barcode: r.barcode, qty: r.qty,
+                branch_id: r.branch_id, 
+                docNo: r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A', 
+                product_name: r.product_name || r.barcode,
+                barcode: r.barcode, 
+                qty: requestedQty,
+                stock_qty: stockQty != null ? stockQty : '-',
+                remain_qty: remainQty != null ? remainQty : '-',
                 status: isAcc ? 'ອານຸມັດ' : isRej ? 'ປະຕິເສດ' : 'ລໍຖ້າ',
                 request_by_name: reqName, request_by_id: reqId || r.request_by_id || '-',
                 accepted_by_name: accName, accepted_by_id: accId || '-',
