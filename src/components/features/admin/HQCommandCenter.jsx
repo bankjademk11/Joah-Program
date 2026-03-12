@@ -106,8 +106,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             // Stock calculation
             const stockQty = r.stock_at_request ?? null;
             const requestedQty = r.qty ?? 0;
-            const remainQty = stockQty != null 
-                ? (isRej ? stockQty : stockQty - requestedQty) 
+            
+            // Pending & Rejected: don't show remaining. Accepted: stock - qty.
+            const remainQty = (stockQty != null && isAcc) 
+                ? stockQty - requestedQty 
                 : null;
 
             const { name: reqName, empId: reqId } = parseUser(r.request_by);
@@ -363,9 +365,9 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             const stockQty = r.stock_at_request ?? null;
             const requestedQty = r.qty ?? 0;
 
-            // คงเหลือ: ถ้า rejected → stock ไม่ถูกตัด แสดงเท่าเดิม | pending/accepted → แสดง stock - qty
-            const remainQty = stockQty != null
-                ? isRejected ? stockQty : stockQty - requestedQty
+            // คงเหลือ: จะแสดงแค่ในสถานะ "✅ ອານຸມັດ" เท่านั้น
+            const remainQty = (stockQty != null && isAccepted)
+                ? stockQty - requestedQty
                 : null;
 
             const stockColor = stockQty == null ? 'text-slate-300'
