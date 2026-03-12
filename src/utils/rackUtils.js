@@ -5,57 +5,62 @@
 
 const BRANCH_RACK_RULES = {
     // ══════════════════════════════════════════════
-    // ສີວິໄລ — Rack Layout (from Mapdata.MD)
+    // ສີວິໄລ — Rack Layout (from MapLayoutSVL.md — updated 2026-03-12)
     // ══════════════════════════════════════════════
     'ສີວິໄລ': {
         'KITCHEN': [
-            { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'H02', 'H03', 'H04'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນ G9', 'ໂລພື້ນ G10', 'ໂລພື້ນ G11'], maxLevel: 0, maxSections: 0 }
+            // G01-G16 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G09', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16'], maxLevel: 5, maxSections: 4 },
+            // G10 = rack shelves (Level 1-5, Section 1-3 — ไม่มี section 4 ตาม file)
+            { zones: ['G10'], maxLevel: 5, maxSections: 3 },
+            // G17, G18 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['G17', 'G18'], maxLevel: 5, maxSections: 4 },
         ],
         'BEAUTY': [
+            // E01-E04 = rack shelves (Level 1-5, Section 1-4)
             { zones: ['E01', 'E02', 'E03', 'E04'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນE 5', 'ໂລພື້ນE 7', 'ໂລພື້ນE 8'], maxLevel: 0, maxSections: 0 }
+            // E05 = floor zone
+            { zones: ['E05'], maxLevel: 0, maxSections: 0 },
         ],
         'STATIONERY': [
-            { zones: ['S01', 'S02', 'S03', 'S05', 'S06', 'S07', 'S08', 'S09'], maxLevel: 5, maxSections: 4 },
-            { zones: ['S10'], maxLevel: 4, maxSections: 4 }
+            // S01-S08, S10 = rack shelves (Level 1-5, Section 1-4)
+            // S09 ถูกเปลี่ยนเป็น Stationery ด้วย แต่ใน MapLayoutSVL.md ไม่ปรากฏ S09 → ข้ามไป
+            { zones: ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10'], maxLevel: 5, maxSections: 4 },
         ],
         'TOYS': [
-            { zones: ['T09'], maxLevel: 5, maxSections: 4 }
+            // T09 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['T09'], maxLevel: 5, maxSections: 4 },
         ],
         'CLEANING/BATH': [
-            { zones: ['A01', 'A02', 'A03', 'A05'], maxLevel: 5, maxSections: 4 },
-            { zones: ['A04'], maxLevel: 6, maxSections: 4 }
+            // A01-A03 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['A01', 'A02', 'A03'], maxLevel: 5, maxSections: 4 },
         ],
         'INTERIOR': [
-            { zones: ['B01'], maxLevel: 3, maxSections: 4 },
-            { zones: ['B02', 'B03', 'B04'], maxLevel: 4, maxSections: 4 }
+            // B01-B03 = rack shelves (B03 starts at L1, B01-B02 start at L1)
+            // B03 ใน file ไม่มี L5 (มีแค่ L1-L4)
+            { zones: ['B03'], maxLevel: 4, maxSections: 4 },
+            { zones: ['B01', 'B02'], maxLevel: 5, maxSections: 4 },
+        ],
+        'SPORT': [
+            // B04 = rack shelves (Level 1-5, Section 1-4) — แยกออกจาก Interior
+            { zones: ['B04'], maxLevel: 5, maxSections: 4 },
         ],
         'TOOL/DIGITAL': [
-            { zones: ['F01', 'F02', 'F03', 'F04'], maxLevel: 5, maxSections: 5 }
+            // F01-F04 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['F01', 'F02', 'F03', 'F04'], maxLevel: 5, maxSections: 4 },
         ],
         'STORAGE': [
-            { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06'], maxLevel: 5, maxSections: 4 },
-            { zones: ['ໂລພື້ນ D07', 'ໂລພື້ນ D08'], maxLevel: 0, maxSections: 0 }
+            // D01-D07 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07'], maxLevel: 5, maxSections: 4 },
+            // D08, D09 = floor zones
+            { zones: ['D08', 'D09'], maxLevel: 0, maxSections: 0 },
         ],
         'FASHION': [
-            { zones: ['C01', 'C02', 'C03', 'C04'], maxLevel: 5, maxSections: 4 }
+            // C01-C05 = rack shelves (Level 1-5, Section 1-4)
+            { zones: ['C01', 'C02', 'C03', 'C04', 'C05'], maxLevel: 5, maxSections: 4 },
+            // C06 = floor zone
+            { zones: ['C06'], maxLevel: 0, maxSections: 0 },
         ],
-        'SPORTS/LEISURE': [
-            { zones: ['H01'], maxLevel: 5, maxSections: 4 }
-        ],
-        'SEASONAL': [
-            { zones: ['I01', 'I02', 'I03'], maxLevel: 4, maxSections: 4 }
-        ],
-        'DISPOSABLE': [
-            { zones: ['J01', 'J02'], maxLevel: 4, maxSections: 4 }
-        ],
-        'PET': [
-            { zones: ['K01', 'K02'], maxLevel: 4, maxSections: 4 }
-        ],
-        'GARDENING': [
-            { zones: ['L01'], maxLevel: 3, maxSections: 4 }
-        ]
     },
 
 
