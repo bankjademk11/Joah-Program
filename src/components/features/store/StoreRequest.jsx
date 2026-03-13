@@ -473,11 +473,13 @@ const StoreRequest = ({ onBack, currentUser }) => {
                         // Only notify if this request belongs to this branch
                         const isMine = !myBranch || reqBranch === myBranch;
 
-                        if (isMine && oldStatus === 'pending') {
-                            if (newStatus === 'accepted') {
+                        if (isMine) {
+                            // Note: Supabase omits paylod.old non-PK fields by default (unless REPLICA IDENTITY FULL is set).
+                            // So oldStatus is usually undefined. We just trigger based on newStatus.
+                            if (newStatus === 'accepted' && oldStatus !== 'accepted') {
                                 playOK();
                                 toast.success('✅ Request ຖືກຍອມຮັບແລ້ວ!');
-                            } else if (newStatus === 'rejected') {
+                            } else if (newStatus === 'rejected' && oldStatus !== 'rejected') {
                                 playError();
                                 toast.error('❌ Request ຖືກປະຕິເສດ');
                             }
