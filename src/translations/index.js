@@ -200,6 +200,7 @@ const translations = {
             defective: 'ສິນຄ້າມີບັນຫາ (Defective Item)',
             supplyChainDelay: 'Sply-Chain ຊັບພາຍເຊນບໍ່ສົ່ງເຄື່ອງໃຫ້',
             itemAtFront: 'ສີນຄ້າຢູ່ໜ້າຮ້ານ',
+            checkList: 'ສິນຄ້າຖືກເຊັກລິດ (Checklist)',
             other: 'ອື່ນໆ (Other)'
         },
         // Edit Panel
@@ -492,6 +493,7 @@ const translations = {
             defective: 'Defective Item',
             supplyChainDelay: 'Supply Chain Delay (Sply-Chain)',
             itemAtFront: 'Item at Front of Store',
+            checkList: 'Item Checked (Checklist)',
             other: 'Other'
         },
         // Edit Panel

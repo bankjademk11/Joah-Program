@@ -517,6 +517,7 @@ const QuickAddPanel = ({
                                 <option value={t('reasons.defective')}>{t('reasons.defective')}</option>
                                 <option value={t('reasons.supplyChainDelay')}>{t('reasons.supplyChainDelay')}</option>
                                 <option value={t('reasons.itemAtFront')}>{t('reasons.itemAtFront')}</option>
+                                <option value={t('reasons.checkList')}>{t('reasons.checkList')}</option>
                                 <option value="Other">{t('reasons.other')}</option>
                             </select>
 

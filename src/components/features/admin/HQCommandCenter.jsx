@@ -136,28 +136,33 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
-            { header: 'Qty ເກົ່າ', key: 'old_qty', width: 12 },
-            { header: 'Qty ໃໝ່', key: 'new_qty', width: 12 },
-            { header: 'ການປ່ຽນ', key: 'change', width: 14 },
-            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
             { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
+            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ການປ່ຽນ', key: 'change', width: 14 },
+            { header: 'ສະຕ໋ອກ (ກ່ອນ)', key: 'old_qty', width: 16 },
+            { header: 'ຄົງເຫຼືອ (ຫຼັງ)', key: 'new_qty', width: 16 },
             { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
         ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
-            const ch = (r.new_qty || 0) - (r.old_qty || 0);
-            const { name: editName, empId: editId } = parseUser(r.updated_by);
+            const ch = (r.new_qty ?? 0) - (r.old_qty ?? 0);
+            const { name: editName, empId: editId } = parseUser(r.updated_by || r.added_by);
+            const isNew = r._source === 'added';
             const row = ws.addRow({
-                branch_id: r.branch_id, item_name: r.item_name || r.barcode,
-                barcode: r.barcode, old_qty: r.old_qty, new_qty: r.new_qty,
-                change: ch > 0 ? `+${ch}` : ch,
+                branch_id: r.branch_id,
+                item_name: r.item_name || r.barcode,
+                barcode: r.barcode,
                 updated_by_name: editName,
                 updated_by_id: editId || r.updated_by_id || '-',
-                details: r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ',
+                change: ch > 0 ? `+${ch}` : ch,
+                old_qty: isNew ? '-' : (r.old_qty ?? '-'),
+                new_qty: r.new_qty ?? '-',
+                details: r.details || r.change_reason || r.remarks || (isNew ? 'ສິນຄ້າເຂ້າໃໝ່' : 'ແກ້ໄຂຂໍ້ມູນ'),
                 updated_at: fmtExcel(r.updated_at),
             });
-            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFEDE9FE' : 'FFFFFFFF' } }; });
+            const bg = isNew ? 'FFD1FAE5' : (ch > 0 ? 'FFD1FAE5' : ch < 0 ? 'FFFEE2E2' : 'FFF1F5F9');
+            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? bg : 'FFFFFFFF' } }; });
             row.getCell('change').font = { bold: true, color: { argb: ch > 0 ? 'FF065F46' : ch < 0 ? 'FF991B1B' : 'FF6B7280' } };
         });
     } else {
@@ -248,20 +253,23 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
         {BRANCHES.map(branch => {
             const c = BC[branch];
             const rows = data.filter(r => r.branch_id === branch);
-            let mainVal, mainLabel, subA, subB;
+            let mainVal, mainLabel, subA, subB, subC;
 
             if (activeTab === 'requests') {
                 mainVal = rows.length; mainLabel = 'ຄຳຂໍທັງໝົດ';
                 subA = { val: rows.filter(r => r.status === 'pending').length, label: 'ລໍຖ້າ', color: 'text-amber-500' };
                 subB = { val: rows.filter(r => r.status === 'accepted' || r.status === 'approved').length, label: 'ອານຸມັດ', color: 'text-emerald-600' };
+                subC = { val: rows.filter(r => r.status === 'rejected').length, label: 'ປະຕິເສດ', color: 'text-rose-500' };
             } else if (activeTab === 'edits') {
                 mainVal = rows.length; mainLabel = 'ການແກ້ໄຂ';
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-indigo-500' };
                 subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-purple-600' };
+                subC = null;
             } else {
                 mainVal = rows.length; mainLabel = 'ສິນຄ້າໃໝ່';
                 subA = { val: new Set(rows.map(r => r.added_by)).size, label: 'ຜູ້ດຳເນີນ', color: 'text-teal-600' };
                 subB = null;
+                subC = null;
             }
 
             return (
@@ -282,7 +290,7 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                         <p className={`text-7xl font-black leading-none ${branch === 'ສີວິໄລ' ? 'text-white' : c.txt} drop-shadow-xl tracking-tighter`}>{mainVal}</p>
                         <p className={`text-base font-bold ${branch === 'ສີວິໄລ' ? 'text-white/90' : 'text-slate-500'} mt-1 drop-shadow-md`}>{mainLabel}</p>
 
-                        <div className={`flex gap-6 pt-4 mt-4 border-t ${branch === 'ສີວິໄລ' ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
+                        <div className={`flex gap-4 pt-4 mt-4 border-t ${branch === 'ສີວິໄລ' ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
                             <div>
                                 <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subA.color} drop-shadow-md`}>{subA.val}</p>
                                 <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subA.label}</p>
@@ -291,6 +299,12 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                                 <div>
                                     <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subB.color} drop-shadow-md`}>{subB.val}</p>
                                     <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subB.label}</p>
+                                </div>
+                            )}
+                            {subC && (
+                                <div>
+                                    <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-rose-300' : subC.color} drop-shadow-md`}>{subC.val}</p>
+                                    <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subC.label}</p>
                                 </div>
                             )}
                         </div>
@@ -308,9 +322,13 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
 const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) => {
     const c = BC[branch];
     const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'accepted' | 'rejected'
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const exportRef = useRef(null);
+
+    // Reset filter when branch changes
+    useEffect(() => { setStatusFilter('all'); setSearch(''); }, [branch]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -321,6 +339,12 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
     const branchData = data.filter(r => r.branch_id === branch);
     const filtered = branchData.filter(r => {
+        // Status filter (requests tab only)
+        if (activeTab === 'requests' && statusFilter !== 'all') {
+            if (statusFilter === 'accepted' && r.status !== 'accepted' && r.status !== 'approved') return false;
+            if (statusFilter === 'pending' && r.status !== 'pending') return false;
+            if (statusFilter === 'rejected' && r.status !== 'rejected') return false;
+        }
         if (!search) return true;
         const s = search.toLowerCase();
         return (
@@ -333,13 +357,14 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
     const headers =
         activeTab === 'requests' ? ['ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
-            activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ເຫດຜົນ', 'ເວລາ'] :
+            activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                 ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
     const reqSummary = activeTab === 'requests' ? [
-        { label: 'ລໍຖ້າ', val: filtered.filter(r => r.status === 'pending').length, cls: 'bg-amber-400/30' },
-        { label: 'ອານຸມັດ', val: filtered.filter(r => r.status === 'accepted' || r.status === 'approved').length, cls: 'bg-emerald-400/30' },
-        { label: 'ປະຕິເສດ', val: filtered.filter(r => r.status === 'rejected').length, cls: 'bg-rose-400/30' },
+        { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
+        { label: 'ລໍຖ້າ', val: branchData.filter(r => r.status === 'pending').length, key: 'pending', cls: 'bg-amber-400/30', active: 'bg-amber-400/60 ring-2 ring-amber-300' },
+        { label: 'ອານຸມັດ', val: branchData.filter(r => r.status === 'accepted' || r.status === 'approved').length, key: 'accepted', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
+        { label: 'ປະຕິເສດ', val: branchData.filter(r => r.status === 'rejected').length, key: 'rejected', cls: 'bg-rose-400/30', active: 'bg-rose-400/60 ring-2 ring-rose-300' },
     ] : [];
 
     // Export: 'dated' uses current filtered (date-filtered) data, 'all' uses all branch data
@@ -441,12 +466,40 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             );
         }
         if (activeTab === 'edits') {
-            const qtyChange = (r.new_qty || 0) - (r.old_qty || 0);
+            const qtyChange = (r.new_qty ?? 0) - (r.old_qty ?? 0);
+            const oldQty = r.old_qty ?? null;
+            const newQty = r.new_qty ?? null;
+            const isNew = r._source === 'added';
+            const changeColor = qtyChange > 0 ? 'text-emerald-500' : qtyChange < 0 ? 'text-rose-500' : 'text-slate-400';
+            const remainColor = newQty == null ? 'text-slate-300' : newQty < 0 ? 'text-rose-600 font-black' : newQty === 0 ? 'text-orange-500 font-bold' : 'text-slate-700 dark:text-slate-200 font-semibold';
             return (
-                <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                    <td className="px-6 py-4"><p className="text-base font-bold text-slate-800 dark:text-white">{r.item_name || r.barcode || '-'}</p><p className="text-sm text-slate-400 font-mono">{r.barcode}</p></td>
-                    <td className="px-6 py-4"><UserCell value={r.updated_by} iconColor="text-indigo-400" /></td>
-                    <td className="px-6 py-4 text-center"><span className={`text-3xl font-black ${qtyChange > 0 ? 'text-emerald-500' : qtyChange < 0 ? 'text-rose-500' : 'text-slate-400'}`}>{qtyChange > 0 ? `+${qtyChange}` : qtyChange || '-'}</span></td>
+                <tr key={i} className={`transition-colors ${isNew ? 'bg-emerald-50/40 dark:bg-emerald-900/10' : 'hover:bg-indigo-50/30'}`}>
+                    <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                            {isNew && <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200 whitespace-nowrap">ສິນຄ້າໃໝ່</span>}
+                            <div>
+                                <p className="text-base font-bold text-slate-800 dark:text-white">{r.item_name || r.barcode || '-'}</p>
+                                <p className="text-sm text-slate-400 font-mono">{r.barcode}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td className="px-6 py-4"><UserCell value={r.updated_by} iconColor={isNew ? 'text-emerald-400' : 'text-indigo-400'} /><p className="text-xs text-slate-400 mt-1">{fmt(r.updated_at)}</p></td>
+                    {/* ການປ່ຽນແປງ */}
+                    <td className="px-4 py-4 text-center">
+                        <span className={`text-2xl font-black ${changeColor}`}>{qtyChange > 0 ? `+${qtyChange}` : qtyChange || '-'}</span>
+                    </td>
+                    {/* ສະຕ໋ອກ (ກ່ອນ) */}
+                    <td className="px-4 py-4 text-center">
+                        <span className="text-2xl font-black text-slate-500 dark:text-slate-400">
+                            {isNew ? <span className="text-sm text-slate-300">-</span> : (oldQty != null ? oldQty : <span className="text-sm text-slate-300">-</span>)}
+                        </span>
+                    </td>
+                    {/* ຄົງເຫຼືອ (ຫຼັງ) */}
+                    <td className="px-4 py-4 text-center">
+                        <span className={`text-2xl ${remainColor}`}>
+                            {newQty != null ? newQty : <span className="text-sm text-slate-300">-</span>}
+                        </span>
+                    </td>
                     <td className="px-6 py-4"><span className="text-sm text-slate-500 italic">{r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ'}</span></td>
                     <td className="px-6 py-4 text-slate-400 text-sm whitespace-nowrap">{fmt(r.updated_at)}</td>
                 </tr>
@@ -474,14 +527,20 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         <div><h2 className="text-2xl font-black text-white">📍 {branch}</h2><p className="text-white/80 text-base font-bold">{filtered.length} ລາຍການ</p></div>
                     </div>
 
-                    {/* Request summary badges */}
+                    {/* Request summary badges — clickable filter buttons */}
                     {reqSummary.length > 0 && (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
                             {reqSummary.map(s => (
-                                <div key={s.label} className={`flex flex-col items-center px-4 py-2 rounded-2xl ${s.cls} text-white`}>
+                                <button
+                                    key={s.key}
+                                    onClick={() => setStatusFilter(statusFilter === s.key ? 'all' : s.key)}
+                                    className={`flex flex-col items-center px-4 py-2 rounded-2xl text-white transition-all hover:scale-105 active:scale-95 ${
+                                        statusFilter === s.key ? s.active : s.cls + ' hover:bg-white/30'
+                                    }`}
+                                >
                                     <span className="text-2xl font-black">{s.val}</span>
                                     <span className="text-xs font-bold opacity-80 uppercase">{s.label}</span>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     )}
@@ -576,7 +635,7 @@ const HQCommandCenter = ({ onBack }) => {
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
-        setSelectedBranch(null);
+        // ✅ DO NOT reset selectedBranch here — keep the user on the detail page
         try {
             let rows = [];
             if (activeTab === 'requests') {
@@ -599,6 +658,23 @@ const HQCommandCenter = ({ onBack }) => {
                 const { data: d, error } = await q;
                 if (error) throw error;
                 rows = d || [];
+                // 🆕 Also fetch added_items_log and merge in
+                let q2 = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(500);
+                if (startDate) q2 = q2.gte('created_at', `${startDate}T00:00:00`);
+                if (endDate) q2 = q2.lte('created_at', `${endDate}T23:59:59`);
+                const { data: addedData } = await q2;
+                const normalizedAdded = (addedData || []).map(r => ({
+                    ...r,
+                    _source: 'added',
+                    old_qty: 0,
+                    new_qty: r.qty,
+                    updated_by: r.added_by,
+                    updated_at: r.created_at,
+                    details: r.remarks || r.reason || 'ສິນຄ້າເຂ້າໃໝ່',
+                }));
+                rows = [...rows, ...normalizedAdded].sort((a, b) =>
+                    new Date(b.updated_at) - new Date(a.updated_at)
+                );
             } else {
                 let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(500);
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);

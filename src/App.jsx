@@ -817,8 +817,8 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Store Request Card (Only for Front Store or when not in Admin Menu) */}
-                  {!showAdminMenu && user?.workplace !== 'back' && (
+                  {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
+                  {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
                     <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
                         <StoreRequestIcon className="w-8 h-8 text-current" />
