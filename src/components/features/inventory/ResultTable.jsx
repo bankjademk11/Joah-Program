@@ -4,7 +4,7 @@ import {
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     UploadCloud, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles, ScanLine
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
@@ -18,6 +18,7 @@ import EditPanel from './EditPanel';
 import QuickAddPanel from './QuickAddPanel';
 import LocationInspector from './LocationInspector';
 import AuditLogModal from '../../ui/AuditLogModal';
+import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 
 const ResultTable = ({
@@ -46,6 +47,7 @@ const ResultTable = ({
     const [diagnosticRow, setDiagnosticRow] = useState(null);
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
+    const [showScanner, setShowScanner] = useState(false);
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
@@ -940,7 +942,7 @@ const ResultTable = ({
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
                             <input
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                                className="input-field pl-14 font-bold"
+                                className="input-field pl-14 pr-12 font-bold"
                                 value={searchTerm}
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                                 onKeyDown={(e) => {
@@ -965,6 +967,13 @@ const ResultTable = ({
                                     }
                                 }}
                             />
+                            <button
+                                onClick={() => setShowScanner(true)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-400 hover:text-joah-orange hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all"
+                                title="Scan Barcode"
+                            >
+                                <ScanLine size={18} />
+                            </button>
                         </div>
                         <div className="relative">
                             <Filter className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600" size={18} />
@@ -1424,6 +1433,17 @@ const ResultTable = ({
                     currentBranch={currentBranch}
                 />
             </div>
+
+            {/* Scanner Modal */}
+            {showScanner && (
+                <BarcodeScannerModal
+                    onDetected={(code) => {
+                        setSearchTerm(code);
+                        setCurrentPage(1);
+                    }}
+                    onClose={() => setShowScanner(false)}
+                />
+            )}
         </>
     );
 };
