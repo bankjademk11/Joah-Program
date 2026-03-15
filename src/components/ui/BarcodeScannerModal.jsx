@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, X, ScanLine, RotateCw } from 'lucide-react';
 
 const BarcodeScannerModal = ({ onDetected, onClose }) => {
@@ -277,7 +278,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    return (
+    const modalContent = (
         <div className="fixed inset-0 z-[999] flex flex-col bg-black">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileScan} style={{ display: 'none' }} />
@@ -413,6 +414,12 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
             `}</style>
         </div>
     );
+    
+    // 💡 Render via React Portal so the camera modal escapes parent styles
+    if (typeof document !== 'undefined') {
+        return createPortal(modalContent, document.body);
+    }
+    return modalContent;
 };
 
 export default BarcodeScannerModal;
