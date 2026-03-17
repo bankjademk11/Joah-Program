@@ -87,6 +87,7 @@ function AppContent() {
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
   const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
   const [adminViewBranch, setAdminViewBranch] = useState(''); // Branch Admin เลือกดูใน Cloud
+  const [autoSyncMaster, setAutoSyncMaster] = useState(false); // Checkbox for Master Data Sync
 
   // --- Realtime State ---
   const [realtimeStatus, setRealtimeStatus] = useState('disconnected'); // 'connected', 'disconnected', 'connecting'
@@ -292,9 +293,9 @@ function AppContent() {
       let dataRows = [];
       let locationRows = [];
       let odooRows = [];
+      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
 
       if (activeSource === 'supabase') {
-        const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
         const masterBranch = branchToLoad;
 
         // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
@@ -377,7 +378,7 @@ function AppContent() {
         }));
       }
 
-      const { results, stats } = validateData(locationRows, dataRows, odooRows, user?.branch_id);
+      const { results, stats } = validateData(locationRows, dataRows, odooRows, branchToLoad);
       setValidationResults(results);
       setMasterData(dataRows);
       setStats(stats);
@@ -493,7 +494,10 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, user?.branch_id);
+      // Calculate branchToLoad using the same logic as handleValidate
+      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+
+      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad);
       setValidationResults(validatedResults);
       setStats(validatedStats);
       setRefreshTrigger(Date.now());
@@ -627,14 +631,35 @@ function AppContent() {
     const confirmed = window.confirm(`Sync Location ໄປທີ່ສາຂາ: "${targetBranch}"\n\n${validationResults.length} ລາຍການ ຈະຖືກ Sync ໄປ Cloud.\n\n⚠️ ຂໍ້ມູນເກົ່າຂອງສາຂານີ້ຈະຖືກແທນທີ່.`);
     if (!confirmed) return;
 
+    // 🔍 DEBUG LOG — ตรวจสอบก่อน Sync
+    console.log('🚀 [Sync Location] targetBranch:', targetBranch);
+    console.log('🚀 [Sync Location] importBranch state:', importBranch);
+    console.log('🚀 [Sync Location] user.branch_id:', user?.branch_id);
+    console.log('🚀 [Sync Location] records count:', validationResults.length);
+    console.log('🚀 [Sync Master?]', autoSyncMaster);
+
     setIsProcessing(true);
     try {
+      // 1. Sync Location 
       const result = await syncLocationResultsToSupabase(validationResults, targetBranch);
+
       if (result.success) {
         setLocationSynced(true);
-        alert(`✅ Sync ສຳເລັດ! ${result.synced} ລາຍການ ຖືກບັນທຶກເຂົ້າ Cloud ແລ້ວ`);
+        let msg = `✅ Sync Location ສຳເລັດ! ${result.synced} ລາຍການ ຖືກບັນທຶກເຂົ້າ Cloud ແລ້ວ\n`;
+
+        // 2. Sync Master Data if selected
+        if (autoSyncMaster) {
+          const masterResult = await syncMasterDataToSupabase(masterData, targetBranch);
+          if (masterResult.success) {
+            msg += `✅ Sync Master Data ສຳເລັດ! ${masterResult.synced} ລາຍການ (Global ສີວິໄລ)\n`;
+          } else {
+            msg += `❌ Sync Master Data ລົ້ມເຫຼວ: ${masterResult.error}\n`;
+          }
+        }
+
+        alert(msg);
       } else {
-        alert('❌ Sync ລົ້ມເຫຼວ: ' + result.error);
+        alert('❌ Sync Location ລົ້ມເຫຼວ: ' + result.error);
       }
     } catch (e) {
       alert('Error: ' + e.message);
@@ -760,6 +785,21 @@ function AppContent() {
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                           </select>
+                        </div>
+                        {/* Auto Sync Master Checkbox */}
+                        <div className="w-full mt-[-8px]">
+                          <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={autoSyncMaster}
+                              onChange={(e) => setAutoSyncMaster(e.target.checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 rounded text-joah-orange focus:ring-joah-orange border-slate-300 dark:border-slate-600 dark:bg-slate-900 cursor-pointer"
+                            />
+                            <span className="text-[11px] font-black tracking-wider text-slate-600 dark:text-slate-300 uppercase">
+                              ອັບເດດ Master Data ໃໝ່
+                            </span>
+                          </label>
                         </div>
                         {/* Hidden FileUpload — triggered by button below */}
                         <div className="hidden">
@@ -1016,11 +1056,15 @@ function AppContent() {
                   </div>
                   {/* ให้เฉพาะ HQ (isAdmin) มีสิทธิ์อัปเดต Master Data จาก Excel ขึ้น Cloud */}
                   {dbSource === 'excel' && isAdmin && (
-                    <button onClick={handleSyncToCloud} disabled={isProcessing} className="flex flex-col items-center gap-1 group">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center group-hover:bg-joah-orange group-hover:text-white transition-all duration-300 shadow-sm">
-                        {isProcessing ? <RefreshCw className="animate-spin" width={18} /> : <UploadCloud width={18} />}
+                    <button 
+                      onClick={handleSyncToCloud} 
+                      disabled={true} 
+                      className="flex flex-col items-center gap-1 group opacity-40 cursor-not-allowed"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-500 flex items-center justify-center shadow-sm">
+                        <ShieldCheck width={18} />
                       </div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Sync Cloud</span>
+                      <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter">Sync Locked</span>
                     </button>
                   )}
                 </div>
@@ -1152,14 +1196,11 @@ function AppContent() {
                     </div>
                     <button
                       onClick={handleSyncLocationToCloud}
-                      disabled={isProcessing}
-                      className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg ${locationSynced
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30'
-                        : 'bg-gradient-to-r from-joah-orange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-orange-500/30'
-                        } disabled:opacity-50`}
+                      disabled={true}
+                      className="px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700"
                     >
-                      {isProcessing ? <RefreshCw className="animate-spin" size={18} /> : locationSynced ? <CheckCircle size={18} /> : <UploadCloud size={18} />}
-                      <span>{locationSynced ? 'Sync ອີກຄັ້ງ' : 'Sync Location ໄປ Cloud'}</span>
+                      <ShieldCheck size={18} />
+                      <span>Sync ຖືກບລັອກໄວ້</span>
                     </button>
                   </div>
                 </div>

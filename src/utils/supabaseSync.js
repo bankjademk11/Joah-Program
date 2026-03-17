@@ -3,8 +3,8 @@ const PSN_BRANCHES = ['ໂພນສີນວນ', 'ໂພນສີນວນ A', 
 const isPSN = (branch) => branch?.startsWith('ໂພນສີນວນ');
 
 // PSN now uses a single branch identity
-export const normalizeMasterBranch = (branch) =>
-    isPSN(branch) ? 'ໂພນສີນວນ' : branch;
+// ສີວິໄລ is now the global master branch — all branches share the same master_data
+export const normalizeMasterBranch = (branch) => 'ສີວິໄລ';
 
 const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 
@@ -14,13 +14,13 @@ const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 export const syncMasterDataToSupabase = async (masterDataArray, branchId) => {
     try {
         if (!branchId) throw new Error('branch_id is required for sync');
-        // PSN A และ B ใช้ master_data ชุดเดียวกัน เก็บภายใต้ A เสมอ
+        
+        // 🛑 LOCKED: This function is disabled for safety
+        return { success: false, error: 'ຟັງຊັນ Sync Master Data ຖືກປິດໃຊ້ງານເພື່ອຄວາມປອດໄພ' };
+
+        // Always normalize to ສີວິໄລ (the global master branch)
         const branch = normalizeMasterBranch(branchId);
         console.log(`Syncing master_data → branch: ${branch} (requested: ${branchId}), ${masterDataArray.length} records`);
-
-        // Clear only THIS branch's master data
-        const { error: deleteError } = await supabase.from('master_data').delete().eq('branch_id', branch);
-        if (deleteError) throw deleteError;
 
         // คัดกรองเอาเฉพาะ Barcode ไม่ซ้ำ
         const uniqueMap = new Map();
@@ -51,11 +51,15 @@ export const syncMasterDataToSupabase = async (masterDataArray, branchId) => {
 
         const finalData = Array.from(uniqueMap.values());
 
-        // Insert new data in chunks
+        // ✅ UPSERT instead of DELETE+INSERT
+        // This prevents wiping the global master when uploading from any branch.
+        // If barcode exists → update it. If not → insert new.
         const chunkSize = 1000;
         for (let i = 0; i < finalData.length; i += chunkSize) {
-            const { error: insertError } = await supabase.from('master_data').insert(finalData.slice(i, i + chunkSize));
-            if (insertError) throw insertError;
+            const { error: upsertError } = await supabase
+                .from('master_data')
+                .upsert(finalData.slice(i, i + chunkSize), { onConflict: 'barcode,branch_id' });
+            if (upsertError) throw upsertError;
         }
 
         return { success: true, synced: finalData.length };
@@ -65,10 +69,11 @@ export const syncMasterDataToSupabase = async (masterDataArray, branchId) => {
     }
 };
 
+
 export const fetchMasterFromSupabase = async (branchId) => {
     try {
         // PSN A และ B ดึง master_data จาก A เสมอ
-        const branch = normalizeMasterBranch(branchId || 'ຕະຫຼາດລາວ');
+        const branch = normalizeMasterBranch(branchId || 'ສີວິໄລ');
         let allData = [];
         let curPage = 0;
         const pageSize = 1000;
@@ -111,8 +116,11 @@ export const syncLocationResultsToSupabase = async (validatedResults, branchId) 
         const branch = branchId;
         console.log('🚀 Starting Full Sync to location_inventory for branch:', branch, validatedResults.length, 'records');
 
+        // 🛑 LOCKED: This function is disabled to prevent accidental data loss
+        return { success: false, error: 'ຟັງຊັນ Sync Location ຖືກປິດໃຊ້ງານເພື່ອຄວາມປອດໄພ' };
+
         // 1. Clear only THIS branch's old data
-        await supabase.from('location_inventory').delete().eq('branch_id', branch);
+        // await supabase.from('location_inventory').delete().eq('branch_id', branch);
 
         // 2. Prepare Data for ALL items (include branch_id)
         const dataToInsert = validatedResults.map(res => ({
