@@ -158,7 +158,7 @@ const ResultTable = ({
             const matchesSearch =
                 (row.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (row.rackLocation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (row.itemName || row.masterItemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (row.itemName || '').toLowerCase().includes(searchTerm.toLowerCase());
             const matchesFilter =
                 filterStatus === 'all' ||
@@ -315,7 +315,7 @@ const ResultTable = ({
 
                 await logInventoryHistory({
                     barcode: row.barcode,
-                    itemName: row.masterItemName || row.itemName,
+                    itemName: row.itemName || row.masterItemName,
                     oldQty: oldQty,
                     newQty: newQty,
                     oldRack: row.rackLocation,
@@ -425,7 +425,7 @@ const ResultTable = ({
 
                 await logInventoryHistory({
                     barcode: selectedRow.barcode,
-                    itemName: selectedRow.masterItemName || selectedRow.itemName,
+                    itemName: selectedRow.itemName || selectedRow.masterItemName,
                     oldQty: oldQtyValue,
                     newQty: newQtyValue,
                     oldRack: selectedRow.rackLocation || null,
@@ -582,7 +582,7 @@ const ResultTable = ({
                         const bKey = String(res.barcode || '').trim();
                         const rowData = [
                             sanitize(res.barcode),
-                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.itemName || res.masterItemName || ''),
                             sanitize(res.rackLocation || ''),
                             'Mismatch',
                             sanitize(res.reason || ''),
@@ -609,7 +609,7 @@ const ResultTable = ({
                         const bKey = String(res.barcode || '').trim();
                         const rowData = [
                             sanitize(res.barcode),
-                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.itemName || res.masterItemName || ''),
                             sanitize(res.rackLocation || ''),
                             'Missing',
                             sanitize(res.reason || 'Not found in inventory'),
@@ -649,7 +649,7 @@ const ResultTable = ({
 
                         const rowData = [
                             sanitize(res.barcode),
-                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.itemName || res.masterItemName || ''),
                             isNaN(odoo) ? 0 : odoo,
                             isNaN(actual) ? 0 : actual,
                             isNaN(diff) ? 0 : diff,
@@ -703,7 +703,7 @@ const ResultTable = ({
 
                         return [
                             sanitize(res.barcode),
-                            sanitize(res.masterItemName || res.itemName || ''),
+                            sanitize(res.itemName || res.masterItemName || ''),
                             sanitize(res.rackLocation || ''),
                             sanitize(cat1),
                             sanitize(cat2),
@@ -1236,7 +1236,7 @@ const ResultTable = ({
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col gap-1.5 min-w-[200px]">
                                                     <span className="text-sm font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
-                                                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.masterItemName || row.itemName}>{row.masterItemName || row.itemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
+                                                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">

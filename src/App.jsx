@@ -1077,13 +1077,13 @@ function AppContent() {
                   {dbSource === 'excel' && isAdmin && (
                     <button 
                       onClick={handleSyncToCloud} 
-                      disabled={true} 
-                      className="flex flex-col items-center gap-1 group opacity-40 cursor-not-allowed"
+                      disabled={isProcessing} 
+                      className="flex flex-col items-center gap-1 group hover:scale-110 transition-transform"
                     >
-                      <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-500 flex items-center justify-center shadow-sm">
-                        <ShieldCheck width={18} />
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30">
+                        <Database width={18} />
                       </div>
-                      <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter">Sync Locked</span>
+                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">Sync Cloud</span>
                     </button>
                   )}
                 </div>
@@ -1215,11 +1215,14 @@ function AppContent() {
                     </div>
                     <button
                       onClick={handleSyncLocationToCloud}
-                      disabled={true}
-                      className="px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700"
+                      disabled={isProcessing || locationSynced}
+                      className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg ${locationSynced
+                        ? 'bg-emerald-500 text-white cursor-default'
+                        : 'bg-joah-orange hover:bg-orange-600 text-white shadow-orange-500/30 active:scale-95'
+                      } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
-                      <ShieldCheck size={18} />
-                      <span>Sync ຖືກບລັອກໄວ້</span>
+                      {locationSynced ? <CheckCircle size={18} /> : <UploadCloud size={18} />}
+                      <span>{locationSynced ? 'Synced ແລ້ວ!' : 'Sync Location ໄປ Cloud'}</span>
                     </button>
                   </div>
                 </div>

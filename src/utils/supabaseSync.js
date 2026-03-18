@@ -2,9 +2,12 @@ import { supabase } from './supabaseClient';
 const PSN_BRANCHES = ['ໂພນສີນວນ', 'ໂພນສີນວນ A', 'ໂພນສີນວນ B'];
 const isPSN = (branch) => branch?.startsWith('ໂພນສີນວນ');
 
-// PSN now uses a single branch identity
-// ສີວິໄລ is now the global master branch — all branches share the same master_data
-export const normalizeMasterBranch = (branch) => 'ສີວິໄລ';
+// ຕະຫຼາດລາວ uses its own separate master_data.
+// All other branches (ວັງຊາຍ, ໂພນສີນວນ, etc.) fall back to ສີວິໄລ as the global master.
+export const normalizeMasterBranch = (branch) => {
+    if (branch === 'ຕະຫຼາດລາວ') return 'ຕະຫຼາດລາວ';
+    return 'ສີວິໄລ';
+};
 
 const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 
@@ -14,9 +17,6 @@ const applyBranchFilter = (query, branch) => query.eq('branch_id', branch);
 export const syncMasterDataToSupabase = async (masterDataArray, branchId) => {
     try {
         if (!branchId) throw new Error('branch_id is required for sync');
-        
-        // 🛑 LOCKED: This function is disabled for safety
-        return { success: false, error: 'ຟັງຊັນ Sync Master Data ຖືກປິດໃຊ້ງານເພື່ອຄວາມປອດໄພ' };
 
         // Always normalize to ສີວິໄລ (the global master branch)
         const branch = normalizeMasterBranch(branchId);
@@ -116,16 +116,14 @@ export const syncLocationResultsToSupabase = async (validatedResults, branchId) 
         const branch = branchId;
         console.log('🚀 Starting Full Sync to location_inventory for branch:', branch, validatedResults.length, 'records');
 
-        // 🛑 LOCKED: This function is disabled to prevent accidental data loss
-        return { success: false, error: 'ຟັງຊັນ Sync Location ຖືກປິດໃຊ້ງານເພື່ອຄວາມປອດໄພ' };
-
-        // 1. Clear only THIS branch's old data
+        // ✅ NOTE: DELETE is intentionally disabled. Old data must be cleared manually via Supabase SQL.
         // await supabase.from('location_inventory').delete().eq('branch_id', branch);
 
         // 2. Prepare Data for ALL items (include branch_id)
         const dataToInsert = validatedResults.map(res => ({
             barcode_no: res.barcode,
-            item_name: res.masterItemName || res.itemName || '',
+            // Prefer itemName (Lao, from location sheet) over masterItemName (may be English from master_data)
+            item_name: res.itemName || res.masterItemName || '',
             rack_location: res.rackLocation,
             category_1_actual: res.category1,
             category_2_actual: res.category2,
