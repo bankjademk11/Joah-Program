@@ -63,6 +63,7 @@ const normalizeBarcode = (barcode) => {
 
 /**
  * Normalize value for comparison (Handles '01' vs '1', and trims)
+ * Converts to uppercase to ensure case-insensitive matching for categories.
  */
 const normalizeForComparison = (val) => {
     if (val === 0 || val === '0' || val === null || val === undefined) return '';
@@ -76,7 +77,9 @@ const normalizeForComparison = (val) => {
     if (/^\d+$/.test(s)) {
         return String(Number(s));
     }
-    return s;
+    
+    // Always return uppercase for text comparisons (e.g. STATIONERY vs stationery)
+    return s.toUpperCase();
 };
 
 /**
@@ -272,6 +275,18 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
                         pattern = new RegExp(`^(${zones})(\\d+)$`, 'i');
                         label = `${firstZone}1 → ${firstZone}${rule.maxModule || 10}`;
                         break;
+                    case 'tll_shelf':
+                        pattern = new RegExp(`^(${zones})-[1-${rule.maxLevel || 4}]-[1-${rule.maxSections || 5}]$`, 'i');
+                        label = `${firstZone}-1-1 → ${lastZone}-${rule.maxLevel || 4}-${rule.maxSections || 5}`;
+                        break;
+                    case 'tll_floor': {
+                        // Allow optional "ໂລພື້ນ " prefix so raw zones like K01 are matched
+                        const floorPatternStr = rule.zones.map(z => z.replace('ໂລພື້ນ ', '(?:ໂລພື້ນ\\\\s*)?')).join('|');
+                        pattern = new RegExp(`^(${floorPatternStr})$`, 'i');
+                        label = rule.zones.join(', ');
+                        hasFloorZone = true;
+                        break;
+                    }
                     default:
                         if (rule.maxLevel === 0) {
                             pattern = new RegExp(`^(${zones})$`, 'i');
@@ -301,7 +316,11 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
                 const firstAll = allZonesForLabel[0];
                 const lastAll = allZonesForLabel[allZonesForLabel.length - 1];
                 combinedLabel = `${firstAll}-L1-1 → ${lastAll}-L${maxLevelForLabel}-${maxSectionsForLabel}`;
-            } else if (ruleFormat === 'legacy' && hasFloorZone && maxLevelForLabel > 0) {
+            } else if (ruleFormat === 'tll_shelf' && !hasFloorZone && maxLevelForLabel > 0) {
+                const firstAll = allZonesForLabel[0];
+                const lastAll = allZonesForLabel[allZonesForLabel.length - 1];
+                combinedLabel = `${firstAll}-1-1 → ${lastAll}-${maxLevelForLabel}-${maxSectionsForLabel}`;
+            } else if ((ruleFormat === 'legacy' || ruleFormat === 'tll_shelf') && hasFloorZone && maxLevelForLabel > 0) {
                 // Mixed rack + floor: show rack range first, then floor zones
                 const rackLabels = expectedLabels.filter(l => l.includes('→'));
                 const floorLabels = expectedLabels.filter(l => !l.includes('→'));

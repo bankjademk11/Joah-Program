@@ -867,6 +867,25 @@ function AppContent() {
                         <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
                       </div>
+                      
+                      {/* Branch Selector array for Store Request */}
+                      {(isAdmin || isPSNUser) && (
+                        <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                          <select
+                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
+                            onChange={(e) => setAdminViewBranch(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                          >
+                            {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
+                            {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
+                            {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
+                            <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                          </select>
+                        </div>
+                      )}
+
                       <button
                         onClick={() => setStep('store-request')}
                         className="w-full btn-primary mt-2 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30"
@@ -1095,7 +1114,7 @@ function AppContent() {
           )}
 
           {step === 'store-request' && (
-            <StoreRequest onBack={() => setStep('upload')} currentUser={user} />
+            <StoreRequest onBack={() => setStep('upload')} currentUser={user} activeBranch={adminViewBranch} />
           )}
 
 
@@ -1239,7 +1258,7 @@ function AppContent() {
         <Footer />
 
         {/* History Modal */}
-        {showHistory && <HistoryLog onClose={() => setShowHistory(false)} currentUser={user} />}
+        {showHistory && <HistoryLog onClose={() => setShowHistory(false)} currentUser={user} activeBranch={adminViewBranch} />}
 
         {/* Store Request Manager Modal */}
         {

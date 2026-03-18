@@ -8,7 +8,7 @@ import soundOK from '../../../assets/RequestOK.mp3';
 import soundError from '../../../assets/RequestEror.mp3';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal'; // Import shared component
 
-const StoreRequest = ({ onBack, currentUser }) => {
+const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
 
     const { t } = useLanguage();
     const [barcode, setBarcode] = useState('');
@@ -53,7 +53,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
                         const oldStatus = payload.old?.status;
                         const newStatus = payload.new?.status;
                         const reqBranch = payload.new?.branch_id;
-                        const myBranch = currentUser?.branch_id;
+                        const myBranch = activeBranch || currentUser?.branch_id;
 
                         // Only notify if this request belongs to this branch
                         const isMine = !myBranch || reqBranch === myBranch;
@@ -76,7 +76,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [currentUser?.branch_id]);
+    }, [currentUser?.branch_id, activeBranch]);
 
     // Focus barcode input
     useEffect(() => {
@@ -96,7 +96,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
 
     const fetchRecentRequests = async () => {
         try {
-            const userBranch = currentUser?.branch_id;
+            const userBranch = activeBranch || currentUser?.branch_id;
             let query = supabase.from('store_requests').select('*').order('created_at', { ascending: false }).limit(100);
             if (userBranch) query = query.eq('branch_id', userBranch);
             const { data, error } = await query;
@@ -113,7 +113,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
     const doSearch = useCallback(async (barcodeValue) => {
         if (!barcodeValue?.trim()) return;
         setIsLoading(true);
-        const userBranch = currentUser?.branch_id;
+        const userBranch = activeBranch || currentUser?.branch_id;
         try {
             let query = supabase.from('location_inventory').select('*').eq('barcode_no', barcodeValue.trim());
             if (userBranch) query = query.eq('branch_id', userBranch);
@@ -143,7 +143,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser?.branch_id]);
+    }, [currentUser?.branch_id, activeBranch]);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -197,7 +197,7 @@ const StoreRequest = ({ onBack, currentUser }) => {
         try {
             // 📸 Snapshot stock ณ ตอนนี้จาก location_inventory ก่อน insert
             const barcodes = cart.map(item => item.barcode).filter(Boolean);
-            const branchId = currentUser?.branch_id || null;
+            const branchId = activeBranch || currentUser?.branch_id || null;
             let stockSnapshot = {}; // barcode -> total qty
 
             if (barcodes.length > 0 && branchId) {
