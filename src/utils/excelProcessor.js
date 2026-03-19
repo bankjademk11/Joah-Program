@@ -275,6 +275,17 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
                         pattern = new RegExp(`^(${zones})(\\d+)$`, 'i');
                         label = `${firstZone}1 → ${firstZone}${rule.maxModule || 10}`;
                         break;
+                    case 'tll_new':
+                        // TLL New Format: A01-1, A01-2, ... (Zone-Level only)
+                        if (rule.maxLevel === 0) {
+                            pattern = new RegExp(`^(${zones})$`, 'i');
+                            label = rule.zones.join(', ');
+                            hasFloorZone = true;
+                        } else {
+                            pattern = new RegExp(`^(${zones})-[1-9]\\d*$`, 'i');
+                            label = `${firstZone}-1 → ${lastZone}-${rule.maxLevel || 4}`;
+                        }
+                        break;
                     case 'tll_shelf':
                         pattern = new RegExp(`^(${zones})-[1-${rule.maxLevel || 4}]-[1-${rule.maxSections || 5}]$`, 'i');
                         label = `${firstZone}-1-1 → ${lastZone}-${rule.maxLevel || 4}-${rule.maxSections || 5}`;
@@ -311,7 +322,17 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
             // Only fall back to ຫຼື when mixing floor zones + rack zones (e.g., KITCHEN)
             const ruleFormat = rules[0]?.format || 'legacy';
             let combinedLabel;
-            if (ruleFormat === 'legacy' && !hasFloorZone && maxLevelForLabel > 0) {
+            if (ruleFormat === 'tll_new' && !hasFloorZone && maxLevelForLabel > 0) {
+                // TLL New: combine into single range e.g. "A01-1 → A30-4"
+                const firstAll = allZonesForLabel[0];
+                const lastAll = allZonesForLabel[allZonesForLabel.length - 1];
+                combinedLabel = `${firstAll}-1 → ${lastAll}-${maxLevelForLabel}`;
+            } else if (ruleFormat === 'tll_new' && hasFloorZone && maxLevelForLabel > 0) {
+                // TLL New mixed rack + floor
+                const rackLabels = expectedLabels.filter(l => l.includes('→'));
+                const floorLabels = expectedLabels.filter(l => !l.includes('→'));
+                combinedLabel = [...new Set([...rackLabels, ...floorLabels])].join(' ຫຼື ');
+            } else if (ruleFormat === 'legacy' && !hasFloorZone && maxLevelForLabel > 0) {
                 // All rack groups → combine into single range e.g. "S01-L1-1 → S10-L5-4"
                 const firstAll = allZonesForLabel[0];
                 const lastAll = allZonesForLabel[allZonesForLabel.length - 1];

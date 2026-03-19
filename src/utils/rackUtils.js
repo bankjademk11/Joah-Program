@@ -116,64 +116,68 @@ const BRANCH_RACK_RULES = {
     },
 
     // ══════════════════════════════════════════════
-    // ຕະຫຼາດລາວ — Layout based on MapLayoutTLL.md
-    // Format is mainly: Zone-Level-Section (e.g. A01-1-1, B02-2-5)
-    // Note: Level is 1-4, Section is 1-5 consistently across most zones
+    // ຕະຫຼາດລາວ — Layout based on TLLMapLayout.md (updated 2026-03-19)
+    // Format: Zone-Level (e.g. A01-1, A01-2, A01-3, A01-4)
+    // Level is 1-4 for most zones, B04 has Level 1-5
     // ══════════════════════════════════════════════
     'ຕະຫຼາດລາວ': {
         'KITCHEN': [
-            // A01 to A30: Level 1-4, Sections 1-5
-            { zones: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'A20', 'A21', 'A22', 'A23', 'A24', 'A25', 'A26', 'A27', 'A28', 'A29', 'A30'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' },
-            // Floor sections
-            { zones: ['ໂລພື້ນ K03'], maxLevel: 0, maxSections: 0, format: 'tll_floor' }
+            // A01-A30: Level 1-4
+            { zones: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'A20', 'A21', 'A22', 'A23', 'A24', 'A25', 'A26', 'A27', 'A28', 'A29', 'A30'], maxLevel: 4, format: 'tll_new' },
+            // Floor
+            { zones: ['ໂລພື້ນ K03'], maxLevel: 0, format: 'tll_floor' }
         ],
         'CLEANING': [
-            // B01 to B10 (No B05): Level 1-4, Sections 1-5
-            { zones: ['B01', 'B02', 'B03', 'B04', 'B06', 'B07', 'B08', 'B09', 'B10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // B01-B04: Level 1-4 (no B05)
+            { zones: ['B01', 'B02', 'B03'], maxLevel: 4, format: 'tll_new' },
+            // B04: Level 1-5 (special case)
+            { zones: ['B04'], maxLevel: 5, format: 'tll_new' },
+            // B06-B10: Level 1-4
+            { zones: ['B06', 'B07', 'B08', 'B09', 'B10'], maxLevel: 4, format: 'tll_new' }
         ],
         'STORAGE': [
-            // C01 to C10: Level 1-4, Sections 1-5
-            { zones: ['C01', 'C02', 'C03', 'C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' },
-            // Floor sections
-            { zones: ['ໂລພື້ນ LO3', 'ໂລພື້ນ N01'], maxLevel: 0, maxSections: 0, format: 'tll_floor' }
+            // C01-C10: Level 1-4
+            { zones: ['C01', 'C02', 'C03', 'C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10'], maxLevel: 4, format: 'tll_new' },
+            // Floor
+            { zones: ['ໂລພື້ນ LO3', 'ໂລພື້ນ N01'], maxLevel: 0, format: 'tll_floor' }
         ],
         'TOOL/DIGITAL': [
-            // D01 to D10: Level 1-4, Sections 1-5
-            { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // D01-D10: Level 1-4
+            { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10'], maxLevel: 4, format: 'tll_new' }
         ],
         'BEAUTY': [
-            // E01 to E05: Level 1-4, Sections 1-5
-            { zones: ['E01', 'E02', 'E03', 'E04', 'E05'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' },
-            // Floor sections
-            { zones: ['ໂລພື້ນ LO2'], maxLevel: 0, maxSections: 0, format: 'tll_floor' }
+            // E01-E05: Level 1-4
+            { zones: ['E01', 'E02', 'E03', 'E04', 'E05'], maxLevel: 4, format: 'tll_new' },
+            // Floor
+            { zones: ['ໂລພື້ນ LO2'], maxLevel: 0, format: 'tll_floor' }
         ],
         'TOYS': [
-            // F01 to F05: Level 1-4, Sections 1-5
-            { zones: ['F01', 'F02', 'F03', 'F04', 'F05'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // F01-F05: Level 1-4
+            { zones: ['F01', 'F02', 'F03', 'F04', 'F05'], maxLevel: 4, format: 'tll_new' }
         ],
         'FASHION': [
-            // G01 to G10: Level 1-4, Sections 1-5
-            { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G09', 'G10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' },
-            // Floor sections (Note: K02 is shared with digital, map to fashion here)
-            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, maxSections: 0, format: 'tll_floor' }
+            // G01-G10: Level 1-4
+            { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G09', 'G10'], maxLevel: 4, format: 'tll_new' },
+            // Floor (FASHION + DIGITAL shared)
+            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, format: 'tll_floor' }
         ],
         'STATIONERY': [
-            // H01 to H10: Level 1-4, Sections 1-5
-            { zones: ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' },
-            // Floor sections
-            { zones: ['ໂລພື້ນ K01', 'ໂລພື້ນ LO1'], maxLevel: 0, maxSections: 0, format: 'tll_floor' }
+            // H01-H10: Level 1-4
+            { zones: ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10'], maxLevel: 4, format: 'tll_new' },
+            // Floor
+            { zones: ['ໂລພື້ນ K01', 'ໂລພື້ນ LO1'], maxLevel: 0, format: 'tll_floor' }
         ],
         'INTERIOR': [
-            // I01 to I10: Level 1-4, Sections 1-5
-            { zones: ['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08', 'I09', 'I10'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // I01-I10: Level 1-4
+            { zones: ['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08', 'I09', 'I10'], maxLevel: 4, format: 'tll_new' }
         ],
         'SPORTS': [
-            // J01 to J02: Level 1-4, Sections 1-5
-            { zones: ['J01', 'J02'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // J01-J02: Level 1-4
+            { zones: ['J01', 'J02'], maxLevel: 4, format: 'tll_new' }
         ],
         'FOOD': [
-            // J03 to J05: Level 1-4, Sections 1-5
-            { zones: ['J03', 'J04', 'J05'], maxLevel: 4, maxSections: 5, format: 'tll_shelf' }
+            // J03-J05: Level 1-4
+            { zones: ['J03', 'J04', 'J05'], maxLevel: 4, format: 'tll_new' }
         ]
     },
 
@@ -258,8 +262,19 @@ export const getRackSuggestions = (category, branchId) => {
                     }
                     break;
 
+                case 'tll_new':
+                    // TLL New Format: A01-1, A01-2, ... (Zone-Level only, no section)
+                    if (rule.maxLevel === 0) {
+                        suggestions.push(zone);
+                    } else {
+                        for (let level = 1; level <= (rule.maxLevel || 4); level++) {
+                            suggestions.push(`${zone}-${level}`);
+                        }
+                    }
+                    break;
+
                 case 'tll_shelf':
-                    // TLL Format: A01-1-1 (Zone-Level-Section)
+                    // TLL Legacy Format: A01-1-1 (Zone-Level-Section) — kept for backward compat
                     for (let level = 1; level <= (rule.maxLevel || 4); level++) {
                         for (let section = 1; section <= (rule.maxSections || 5); section++) {
                             suggestions.push(`${zone}-${level}-${section}`);
