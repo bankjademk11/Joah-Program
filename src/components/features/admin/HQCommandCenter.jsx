@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import imgSvl from '../../../assets/SVLJoah.png';
+import imgTll from '../../../assets/TLLimage.png';
 
 // ===================== CONSTANTS =====================
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
@@ -272,6 +273,7 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subC = null;
             }
 
+            const hasImg = branch === 'ສີວິໄລ' || branch === 'ຕະຫຼາດລາວ';
             return (
                 <button key={branch} onClick={() => onSelectBranch(branch)}
                     className={`text-left p-7 rounded-3xl border-2 ${c.card} ${c.bdr} shadow-md hover:shadow-xl hover:scale-[1.025] active:scale-[0.99] transition-all duration-200 group focus:outline-none focus:ring-4 focus:ring-offset-1 focus:ring-orange-300 relative overflow-hidden`}>
@@ -282,33 +284,44 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                         </div>
                     )}
 
+                    {branch === 'ຕະຫຼາດລາວ' && (
+                        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                            <img src={imgTll} alt="Talad Lao Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
+                        </div>
+                    )}
+
+                    {/* Dark overlay for readability on image cards */}
+                    {hasImg && (
+                        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/40 via-black/50 to-black/70 pointer-events-none transition-opacity duration-500 group-hover:opacity-0" />
+                    )}
+
                     <div className="relative z-10">
                         <div className="flex items-center justify-between mb-5">
-                            <span className={`text-xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : c.txt} drop-shadow-md`}>{branch}</span>
+                            <span className={`text-xl font-black ${hasImg ? 'text-white' : c.txt} drop-shadow-md`}>{branch}</span>
                             <div className={`w-10 h-10 rounded-xl ${c.gr} flex items-center justify-center text-white shadow-sm`}><ChevronRight size={20} /></div>
                         </div>
-                        <p className={`text-7xl font-black leading-none ${branch === 'ສີວິໄລ' ? 'text-white' : c.txt} drop-shadow-xl tracking-tighter`}>{mainVal}</p>
-                        <p className={`text-base font-bold ${branch === 'ສີວິໄລ' ? 'text-white/90' : 'text-slate-500'} mt-1 drop-shadow-md`}>{mainLabel}</p>
+                        <p className={`text-7xl font-black leading-none ${hasImg ? 'text-white' : c.txt} drop-shadow-xl tracking-tighter`}>{mainVal}</p>
+                        <p className={`text-base font-bold ${hasImg ? 'text-white/90' : 'text-slate-500'} mt-1 drop-shadow-md`}>{mainLabel}</p>
 
-                        <div className={`flex gap-4 pt-4 mt-4 border-t ${branch === 'ສີວິໄລ' ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
+                        <div className={`flex gap-4 pt-4 mt-4 border-t ${hasImg ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
                             <div>
-                                <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subA.color} drop-shadow-md`}>{subA.val}</p>
-                                <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subA.label}</p>
+                                <p className={`text-2xl font-black ${hasImg ? 'text-white' : subA.color} drop-shadow-md`}>{subA.val}</p>
+                                <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subA.label}</p>
                             </div>
                             {subB && (
                                 <div>
-                                    <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-white' : subB.color} drop-shadow-md`}>{subB.val}</p>
-                                    <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subB.label}</p>
+                                    <p className={`text-2xl font-black ${hasImg ? 'text-white' : subB.color} drop-shadow-md`}>{subB.val}</p>
+                                    <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subB.label}</p>
                                 </div>
                             )}
                             {subC && (
                                 <div>
-                                    <p className={`text-2xl font-black ${branch === 'ສີວິໄລ' ? 'text-rose-300' : subC.color} drop-shadow-md`}>{subC.val}</p>
-                                    <p className={`text-[10px] font-bold ${branch === 'ສີວິໄລ' ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subC.label}</p>
+                                    <p className={`text-2xl font-black ${hasImg ? 'text-rose-300' : subC.color} drop-shadow-md`}>{subC.val}</p>
+                                    <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subC.label}</p>
                                 </div>
                             )}
                         </div>
-                        <p className={`text-sm font-bold mt-4 transition-colors ${branch === 'ສີວິໄລ' ? 'text-white/70 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
+                        <p className={`text-sm font-bold mt-4 transition-colors ${hasImg ? 'text-white/70 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
                             👆 ກົດເພື່ອເບິ່ງລາຍລະອຽດ
                         </p>
                     </div>
@@ -322,13 +335,16 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
 const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) => {
     const c = BC[branch];
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'accepted' | 'rejected'
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [page, setPage] = useState(0);
+    const PAGE_SIZE = 100;
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const exportRef = useRef(null);
 
     // Reset filter when branch changes
-    useEffect(() => { setStatusFilter('all'); setSearch(''); }, [branch]);
+    useEffect(() => { setStatusFilter('all'); setSearch(''); setPage(0); }, [branch]);
+    useEffect(() => { setPage(0); }, [search, statusFilter]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -355,10 +371,13 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         );
     });
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paginatedData = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
     const headers =
-        activeTab === 'requests' ? ['ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
-            activeTab === 'edits' ? ['ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
-                ['ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
+        activeTab === 'requests' ? ['#', 'ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
+            activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
+                ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
@@ -408,6 +427,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
             return (
                 <tr key={i} className={`transition-colors ${isAccepted ? 'bg-emerald-50/40' : isRejected ? 'bg-rose-50/40' : 'hover:bg-amber-50/40'}`}>
+                    <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 py-1 rounded-md text-[11px] font-black tracking-widest bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
                             DOC: {docNo}
@@ -474,6 +494,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             const remainColor = newQty == null ? 'text-slate-300' : newQty < 0 ? 'text-rose-600 font-black' : newQty === 0 ? 'text-orange-500 font-bold' : 'text-slate-700 dark:text-slate-200 font-semibold';
             return (
                 <tr key={i} className={`transition-colors ${isNew ? 'bg-emerald-50/40 dark:bg-emerald-900/10' : 'hover:bg-indigo-50/30'}`}>
+                    <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
                     <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                             {isNew && <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200 whitespace-nowrap">ສິນຄ້າໃໝ່</span>}
@@ -507,6 +528,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         }
         return (
             <tr key={i} className="hover:bg-emerald-50/30 transition-colors">
+                <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
                 <td className="px-6 py-4"><p className="text-base font-bold text-slate-800 dark:text-white">{r.item_name || r.barcode || '-'}</p><p className="text-sm text-slate-400 font-mono">{r.barcode}</p></td>
                 <td className="px-6 py-4"><UserCell value={r.added_by} iconColor="text-emerald-400" /></td>
                 <td className="px-6 py-4 text-center"><span className="text-3xl font-black text-emerald-600">{r.qty ?? '-'}</span></td>
@@ -616,10 +638,38 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         <tr>{headers.map(h => <th key={h} className="px-6 py-4 text-sm font-black uppercase text-slate-500 tracking-wider text-left whitespace-nowrap">{h}</th>)}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                        {filtered.length > 0 ? filtered.map((r, i) => renderRow(r, i)) : <tr><td colSpan={headers.length}><EmptyState label="ບໍ່ພົບຂໍ້ມູນ" /></td></tr>}
+                        {paginatedData.length > 0 ? paginatedData.map((r, i) => renderRow(r, page * PAGE_SIZE + i)) : <tr><td colSpan={headers.length}><EmptyState label="ບໍ່ພົບຂໍ້ມູນ" /></td></tr>}
                     </tbody>
                 </table>
             </div>
+
+            {/* Pagination */}
+            {filtered.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-sm font-bold text-slate-500">
+                        ແຖວ {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} ຈາກ {filtered.length} ລາຍການ
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(0, p - 1))}
+                            disabled={page === 0}
+                            className="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm font-black text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            ← Prev
+                        </button>
+                        <span className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-black shadow-md">
+                            {page + 1} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                            disabled={page >= totalPages - 1}
+                            className="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm font-black text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            Next →
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
