@@ -702,14 +702,14 @@ const HQCommandCenter = ({ onBack }) => {
                 // เพราะ logInventoryHistory write ด้วย old_qty=0 ซึ่งซ้อนกับ added_items_log
                 let q = supabase.from('inventory_history').select('*')
                     .gt('old_qty', 0)
-                    .order('updated_at', { ascending: false }).limit(500);
+                    .order('updated_at', { ascending: false }).limit(5000);
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
                 const { data: d, error } = await q;
                 if (error) throw error;
                 rows = d || [];
                 // 🆕 Also fetch added_items_log and merge in
-                let q2 = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(500);
+                let q2 = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(5000);
                 if (startDate) q2 = q2.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q2 = q2.lte('created_at', `${endDate}T23:59:59`);
                 const { data: addedData } = await q2;
@@ -726,7 +726,7 @@ const HQCommandCenter = ({ onBack }) => {
                     new Date(b.updated_at) - new Date(a.updated_at)
                 );
             } else {
-                let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(500);
+                let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(5000);
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);
                 const { data: d, error } = await q;
