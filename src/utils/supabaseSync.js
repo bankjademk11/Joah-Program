@@ -3,9 +3,11 @@ const PSN_BRANCHES = ['ໂພນສີນວນ', 'ໂພນສີນວນ A', 
 const isPSN = (branch) => branch?.startsWith('ໂພນສີນວນ');
 
 // ຕະຫຼາດລາວ uses its own separate master_data.
-// All other branches (ວັງຊາຍ, ໂພນສີນວນ, etc.) fall back to ສີວິໄລ as the global master.
+// ວັງຊາຍ shares master_data with ຕະຫຼາດລາວ.
+// All other branches (ສີວິໄລ, ໂພນສີນວນ, etc.) fall back to ສີວິໄລ as the global master.
 export const normalizeMasterBranch = (branch) => {
     if (branch === 'ຕະຫຼາດລາວ') return 'ຕະຫຼາດລາວ';
+    if (branch === 'ວັງຊາຍ') return 'ຕະຫຼາດລາວ';
     return 'ສີວິໄລ';
 };
 
