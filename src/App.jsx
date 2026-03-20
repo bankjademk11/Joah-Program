@@ -441,16 +441,20 @@ function AppContent() {
     try {
       console.log(`🔄 Refreshing cloud data (skipMaster: ${options.skipMaster})...`);
 
-      // Fetch dynamic data always
+      // Calculate branchToLoad FIRST
+      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+
+      // Fetch dynamic data always using branchToLoad
       const fetchTasks = [
-        fetchLocationFromSupabase(user?.branch_id),
-        fetchOdooFromSupabase(user?.branch_id)
+        fetchLocationFromSupabase(branchToLoad),
+        fetchOdooFromSupabase(branchToLoad)
       ];
 
       // Only fetch master if explicitly asked or if we don't have it yet
       const shouldFetchMaster = !options.skipMaster || masterData.length === 0;
       if (shouldFetchMaster) {
-        fetchTasks.push(fetchMasterFromSupabase(user?.branch_id));
+        // master uses the same branch logic
+        fetchTasks.push(fetchMasterFromSupabase(branchToLoad));
       }
 
       const results = await Promise.all(fetchTasks);
@@ -494,9 +498,8 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      // Calculate branchToLoad using the same logic as handleValidate
-      const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
-
+      // branchToLoad is already calculated above
+      
       const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad);
       setValidationResults(validatedResults);
       setStats(validatedStats);
@@ -515,7 +518,7 @@ function AppContent() {
       }
       isRefreshingRef.current = false;
     }
-  }, [masterData]);
+  }, [masterData, user, adminViewBranch, isAdmin, isPSNUser]);
 
   // --- Supabase Realtime Subscription ---
   useEffect(() => {

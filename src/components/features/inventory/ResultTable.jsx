@@ -450,6 +450,125 @@ const ResultTable = ({
         }
     };
 
+    const handleSplitMasterQty = async (splitAmount, newRackLocation, splitReason) => {
+        if (!selectedRow || !splitAmount || !newRackLocation) return;
+        const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+
+        if (dbSource === 'supabase' && !activeUser) {
+            showError('Error: User not identified. Please login again.');
+            return;
+        }
+
+        setIsUpdating(true);
+        const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
+        
+        try {
+            const splitQtyNum = Number(splitAmount);
+            const oldQtyNum = Number(selectedRow.qty || 0);
+            
+            if (splitQtyNum <= 0 || splitQtyNum > oldQtyNum) {
+                throw new Error("ຈຳນວນແບ່ງຕ້ອງຫຼາຍກວ່າ 0 ແລະ ບໍ່ເກີນຈຳນວນທີ່ມີຢູ່. (Invalid split amount)");
+            }
+            if (!splitReason.trim()) {
+                throw new Error("ກະລຸນາລະບຸເຫດຜົນ (Reason required)");
+            }
+            if (newRackLocation === selectedRow.rackLocation) {
+                throw new Error("ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້ (Must select different Rack)");
+            }
+            
+            const remainingQty = oldQtyNum - splitQtyNum;
+
+            if (dbSource === 'supabase') {
+                if (!selectedRow.id) throw new Error("ບໍ່ພົບ Record ID ໃນຖານຂໍ້ມູນ.");
+
+                // 1. Update old record logic
+                const { error: updateError } = await supabase
+                    .from('location_inventory')
+                    .update({
+                        qty: remainingQty,
+                        remarks: `Split ${splitQtyNum} to ${newRackLocation} by ${activeUser}`,
+                        uploaded_by: activeUser
+                    })
+                    .eq('id', selectedRow.id);
+                if (updateError) throw updateError;
+
+                // 2. Insert new record logic using logic from addLocationRecord
+                const newPayload = {
+                    barcode_no: selectedRow.barcode,
+                    item_name: selectedRow.itemName || selectedRow.masterItemName,
+                    rack_location: newRackLocation,
+                    category_1_actual: selectedRow.category1 || '',
+                    category_2_actual: selectedRow.category2 || '',
+                    qty: splitQtyNum,
+                    remarks: `Split from ${selectedRow.rackLocation}: ${splitReason}`,
+                    uploaded_by: activeUser
+                };
+                
+                const result = await addLocationRecord(newPayload, branchToSave);
+                if (!result.success) throw new Error(result.error);
+                
+                // 3. Log History for Old Record Deduct
+                await logInventoryHistory({
+                    barcode: selectedRow.barcode,
+                    itemName: selectedRow.itemName || selectedRow.masterItemName,
+                    oldQty: oldQtyNum,
+                    newQty: remainingQty,
+                    oldRack: selectedRow.rackLocation,
+                    newRack: selectedRow.rackLocation,
+                    updatedBy: activeUser,
+                    reason: `ແບ່ງເຄື່ອງອອກໄປ Rack ${newRackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
+                    branchId: branchToSave
+                });
+                
+                // 4. Log History for New Record Add
+                await logInventoryHistory({
+                    barcode: selectedRow.barcode,
+                    itemName: selectedRow.itemName || selectedRow.masterItemName,
+                    oldQty: 0,
+                    newQty: splitQtyNum,
+                    oldRack: null, // New rack insertion
+                    newRack: newRackLocation,
+                    updatedBy: activeUser,
+                    reason: `ຮັບເຄື່ອງມາແບ່ງຈາກ Rack ${selectedRow.rackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
+                    branchId: branchToSave
+                });
+            }
+
+            // Local state optimistic update
+            if (onUpdateRowQty) {
+                onUpdateRowQty(selectedRow.rowIndex, { 
+                    qty: remainingQty,
+                    updatedBy: activeUser,
+                    updatedAt: new Date().toISOString()
+                });
+                
+                // Insert optimistic new item
+                const newOptimisticItem = {
+                    id: `temp-split-${Date.now()}`,
+                    barcode: selectedRow.barcode,
+                    itemName: selectedRow.itemName || selectedRow.masterItemName,
+                    qty: splitQtyNum,
+                    rackLocation: newRackLocation,
+                    category1: selectedRow.category1,
+                    category2: selectedRow.category2,
+                    masterItemName: selectedRow.masterItemName,
+                    odooQty: selectedRow.odooQty, // Not quite accurate for split, but close
+                    status: selectedRow.status,
+                    rowIndex: results.length + optimisticItems.length + 1
+                };
+                setOptimisticItems(prev => [newOptimisticItem, ...prev]);
+            }
+
+            success(t('results.saveSuccess'));
+            setSelectedRow(null);
+            
+        } catch (err) {
+            showError(t('results.saveError') + ': ' + err.message);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const handleQuickAddSave = async () => {
         if (!quickAddForm.barcode_no || !quickAddForm.rack_location || !quickAddForm.remarks) {
             alert(t('results.fillRequired'));
@@ -1399,6 +1518,7 @@ const ResultTable = ({
                     currentUser={currentUser}
                     isUpdating={isUpdating}
                     handleUpdate={handleUpdateMasterQty}
+                    handleSplit={handleSplitMasterQty}
                     results={results}
                     allResults={allResults}
                     mergeAmount={mergeAmount}

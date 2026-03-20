@@ -201,6 +201,7 @@ const translations = {
             supplyChainDelay: 'Sply-Chain ຊັບພາຍເຊນບໍ່ສົ່ງເຄື່ອງໃຫ້',
             itemAtFront: 'ສີນຄ້າຢູ່ໜ້າຮ້ານ',
             checkList: 'ສິນຄ້າຖືກເຊັກລິດ (Checklist)',
+            depositFull: 'ຝາກໄວ້ບໍ່ມີບ່ອນຈັດເກັດເຄື່ອງເຕັມ',
             other: 'ອື່ນໆ (Other)'
         },
         // Edit Panel
@@ -494,6 +495,7 @@ const translations = {
             supplyChainDelay: 'Supply Chain Delay (Sply-Chain)',
             itemAtFront: 'Item at Front of Store',
             checkList: 'Item Checked (Checklist)',
+            depositFull: 'Left here, no space for storage (Full)',
             other: 'Other'
         },
         // Edit Panel
