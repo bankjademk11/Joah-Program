@@ -40,7 +40,7 @@ const fmt = (ts) => {
     return `${d.toLocaleDateString('lo-LA')}  ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
-const fmtExcel = (ts) => (!ts ? '-' : new Date(ts).toLocaleString('th-TH'));
+const fmtExcel = (ts) => (!ts ? '-' : new Date(ts).toLocaleString('en-GB'));
 
 // Parse "Name (EMP-ID)" -> { name, empId }
 const parseUser = (str) => {

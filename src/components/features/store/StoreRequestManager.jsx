@@ -453,8 +453,8 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                     status: req.status.toUpperCase(),
                     request_by: req.request_by,
                     accepted_by: req.accepted_by || '-',
-                    request_time: requestDate.toLocaleString('th-TH'),
-                    action_time: actionDate ? actionDate.toLocaleString('th-TH') : '-'
+                    request_time: requestDate.toLocaleString('en-GB'),
+                    action_time: actionDate ? actionDate.toLocaleString('en-GB') : '-'
                 });
 
                 // Apply borders and alternating colors for all cells FIRST
@@ -635,7 +635,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                         </h3>
                                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mt-1">
                                                             <Clock size={12} />
-                                                            {new Date(group.created_at).toLocaleString('th-TH')}
+                                                            {new Date(group.created_at).toLocaleString('en-GB')}
                                                             <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                                                             {group.items.length} ລາຍການ (ທັງໝົດ: {group.items.reduce((sum, i) => sum + (i.qty || 0), 0)})
                                                         </p>
@@ -755,7 +755,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                                         {group.items[0].status === 'accepted' ? 'Accepted' : 'Rejected'}
                                                     </span>
                                                 </h4>
-                                                <p className="text-xs text-slate-400">{new Date(group.created_at).toLocaleString('th-TH')}</p>
+                                                <p className="text-xs text-slate-400">{new Date(group.created_at).toLocaleString('en-GB')}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
