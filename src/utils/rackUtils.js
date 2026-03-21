@@ -242,8 +242,8 @@ const BRANCH_RACK_RULES = {
             { zones: ['I01', 'I02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
         ],
         'CLEANING': [
-            // J01-J02: Level L1-L5, Section 1-4
-            { zones: ['J01', 'J02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            // J01-J03: Level L1-L5, Section 1-4
+            { zones: ['J01', 'J02', 'J03'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
         ],
         'TOOL/DIGITAL': [
             // K01-K02: Level L1-L5, Section 1-4
