@@ -107,22 +107,15 @@ const BRANCH_RACK_RULES = {
 
         // 1. Kitchen
         addShelf('KITCHEN', ['A01', 'A02', 'A03', 'A04']);
-        addModule('KITCHEN', 'B1', 14);
-
-        // 2. Kitchen-Storage
-        addModule('KITCHEN-STORAGE', 'B2', 14);
 
         // 3. Cleaning/Bath
         addShelf('CLEANING/BATH', ['A05', 'A06']);
-        addModule('CLEANING/BATH', 'B3', 14);
 
         // 4. Stationery
         addShelf('STATIONERY', ['A07', 'A08']);
-        addModule('STATIONERY', 'B4', 14);
 
         // 5. Fashion & Beauty
         addShelf('FASHION&BEAUTY', ['A09']);
-        addModule('FASHION&BEAUTY', 'B5', 14);
 
         // 6. Interior & Tool
         // Missing L1-1 for B1 in both A10 and A010
