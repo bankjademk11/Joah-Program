@@ -73,47 +73,83 @@ const BRANCH_RACK_RULES = {
     //         M-X (Standalone Display)
     //         CX (Floor Storage)
     // ══════════════════════════════════════════════
-    'ໂພນສີນວນ': {
-        'KITCHEN': [
-            { zones: ['A01', 'A02', 'A03', 'A04'], maxBay: 3, maxLevel: 4, format: 'shelf' },
-            { zones: ['B1'], maxModule: 14, format: 'display' }
-        ],
-        'KITCHEN-STORAGE': [
-            { zones: ['B2'], maxModule: 14, format: 'display' }
-        ],
-        'CLEANING/BATH': [
-            { zones: ['A05', 'A06'], maxBay: 3, maxLevel: 4, format: 'shelf' },
-            { zones: ['B3'], maxModule: 14, format: 'display' }
-        ],
-        'STATIONERY': [
-            { zones: ['A07', 'A08'], maxBay: 3, maxLevel: 4, format: 'shelf' },
-            { zones: ['B4'], maxModule: 14, format: 'display', moduleCategory: { 1: 'Stationery', 9: 'Beauty' } }
-        ],
-        'FASHION&BEAUTY': [
-            { zones: ['A09'], maxBay: 3, maxLevel: 4, format: 'shelf' },
-            { zones: ['B5'], maxModule: 14, format: 'display' }
-        ],
-        'INTERIOR&TOOL': [
-            { zones: ['A010'], maxBay: 3, maxLevel: 4, format: 'shelf' }
-        ],
-        'STORAGE': [
-            { zones: ['A011', 'A012'], maxBay: 3, maxLevel: 4, format: 'shelf' }
-        ],
-        'SPORTS': [
-            { zones: ['A013'], maxBay: 3, maxLevel: 4, format: 'shelf' },
-            { zones: ['B6'], maxModule: 14, format: 'display', moduleCategory: { 1: 'Toy', 9: 'Sport' } }
-        ],
-        'TOYS': [
-            { zones: ['A014'], maxBay: 3, maxLevel: 4, format: 'shelf' }
-        ],
-        'TOOL/DIGITAL': [
-            { zones: ['A015'], maxModule: 8, format: 'display' },
-            { zones: ['B7'], maxModule: 7, format: 'display' }
-        ],
-        'FLOOR': [
-            { zones: ['C'], maxModule: 10, format: 'floor' }
-        ]
-    },
+    'ໂພນສີນວນ': (() => {
+        const psnMap = {};
+
+        // Helper to add exact items
+        const addExact = (cat, items) => {
+            if (!psnMap[cat]) psnMap[cat] = [];
+            psnMap[cat].push({ zones: items, maxLevel: 0, format: 'exact' });
+        };
+
+        // Helper to generate typical shelf ranges: Zone-Bx-Lx-1
+        const addShelf = (cat, zones, skipExacts = []) => {
+            const result = [];
+            zones.forEach(z => {
+                for (let b = 1; b <= 3; b++) {
+                    for (let l = 1; l <= 4; l++) {
+                        const loc = `${z}-B${b}-L${l}-1`;
+                        if (!skipExacts.includes(loc)) result.push(loc);
+                    }
+                }
+            });
+            addExact(cat, result);
+        };
+
+        // Helper to generate typical modules: Zone-Mx or Zonex
+        const addModule = (cat, zone, max, prefix = '-M') => {
+            const result = [];
+            for (let i = 1; i <= max; i++) {
+                result.push(`${zone}${prefix}${i}`);
+            }
+            addExact(cat, result);
+        };
+
+        // 1. Kitchen
+        addShelf('KITCHEN', ['A01', 'A02', 'A03', 'A04']);
+        addModule('KITCHEN', 'B1', 14);
+
+        // 2. Kitchen-Storage
+        addModule('KITCHEN-STORAGE', 'B2', 14);
+
+        // 3. Cleaning/Bath
+        addShelf('CLEANING/BATH', ['A05', 'A06']);
+        addModule('CLEANING/BATH', 'B3', 14);
+
+        // 4. Stationery
+        addShelf('STATIONERY', ['A07', 'A08']);
+        addModule('STATIONERY', 'B4', 14);
+
+        // 5. Fashion & Beauty
+        addShelf('FASHION&BEAUTY', ['A09']);
+        addModule('FASHION&BEAUTY', 'B5', 14);
+
+        // 6. Interior & Tool
+        // Missing L1-1 for B1 in both A10 and A010
+        addShelf('INTERIOR&TOOL', ['A10', 'A010'], ['A10-B1-L1-1', 'A010-B1-L1-1']);
+
+        // 7. Storage
+        addShelf('STORAGE', ['A11', 'A12', 'A011', 'A012']);
+
+        // 8. Sports
+        addShelf('SPORTS', ['A13', 'A013']);
+        addExact('SPORTS', ['A14-B1-L1-1']); // Exact single rack from file
+        addModule('SPORTS', 'B6', 14, '-M');
+
+        // 9. Toy & Toys
+        // A14 starts from B1-L2-1 (skip B1-L1-1 since it's in Sports)
+        addShelf('TOY', ['A14'], ['A14-B1-L1-1']);
+        addShelf('TOYS', ['A014']);
+
+        // 10. Tool/Digital
+        addModule('TOOL/DIGITAL', 'A015', 8, '-M');
+        addModule('TOOL/DIGITAL', 'B7', 7, '-M');
+
+        // 11. Floor
+        addModule('FLOOR', 'C', 10, '');
+
+        return psnMap;
+    })(),
 
     // ══════════════════════════════════════════════
     // ຕະຫຼາດລາວ — Layout based on Map Layout (TLL).md (updated 2026-03-19 v2)
