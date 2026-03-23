@@ -298,6 +298,18 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
                         hasFloorZone = true;
                         break;
                     }
+                    case 'exact': {
+                        pattern = new RegExp(`^(${zones})$`, 'i');
+                        if (rule.label) {
+                            label = rule.label;
+                        } else if (rule.zones.length > 3) {
+                            label = `${rule.zones[0]} → ${rule.zones[rule.zones.length - 1]}`;
+                        } else {
+                            label = rule.zones.join(', ');
+                        }
+                        hasFloorZone = true; // Prevents legacy combining logic which might mess it up
+                        break;
+                    }
                     default:
                         if (rule.maxLevel === 0) {
                             pattern = new RegExp(`^(${zones})$`, 'i');
