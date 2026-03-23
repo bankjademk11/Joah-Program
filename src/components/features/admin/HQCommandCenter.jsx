@@ -684,8 +684,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 // ===================== MAIN (React Portal) =====================
 const HQCommandCenter = ({ onBack }) => {
     const [activeTab, setActiveTab] = useState('requests');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState(todayStr());
+    const [endDate, setEndDate] = useState(todayStr());
     const [selectedBranch, setSelectedBranch] = useState(null);
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -694,6 +694,22 @@ const HQCommandCenter = ({ onBack }) => {
         setIsLoading(true);
         // ✅ DO NOT reset selectedBranch here — keep the user on the detail page
         try {
+            // 🚀 Helper for Chunked Fetching (Auto-pagination over 1000 limit)
+            const fetchAllChunks = async (queryBuilder) => {
+                let allData = [];
+                let from = 0;
+                const step = 1000;
+                while (true) {
+                    const { data, error } = await queryBuilder.range(from, from + step - 1);
+                    if (error) throw error;
+                    if (!data || data.length === 0) break;
+                    allData = [...allData, ...data];
+                    if (data.length < step) break; // End of records
+                    from += step;
+                }
+                return allData;
+            };
+
             let rows = [];
             if (activeTab === 'requests') {
                 let q = supabase.from('store_requests')
@@ -701,25 +717,21 @@ const HQCommandCenter = ({ onBack }) => {
                     .order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);
-                const { data: d, error } = await q;
-                if (error) throw error;
-                rows = d || [];
+                rows = await fetchAllChunks(q);
+                
             } else if (activeTab === 'edits') {
-                // gt('old_qty', 0) — กรองออกรายการที่ old_qty=0 (สินค้าใหม่จาก QuickAdd)
-                // เพราะ logInventoryHistory write ด้วย old_qty=0 ซึ่งซ้อนกับ added_items_log
                 let q = supabase.from('inventory_history').select('*')
                     .gt('old_qty', 0)
-                    .order('updated_at', { ascending: false }).limit(5000);
+                    .order('updated_at', { ascending: false });
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
-                const { data: d, error } = await q;
-                if (error) throw error;
-                rows = d || [];
-                // 🆕 Also fetch added_items_log and merge in
-                let q2 = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(5000);
+                rows = await fetchAllChunks(q);
+
+                let q2 = supabase.from('added_items_log').select('*').order('created_at', { ascending: false });
                 if (startDate) q2 = q2.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q2 = q2.lte('created_at', `${endDate}T23:59:59`);
-                const { data: addedData } = await q2;
+                const addedData = await fetchAllChunks(q2);
+
                 const normalizedAdded = (addedData || []).map(r => ({
                     ...r,
                     _source: 'added',
@@ -733,11 +745,10 @@ const HQCommandCenter = ({ onBack }) => {
                     new Date(b.updated_at) - new Date(a.updated_at)
                 );
             } else {
-                let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false }).limit(5000);
+                let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);
-                const { data: d, error } = await q;
-                if (!error) rows = d || [];
+                rows = await fetchAllChunks(q);
             }
             setData(rows);
         } catch (e) {
