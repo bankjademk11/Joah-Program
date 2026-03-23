@@ -76,70 +76,92 @@ const BRANCH_RACK_RULES = {
     'ໂພນສີນວນ': (() => {
         const psnMap = {};
 
-        // Helper to add exact items
         const addExact = (cat, items) => {
-            if (!psnMap[cat]) psnMap[cat] = [];
-            psnMap[cat].push({ zones: items, maxLevel: 0, format: 'exact' });
+            if (items.length === 0) return;
+            const category = cat.toUpperCase();
+            if (!psnMap[category]) psnMap[category] = [];
+            
+            // Build abbreviated label for display purposes
+            let label = items.join(', ');
+            if (items.length > 3) {
+                // Determine if it's a range of modules or shelves
+                const first = items[0];
+                const last = items[items.length - 1];
+                label = `${first} → ${last}`;
+            }
+            
+            psnMap[category].push({ zones: items, maxLevel: 0, format: 'exact', label });
         };
 
-        // Helper to generate typical shelf ranges: Zone-Bx-Lx-1
-        const addShelf = (cat, zones, skipExacts = []) => {
+        const addShelf = (cat, zones, skipPrefixes = []) => {
             const result = [];
             zones.forEach(z => {
                 for (let b = 1; b <= 3; b++) {
                     for (let l = 1; l <= 4; l++) {
-                        const loc = `${z}-B${b}-L${l}-1`;
-                        if (!skipExacts.includes(loc)) result.push(loc);
+                        for (let s = 1; s <= 4; s++) {
+                            const loc = `${z}-B${b}-L${l}-${s}`;
+                            const isSkipped = skipPrefixes.some(prefix => loc.startsWith(prefix));
+                            if (!isSkipped) result.push(loc);
+                        }
                     }
                 }
             });
             addExact(cat, result);
         };
 
-        // Helper to generate typical modules: Zone-Mx or Zonex
-        const addModule = (cat, zone, max, prefix = '-M') => {
+        const addModule = (cat, zone, start, end, prefix = '-M') => {
             const result = [];
-            for (let i = 1; i <= max; i++) {
+            for (let i = start; i <= end; i++) {
                 result.push(`${zone}${prefix}${i}`);
             }
             addExact(cat, result);
         };
 
+        // --- Execute Rules based on lastLayoutPSN.md ---
+        
         // 1. Kitchen
         addShelf('KITCHEN', ['A01', 'A02', 'A03', 'A04']);
+        addModule('KITCHEN', 'B1', 1, 15);
+        addModule('KITCHEN', 'B2', 1, 7);
+
+        // 2. Storage
+        addShelf('STORAGE', ['A11', 'A12']);
+        addModule('STORAGE', 'B2', 8, 14);
 
         // 3. Cleaning/Bath
         addShelf('CLEANING/BATH', ['A05', 'A06']);
+        addModule('CLEANING/BATH', 'B3', 1, 14);
 
         // 4. Stationery
         addShelf('STATIONERY', ['A07', 'A08']);
+        addModule('STATIONERY', 'B4', 1, 7);
 
-        // 5. Fashion & Beauty
-        addShelf('FASHION&BEAUTY', ['A09']);
+        // 5. Beauty
+        addModule('BEAUTY', 'B4', 8, 14);
 
-        // 6. Interior & Tool
-        // Missing L1-1 for B1 in both A10 and A010
-        addShelf('INTERIOR&TOOL', ['A10', 'A010'], ['A10-B1-L1-1', 'A010-B1-L1-1']);
+        // 6. Fashion
+        addShelf('FASHION', ['A09']);
+        addModule('FASHION', 'B5', 1, 7);
 
-        // 7. Storage
-        addShelf('STORAGE', ['A11', 'A12', 'A011', 'A012']);
+        // 7. Tool & Tool/Digital
+        addShelf('TOOL', ['A10'], ['A10-B1-L1']); // Skips A10-B1-L1-1 to 4
+        addModule('TOOL/DIGITAL', 'B5', 8, 14);
+        addModule('TOOL/DIGITAL', 'A015', 1, 8);
 
         // 8. Sports
-        addShelf('SPORTS', ['A13', 'A013']);
-        addExact('SPORTS', ['A14-B1-L1-1']); // Exact single rack from file
-        addModule('SPORTS', 'B6', 14, '-M');
+        addShelf('SPORTS', ['A13']);
+        addExact('SPORTS', ['A14-B1-L1-1', 'A14-B1-L1-2', 'A14-B1-L1-3', 'A14-B1-L1-4']);
+        addModule('SPORTS', 'B6', 8, 14);
 
-        // 9. Toy & Toys
-        // A14 starts from B1-L2-1 (skip B1-L1-1 since it's in Sports)
-        addShelf('TOY', ['A14'], ['A14-B1-L1-1']);
-        addShelf('TOYS', ['A014']);
+        // 9. Toys
+        addModule('TOYS', 'B6', 1, 7);
 
-        // 10. Tool/Digital
-        addModule('TOOL/DIGITAL', 'A015', 8, '-M');
-        addModule('TOOL/DIGITAL', 'B7', 7, '-M');
+        // 10. Interior
+        addShelf('INTERIOR', ['A14'], ['A14-B1-L1']); // Skips A14-B1-L1-1 to 4 (since it's sports)
+        addModule('INTERIOR', 'B7', 1, 7);
 
         // 11. Floor
-        addModule('FLOOR', 'C', 10, '');
+        addModule('FLOOR', 'C', 1, 10, '');
 
         return psnMap;
     })(),
