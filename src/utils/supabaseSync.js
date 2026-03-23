@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
-const PSN_BRANCHES = ['ໂພນສີນວນ', 'ໂພນສີນວນ A', 'ໂພນສີນວນ B'];
-const isPSN = (branch) => branch?.startsWith('ໂພນສີນວນ');
+const PSN_BRANCHES = ['ໂພນສີນວນ'];
+const isPSN = (branch) => branch === 'ໂພນສີນວນ';
 
 // ຕະຫຼາດລາວ uses its own separate master_data.
 // ວັງຊາຍ shares master_data with ຕະຫຼາດລາວ.

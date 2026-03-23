@@ -1254,7 +1254,7 @@ function AppContent() {
                 refreshTrigger={refreshTrigger}
                 onUpdateRowQty={handleUpdateResultRowQty}
                 currentUser={user}
-                currentBranch={(isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ A' : user?.branch_id)) : user?.branch_id}
+                currentBranch={(isAdmin || isPSNUser) ? (adminViewBranch || (isPSNUser ? 'ໂພນສີນວນ' : user?.branch_id)) : user?.branch_id}
                 onAddNewProduct={handleGotoProductManager}
               />
             </div>
