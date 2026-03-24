@@ -2,11 +2,10 @@ import { supabase } from './supabaseClient';
 const PSN_BRANCHES = ['ໂພນສີນວນ'];
 const isPSN = (branch) => branch === 'ໂພນສີນວນ';
 
-// ຕະຫຼາດລາວ uses its own separate master_data.
-// ວັງຊາຍ shares master_data with ຕະຫຼາດລາວ.
-// All other branches (ສີວິໄລ, ໂພນສີນວນ, etc.) fall back to ສີວິໄລ as the global master.
+// ຕະຫຼາດລາວ becomes the Global Master Data source for all branches (Except specialized one if needed).
+// ວັງຊາຍ, ໂພນສີນວນ, ສີວິໄລ will all share master_data with ຕະຫຼາດລາວ.
 export const normalizeMasterBranch = (branch) => {
-    if (branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch?.startsWith('ໂພນສີນວນ')) {
+    if (branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch?.startsWith('ໂພນສີນວນ') || branch === 'ສີວິໄລ') {
         return 'ຕະຫຼາດລາວ';
     }
     return 'ສີວິໄລ';
