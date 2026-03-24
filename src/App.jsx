@@ -86,7 +86,7 @@ function AppContent() {
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
   const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
-  const [adminViewBranch, setAdminViewBranch] = useState(''); // Branch Admin เลือกดูใน Cloud
+  const [adminViewBranch, setAdminViewBranch] = useState('ຕະຫຼາດລາວ'); // Branch Admin เลือกดูใน Cloud (Default to TLL)
   const [autoSyncMaster, setAutoSyncMaster] = useState(false); // Checkbox for Master Data Sync
 
   // --- Realtime State ---
@@ -133,20 +133,52 @@ function AppContent() {
         branch_id: branch
       });
       setImportBranch(branch);
+      setAdminViewBranch(branch); // <--- Bug Fix: Set initial view branch for HQ
       setIsLoggedIn(true);
     }
   }, []);
 
   const handleLogout = () => {
+    // 1. Clear LocalStorage
     localStorage.removeItem('joah_employee_id');
     localStorage.removeItem('joah_employee_name');
     localStorage.removeItem('joah_employee_role');
     localStorage.removeItem('joah_employee_workplace');
     localStorage.removeItem('joah_branch_id');
+
+    // 2. Clear All Related States to prevent UI leakage
     setIsLoggedIn(false);
     setUser(null);
     setStep('upload');
+    setWorkbook(null);
+    setRawFile(null);
+    setSheetNames([]);
+    setLocationSheetName('');
+    setSuggestions({});
+    setValidationResults([]);
+    setMasterData([]);
+    setStats({ total: 0, passed: 0, mismatch: 0, missing: 0 });
+    setIsProcessing(false);
+    setLoadingProgress(0);
+    setLoadingOverlayMessage(null);
+    setShowProgressBar(true);
+    setFilterStatus('all');
+    setDbSource('excel');
+    setDataSourceLabel('Local Mode (Excel)');
+    setRefreshTrigger(0);
+    setLoadedFileName('');
+    setShowHistory(false);
+    setShowStoreRequestManager(false);
     setPreFilledBarcode(null);
+    setShowAdminMenu(false); // <--- Bug Fix: Close admin menu
+    setLocationFilter('');
+    setHideZeroQty(false);
+    setImportBranch('');
+    setAdminViewBranch(''); // <--- Bug Fix: Clear admin view branch
+    setAutoSyncMaster(false);
+    setRealtimeStatus('disconnected');
+    setPendingChanges(0);
+    setLastChangeBy('');
   };
 
   const handleReset = () => {
@@ -172,6 +204,7 @@ function AppContent() {
     setUser(userInfo);
     const loginBranch = userInfo.branch_id || 'ຕະຫຼາດລາວ';
     setImportBranch(loginBranch);
+    setAdminViewBranch(loginBranch); // <--- Bug Fix: Set initial view branch for HQ
     setIsLoggedIn(true);
   };
 

@@ -12,6 +12,7 @@ import {
 import imgSvl from '../../../assets/SVLJoah.png';
 import imgTll from '../../../assets/TLLimage.png';
 import imgVx from '../../../assets/VX.png';
+import imgPsn from '../../../assets/PSNimage.png';
 
 // ===================== CONSTANTS =====================
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
@@ -274,7 +275,7 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subC = null;
             }
 
-            const hasImg = branch === 'ສີວິໄລ' || branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ';
+            const hasImg = branch === 'ສີວິໄລ' || branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch === 'ໂພນສີນວນ';
             return (
                 <button key={branch} onClick={() => onSelectBranch(branch)}
                     className={`text-left p-7 rounded-3xl border-2 ${c.card} ${c.bdr} shadow-md hover:shadow-xl hover:scale-[1.025] active:scale-[0.99] transition-all duration-200 group focus:outline-none focus:ring-4 focus:ring-offset-1 focus:ring-orange-300 relative overflow-hidden`}>
@@ -294,6 +295,12 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                     {branch === 'ວັງຊາຍ' && (
                         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
                             <img src={imgVx} alt="Wang Xay Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
+                        </div>
+                    )}
+
+                    {branch === 'ໂພນສີນວນ' && (
+                        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                            <img src={imgPsn} alt="Phon Sinuan Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
                         </div>
                     )}
 
