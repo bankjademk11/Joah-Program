@@ -11,12 +11,10 @@ const BRANCH_RACK_RULES = {
         'KITCHEN': [
             // G01-G16 = rack shelves (Level 1-5, Section 1-4)
             { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G09', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16'], maxLevel: 5, maxSections: 4 },
-            // G10 = rack shelves (Level 1-5, Section 1-3 — ไม่มี section 4 ตาม file)
-            { zones: ['G10'], maxLevel: 5, maxSections: 3 },
             // G17, G18 = rack shelves (Level 1-5, Section 1-4)
             { zones: ['G17', 'G18'], maxLevel: 5, maxSections: 4 },
             // ໂລພື້ນ floor zones (Cat Kitchen)
-            { zones: ['G09-ໂລພື້ນ', 'G10 ໂລພື້ນ'], maxLevel: 0, maxSections: 0 },
+            { zones: ['G10 ໂລພື້ນ'], maxLevel: 0, maxSections: 0 },
         ],
         'BEAUTY': [
             // E01-E04 = rack shelves (Level 1-5, Section 1-4)
@@ -80,7 +78,7 @@ const BRANCH_RACK_RULES = {
             if (items.length === 0) return;
             const category = cat.toUpperCase();
             if (!psnMap[category]) psnMap[category] = [];
-            
+
             // Build abbreviated label for display purposes
             let label = items.join(', ');
             if (items.length > 3) {
@@ -89,7 +87,7 @@ const BRANCH_RACK_RULES = {
                 const last = items[items.length - 1];
                 label = `${first} → ${last}`;
             }
-            
+
             psnMap[category].push({ zones: items, maxLevel: 0, format: 'exact', label });
         };
 
@@ -118,7 +116,7 @@ const BRANCH_RACK_RULES = {
         };
 
         // --- Execute Rules based on lastLayoutPSN.md ---
-        
+
         // 1. Kitchen
         addShelf('KITCHEN', ['A01', 'A02', 'A03', 'A04']);
         addModule('KITCHEN', 'B1', 1, 15);
