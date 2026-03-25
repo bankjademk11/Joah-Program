@@ -260,45 +260,45 @@ const BRANCH_RACK_RULES = {
     'ວັງຊາຍ': {
         'KITCHEN': [
             // A01-A06: Level L1-L5, Section 1-4
-            { zones: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06'], maxLevel: 5, maxSections: 4 }
         ],
         'STATIONARY': [
             // B01-B02: Level L1-L5, Section 1-4
-            { zones: ['B01', 'B02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['B01', 'B02'], maxLevel: 5, maxSections: 4 }
         ],
         'STORAGE': [
             // C01-C03: Level L1-L4, Section 1-4
-            { zones: ['C01', 'C02', 'C03'], maxLevel: 4, maxSection: 4, format: 'tll_shelf' },
+            { zones: ['C01', 'C02', 'C03'], maxLevel: 4, maxSections: 4 },
             // Floor
             { zones: ['ໂລພື້ນ F01'], maxLevel: 0, format: 'tll_floor' }
         ],
         'INTERIOR': [
             // D01-D02: Level L1-L5, Section 1-4
-            { zones: ['D01', 'D02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['D01', 'D02'], maxLevel: 5, maxSections: 4 }
         ],
         'TOY': [
             // E01: Level L1-L4, Section 1-4
-            { zones: ['E01'], maxLevel: 4, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['E01'], maxLevel: 4, maxSections: 4 }
         ],
         'FASHION': [
             // G01-G02: Level L1-L5, Section 1-4
-            { zones: ['G01', 'G02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['G01', 'G02'], maxLevel: 5, maxSections: 4 }
         ],
         'BEAUTY': [
             // H01-H02: Level L1-L5, Section 1-4
-            { zones: ['H01', 'H02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['H01', 'H02'], maxLevel: 5, maxSections: 4 }
         ],
         'SPORT': [
             // I01-I02: Level L1-L5, Section 1-4
-            { zones: ['I01', 'I02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['I01', 'I02'], maxLevel: 5, maxSections: 4 }
         ],
         'CLEANING': [
             // J01-J03: Level L1-L5, Section 1-4
-            { zones: ['J01', 'J02', 'J03'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['J01', 'J02', 'J03'], maxLevel: 5, maxSections: 4 }
         ],
         'TOOL/DIGITAL': [
             // K01-K02: Level L1-L5, Section 1-4
-            { zones: ['K01', 'K02'], maxLevel: 5, maxSection: 4, format: 'tll_shelf' }
+            { zones: ['K01', 'K02'], maxLevel: 5, maxSections: 4 }
         ]
     },
 };
