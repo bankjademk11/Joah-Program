@@ -55,7 +55,7 @@ const BRANCH_RACK_RULES = {
             // D01-D07 = rack shelves (Level 1-5, Section 1-4)
             { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07'], maxLevel: 5, maxSections: 4 },
             // D08, D09 = floor zones
-            { zones: ['D08', 'D09'], maxLevel: 0, maxSections: 0 },
+            { zones: ['D08', 'D09', 'D08-ໂລພື້ນ', 'D09-ໂລພື້ນ'], maxLevel: 0, maxSections: 0 },
         ],
         'FASHION': [
             // C01-C05 = rack shelves (Level 1-5, Section 1-4)

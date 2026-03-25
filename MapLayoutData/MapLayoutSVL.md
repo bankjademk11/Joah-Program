@@ -1164,3 +1164,5 @@ Digital |
 | T09-L2-4 | TOYS |
 | T09-L1-4 | TOYS |
 | G10 ໂລພື້ນ | Kitchen |
+| D08-ໂລພື້ນ | Storage |
+| D09-ໂລພື້ນ | Storage |
