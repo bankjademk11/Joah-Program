@@ -15,8 +15,8 @@ const BRANCH_RACK_RULES = {
             { zones: ['G10'], maxLevel: 5, maxSections: 3 },
             // G17, G18 = rack shelves (Level 1-5, Section 1-4)
             { zones: ['G17', 'G18'], maxLevel: 5, maxSections: 4 },
-            // G09-ໂລພື້ນ = floor zone (Cat Kitchen)
-            { zones: ['G09-ໂລພື້ນ'], maxLevel: 0, maxSections: 0 },
+            // ໂລພື້ນ floor zones (Cat Kitchen)
+            { zones: ['G09-ໂລພື້ນ', 'G10 ໂລພື້ນ'], maxLevel: 0, maxSections: 0 },
         ],
         'BEAUTY': [
             // E01-E04 = rack shelves (Level 1-5, Section 1-4)
