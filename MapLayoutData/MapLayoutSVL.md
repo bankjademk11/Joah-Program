@@ -389,6 +389,10 @@
 | A03-L2-3 | Cleaning/Bath |
 | A03-L1-3 | Cleaning/Bath |
 | A01-L5-4 | Cleaning/Bath |
+| A01-L6-1 | Cleaning/Bath |
+| A01-L6-2 | Cleaning/Bath |
+| A01-L6-3 | Cleaning/Bath |
+| A01-L6-4 | Cleaning/Bath |
 | A01-L4-4 | Cleaning/Bath |
 | A01-L3-4 | Cleaning/Bath |
 | A01-L2-4 | Cleaning/Bath |

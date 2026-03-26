@@ -33,7 +33,9 @@ const BRANCH_RACK_RULES = {
         ],
         'CLEANING/BATH': [
             // A01-A03 = rack shelves (Level 1-5, Section 1-4)
-            { zones: ['A01', 'A02', 'A03'], maxLevel: 5, maxSections: 4 },
+            // A01 now goes to L6 (A01-L6-1~4 added 2026-03-26); A02, A03 remain L1-L5
+            { zones: ['A01'], maxLevel: 6, maxSections: 4 },
+            { zones: ['A02', 'A03'], maxLevel: 5, maxSections: 4 },
         ],
         'INTERIOR': [
             // B01-B03 = rack shelves (B03 starts at L1, B01-B02 start at L1)
