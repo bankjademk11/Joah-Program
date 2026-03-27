@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
+import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight, Sparkles } from 'lucide-react';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
 
@@ -149,6 +149,11 @@ const QuickAddPanel = ({
         ? getRackSuggestions(quickAddForm.category_1_actual || selectedCategory, currentBranch)
         : (selectedCategory ? getRackSuggestions(selectedCategory, currentBranch) : getAllLocations());
 
+    // Calculate Recommended Locations based on previous scans of this barcode
+    const recommendedScannedLocs = quickAddForm.barcode_no
+        ? [...new Set(allResults.filter(r => String(r.barcode).trim() === String(quickAddForm.barcode_no).trim() && r.rackLocation).map(r => r.rackLocation))]
+        : [];
+
     return createPortal(
         <div
             style={{
@@ -243,7 +248,8 @@ const QuickAddPanel = ({
                                 <input
                                     type="text"
                                     value={quickAddForm.barcode_no}
-                                    onChange={(e) => setQuickAddForm(prev => ({ ...prev, barcode_no: e.target.value }))}
+                                    onChange={(e) => setQuickAddForm(prev => ({ ...prev, barcode_no: e.target.value.replace(/\s+/g, '') }))}
+                                    onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
                                     className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white font-mono outline-none placeholder:text-slate-300"
                                     placeholder="Scan Barcode..."
                                     autoFocus
@@ -297,6 +303,30 @@ const QuickAddPanel = ({
                                 {t('quickAdd.targetLocation')}
                                 {customMode && <span className="text-[10px] text-emerald-500 font-normal">{t('quickAdd.customMode')}</span>}
                             </p>
+
+                            {/* Recommended Locations Chips */}
+                            {recommendedScannedLocs.length > 0 && (
+                                <div className="mb-3">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] uppercase font-bold text-amber-500">
+                                        <Sparkles size={10} /> ໂລເຄຊັ້ນແນະນຳ (ເຄີຍສະແກນແລ້ວ)
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {recommendedScannedLocs.map(loc => (
+                                            <button
+                                                key={`rec-${loc}`}
+                                                onClick={() => {
+                                                    setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc 
+                                                    ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/40 dark:border-amber-700 dark:text-amber-400' 
+                                                    : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-amber-600/50 dark:hover:bg-amber-900/20'}`}
+                                            >
+                                                {loc}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex gap-2" ref={dropdownRef}>
                                 {/* CUSTOM SELECT TRIGGER */}

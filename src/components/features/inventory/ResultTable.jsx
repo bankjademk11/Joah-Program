@@ -271,11 +271,18 @@ const ResultTable = ({
         setIsLoadingHistory(true);
         setShowHistory(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('inventory_history')
                 .select('*')
                 .eq('barcode', barcode)
                 .order('updated_at', { ascending: false });
+
+            // Ensure we strictly fetch history for the currently viewed branch only
+            if (currentBranch) {
+                query = query.eq('branch_id', currentBranch);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
             setHistoryData(data || []);
         } catch (err) {
@@ -378,7 +385,7 @@ const ResultTable = ({
                     .from('location_inventory')
                     .update({
                         qty: newQtyValue,
-                        rack_location: newQtyValue === 0 ? null : (editLocation || selectedRow.rackLocation),
+                        rack_location: editLocation || selectedRow.rackLocation,
                         category_1_actual: editCat1 || selectedRow.category1,
                         category_2_actual: editCat2 || selectedRow.category2,
                         remarks: `Updated by ${activeUser} at ${now}`,
@@ -581,10 +588,11 @@ const ResultTable = ({
                 ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
                 : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
-            // Logic: If Qty is 0, clear Location to NULL
+            // Ensure we preserve the specified rack_location even if QTY is 0
             const finalPayload = {
                 ...quickAddForm,
-                rack_location: Number(quickAddForm.qty) === 0 ? null : quickAddForm.rack_location,
+                rack_location: quickAddForm.rack_location,
+
                 uploaded_by: activeUser
             };
 
@@ -621,7 +629,7 @@ const ResultTable = ({
                     barcode: quickAddForm.barcode_no,
                     itemName: quickAddForm.item_name,
                     qty: Number(quickAddForm.qty),
-                    rackLocation: finalPayload.rack_location, // Use sanitized location (null if qty 0)
+                    rackLocation: finalPayload.rack_location, // Use specified location
                     category1: quickAddForm.category_1_actual,
                     category2: quickAddForm.category_2_actual,
                     masterItemName: quickAddForm.item_name, // Assume same as entered
@@ -663,11 +671,17 @@ const ResultTable = ({
             if (dbSource === 'supabase') {
                 // Shared History Fetch for ALL templates (Audit, Standard, etc.)
                 const reasonMap = {};
-                const { data: histRows, error: histError } = await supabase
+                let histQuery = supabase
                     .from('inventory_history')
                     .select('barcode, change_reason, details, updated_at')
                     .order('updated_at', { ascending: false })
                     .limit(5000); // Increased limit for broader coverage
+                
+                if (currentBranch) {
+                    histQuery = histQuery.eq('branch_id', currentBranch);
+                }
+
+                const { data: histRows, error: histError } = await histQuery;
 
                 if (!histError && histRows) {
                     histRows.forEach(row => {
@@ -1063,8 +1077,12 @@ const ResultTable = ({
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
                                 className="input-field pl-14 pr-12 font-bold"
                                 value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                                onChange={(e) => { 
+                                    setSearchTerm(e.target.value.replace(/\s+/g, '')); 
+                                    setCurrentPage(1); 
+                                }}
                                 onKeyDown={(e) => {
+                                    if (e.key === ' ') e.preventDefault();
                                     if (e.key === 'Enter' && filteredResults.length === 0 && searchTerm.length >= 5) {
                                         if (dbSource !== 'supabase') {
                                             alert('⚠️ Please connect to Cloud first.');
@@ -1405,6 +1423,18 @@ const ResultTable = ({
                                             </td>
                                             <td className="px-8 py-6 text-right">
                                                 <div className="flex items-center justify-end gap-2">
+                                                    <button onClick={() => {
+                                                        const sourceInfo = row.hasOwnProperty('id') ? "Source: location_inventory (Scanned from warehouse)" : "Source: master_data (No scan record)";
+                                                        const debugStr = `🔍 DEBUG INFO:\n${sourceInfo}\n\nRAW DATA:\n${JSON.stringify(row, null, 2)}`;
+                                                        navigator.clipboard.writeText(debugStr).then(() => {
+                                                            alert(`✅ ຂໍ້ມູນຖືກ Copy ແລ້ວ!\n\n${debugStr}`);
+                                                        }).catch(() => {
+                                                            prompt("Copy ຂໍ້ມູນຢູ່ດ້ານລຸ່ມນີ້:", debugStr);
+                                                        });
+                                                        console.log("DEBUG ROW:", row);
+                                                    }} className="p-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-bold hover:bg-purple-100 hover:scale-105 transition-all flex items-center gap-1 text-[10px]" title="Debug & Copy data">
+                                                        <Database size={14} /> DEBUG
+                                                    </button>
                                                     <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
                                                         <Info size={18} />
                                                     </button>

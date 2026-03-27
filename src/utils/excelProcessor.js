@@ -58,7 +58,7 @@ export const sheetToJSON = (workbook, sheetName) => {
  */
 const normalizeBarcode = (barcode) => {
     if (barcode === null || barcode === undefined) return '';
-    return String(barcode).trim();
+    return String(barcode).replace(/\s+/g, '');
 };
 
 /**

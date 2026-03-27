@@ -35,11 +35,10 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
         const fetchAllHistory = async () => {
             setIsLoading(true);
             try {
-                // Determine which branch to filter. 
-                // If HQ/Admin selects 'All Branches', we don't filter.
-                // Otherwise use activeBranch or fallback to user's branch.
                 let branchToFilter = currentUser?.branch_id;
-                if (activeBranch) {
+                const isAdmin = currentUser?.role === 'HQ';
+                
+                if (isAdmin && activeBranch) {
                     branchToFilter = activeBranch === 'All Branches' ? null : activeBranch;
                 }
 
