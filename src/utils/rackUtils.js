@@ -176,57 +176,79 @@ const BRANCH_RACK_RULES = {
             // A01-A30: Level 1-4
             { zones: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'A20', 'A21', 'A22', 'A23', 'A24', 'A25', 'A26', 'A27', 'A28', 'A29', 'A30'], maxLevel: 4, format: 'tll_new' },
             // Floor
-            { zones: ['ໂລພື້ນ K03'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ K03'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'CLEANING': [
             // B01-B10: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
-            { zones: ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B09', 'B10'], maxLevel: 4, format: 'tll_new' }
+            { zones: ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B09', 'B10'], maxLevel: 4, format: 'tll_new' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'STORAGE': [
             // C01-C10: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
             { zones: ['C01', 'C02', 'C03', 'C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10'], maxLevel: 4, format: 'tll_new' },
             // Floor
-            { zones: ['ໂລພື້ນ LO3', 'ໂລພື້ນ N01'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ LO3', 'ໂລພື້ນ N01'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'TOOL/DIGITAL': [
-            // D01-D10: Level 1-4 (D01 starts at level 2 in practice)
+            // D01-D10: Level 1-4
             { zones: ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10'], maxLevel: 4, format: 'tll_new' },
             // Shared floor with FASHION
-            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'BEAUTY': [
             // E01-E05: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
             { zones: ['E01', 'E02', 'E03', 'E04', 'E05'], maxLevel: 4, format: 'tll_new' },
             // Floor
-            { zones: ['ໂລພື້ນ LO2'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ LO2'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'TOYS': [
             // F01-F05: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
-            { zones: ['F01', 'F02', 'F03', 'F04', 'F05'], maxLevel: 4, format: 'tll_new' }
+            { zones: ['F01', 'F02', 'F03', 'F04', 'F05'], maxLevel: 4, format: 'tll_new' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'FASHION': [
             // G01-G10: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
             { zones: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G09', 'G10'], maxLevel: 4, format: 'tll_new' },
             // Shared floor with DIGITAL
-            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ K02'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'STATIONERY': [
             // H01-H10: Level 1-4
             { zones: ['H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10'], maxLevel: 4, format: 'tll_new' },
             // Floor
-            { zones: ['ໂລພື້ນ K01', 'ໂລພື້ນ LO1'], maxLevel: 0, format: 'tll_floor' }
+            { zones: ['ໂລພື້ນ K01', 'ໂລພື້ນ LO1'], maxLevel: 0, format: 'tll_floor' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'INTERIOR': [
             // I01-I10: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
-            { zones: ['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08', 'I09', 'I10'], maxLevel: 4, format: 'tll_new' }
+            { zones: ['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08', 'I09', 'I10'], maxLevel: 4, format: 'tll_new' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'SPORTS': [
             // J01-J02: Level 1-4 (uniform, updated from TLLNEWMAP.md 2026-03-26)
-            { zones: ['J01', 'J02'], maxLevel: 4, format: 'tll_new' }
+            { zones: ['J01', 'J02'], maxLevel: 4, format: 'tll_new' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ],
         'FOOD': [
             // J03-J05: Level 1-4
-            { zones: ['J03', 'J04', 'J05'], maxLevel: 4, format: 'tll_new' }
+            { zones: ['J03', 'J04', 'J05'], maxLevel: 4, format: 'tll_new' },
+            // Temp Storage (All-in-One)
+            { zones: ['F1-ໂລຝາກ', 'F2-ໂລຝາກ'], maxLevel: 0, format: 'tll_floor' }
         ]
     },
 
