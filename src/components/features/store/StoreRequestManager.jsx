@@ -153,34 +153,31 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
         if (!window.confirm(`ຢືນຢັນການຮັບ ${productName} ຈຳນວນ ${qty}?`)) return;
 
         try {
-            // 1. Fetch current inventory using both barcode and branch_id
+            // 1. Fetch current inventory using barcode and branch_id, selecting the ID 
             let invQuery = supabase
                 .from('location_inventory')
-                .select('qty')
-                .eq('barcode_no', barcode);
+                .select('id, qty, rack_location')
+                .eq('barcode_no', barcode)
+                .order('qty', { ascending: false }); // Take the one with the most QTY to deduct from
 
             if (branchId) {
                 invQuery = invQuery.eq('branch_id', branchId);
             }
 
-            const { data: inv, error: invErr } = await invQuery.limit(1).maybeSingle();
+            // We only pick ONE specific rack to deduct from
+            const { data: invRows, error: invErr } = await invQuery.limit(1);
 
             if (invErr) throw invErr;
-            if (!inv) throw new Error('ບໍ່ພົບຂໍ້ມູນສິນຄ້າໃນສາງ (ອາດຈະຜິດສາຂາ)');
-
+            if (!invRows || invRows.length === 0) throw new Error('ບໍ່ພົບຂໍ້ມູນສິນຄ້າໃນສາງ (ອາດຈະຜິດສາຂາ)');
+            
+            const inv = invRows[0];
             const newQty = (inv.qty || 0) - qty;
 
-            // 2. Transaction-ish update
-            let updateQuery = supabase
+            // 2. Transaction-ish update - UPDATE ONLY BY ID, NOT BY BARCODE
+            const { error: invUpdateErr } = await supabase
                 .from('location_inventory')
                 .update({ qty: newQty })
-                .eq('barcode_no', barcode);
-
-            if (branchId) {
-                updateQuery = updateQuery.eq('branch_id', branchId);
-            }
-
-            const { error: invUpdateErr } = await updateQuery;
+                .eq('id', inv.id);
 
             if (invUpdateErr) throw invUpdateErr;
 
@@ -196,7 +193,7 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                 .eq('id', id);
 
             if (error) throw error;
-            toast.success(`✅ ຮັບຊາບ ແລະ ຫັກສາງ ${productName} ແລ້ວ`);
+            toast.success(`✅ ຮັບຊາບ ແລະ ຫັກສາງ ${productName} ແລ້ວ (Rack: ${inv.rack_location || '-'})`);
             fetchRequests();
         } catch (err) {
             toast.error('ເກີດຂໍ้ຜິດພາດ: ' + err.message);
@@ -212,30 +209,26 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
         try {
             setIsLoading(true);
 
-            // For batch, we'll iterate and update inventory
-            // Ideally use an RPC for this to be atomic
+            // For batch, we iterate and update inventory exactly by ID
             for (const item of pendingItems) {
                 let invQuery = supabase
                     .from('location_inventory')
-                    .select('qty')
-                    .eq('barcode_no', item.barcode);
+                    .select('id, qty')
+                    .eq('barcode_no', item.barcode)
+                    .order('qty', { ascending: false });
 
                 if (item.branch_id) {
                     invQuery = invQuery.eq('branch_id', item.branch_id);
                 }
 
-                const { data: inv } = await invQuery.limit(1).maybeSingle();
+                const { data: invRows } = await invQuery.limit(1);
 
-                if (inv) {
-                    let updateQuery = supabase
+                if (invRows && invRows.length > 0) {
+                    const inv = invRows[0];
+                    await supabase
                         .from('location_inventory')
                         .update({ qty: (inv.qty || 0) - item.qty })
-                        .eq('barcode_no', item.barcode);
-
-                    if (item.branch_id) {
-                        updateQuery = updateQuery.eq('branch_id', item.branch_id);
-                    }
-                    await updateQuery;
+                        .eq('id', inv.id); // Deduct ONLY from this specific row ID
                 }
             }
 
