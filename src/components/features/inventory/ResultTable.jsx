@@ -97,16 +97,61 @@ const ResultTable = ({
         </div>
     );
 
+    // --- Refresh Cooldown & Single Row Refresh Logic ---
+    const [cooldownRemaining, setCooldownRemaining] = useState(0);
+    const [refreshingRowId, setRefreshingRowId] = useState(null);
+
+    useEffect(() => {
+        if (cooldownRemaining > 0) {
+            const timer = setInterval(() => setCooldownRemaining(prev => Math.max(0, prev - 1)), 1000);
+            return () => clearInterval(timer);
+        }
+    }, [cooldownRemaining]);
+
     const handleManualRefresh = async () => {
+        if (cooldownRemaining > 0) return;
+
         setIsRefreshing(true);
-        // Artificial delay for better UX (so the skeleton is seen)
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 600)); // UX delay
 
         if (onRefresh) {
-            // Pass silent: true to avoid global LoadingOverlay / Elephant
-            await onRefresh({ skipMaster: false, silent: true });
+            await onRefresh({ skipMaster: true, silent: true }); // Avoid downloading Master if we can
         }
+        
+        setCooldownRemaining(180); // 3 minutes cooldown
         setIsRefreshing(false);
+    };
+
+    const refreshSingleRow = async (row) => {
+        if (!row.barcode) return;
+        setRefreshingRowId(row.id || row.barcode);
+        try {
+            await new Promise(r => setTimeout(r, 600)); // Add UX delay so the spin animation is clearly visible
+
+            const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
+            let query = supabase.from('location_inventory').select('*').eq('barcode_no', row.barcode);
+            
+            if (row.rackLocation) {
+                query = query.eq('rack_location', row.rackLocation);
+            }
+            if (branchToSave && branchToSave !== 'All Branches') {
+                query = query.eq('branch_id', branchToSave);
+            }
+
+            const { data, error } = await query.limit(1).maybeSingle();
+            if (error) throw error;
+
+            if (data && onUpdateRowQty) {
+                onUpdateRowQty(row.rowIndex, { qty: data.qty || 0 });
+                toast.success(`ອັບເດດ ${row.barcode} ສຳເລັດ!`);
+            } else {
+                toast.info(`ບໍ່ພົບການປ່ຽນແປງສຳລັບ ${row.barcode} ໃນฐานข้อมูล`);
+            }
+        } catch (err) {
+            toast.error('ດຶງຂໍ້ມູນเฉพาะจุดผิດພາດ: ' + err.message);
+        } finally {
+            setRefreshingRowId(null);
+        }
     };
 
     const [isFoundInMaster, setIsFoundInMaster] = useState(false); // New state to track if barcode exists in Master Data
@@ -1216,9 +1261,9 @@ const ResultTable = ({
                             )}
                         </div>
                         {onRefresh && (
-                            <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-secondary py-3 text-[10px] min-w-[120px] font-bold">
+                            <button onClick={handleManualRefresh} disabled={isRefreshing || cooldownRemaining > 0} className={`btn-secondary py-3 text-[10px] min-w-[120px] font-bold ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <RotateCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-                                <span>{isRefreshing ? t('results.loading') : t('navbar.refresh')}</span>
+                                <span>{isRefreshing ? t('results.loading') : cooldownRemaining > 0 ? `ລໍຖ້າ ${Math.floor(cooldownRemaining / 60)}:${(cooldownRemaining % 60).toString().padStart(2, '0')}` : t('navbar.refresh')}</span>
                             </button>
                         )}
                     </div>
@@ -1443,6 +1488,9 @@ const ResultTable = ({
                                                             <History size={18} />
                                                         </button>
                                                     )}
+                                                    <button onClick={() => refreshSingleRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="Refresh Item">
+                                                        <RotateCw size={18} className={refreshingRowId === (row.id || row.barcode) ? 'animate-spin text-emerald-500' : ''} />
+                                                    </button>
                                                     <button onClick={() => {
                                                         setSelectedRow(row);
                                                         setEditQty(row.qty || 0);
