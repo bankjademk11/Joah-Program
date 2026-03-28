@@ -331,18 +331,7 @@ function AppContent() {
       if (activeSource === 'supabase') {
         const masterBranch = branchToLoad;
 
-        // 🧹 AUTO CLEANUP: Clear locations for items with qty=0 before fetching data
-        try {
-          await supabase
-            .from('location_inventory')
-            .update({ rack_location: null })
-            .eq('branch_id', branchToLoad)
-            .eq('qty', 0)
-            .not('rack_location', 'is', null);
-          console.log(`✅ Auto-cleanup: Cleared locations for qty=0 items in branch ${branchToLoad}`);
-        } catch (cleanupErr) {
-          console.warn('⚠️ Auto-cleanup failed (non-critical):', cleanupErr);
-        }
+        // 🧹 Auto-cleanup has been removed. We now preserve rack_location even if qty is 0.
 
         const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
           fetchMasterFromSupabase(masterBranch),
