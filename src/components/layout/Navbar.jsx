@@ -144,7 +144,7 @@ const TestReloadPrompt = ({ onClose }) => {
                         return (
                             <div key={idx} className={`flex items-start gap-3 mb-3 last:mb-0 animate-slide-up ${isPast ? 'opacity-50' : 'opacity-100'}`}>
                                 <div className="mt-0.5 flex-shrink-0">
-                                    {isPast ? <span className="text-emerald-500">✓</span> : <span className="text-orange-500 animate-pulse">></span>}
+                                    {isPast ? <span className="text-emerald-500">✓</span> : <span className="text-orange-500 animate-pulse">&gt;</span>}
                                 </div>
                                 <div className="flex-1">
                                     <span className={`${isPast ? 'text-slate-500' : 'text-orange-100'}`}>{step.text}</span>
