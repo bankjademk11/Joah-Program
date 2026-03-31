@@ -115,24 +115,36 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         setIsLoading(true);
         const userBranch = activeBranch || currentUser?.branch_id;
         try {
-            let query = supabase.from('location_inventory').select('*').eq('barcode_no', barcodeValue.trim());
+            // ✅ ดึงทุก rack ที่มี barcode นี้แล้วรวม qty ทั้งหมด
+            let query = supabase.from('location_inventory')
+                .select('barcode_no, item_name, qty, rack_location, branch_id')
+                .eq('barcode_no', barcodeValue.trim());
             if (userBranch) query = query.eq('branch_id', userBranch);
-            const { data, error } = await query.limit(1).maybeSingle();
+            const { data, error } = await query;
             if (error) throw error;
-            if (data) {
+            if (data && data.length > 0) {
+                // รวม qty จากทุก rack
+                const totalQty = data.reduce((sum, row) => sum + (row.qty || 0), 0);
+                // รวม rack location ทั้งหมดที่มี qty > 0
+                const activeRacks = data
+                    .filter(row => (row.qty || 0) > 0)
+                    .map(row => row.rack_location)
+                    .filter(Boolean);
+                const rackDisplay = activeRacks.length > 0 ? activeRacks.join(', ') : data[0].rack_location || 'N/A';
+                const firstRow = data[0];
                 setProduct({
-                    barcode: data.barcode_no,
-                    item_name: data.item_name,
-                    product_name_la: data.item_name,
-                    available_qty: data.qty || 0,
-                    rack_location: data.rack_location || 'N/A',
-                    branch_id: data.branch_id
+                    barcode: firstRow.barcode_no,
+                    item_name: firstRow.item_name,
+                    product_name_la: firstRow.item_name,
+                    available_qty: totalQty,
+                    rack_location: rackDisplay,
+                    branch_id: firstRow.branch_id
                 });
                 setQty(1);
-                if (data.qty > 0) {
-                    toast.success(`ພົບສິນຄ້າ! ສາງ ${userBranch || ''}: ${data.qty} ຫນ່ວຍ`);
+                if (totalQty > 0) {
+                    toast.success(`ພົບສິນຄ້າ! ສາງ ${userBranch || ''}: ${totalQty} ຫນ່ວຍ (${data.length} Rack)`);
                 } else {
-                    toast.warning(`ພົບສິນຄ້າ, ແຕ່ສາງ ${userBranch || ''} ໝົດແລ້ວ`);
+                    toast.warning(`ພົບສິນຄ້າ, ແຕ່ສາງ ${userBranch || ''} ໝົດທຸກ Rack ແລ້ວ`);
                 }
             } else {
                 setProduct(null);

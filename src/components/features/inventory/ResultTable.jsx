@@ -1095,7 +1095,8 @@ const ResultTable = ({
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `JoahTools_${template.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const branchStr = currentBranch ? `${currentBranch.toUpperCase()}_` : '';
+            a.download = `JoahTools_${branchStr}${template.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
             a.click();
         } catch (e) {
             console.error('Export Error:', e);
