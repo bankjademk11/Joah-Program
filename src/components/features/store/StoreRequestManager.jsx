@@ -122,12 +122,23 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                             invQuery = invQuery.eq('branch_id', request.branch_id);
                         }
 
-                        const { data: inventoryData } = await invQuery.limit(1).maybeSingle();
+                        const { data: inventoryData } = await invQuery;
+
+                        // ✅ รวม qty จากทุก Rack + แสดง Rack ที่มีของเท่านั้น
+                        const totalQty = (inventoryData || []).reduce((sum, row) => sum + (row.qty || 0), 0);
+                        const activeRacks = (inventoryData || [])
+                            .filter(row => (row.qty || 0) > 0)
+                            .map(row => row.rack_location)
+                            .filter(Boolean);
+                        const rackDisplay = activeRacks.length > 0
+                            ? activeRacks.join(', ')
+                            : (inventoryData?.[0]?.rack_location || 'N/A');
 
                         return {
                             ...request,
-                            available_qty: inventoryData?.qty ?? 0,
-                            rack_location: inventoryData?.rack_location || 'N/A'
+                            available_qty: totalQty,
+                            rack_location: rackDisplay,
+                            rack_details: (inventoryData || []).map(r => ({ rack: r.rack_location || 'N/A', qty: r.qty || 0 }))
                         };
                     } catch (err) {
                         return {
@@ -260,29 +271,26 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
         try {
             setIsLoading(true);
 
-            // 1. Restore Inventory
+            // 1. Restore Inventory - ✅ คืนเฉพาะ Rack ที่มี qty สูงสุด (Rack เดียวกับที่หักไป)
             for (const item of group.items) {
                 let invQuery = supabase
                     .from('location_inventory')
-                    .select('qty')
-                    .eq('barcode_no', item.barcode);
+                    .select('id, qty, rack_location')
+                    .eq('barcode_no', item.barcode)
+                    .order('qty', { ascending: false }); // เรียงตาม qty มากสุด เหมือน handleAccept
 
                 if (item.branch_id) {
                     invQuery = invQuery.eq('branch_id', item.branch_id);
                 }
 
-                const { data: inv } = await invQuery.limit(1).maybeSingle();
+                const { data: invRows } = await invQuery.limit(1);
 
-                if (inv) {
-                    let updateQuery = supabase
+                if (invRows && invRows.length > 0) {
+                    const inv = invRows[0];
+                    await supabase
                         .from('location_inventory')
                         .update({ qty: (inv.qty || 0) + item.qty })
-                        .eq('barcode_no', item.barcode);
-
-                    if (item.branch_id) {
-                        updateQuery = updateQuery.eq('branch_id', item.branch_id);
-                    }
-                    await updateQuery;
+                        .eq('id', inv.id); // ✅ คืนเฉพาะ Row ID นี้เท่านั้น ไม่ไปยุ่ง Rack อื่น
                 }
             }
 
@@ -658,27 +666,57 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
                                             </div>
 
                                             {/* Items List */}
-                                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-slate-900/50">
+                                            <div className="max-h-[400px] overflow-y-auto custom-scrollbar divide-y divide-slate-100 dark:divide-slate-800">
                                                 {group.items.map((item) => (
-                                                    <div key={item.id} className="p-4 border-b border-slate-100 dark:border-slate-800 last:border-0 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
-                                                        <div className="flex items-center gap-4 flex-1">
-                                                            <div className="flex flex-col items-center justify-center min-w-[50px]">
-                                                                <span className="text-[10px] font-black text-slate-400 uppercase">ຈຳນວນ</span>
-                                                                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center font-black text-blue-600 dark:text-blue-400 text-lg">
-                                                                    {item.qty}
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="font-bold text-slate-800 dark:text-white text-sm">{item.product_name}</h4>
-                                                                <div className="flex items-center gap-3 mt-1">
-                                                                    <span className="text-[10px] font-mono text-slate-400">{item.barcode}</span>
-                                                                    <div className={`flex items-center gap-1 text-[10px] font-bold ${item.available_qty > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                                        <div className={`w-1.5 h-1.5 rounded-full ${item.available_qty > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                                                                        Stock: {item.available_qty}
+                                                    <div key={item.id} className="p-4 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                                        {/* Qty Badge */}
+                                                        <div className="flex-shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/20 text-white">
+                                                            <span className="text-[9px] font-bold uppercase opacity-70 leading-none">QTY</span>
+                                                            <span className="text-lg font-black leading-tight">{item.qty}</span>
+                                                        </div>
+
+                                                        {/* Info */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="font-bold text-slate-800 dark:text-white text-sm leading-tight truncate">{item.product_name}</h4>
+                                                            <span className="text-[10px] font-mono text-slate-400">{item.barcode}</span>
+
+                                                            {/* Rack Breakdown */}
+                                                            {item.rack_details && item.rack_details.length > 1 ? (
+                                                                <div className="mt-2">
+                                                                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                                                        {item.rack_details.map((r, i) => (
+                                                                            <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border ${r.qty > 0
+                                                                                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                                                                                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through'
+                                                                            }`}>
+                                                                                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.qty > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                                                                <span>{r.rack}</span>
+                                                                                <span className="opacity-70">·</span>
+                                                                                <span>{r.qty}</span>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    <span className="text-[10px] font-bold text-slate-400">📍 {item.rack_location}</span>
+                                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 w-fit">
+                                                                        <span className="text-[10px] font-black text-blue-700 dark:text-blue-300">ລວມທັງໝົດ</span>
+                                                                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400">{item.available_qty} ຫນ່ວຍ</span>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 mt-1.5">
+                                                                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border ${item.available_qty > 0
+                                                                        ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                                                                        : 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-700 text-rose-600 dark:text-rose-400'
+                                                                    }`}>
+                                                                        <div className={`w-1.5 h-1.5 rounded-full ${item.available_qty > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                                        <span>Stock: {item.available_qty}</span>
+                                                                    </div>
+                                                                    {item.rack_location && item.rack_location !== 'N/A' && (
+                                                                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                                            📍 {item.rack_location}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         {item.status === 'accepted' ? (
                                                             <span className="text-emerald-500"><CheckCircle size={16} /></span>
