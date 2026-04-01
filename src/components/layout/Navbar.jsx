@@ -137,6 +137,10 @@ const Navbar = ({
                                         {dbSource === 'supabase' ? <ShieldCheck size={12} /> : <Database size={12} />}
                                         <span>{dbSource === 'supabase' ? t('navbar.cloudMode') : t('navbar.localMode')}</span>
                                     </div>
+                                    <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700"></div>
+                                    <div className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                                        v2.1
+                                    </div>
                                 </div>
                             </div>
                         </div>
