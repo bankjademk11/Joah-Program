@@ -1,22 +1,13 @@
-/*
-  Cloudflare Pages — Custom HTTP Headers
-  ตั้งค่า Cache-Control สำหรับไฟล์สำคัญ
-  เพื่อให้ Service Worker อัปเดตได้ถูกต้อง
-*/
+# Cloudflare Pages — Custom HTTP Headers
 
-# ไฟล์ sw.js และ index.html — ห้าม cache เด็ดขาด
-# เพราะ Browser ต้องดึงล่าสุดทุกครั้ง เพื่อตรวจอัปเดต
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
-# workbox manifest — ห้าม cache เช่นกัน
 /manifest.webmanifest
   Cache-Control: no-cache, no-store, must-revalidate
 
-# JS + CSS ที่มี hash ในชื่อไฟล์ — cache ได้นานมาก (1 ปี)
-# Vite สร้างชื่อใหม่อัตโนมัติทุก build ทำให้ไม่มี stale cache
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
