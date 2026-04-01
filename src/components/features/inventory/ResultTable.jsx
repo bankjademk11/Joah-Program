@@ -118,7 +118,7 @@ const ResultTable = ({
             await onRefresh({ skipMaster: true, silent: true }); // Avoid downloading Master if we can
         }
         
-        setCooldownRemaining(180); // 3 minutes cooldown
+        setCooldownRemaining(3); // 3 seconds cooldown
         setIsRefreshing(false);
     };
 

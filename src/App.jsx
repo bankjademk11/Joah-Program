@@ -97,6 +97,10 @@ function AppContent() {
   const debounceTimerRef = useRef(null);
   const isRefreshingRef = useRef(false);
 
+  // 🚀 Delta Sync State
+  const [rawLocationRows, setRawLocationRows] = useState([]); 
+  const [lastLocationSyncTime, setLastLocationSyncTime] = useState(null);
+
   const isPSNUser = user?.branch_id?.startsWith('ໂພນສີນວນ');
   const isAdmin = user?.role === 'HQ'; // เฉพาะ HQ เท่านั้นที่เข้า Admin menu ได้
   const filteredResults = validationResults.filter(r => {
@@ -179,6 +183,8 @@ function AppContent() {
     setRealtimeStatus('disconnected');
     setPendingChanges(0);
     setLastChangeBy('');
+    setRawLocationRows([]); // 🚀 Clear Delta Sync State
+    setLastLocationSyncTime(null);
   };
 
   const handleReset = () => {
@@ -451,7 +457,7 @@ function AppContent() {
   };
 
   // --- Dedicated Cloud Refresh (Smart & Optimized) ---
-  const refreshFromCloud = useCallback(async (options = { skipMaster: true, silent: false }) => {
+  const refreshFromCloud = useCallback(async (options = { skipMaster: true, silent: false, delta: false }) => {
     if (isRefreshingRef.current) return;
     isRefreshingRef.current = true;
 
@@ -461,14 +467,18 @@ function AppContent() {
       setLoadingProgress(0); // Reset progress if showing overlay
     }
     try {
-      console.log(`🔄 Refreshing cloud data (skipMaster: ${options.skipMaster})...`);
+      console.log(`🔄 Refreshing cloud data (skipMaster: ${options.skipMaster}, delta: ${options.delta})...`);
 
       // Calculate branchToLoad FIRST
       const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
 
+      // 🚀 DELTA SYNC LOGIC
+      // If delta=true AND we have previously synced data, pass lastLocationSyncTime
+      const isDeltaSync = options.delta && lastLocationSyncTime && rawLocationRows.length > 0;
+
       // Fetch dynamic data always using branchToLoad
       const fetchTasks = [
-        fetchLocationFromSupabase(branchToLoad),
+        fetchLocationFromSupabase(branchToLoad, isDeltaSync ? lastLocationSyncTime : null),
         fetchOdooFromSupabase(branchToLoad)
       ];
 
@@ -480,7 +490,7 @@ function AppContent() {
       }
 
       const results = await Promise.all(fetchTasks);
-      const cloudLocation = results[0];
+      const cloudLocation = results[0]; // Full data OR Delta data
       const cloudOdoo = results[1];
       const cloudMaster = shouldFetchMaster ? results[2] : null;
 
@@ -502,7 +512,46 @@ function AppContent() {
         activeMasterData = mappedMaster;
       }
 
-      const locationRows = (cloudLocation || []).map(l => ({
+      // 🧩 Merge Data if Delta Sync
+      let finalLocationData = cloudLocation || [];
+      if (isDeltaSync) {
+        const deltaRows = cloudLocation || [];
+        const numUpdates = deltaRows.length;
+        
+        // 🧪 DEBUG: Calculate approximate size in KB
+        const approxBytes = new TextEncoder().encode(JSON.stringify(deltaRows)).length;
+        const approxKB = (approxBytes / 1024).toFixed(2);
+        
+        console.table(deltaRows); // 🧪 DEBUG: Show full payload in console
+        console.log(`🧩 Delta Sync: Received ${numUpdates} updated row(s), Size: ~${approxKB} KB`);
+        
+        // 🧪 DEBUG: Build detailed message text
+        let detailString = '';
+        if (numUpdates > 0 && numUpdates <= 20) {
+            detailString = '\n\n📋 ລາຍລະອຽດ:\n' + deltaRows.map(r => `• ${r.barcode_no} (ສາຂາ: ${r.branch_id || 'N/A'})`).join('\n');
+        } else if (numUpdates > 20) {
+            detailString = '\n\n📋 ລາຍລະອຽດ: ຫຼາຍກວ່າ 20 ລາຍການ... (ສາມາດເບິ່ງເພີ່ມເຕີມໃນ Console F12)';
+        }
+
+        // Show an explicit alert to the user so they can verify the efficiency
+        alert(`🚨 [DEBUG] Delta Sync\n\nໂໝດ: ປະຢັດ Egress Data 🚀\nພົບການປ່ຽນແປງ: ${numUpdates} ແຖວ\nໃຊ້ Data ໄປພຽງ: ~${approxKB} KB${detailString}`);
+
+        const deltaMap = new Map(deltaRows.map(row => [row.id, row]));
+        
+        // Replace updated rows
+        finalLocationData = rawLocationRows.map(row => deltaMap.has(row.id) ? deltaMap.get(row.id) : row);
+        const existingIds = new Set(rawLocationRows.map(row => row.id));
+        
+        // Append newly inserted rows
+        deltaRows.forEach(row => {
+            if (!existingIds.has(row.id)) finalLocationData.push(row);
+        });
+      }
+
+      setRawLocationRows(finalLocationData);
+      setLastLocationSyncTime(new Date().toISOString());
+
+      const locationRows = finalLocationData.map(l => ({
         id: l.id,
         branch_id: l.branch_id,
         'Barcode': l.barcode_no,
@@ -540,7 +589,7 @@ function AppContent() {
       }
       isRefreshingRef.current = false;
     }
-  }, [masterData, user, adminViewBranch, isAdmin, isPSNUser]);
+  }, [masterData, user, adminViewBranch, isAdmin, isPSNUser, lastLocationSyncTime, rawLocationRows]);
 
   // --- Supabase Realtime Subscription ---
   useEffect(() => {
@@ -560,6 +609,15 @@ function AppContent() {
         { event: '*', schema: 'public', table: 'location_inventory' },
         (payload) => {
           console.log('📡 Realtime change detected:', payload.eventType, payload);
+
+          // 🚨 BRANCH FILTER: Prevent changes from other branches from bleeding in!
+          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+          const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
+          
+          if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) {
+            console.log(`🛡️ Realtime ignored: Item is from ${payloadBranch}, but we are viewing ${targetBranch}`);
+            return; // Skip this update!
+          }
 
           // Show notification banner
           const changedBy = payload.new?.uploaded_by || payload.old?.uploaded_by || 'Unknown';
@@ -722,10 +780,10 @@ function AppContent() {
           isProcessing={isProcessing}
           onRefresh={(options) => {
             if (dbSource === 'supabase') {
-              // Manual refresh button from Navbar clears EVERYTHING and reloads all
-              // Silent mode defaults to true unless specified
+              // 🚀 DELTA SYNC UPGRADE: Use partial fetching for Location, and skip Master Data to save Egress.
               refreshFromCloud({
-                skipMaster: false,
+                skipMaster: true,
+                delta: true,
                 silent: options?.silent ?? true,
                 loadingText: options?.loadingText,
                 showProgress: options?.showProgress
@@ -1264,10 +1322,10 @@ function AppContent() {
                 filterStatus={filterStatus}
                 onFilterChange={setFilterStatus}
                 dbSource={dbSource}
-                onRefresh={() => {
+                onRefresh={(options) => {
                   if (dbSource === 'supabase') {
-                    // Smart refresh from table only updates counts
-                    refreshFromCloud({ skipMaster: true });
+                    // Smart refresh from table only updates counts via Delta Sync 🚀
+                    refreshFromCloud({ skipMaster: true, delta: true, silent: options?.silent });
                   } else {
                     handleValidate({ locationSheet: locationSheetName });
                     setRefreshTrigger(Date.now());

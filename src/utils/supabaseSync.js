@@ -225,7 +225,7 @@ export const logInventoryHistory = async ({
     }
 };
 
-export const fetchLocationFromSupabase = async (branchId) => {
+export const fetchLocationFromSupabase = async (branchId, lastSyncTime = null) => {
     try {
         const branch = branchId || 'ຕະຫຼາດລາວ';
         let allData = [];
@@ -234,12 +234,24 @@ export const fetchLocationFromSupabase = async (branchId) => {
         let hasMore = true;
 
         while (hasMore) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('location_inventory')
                 .select('*')
-                .eq('branch_id', branch)
                 .order('id', { ascending: true })
                 .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+
+            // Conditional Branch Filter
+            if (branch && branch !== 'All Branches') {
+                query = query.eq('branch_id', branch);
+            }
+
+            // 🚀 DELTA SYNC FILTER: Now fully active
+            // Will efficiently query only rows that changed.
+            if (lastSyncTime) {
+                query = query.gt('updated_at', lastSyncTime);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 
