@@ -17,6 +17,7 @@ const EditPanel = ({
     isUpdating,
     handleUpdate,
     handleSplit,
+    handleClone,
     results, // For backward compatibility
     allResults, // Essential for Inspector
     mergeAmount,
@@ -33,6 +34,7 @@ const EditPanel = ({
     const dropdownRef = useRef(null);
     const [locationSearch, setLocationSearch] = useState('');
     const [isSplitMode, setIsSplitMode] = useState(false);
+    const [isCloneMode, setIsCloneMode] = useState(false);
 
     // --- Helpers ---
     // Use branch-specific rules
@@ -113,6 +115,7 @@ const EditPanel = ({
             setViewingCategories(false); // Reset View
             setLocalInspectedLocation(null); // Reset Local Inspector
             setIsSplitMode(false); // Reset Split Mode
+            setIsCloneMode(false); // Reset Clone Mode
         }
     }, [selectedRow]);
 
@@ -224,60 +227,87 @@ const EditPanel = ({
                                 <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('editPanel.quantityManagement')}</p>
                             </div>
 
-                            {/* Mode Toggle */}
-                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                            {/* Mode Toggle - Lao labels */}
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg gap-0.5">
                                 <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                    onClick={() => { setIsSplitMode(false); setMergeAmount(''); }}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode && !isCloneMode ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                    onClick={() => { setIsSplitMode(false); setIsCloneMode(false); setMergeAmount(''); }}
                                 >
-                                    ຮ່ວມຈຳນວນ (Merge)
+                                    ແກ້ໄຂ
                                 </button>
                                 <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                    onClick={() => { setIsSplitMode(true); setMergeAmount(''); }}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(''); }}
                                 >
-                                    ແບ່ງ Rack (Split)
+                                    ແບ່ງໄປ
+                                </button>
+                                <button
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                    onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); }}
+                                >
+                                    ໂຄນສິນຄ້າ
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                {/* Current Qty Display */}
-                                <div className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center border border-transparent">
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{t('editPanel.current')}</p>
-                                    <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
-                                </div>
-
-                                {/* Icon based on mode */}
-                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
-                                    {isSplitMode ? <CornerDownRight size={16} strokeWidth={3} className="text-rose-400" /> : <Plus size={16} strokeWidth={3} />}
-                                </div>
-
-                                {/* Additional Input */}
-                                <div className="flex-1 relative">
+                            {/* Qty input area — Clone shows full-width only; others show Current + Icon + Input */}
+                            {isCloneMode ? (
+                                <div>
                                     <input
                                         type="number"
                                         placeholder="0"
-                                        className={`w-full p-3 bg-white dark:bg-slate-950 border-2 rounded-xl text-3xl font-bold text-center outline-none transition-all placeholder:text-slate-300 number-input-no-arrows ${isSplitMode ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10' : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'}`}
+                                        className="w-full p-4 bg-white dark:bg-slate-950 border-2 border-emerald-200 dark:border-emerald-900/40 rounded-xl text-4xl font-bold text-center text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
                                         value={mergeAmount}
-                                        onChange={(e) => {
-                                            if (isSplitMode && Number(e.target.value) > editQty) {
-                                                setMergeAmount(editQty);
-                                            } else {
-                                                setMergeAmount(e.target.value);
-                                            }
-                                        }}
+                                        onChange={(e) => setMergeAmount(e.target.value)}
                                         autoFocus
                                     />
-                                    <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">{isSplitMode ? 'ແບ່ງຈຳນວນອອກ (Split Amount)' : t('editPanel.addAmount')}</p>
+                                    <p className="text-[10px] text-slate-400 mt-2 text-center">ຈຳນວນສິນຄ້າທີ່ຕ້ອງການໂຄນໄປ Rack ໃໝ່</p>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    {/* Current Qty Display */}
+                                    <div className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center border border-transparent">
+                                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{t('editPanel.current')}</p>
+                                        <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
+                                    </div>
+
+                                    {/* Icon based on mode */}
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                        {isSplitMode ? <CornerDownRight size={16} strokeWidth={3} className="text-rose-400" /> : <Plus size={16} strokeWidth={3} />}
+                                    </div>
+
+                                    {/* Additional Input */}
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="number"
+                                            placeholder="0"
+                                            className={`w-full p-3 bg-white dark:bg-slate-950 border-2 rounded-xl text-3xl font-bold text-center outline-none transition-all placeholder:text-slate-300 number-input-no-arrows ${
+                                                isSplitMode
+                                                    ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                                    : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
+                                            }`}
+                                            value={mergeAmount}
+                                            onChange={(e) => {
+                                                if (isSplitMode && Number(e.target.value) > editQty) {
+                                                    setMergeAmount(editQty);
+                                                } else {
+                                                    setMergeAmount(e.target.value);
+                                                }
+                                            }}
+                                            autoFocus
+                                        />
+                                        <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">
+                                            {isSplitMode ? 'ແບ່ງຈຳນວນອອກ' : t('editPanel.addAmount')}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Rack Location Section (MATCHING QUICKADDPANEL UI EXACTLY) */}
                         <div>
                             <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-                                <MapPin size={14} className={isSplitMode ? "text-rose-500" : "text-indigo-500"} />
-                                {isSplitMode ? 'ເລືອກ Rack ທີ່ຕ້ອງການແບ່ງໄປ (Target Rack)' : t('editPanel.targetLocation')}
+                                <MapPin size={14} className={isSplitMode ? "text-rose-500" : isCloneMode ? "text-emerald-500" : "text-indigo-500"} />
+                                {isSplitMode ? 'ເລືອກ Rack ທີ່ຕ້ອງການແບ່ງໄປ (Target Rack)' : isCloneMode ? 'ເລືອກ Rack ສຳລັບ Clone ໄປ (Target Rack)' : t('editPanel.targetLocation')}
                                 {customMode && <span className="text-[10px] text-indigo-500 font-normal">{t('quickAdd.customMode')}</span>}
                             </p>
 
@@ -537,12 +567,19 @@ const EditPanel = ({
                             onClick={() => {
                                 if (isSplitMode) {
                                     handleSplit(mergeAmount, editLocation, editReason);
+                                } else if (isCloneMode) {
+                                    handleClone(mergeAmount, editLocation, editReason);
                                 } else {
                                     handleUpdate();
                                 }
                             }}
-                            disabled={isUpdating}
-                            className="px-4 py-2.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                            disabled={isUpdating || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
+                            title={isCloneMode && editLocation === selectedRow?.rackLocation ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' : ''}
+                            className={`px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                                isCloneMode
+                                    ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
+                                    : 'bg-indigo-500 hover:bg-indigo-600'
+                            }`}
                         >
                             {isUpdating ? (
                                 <>

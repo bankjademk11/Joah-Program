@@ -246,6 +246,7 @@ const ResultTable = ({
         if (searchTerm && searchTerm.length >= 4) {
             const exactMatch = results.find(r => r.barcode === searchTerm);
             if (exactMatch && rowRefs.current[exactMatch.barcode]) {
+
                 rowRefs.current[exactMatch.barcode].scrollIntoView({
                     behavior: 'smooth',
                     block: 'center'
@@ -495,6 +496,89 @@ const ResultTable = ({
             setSelectedRow(null);
             setEditReason(''); // Reset reason
             setMergeAmount(''); // Reset merge amount after save
+        } catch (err) {
+            showError(t('results.saveError') + ': ' + err.message);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    // 🆕 Clone: เพิ่มแถวใหม่จาก SKU เดิมโดยไม่ตัดจำนวนต้นฉบับ
+    const handleCloneMasterQty = async (cloneAmount, newRackLocation, cloneReason) => {
+        if (!selectedRow || !cloneAmount || !newRackLocation) {
+            showError('ກະລຸນາໃສ່ຈຳນວນ ແລະ ເລືອກ Rack ທີ່ຕ້ອງການ');
+            return;
+        }
+        if (!cloneReason || !cloneReason.trim()) {
+            showError('ກະລຸນາລະບຸເຫດຜົນ (Reason required)');
+            return;
+        }
+        if (newRackLocation === selectedRow?.rackLocation) {
+            showError('ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້ (ຕ້ອງເລືອກ Rack ໃໝ່)');
+            return;
+        }
+        const cloneQtyNum = Number(cloneAmount);
+        if (cloneQtyNum <= 0) {
+            showError('ຈຳນວນໂຄລນຕ້ອງຫຼາຍກວ່າ 0');
+            return;
+        }
+
+        const activeUser = currentUser
+            ? `${currentUser.name} (${currentUser.id})`
+            : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
+
+        setIsUpdating(true);
+        try {
+            if (dbSource === 'supabase') {
+                // 1. Insert clone row (does NOT touch original row qty)
+                const clonePayload = {
+                    barcode_no: selectedRow.barcode,
+                    item_name: selectedRow.itemName || selectedRow.masterItemName,
+                    rack_location: newRackLocation,
+                    category_1_actual: selectedRow.category1 || '',
+                    category_2_actual: selectedRow.category2 || '',
+                    qty: cloneQtyNum,
+                    remarks: `Clone from ${selectedRow.rackLocation || 'N/A'}: ${cloneReason}`,
+                    uploaded_by: activeUser
+                };
+                const result = await addLocationRecord(clonePayload, branchToSave);
+                if (!result.success) throw new Error(result.error);
+
+                // 2. Log History for the new cloned record
+                await logInventoryHistory({
+                    barcode: selectedRow.barcode,
+                    itemName: selectedRow.itemName || selectedRow.masterItemName,
+                    oldQty: 0,
+                    newQty: cloneQtyNum,
+                    oldRack: null,
+                    newRack: newRackLocation,
+                    updatedBy: activeUser,
+                    reason: `ໂຄລນ SKU ຈາກ Rack ${selectedRow.rackLocation || 'N/A'} ໄປ Rack ${newRackLocation} ຈຳນວນ ${cloneQtyNum} : ${cloneReason}`,
+                    branchId: branchToSave
+                });
+            }
+
+            // Optimistic UI: add clone as new item in local state
+            const newOptimisticItem = {
+                id: `temp-clone-${Date.now()}`,
+                barcode: selectedRow.barcode,
+                itemName: selectedRow.itemName || selectedRow.masterItemName,
+                qty: cloneQtyNum,
+                rackLocation: newRackLocation,
+                category1: selectedRow.category1,
+                category2: selectedRow.category2,
+                masterItemName: selectedRow.masterItemName,
+                odooQty: selectedRow.odooQty,
+                status: selectedRow.status,
+                rowIndex: results.length + optimisticItems.length + 1
+            };
+            setOptimisticItems(prev => [newOptimisticItem, ...prev]);
+
+            success('ໂຄລນ SKU ສຳເລັດ! ✅');
+            setSelectedRow(null);
+            setEditReason('');
+            setMergeAmount('');
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -1598,6 +1682,7 @@ const ResultTable = ({
                     isUpdating={isUpdating}
                     handleUpdate={handleUpdateMasterQty}
                     handleSplit={handleSplitMasterQty}
+                    handleClone={handleCloneMasterQty}
                     results={results}
                     allResults={allResults}
                     mergeAmount={mergeAmount}

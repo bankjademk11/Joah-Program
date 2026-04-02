@@ -728,7 +728,6 @@ const HQCommandCenter = ({ onBack }) => {
                 
             } else if (activeTab === 'edits') {
                 let q = supabase.from('inventory_history').select('*')
-                    .gt('old_qty', 0)
                     .order('updated_at', { ascending: false });
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
@@ -746,11 +745,12 @@ const HQCommandCenter = ({ onBack }) => {
                     new_qty: r.qty,
                     updated_by: r.added_by,
                     updated_at: r.created_at,
-                    details: r.remarks || r.reason || 'ສິນຄ້າເຂ້າໃໝ່',
+                    details: r.remarks || r.reason || 'ສິນຄ້າເຂົ້າໃໝ່',
                 }));
                 rows = [...rows, ...normalizedAdded].sort((a, b) =>
                     new Date(b.updated_at) - new Date(a.updated_at)
                 );
+
             } else {
                 let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
