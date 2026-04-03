@@ -1458,6 +1458,7 @@ const ResultTable = ({
                                             </div>
                                         </div>
                                     </th>
+                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">{t('results.category1')} & {t('results.category2')}</th>
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:text-joah-orange transition-colors group/head"
@@ -1471,7 +1472,18 @@ const ResultTable = ({
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-6 text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 hidden lg:table-cell">{t('results.category1')} & {t('results.category2')}</th>
+                                    <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        {t('results.shopQty')}<br/><span className="opacity-50">{t('results.shopQtySub')}</span>
+                                    </th>
+                                    <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        {t('results.dcQty')}<br/><span className="opacity-50">{t('results.dcQtySub')}</span>
+                                    </th>
+                                    <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        {t('results.salesQty')}<br/><span className="opacity-50">{t('results.salesQtySub')}</span>
+                                    </th>
+                                    <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        {t('results.scrapQty')}<br/><span className="opacity-50">{t('results.scrapQtySub')}</span>
+                                    </th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.status')}</th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.odooQty')}</th>
                                     <th className="px-8 py-6 text-right text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.actions')}</th>
@@ -1485,8 +1497,12 @@ const ResultTable = ({
                                             <td className="px-8 py-6"><div className="h-4 w-8 bg-slate-200 dark:bg-slate-800 rounded"></div></td>
                                             <td className="px-6 py-6"><div className="space-y-2"><div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div><div className="h-3 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div></div></td>
                                             <td className="px-6 py-6"><div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl mx-auto"></div></td>
-                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
                                             <td className="px-6 py-6 hidden lg:table-cell"><div className="space-y-2"><div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded"></div><div className="h-3 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
+                                            <td className="px-6 py-6"><div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
                                             <td className="px-6 py-6"><div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto"></div></td>
                                             <td className="px-6 py-6"><div className="h-6 w-12 bg-slate-200 dark:bg-slate-800 rounded mx-auto"></div></td>
                                             <td className="px-8 py-6 text-right"><div className="h-10 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl ml-auto"></div></td>
@@ -1501,15 +1517,27 @@ const ResultTable = ({
                                         >
                                             <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
                                             <td className="px-6 py-6">
-                                                <div className="flex flex-col gap-1.5 min-w-[200px]">
-                                                    <span className="text-sm font-black text-slate-800 dark:text-white font-mono tracking-tight">{row.barcode}</span>
-                                                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 truncate max-w-[240px]" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
+                                                <div className="flex flex-col gap-2 min-w-[220px] py-1">
+                                                    <div className="flex items-center">
+                                                        <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
+                                                    </div>
+                                                    <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
-                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-joah-orange/30 transition-colors">
-                                                    <MapPin size={12} className="text-joah-orange/50" />
-                                                    <span className="text-xs font-black tracking-tighter uppercase">{row.rackLocation}</span>
+                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-joah-orange/50 transition-all font-mono whitespace-nowrap">
+                                                    <MapPin size={13} className="text-joah-orange shrink-0" />
+                                                    <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase whitespace-nowrap">{row.rackLocation}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-6 hidden lg:table-cell">
+                                                <div className="flex flex-col gap-2 max-w-[180px]">
+                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/30 shadow-sm">
+                                                        <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
+                                                    </div>
+                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50 shadow-sm">
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest truncate">{row.category2 || '-'}</span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
@@ -1521,11 +1549,17 @@ const ResultTable = ({
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6 hidden lg:table-cell">
-                                                <div className="flex flex-col gap-1 max-w-[150px]">
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate">{row.category1 || '-'}</span>
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter opacity-50 truncate">{row.category2 || '-'}</span>
-                                                </div>
+                                            <td className="px-6 py-6 text-center">
+                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                            </td>
+                                            <td className="px-6 py-6 text-center">
+                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                            </td>
+                                            <td className="px-6 py-6 text-center">
+                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                            </td>
+                                            <td className="px-6 py-6 text-center">
+                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
                                             </td>
                                             <td className="px-6 py-6 text-center">
                                                 <button
