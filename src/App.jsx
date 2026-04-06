@@ -23,12 +23,15 @@ import imgCloudDB from './assets/CloudRecordDatabase.png';
 import imgOdoo from './assets/OdooImage.png';
 import imgExcelResize from './assets/ExelResize.png';
 import imgStoreClosing from './assets/RequestfromWarehouse.png';
+import imgStoreRequest from './assets/StoreRequest.png';
 import imgHQCenter from './assets/JoahHQcentercompressed.png';
+import imgStoreInventory from './assets/StoreInventory.png';
 
 import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
 import StoreRequest from './components/features/store/StoreRequest';
 import StoreRequestManager from './components/features/store/StoreRequestManager';
+import StoreInventoryMockup from './components/features/store/StoreInventoryMockup';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/features/admin/MasterAudit';
@@ -98,7 +101,7 @@ function AppContent() {
   const isRefreshingRef = useRef(false);
 
   // 🚀 Delta Sync State
-  const [rawLocationRows, setRawLocationRows] = useState([]); 
+  const [rawLocationRows, setRawLocationRows] = useState([]);
   const [lastLocationSyncTime, setLastLocationSyncTime] = useState(null);
 
   const isPSNUser = user?.branch_id?.startsWith('ໂພນສີນວນ');
@@ -517,34 +520,34 @@ function AppContent() {
       if (isDeltaSync) {
         const deltaRows = cloudLocation || [];
         const numUpdates = deltaRows.length;
-        
+
         // 🧪 DEBUG: Calculate approximate size in KB
         const approxBytes = new TextEncoder().encode(JSON.stringify(deltaRows)).length;
         const approxKB = (approxBytes / 1024).toFixed(2);
-        
+
         console.table(deltaRows); // 🧪 DEBUG: Show full payload in console
         console.log(`🧩 Delta Sync: Received ${numUpdates} updated row(s), Size: ~${approxKB} KB`);
-        
+
         // 🧪 DEBUG: Build detailed message text
         let detailString = '';
         if (numUpdates > 0 && numUpdates <= 20) {
-            detailString = '\n\n📋 ລາຍລະອຽດ:\n' + deltaRows.map(r => `• ${r.barcode_no} (ສາຂາ: ${r.branch_id || 'N/A'})`).join('\n');
+          detailString = '\n\n📋 ລາຍລະອຽດ:\n' + deltaRows.map(r => `• ${r.barcode_no} (ສາຂາ: ${r.branch_id || 'N/A'})`).join('\n');
         } else if (numUpdates > 20) {
-            detailString = '\n\n📋 ລາຍລະອຽດ: ຫຼາຍກວ່າ 20 ລາຍການ... (ສາມາດເບິ່ງເພີ່ມເຕີມໃນ Console F12)';
+          detailString = '\n\n📋 ລາຍລະອຽດ: ຫຼາຍກວ່າ 20 ລາຍການ... (ສາມາດເບິ່ງເພີ່ມເຕີມໃນ Console F12)';
         }
 
         // Show an explicit alert to the user so they can verify the efficiency
         alert(`🚨 [DEBUG] Delta Sync\n\nໂໝດ: ປະຢັດ Egress Data 🚀\nພົບການປ່ຽນແປງ: ${numUpdates} ແຖວ\nໃຊ້ Data ໄປພຽງ: ~${approxKB} KB${detailString}`);
 
         const deltaMap = new Map(deltaRows.map(row => [row.id, row]));
-        
+
         // Replace updated rows
         finalLocationData = rawLocationRows.map(row => deltaMap.has(row.id) ? deltaMap.get(row.id) : row);
         const existingIds = new Set(rawLocationRows.map(row => row.id));
-        
+
         // Append newly inserted rows
         deltaRows.forEach(row => {
-            if (!existingIds.has(row.id)) finalLocationData.push(row);
+          if (!existingIds.has(row.id)) finalLocationData.push(row);
         });
       }
 
@@ -570,7 +573,7 @@ function AppContent() {
       }));
 
       // branchToLoad is already calculated above
-      
+
       const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad);
       setValidationResults(validatedResults);
       setStats(validatedStats);
@@ -613,7 +616,7 @@ function AppContent() {
           // 🚨 BRANCH FILTER: Prevent changes from other branches from bleeding in!
           const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
           const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
-          
+
           if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) {
             console.log(`🛡️ Realtime ignored: Item is from ${payloadBranch}, but we are viewing ${targetBranch}`);
             return; // Skip this update!
@@ -940,42 +943,51 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
-                  {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-inner">
-                        <StoreRequestIcon className="w-8 h-8 text-current" />
+                  {/* Store Closing Checklist */}
+                  {!showAdminMenu && user?.workplace !== 'front' && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-yellow-50 dark:bg-slate-800 relative">
+                        <img src={imgStoreClosing} alt="Store Closing Checklist" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
-                      </div>
-                      
-                      {/* Branch Selector array for Store Request */}
-                      {(isAdmin || isPSNUser) && (
-                        <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                          <select
-                            value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
-                            onChange={(e) => setAdminViewBranch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
-                          >
-                            {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
-                            {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
-                            {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
-                            <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
-                          </select>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeClosing')}</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeClosingSub')}</p>
                         </div>
-                      )}
+                        <button onClick={() => setStep('store-closing')}
+                          className="w-full btn-primary mt-1 group py-4 bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 text-zinc-900 border-none">
+                          <ClipboardCheck size={18} />
+                          <span>Open Checklist</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                      <button
-                        onClick={() => setStep('store-request')}
-                        className="w-full btn-primary mt-2 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30"
-                      >
-                        <Play size={18} />
-                        <span>{t('home.enterStore')}</span>
-                      </button>
+                  {/* Store Inventory (Mockup) */}
+                  {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-emerald-50 dark:bg-slate-800 relative">
+                        <img src={imgStoreInventory} alt="Store Inventory" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຂໍ້ມູນຊັ້ນວ່າງເຄື່ອງໜ້າຮ້ານ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Store Inventory</p>
+                        </div>
+                        <button
+                          onClick={() => setStep('store-inventory-mockup')}
+                          className="w-full btn-primary mt-1 group py-4 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30 border-none"
+                        >
+                          <Database size={18} />
+                          <span>ເຂົ້າເບິ່ງຂໍ້ມູນໜ້າຮ້ານ</span>
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1121,24 +1133,45 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Store Closing Checklist */}
-                  {!showAdminMenu && user?.workplace !== 'front' && (
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-yellow-500 hover:shadow-yellow-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                  {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
+                  {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       {/* Image Banner */}
-                      <div className="w-full h-44 overflow-hidden bg-yellow-50 dark:bg-slate-800 relative">
-                        <img src={imgStoreClosing} alt="Store Closing Checklist" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                      <div className="w-full h-44 overflow-hidden bg-blue-50 dark:bg-slate-800 relative">
+                        <img src={imgStoreRequest} alt="Store Request" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
                         <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
                       {/* Content */}
                       <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
                         <div className="space-y-1.5 text-center">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeClosing')}</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeClosingSub')}</p>
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">{t('home.storeRequest')}</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{t('home.storeRequestSub')}</p>
                         </div>
-                        <button onClick={() => setStep('store-closing')}
-                          className="w-full btn-primary mt-1 group py-4 bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 text-zinc-900 border-none">
-                          <ClipboardCheck size={18} />
-                          <span>Open Checklist</span>
+
+                        {/* Branch Selector array for Store Request */}
+                        {(isAdmin || isPSNUser) && (
+                          <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                            <select
+                              value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
+                              onChange={(e) => setAdminViewBranch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                            >
+                              {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
+                              {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
+                              {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
+                              <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            </select>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => setStep('store-request')}
+                          className="w-full btn-primary mt-1 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 border-none"
+                        >
+                          <Play size={18} />
+                          <span>{t('home.enterStore')}</span>
                         </button>
                       </div>
                     </div>
@@ -1158,9 +1191,9 @@ function AppContent() {
                   </div>
                   {/* ให้เฉพาะ HQ (isAdmin) มีสิทธิ์อัปเดต Master Data จาก Excel ขึ้น Cloud */}
                   {dbSource === 'excel' && isAdmin && (
-                    <button 
-                      onClick={handleSyncToCloud} 
-                      disabled={isProcessing} 
+                    <button
+                      onClick={handleSyncToCloud}
+                      disabled={isProcessing}
                       className="flex flex-col items-center gap-1 group hover:scale-110 transition-transform"
                     >
                       <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30">
@@ -1177,6 +1210,10 @@ function AppContent() {
 
           {step === 'odoo-monitor' && (
             <OdooMonitor onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'store-inventory-mockup' && (
+            <StoreInventoryMockup onBack={() => setStep('upload')} />
           )}
 
           {step === 'store-closing' && (
@@ -1302,7 +1339,7 @@ function AppContent() {
                       className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center gap-2.5 shadow-lg ${locationSynced
                         ? 'bg-emerald-500 text-white cursor-default'
                         : 'bg-joah-orange hover:bg-orange-600 text-white shadow-orange-500/30 active:scale-95'
-                      } disabled:opacity-60 disabled:cursor-not-allowed`}
+                        } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       {locationSynced ? <CheckCircle size={18} /> : <UploadCloud size={18} />}
                       <span>{locationSynced ? 'Synced ແລ້ວ!' : 'Sync Location ໄປ Cloud'}</span>

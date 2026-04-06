@@ -67,7 +67,7 @@ const translations = {
             category1: 'ໝວດໝູ່ 1',
             category2: 'ໝວດໝູ່ 2',
             actualQty: 'ຈຳນວນQTY',
-            masterQty: '(Master)',
+            masterQty: '(ຫຼັງສາງ)',
             shopQty: 'ຈຳນວນໜ້າຮ້ານ',
             shopQtySub: '(Shop Qty)',
             dcQty: 'QTY DC',

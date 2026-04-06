@@ -139,7 +139,7 @@ const Navbar = ({
                                     </div>
                                     <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700"></div>
                                     <div className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
-                                        v2.1
+                                        v3.0
                                     </div>
                                 </div>
                             </div>
