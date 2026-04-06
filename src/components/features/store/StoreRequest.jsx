@@ -40,45 +40,57 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
 
     // Initial Fetch & Realtime Subscription
     useEffect(() => {
-        fetchRecentRequests();
+        let fetchTimeout;
+        const triggerFetch = () => {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(() => {
+                fetchRecentRequests();
+            }, 500); // Debounce: Wait 500ms to batch rapid events (like 5 cart inserts) into just 1 query
+        };
+
+        triggerFetch(); // Initial fetch
+
+        const myBranch = activeBranch || currentUser?.branch_id;
+        const filterConfig = { event: '*', schema: 'public', table: 'store_requests' };
 
         const channel = supabase
             .channel('store_requests_changes')
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'store_requests' },
+                filterConfig,
                 (payload) => {
+                    const reqBranch = payload.new?.branch_id || payload.old?.branch_id;
+                    const isMine = !myBranch || reqBranch === myBranch;
+
+                    // 🚨 CRUCIAL EGRESS FIX: Ignore payloads for other branches!
+                    if (!isMine) return;
+
                     // 🔔 Play sound when HQ accepts or rejects a request
                     if (payload.eventType === 'UPDATE') {
                         const oldStatus = payload.old?.status;
                         const newStatus = payload.new?.status;
-                        const reqBranch = payload.new?.branch_id;
-                        const myBranch = activeBranch || currentUser?.branch_id;
-
-                        // Only notify if this request belongs to this branch
-                        const isMine = !myBranch || reqBranch === myBranch;
-
-                        if (isMine) {
-                            // Note: Supabase omits paylod.old non-PK fields by default (unless REPLICA IDENTITY FULL is set).
-                            // So oldStatus is usually undefined. We just trigger based on newStatus.
-                            if (newStatus === 'accepted' && oldStatus !== 'accepted') {
-                                playOK();
-                                toast.success('✅ Request ຖືກຍອມຮັບແລ້ວ!');
-                            } else if (newStatus === 'rejected' && oldStatus !== 'rejected') {
-                                playError();
-                                toast.error('❌ Request ຖືກປະຕິເສດ');
-                            }
+                        if (newStatus === 'accepted' && oldStatus !== 'accepted') {
+                            playOK();
+                            toast.success('✅ Request ຖືກຍອມຮັບແລ້ວ!');
+                        } else if (newStatus === 'rejected' && oldStatus !== 'rejected') {
+                            playError();
+                            toast.error('❌ Request ຖືກປະຕິເສດ');
                         }
                     }
-                    fetchRecentRequests();
+
+                    // Fetch using debounce so multiple inserts only fetch once!
+                    triggerFetch();
                 }
             )
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            supabase.removeChannel(channel);
+            clearTimeout(fetchTimeout);
+        };
     }, [currentUser?.branch_id, activeBranch]);
 
-    // Focus barcode input
+    // Focus barcode input when product result changes
     useEffect(() => {
         if (barcodeInputRef.current) barcodeInputRef.current.focus();
     }, [product]);
@@ -115,7 +127,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         setIsLoading(true);
         const userBranch = activeBranch || currentUser?.branch_id;
         try {
-            // ✅ ดึงทุก rack ที่มี barcode นี้แล้วรวม qty ทั้งหมด
             let query = supabase.from('location_inventory')
                 .select('barcode_no, item_name, qty, rack_location, branch_id')
                 .eq('barcode_no', barcodeValue.trim());
@@ -123,9 +134,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
             const { data, error } = await query;
             if (error) throw error;
             if (data && data.length > 0) {
-                // รวม qty จากทุก rack
                 const totalQty = data.reduce((sum, row) => sum + (row.qty || 0), 0);
-                // รวม rack location ทั้งหมดที่มี qty > 0
                 const activeRacks = data
                     .filter(row => (row.qty || 0) > 0)
                     .map(row => row.rack_location)
@@ -165,9 +174,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
     const handleScanDetected = (scannedBarcode) => {
         setBarcode(scannedBarcode);
         toast.success(`📷 ສະແກນໄດ້: ${scannedBarcode}`);
-        // Auto search after scan
         doSearch(scannedBarcode);
-        // Switch to search tab on mobile
         setMobileTab('search');
     };
 
@@ -207,10 +214,9 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
         const batchId = `REQ${yy}${mm}${dd}-${randomStr}`;
         try {
-            // 📸 Snapshot stock ณ ตอนนี้จาก location_inventory ก่อน insert
             const barcodes = cart.map(item => item.barcode).filter(Boolean);
             const branchId = activeBranch || currentUser?.branch_id || null;
-            let stockSnapshot = {}; // barcode -> total qty
+            let stockSnapshot = {};
 
             if (barcodes.length > 0 && branchId) {
                 const { data: stockData } = await supabase
@@ -231,7 +237,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                 request_by: currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Store Staff'),
                 branch_id: item.branch_id || branchId,
                 batch_id: batchId,
-                stock_at_request: stockSnapshot[item.barcode] ?? null, // 📸 snapshot ณ เวลานี้
+                stock_at_request: stockSnapshot[item.barcode] ?? null,
             }));
             const { error } = await supabase.from('store_requests').insert(requests);
             if (error) throw error;
@@ -301,8 +307,12 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
     const filteredRequests = recentRequests.filter(req => filter === 'all' || req.status === filter);
     const groupedHistory = groupHistory(filteredRequests);
 
-    // ===================== SEARCH PANEL =====================
-    const SearchPanel = () => (
+    // ========== INLINE JSX PANELS ==========
+    // ⚠️ IMPORTANT: These are JSX variables, NOT sub-components.
+    // Defining them as `const Panel = () => (...)` inside a component causes React to treat them as new
+    // component types on every render, forcing a full unmount+remount which kills input focus continuity.
+
+    const searchPanelJSX = (
         <div className="glass-card p-5 sm:p-8 rounded-[2rem] flex flex-col gap-5 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
                 <ShoppingCart size={150} />
@@ -319,9 +329,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                         onChange={(e) => setBarcode(e.target.value)}
                         placeholder={t('storeRequest.searchPlaceholder')}
                         className="flex-1 text-xl sm:text-2xl font-bold bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 sm:px-6 sm:py-4 placeholder:text-slate-300 min-w-0"
-                        autoFocus={window.innerWidth > 768}
                     />
-                    {/* Search Button */}
                     <button
                         type="submit"
                         disabled={isLoading}
@@ -332,7 +340,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                 </div>
             </form>
 
-            {/* 📸 Big Centered Camera Scan Button */}
             <button
                 type="button"
                 onClick={() => setShowScanner(true)}
@@ -359,7 +366,9 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                         <div className="text-center flex-1 px-2">
                             <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">QTY</span>
                             <input
-                                type="number" min="1" value={qty}
+                                type="number"
+                                min="1"
+                                value={qty}
                                 onChange={(e) => { const val = parseInt(e.target.value, 10); if (!isNaN(val) && val >= 1) setQty(val); else if (e.target.value === '') setQty(''); }}
                                 onBlur={() => { if (!qty || qty < 1) setQty(1); }}
                                 className="w-full text-3xl font-black text-blue-600 dark:text-blue-400 text-center bg-transparent outline-none border-b-2 border-blue-200 dark:border-blue-800 focus:border-blue-500 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -382,8 +391,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         </div>
     );
 
-    // ===================== CART PANEL =====================
-    const CartPanel = () => (
+    const cartPanelJSX = (
         <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-5 shadow-xl border border-slate-100 dark:border-slate-700 flex flex-col h-full min-h-[300px]">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -423,8 +431,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         </div>
     );
 
-    // ===================== HISTORY PANEL =====================
-    const HistoryPanel = () => (
+    const historyPanelJSX = (
         <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col min-h-[300px]">
             <div className="flex items-center justify-between mb-3 px-2">
                 <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">{t('storeRequest.history')}</h3>
@@ -444,7 +451,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                     <RotateCw size={14} className="text-slate-400 cursor-pointer hover:rotate-180 transition-all" onClick={fetchRecentRequests} />
                 </div>
             </div>
-            {/* Status Tabs */}
             <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-4">
                 {['all', 'pending', 'accepted', 'rejected'].map(f => (
                     <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${filter === f ? f === 'rejected' ? 'bg-rose-500 text-white shadow-sm' : f === 'accepted' ? 'bg-emerald-500 text-white shadow-sm' : f === 'pending' ? 'bg-orange-400 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -511,7 +517,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
 
     return (
         <>
-            {/* Barcode Scanner Modal */}
             {showScanner && (
                 <BarcodeScannerModal
                     onDetected={handleScanDetected}
@@ -529,7 +534,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                         <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tight truncate">{t('storeRequest.title')}</h1>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('storeRequest.subtitle')}</p>
                     </div>
-                    {/* Mobile stats */}
                     <div className="flex gap-2 md:hidden">
                         {requestStats.pending > 0 && (
                             <span className="px-3 py-1.5 bg-orange-100 text-orange-600 rounded-xl text-xs font-black">⏳ {requestStats.pending}</span>
@@ -542,7 +546,6 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
 
                 {/* ===== MOBILE TAB LAYOUT ===== */}
                 <div className="md:hidden">
-                    {/* Tab Buttons */}
                     <div className="flex bg-slate-100 dark:bg-slate-800 rounded-2xl p-1 mb-4">
                         {[
                             { key: 'search', icon: Search, label: 'ຄົ້ນຫາ' },
@@ -559,30 +562,22 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
                             </button>
                         ))}
                     </div>
-
-                    {/* Tab Content */}
-                    {mobileTab === 'search' && <SearchPanel />}
-                    {mobileTab === 'cart' && (
-                        <div style={{ minHeight: '60vh' }}>
-                            <CartPanel />
-                        </div>
-                    )}
-                    {mobileTab === 'history' && <HistoryPanel />}
+                    {mobileTab === 'search' && searchPanelJSX}
+                    {mobileTab === 'cart' && <div style={{ minHeight: '60vh' }}>{cartPanelJSX}</div>}
+                    {mobileTab === 'history' && historyPanelJSX}
                 </div>
 
                 {/* ===== DESKTOP LAYOUT ===== */}
                 <div className="hidden md:flex gap-6 h-[calc(100vh-130px)]">
-                    {/* Left Column */}
                     <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2">
-                        <SearchPanel />
+                        {searchPanelJSX}
                     </div>
-                    {/* Right Column */}
                     <div className="w-96 flex flex-col gap-6 h-full overflow-hidden">
                         <div className="flex-1 min-h-[300px] overflow-hidden flex flex-col">
-                            <CartPanel />
+                            {cartPanelJSX}
                         </div>
                         <div className="flex-1 min-h-[350px] overflow-hidden flex flex-col">
-                            <HistoryPanel />
+                            {historyPanelJSX}
                         </div>
                     </div>
                 </div>
