@@ -844,21 +844,18 @@ function AppContent() {
                 </div>
 
                 <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
-                  {/* File Upload + Branch Selector (admin only) */}
+                  {/* File Upload + Branch Selector (admin only) - DISABLED & MOVED TO BOTTOM TEMPORARILY
                   {showAdminMenu && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-400 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      {/* Image Banner */}
                       <div className="w-full h-44 overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
                         <img src={imgImportFile} alt="Import File" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
                         <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
-                      {/* Content */}
                       <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
                         <div className="space-y-1.5 text-center">
                           <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ເລືອກໄຟລ໌ໜ້າວຽກ</h3>
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">XLSX / CSV File</p>
                         </div>
-                        {/* Branch Selector */}
                         <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
                           <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 shrink-0">Import ໃຫ້:</span>
@@ -874,7 +871,6 @@ function AppContent() {
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                           </select>
                         </div>
-                        {/* Auto Sync Master Checkbox */}
                         <div className="w-full mt-[-8px]">
                           <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <input
@@ -889,11 +885,9 @@ function AppContent() {
                             </span>
                           </label>
                         </div>
-                        {/* Hidden FileUpload — triggered by button below */}
                         <div className="hidden">
                           <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
                         </div>
-                        {/* Upload button — same style as other cards */}
                         <button
                           onClick={() => !isProcessing && document.getElementById('file-input').click()}
                           disabled={isProcessing}
@@ -905,6 +899,9 @@ function AppContent() {
                       </div>
                     </div>
                   )}
+                  */}
+
+                  {/* Cloud Database */}
 
                   {/* Cloud Database */}
                   {(isAdmin || (user?.workplace !== 'front' && user?.branch_id)) && (
@@ -1214,6 +1211,34 @@ function AppContent() {
                         >
                           <Play size={18} />
                           <span>{t('home.enterStore')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* File Upload (Disabled & Moved to Bottom) */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col grayscale opacity-50 pointer-events-none transition-all duration-500 w-full sm:w-[340px] border-slate-200 dark:border-slate-800">
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
+                        <img src={imgImportFile} alt="Import File" className="w-full h-full object-cover object-center" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-400 dark:text-slate-500 tracking-tight">ເລືອກໄຟລ໌ໜ້າວຽກ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">XLSX / CSV File (Maintenance)</p>
+                        </div>
+                        
+                        {/* Status Badge */}
+                        <div className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ປິດໃຊ້ງານຊົ່ວຄາວ</span>
+                        </div>
+
+                        <button disabled className="w-full py-4 bg-slate-300 dark:bg-slate-700 text-slate-500 rounded-2xl font-black text-sm uppercase flex items-center justify-center gap-2">
+                          <X size={18} />
+                          <span>Maintenance</span>
                         </button>
                       </div>
                     </div>
