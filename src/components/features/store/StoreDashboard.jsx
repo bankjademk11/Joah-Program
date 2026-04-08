@@ -39,10 +39,10 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
             ring: 'ring-rose-500/40'
         },
         {
-            id: 'missing',
+            id: 'incomplete',
             title: 'ຂໍ້ມູນບໍ່ຄົບ',
             subtitle: 'Incomplete',
-            value: stats.missing,
+            value: stats.incomplete,
             icon: AlertCircle,
             gradient: 'from-amber-500 to-amber-700',
             glow: 'shadow-amber-600/40',
@@ -50,16 +50,15 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
             ring: 'ring-amber-500/40'
         },
         {
-            id: isZeroMode ? 'zero' : 'hasQty',
-            title: isZeroMode ? 'ສິນຄ້າເປັນ 0' : 'ສິນຄ້າມີຈໍານວນ',
-            subtitle: isZeroMode ? 'Zero Quantity' : 'In Stock Items',
-            value: isZeroMode ? (stats.zeroQty || 0) : (stats.hasQty || 0),
-            icon: isZeroMode ? XCircle : PackageOpen,
-            gradient: isZeroMode ? 'from-orange-500 to-red-700' : 'from-sky-500 to-sky-700',
-            glow: isZeroMode ? 'shadow-red-600/40' : 'shadow-sky-600/40',
-            iconBg: isZeroMode ? 'bg-gradient-to-br from-orange-400 to-red-600' : 'bg-gradient-to-br from-sky-400 to-sky-600',
-            ring: isZeroMode ? 'ring-red-500/40' : 'ring-sky-500/40',
-            isToggle: true
+            id: 'missing',
+            title: 'ສິນຄ້າເປັນ 0',
+            subtitle: 'Zero Quantity',
+            value: stats.missing,
+            icon: XCircle,
+            gradient: 'from-orange-500 to-red-700',
+            glow: 'shadow-red-600/40',
+            iconBg: 'bg-gradient-to-br from-orange-400 to-red-600',
+            ring: 'ring-red-500/40'
         },
     ];
 

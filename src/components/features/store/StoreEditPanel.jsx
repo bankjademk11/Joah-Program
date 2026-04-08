@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
-import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories } from '../../../utils/rackUtils';
-import LocationInspector from './LocationInspector';
+import { getStoreRackSuggestions, getStoreBranchCategories } from '../../../utils/storeRackUtils';
+import LocationInspector from '../inventory/LocationInspector';
 
 const EditPanel = ({
     selectedRow,
@@ -38,20 +38,20 @@ const EditPanel = ({
 
     // --- Helpers ---
     // Use branch-specific rules
-    const branchCategories = getBranchCategories(currentBranch);
+    const branchCategories = getStoreBranchCategories(currentBranch);
 
     const getAllLocations = () => {
         const allLocs = [];
         branchCategories.forEach(cat => {
-            allLocs.push(...getRackSuggestions(cat, currentBranch));
+            allLocs.push(...getStoreRackSuggestions(cat, currentBranch));
         });
         return [...new Set(allLocs)].sort();
     };
 
     // Determine current suggestions based on mode and categories
     const currentSuggestions = !customMode
-        ? getRackSuggestions(editCat1 || selectedRow?.category1 || selectedCategory, currentBranch)
-        : (selectedCategory ? getRackSuggestions(selectedCategory, currentBranch) : getAllLocations());
+        ? getStoreRackSuggestions(editCat1 || selectedRow?.category1 || selectedCategory, currentBranch)
+        : (selectedCategory ? getStoreRackSuggestions(selectedCategory, currentBranch) : getAllLocations());
 
     // --- Effects ---
 

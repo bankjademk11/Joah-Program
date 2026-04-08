@@ -18,9 +18,9 @@ import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 
 // Feature Components
-import EditPanel from '../inventory/EditPanel';
+import StoreEditPanel from './StoreEditPanel';
 import DiagnosticPanel from '../inventory/DiagnosticPanel';
-import QuickAddPanel from '../inventory/QuickAddPanel';
+import StoreQuickAddPanel from './StoreQuickAddPanel';
 import LocationInspector from '../inventory/LocationInspector';
 
 const StoreResultTable = ({
@@ -156,7 +156,7 @@ const StoreResultTable = ({
         }
     };
 
-    const [isFoundInMaster, setIsFoundInMaster] = useState(false); // New state to track if barcode exists in Master Data
+    const [isFoundInMaster, setIsFoundInMaster] = useState(false);
     const [quickAddForm, setQuickAddForm] = useState({
         barcode_no: '',
         item_name: '',
@@ -166,7 +166,9 @@ const StoreResultTable = ({
         qty: 0,
         remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
     });
-    const [inspectedLocation, setInspectedLocation] = useState(null); // New state for location inspector
+    // Ref to always access latest quickAddForm inside async callbacks (fixes stale closure)
+    const quickAddFormRef = useRef(quickAddForm);
+    useEffect(() => { quickAddFormRef.current = quickAddForm; }, [quickAddForm]);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // New sort state
     const [optimisticItems, setOptimisticItems] = useState([]); // Optimistic UI for added items
 
@@ -1217,7 +1219,7 @@ const StoreResultTable = ({
                                             return;
                                         }
 
-                                        if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Inventory, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
+                                        if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Store_Inventory, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
                                             setQuickAddForm({
                                                 barcode_no: searchTerm,
                                                 item_name: '',
@@ -1371,7 +1373,7 @@ const StoreResultTable = ({
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
                                     >
                                         <div className="flex items-center justify-center gap-2">
-                                            {t('results.shopQty')}
+                                            ຈຳນວນໜ້າຮ້ານ
                                             <div className={`transition-all duration-300 ${sortConfig.key === 'qty' ? 'text-emerald-500 scale-110' : 'text-emerald-300 group-hover/head:text-emerald-500'}`}>
                                                 {sortConfig.key === 'qty' ? (
                                                     sortConfig.direction === 'asc' ? <ChevronDown size={16} strokeWidth={3} /> : <ChevronDown size={16} className="rotate-180" strokeWidth={3} />
@@ -1379,8 +1381,8 @@ const StoreResultTable = ({
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.actualQty')} / {t('results.masterQty')}
+                                    <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
+                                        ຈຳນວນQTY<br/><span className="text-[10px] opacity-80 font-bold">(ຫຼັງສາງ)</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
                                         {t('results.dcQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
@@ -1437,13 +1439,18 @@ const StoreResultTable = ({
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                    <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
-                                                        <Database size={8} className="text-sky-500" />
-                                                        <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
-                                                    </div>
+                                                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">ໜ້າຮ້ານ</div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                            {/* ຈຳນວນ ຫຼັງສາງ */}
+                                            <td className="px-6 py-6 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                        {row.warehouseQty ?? 0}
+                                                    </span>
+                                                    <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">ສາງ</div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
@@ -1495,13 +1502,72 @@ const StoreResultTable = ({
                     </div>
                 </div>
 
-                {/* --- Modals (Disabled for Mockup) --- */}
-                {/* 
-                  <EditPanel ... />
-                  <DiagnosticPanel ... />
-                  <QuickAddPanel ... />
-                  <AuditLogModal ... />
-                */}
+                {/* --- Modals for Store --- */}
+                <StoreQuickAddPanel
+                    isOpen={showQuickAdd}
+                    onClose={() => setShowQuickAdd(false)}
+                    quickAddForm={quickAddForm}
+                    setQuickAddForm={setQuickAddForm}
+                    isFoundInMaster={isFoundInMaster}
+                    setIsFoundInMaster={setIsFoundInMaster}
+                    isSaving={isSavingQuickAdd}
+                    onSave={async () => {
+                        setIsSavingQuickAdd(true);
+                        try {
+                            const latestForm = quickAddFormRef.current;
+                            if (onAddNewProduct) {
+                                await onAddNewProduct(latestForm);
+                            }
+                            setShowQuickAdd(false);
+                            if (onRefresh) onRefresh();
+                        } catch (err) {
+                            showError('Error saving product: ' + err.message);
+                        } finally {
+                            setIsSavingQuickAdd(false);
+                        }
+                    }}
+                    masterData={masterData}
+                    results={results}
+                    allResults={allResults}
+                    t={t}
+                    currentBranch={currentBranch}
+                />
+                
+                <StoreEditPanel
+                    selectedRow={selectedRow}
+                    onClose={() => { setSelectedRow(null); setEditQty(''); setEditLocation(''); setEditReason(''); }}
+                    editQty={editQty} setEditQty={setEditQty}
+                    editLocation={editLocation} setEditLocation={setEditLocation}
+                    editCat1={editCat1} setEditCat1={setEditCat1}
+                    editCat2={editCat2} setEditCat2={setEditCat2}
+                    editReason={editReason} setEditReason={setEditReason}
+                    currentUser={currentUser}
+                    isUpdating={isUpdating}
+                    handleUpdate={async () => {
+                         // Basic update wrapper
+                         setIsUpdating(true);
+                         try {
+                              if (onUpdateRowQty && selectedRow) {
+                                  await onUpdateRowQty(selectedRow.rowIndex, { 
+                                     qty: Number(editQty || 0), 
+                                     rackLocation: editLocation || selectedRow.rackLocation,
+                                     category1: editCat1 || selectedRow.category1,
+                                     category2: editCat2 || selectedRow.category2
+                                  });
+                              }
+                              setSelectedRow(null);
+                         } catch(e) {}
+                         finally { setIsUpdating(false); }
+                    }}
+                    handleSplit={() => {}} 
+                    handleClone={() => {}}
+                    results={results}
+                    allResults={allResults}
+                    mergeAmount={mergeAmount}
+                    setMergeAmount={setMergeAmount}
+                    t={t}
+                    currentBranch={currentBranch}
+                />
             </div>
 
             {/* Scanner Modal */}

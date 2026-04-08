@@ -1,0 +1,483 @@
+import { useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
+import * as XLSX from "xlsx";
+import {
+  X, Upload, BarChart3, ChevronRight, ChevronDown, FileSpreadsheet,
+  Search, ArrowUpDown, Download, RotateCw, ArrowLeft,
+  CheckCircle2, FileText, LayoutDashboard, Database, TrendingUp, Info
+} from "lucide-react";
+
+const PAGE_SIZE = 50;
+
+export default function SalesAggregator({ onBack }) {
+  const [rows, setRows] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [barcodeCol, setBarcodeCol] = useState("");
+  const [qtyCol, setQtyCol] = useState("");
+  const [aggData, setAggData] = useState([]);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("count");
+  const [sortDir, setSortDir] = useState(-1);
+  const [page, setPage] = useState(0);
+  const [step, setStep] = useState("upload"); // upload | config | result
+  const [isReading, setIsReading] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const [dragging, setDragging] = useState(false);
+
+  // --- Logic ---
+  const parseFile = useCallback((file) => {
+    if (!file) return;
+    setFileName(file.name);
+    setIsReading(true); // Start loading
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Use setTimeout to allow UI to render the loading state first
+      setTimeout(() => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const parsed = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+          if (!parsed.length) {
+            alert("ໄຟລ໌ນີ້ບໍ່ມີຂໍ້ມູນ");
+            setIsReading(false);
+            return;
+          }
+
+          const cols = Object.keys(parsed[0]);
+          setRows(parsed);
+          setHeaders(cols);
+          const bIdx = cols.findIndex((c) => c.toLowerCase().includes("barcode"));
+          const qIdx = cols.findIndex(
+            (c) => c.toLowerCase().includes("quantity") || c.toLowerCase().includes("qty")
+          );
+          setBarcodeCol(cols[bIdx >= 0 ? bIdx : 0]);
+          setQtyCol(cols[qIdx >= 0 ? qIdx : 0]);
+          setStep("config");
+        } catch (error) {
+          console.error("Error parsing file:", error);
+          alert("ເກີດຂໍ້ຜິດພາດໃນການອ່ານໄຟລ໌");
+        } finally {
+          setIsReading(false); // Stop loading
+        }
+      }, 150);
+    };
+    reader.readAsArrayBuffer(file);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      setDragging(false);
+      parseFile(e.dataTransfer.files[0]);
+    },
+    [parseFile]
+  );
+
+  const runAgg = useCallback(() => {
+    setIsReading(true); // Start loading for aggregation
+    setTimeout(() => {
+      const map = {};
+      for (const row of rows) {
+        const key = String(row[barcodeCol]).trim();
+        if (!key) continue;
+        const q = parseFloat(row[qtyCol]) || 0;
+        if (!map[key]) map[key] = { barcode: key, count: 0, qty: 0 };
+        map[key].count++;
+        map[key].qty += q;
+      }
+      setAggData(Object.values(map));
+      setPage(0);
+      setStep("result");
+      setIsReading(false);
+    }, 100);
+  }, [rows, barcodeCol, qtyCol]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return aggData
+      .filter((r) => !q || r.barcode.toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (sortKey === "barcode") return sortDir * a.barcode.localeCompare(b.barcode);
+        return sortDir * (a[sortKey] - b[sortKey]);
+      });
+  }, [aggData, search, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageSlice = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => d * -1);
+    else { setSortKey(key); setSortDir(-1); }
+    setPage(0);
+  };
+
+  const totalQty = useMemo(() => aggData.reduce((s, r) => s + r.qty, 0), [aggData]);
+
+  const downloadCSV = () => {
+    const csvRows = [
+      ["Barcode", "ຈຳນວນຄັ້ງ", "Qty ລວມ"],
+      ...filtered.map((r) => [r.barcode, r.count, Math.round(r.qty)]),
+    ];
+    // BOM for Excel Lao language support
+    const csvContent = "\uFEFF" + csvRows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const content = (
+    <div className="fixed inset-0 z-[300] bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-300">
+
+      {/* --- Header --- */}
+      <header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 shadow-sm relative z-10">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all group"
+          >
+            <ArrowLeft size={22} className="group-hover:-translate-x-1 transition-transform" />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                <TrendingUp size={18} />
+              </div>
+              <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Sales Aggregator</h1>
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">ລວມຍອດຂາຍສິນຄ້າຈາກ Odoo</p>
+          </div>
+        </div>
+
+        {/* Steps Indicator */}
+        <div className="hidden md:flex items-center gap-3">
+          {[
+            { id: 'upload', label: 'ອັບໂຫລດ', icon: Upload },
+            { id: 'config', label: 'ຕັ້ງຄ່າ', icon: Database },
+            { id: 'result', label: 'ຜົນລາຍງານ', icon: BarChart3 }
+          ].map((s, idx) => (
+            <div key={s.id} className="flex items-center gap-3">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${step === s.id
+                  ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20 scale-105'
+                  : (step === 'result' || (step === 'config' && s.id === 'upload'))
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+                }`}>
+                <s.icon size={14} />
+                <span className="text-xs font-black">{s.label}</span>
+              </div>
+              {idx < 2 && <ChevronRight size={14} className="text-slate-300" />}
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onBack}
+          className="p-2.5 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all"
+        >
+          <X size={24} />
+        </button>
+      </header>
+
+      {/* --- Main Content --- */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 relative">
+        {/* Loading Overlay */}
+        {isReading && (
+          <div className="absolute inset-0 z-50 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-800 p-10 rounded-[2.5rem] shadow-2xl border border-blue-500/20 flex flex-col items-center gap-6">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full border-4 border-blue-100 dark:border-blue-900/30 border-t-blue-600 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Database size={24} className="text-blue-600 animate-pulse" />
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-1">ກຳລັງປະມວນຜົນຂໍ້ມູນ</h3>
+                <p className="text-sm font-bold text-slate-400">ກະລຸນາລໍຖ້າຈັກຄູ່, ງານນີ້ໃຊ້ພະລັງງານສູງ...</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="max-w-6xl mx-auto w-full">
+
+          {/* STEP 1: UPLOAD */}
+          {step === "upload" && (
+            <div className="max-w-2xl mx-auto pt-10 animate-in slide-in-from-bottom-5 duration-500">
+              <div className="text-center mb-10">
+                <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-3">ເລີ່ມຕົ້ນສະຫຼຸບຍອດຂາຍ</h2>
+                <p className="text-slate-500 dark:text-slate-400 font-medium">ວາງໄຟລ໌ Excel ທີ່ Export ມາຈາກ Odoo ເພື່ອລວມຍອດຕາມ Barcode</p>
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById("file-input").click()}
+                className={`group relative rounded-[2.5rem] border-4 border-dashed p-20 text-center transition-all duration-500 h-[400px] flex flex-col items-center justify-center
+                    ${dragging
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/10 scale-95"
+                    : "border-slate-200 dark:border-slate-800 hover:border-blue-400 hover:bg-white dark:hover:bg-slate-900/50 cursor-pointer shadow-xl shadow-transparent hover:shadow-blue-500/10"
+                  }`}
+              >
+                <div className={`w-24 h-24 rounded-3xl mb-8 flex items-center justify-center transition-all duration-500 ${dragging ? 'bg-blue-600 text-white scale-110' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 group-hover:scale-110'
+                  }`}>
+                  <Upload size={48} strokeWidth={2.5} />
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2 underline underline-offset-8 decoration-blue-200 dark:decoration-blue-800 group-hover:decoration-blue-500 transition-all">
+                  ຄລິກ ຫຼື ວາງໄຟລ໌ລົງທີ່ນີ້
+                </h3>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">ຮອງຮັບ .XLSX, .XLS, .CSV</p>
+
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => parseFile(e.target.files[0])}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: CONFIGURATION */}
+          {step === "config" && (
+            <div className="max-w-xl mx-auto pt-10 animate-in zoom-in-95 duration-300">
+              <div className="glass-card rounded-[2.5rem] border-blue-500/30 p-10 shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600" />
+
+                <div className="flex items-center gap-4 mb-10">
+                  <div className="p-3 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600">
+                    <FileSpreadsheet size={28} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 text-emerald-600">File Detected</p>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white truncate">{fileName}</h3>
+                    <p className="text-xs font-bold text-slate-500">ພົບຂໍ້ມູນທັງໝົດ: {rows.length.toLocaleString()} ແຖວ</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center text-[10px]">1</span>
+                      ເລືອກຄໍລຳ Barcode
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={barcodeCol}
+                        onChange={(e) => setBarcodeCol(e.target.value)}
+                        className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                      >
+                        {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center text-[10px]">2</span>
+                      ເລືອກຄໍລຳ Quantity (ຈຳນວນ)
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={qtyCol}
+                        onChange={(e) => setQtyCol(e.target.value)}
+                        className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                      >
+                        {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                    </div>
+                  </div>
+
+                  <div className="pt-6">
+                    <button
+                      onClick={runAgg}
+                      className="w-full h-16 rounded-[1.5rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-lg shadow-xl shadow-blue-500/30 hover:-translate-y-1 transition-all active:scale-95 flex items-center justify-center gap-3"
+                    >
+                      <span>ປະມວນຜົນລວມຍອດ</span>
+                      <ArrowLeft className="rotate-180" size={22} />
+                    </button>
+                    <button
+                      onClick={() => setStep('upload')}
+                      className="w-full mt-4 h-12 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold transition-colors text-sm"
+                    >
+                      ຍົກເລີກ ແລະ ເລືອກໄຟລ໌ໃໝ່
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: RESULTS */}
+          {step === "result" && (
+            <div className="space-y-8 animate-in fade-in duration-500">
+
+              {/* Dashboard Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="glass-card rounded-[2rem] p-8 border-blue-500/20 shadow-xl relative overflow-hidden group">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-3">Total SKUs</p>
+                  <p className="text-5xl font-black text-slate-800 dark:text-white">{aggData.length.toLocaleString()}</p>
+                  <p className="text-sm font-bold text-slate-400 mt-2">ລາຍການສິນຄ້າທັງໝົດ</p>
+                </div>
+                <div className="glass-card rounded-[2rem] p-8 border-emerald-500/20 shadow-xl relative overflow-hidden group">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
+                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-3">Aggregated Qty</p>
+                  <p className="text-5xl font-black text-slate-800 dark:text-white">{Math.round(totalQty).toLocaleString()}</p>
+                  <p className="text-sm font-bold text-slate-400 mt-2">ຈຳນວນສິນຄ້າລວມທັງໝົດ</p>
+                </div>
+                <div className="glass-card rounded-[2rem] p-8 border-amber-500/20 shadow-xl relative overflow-hidden group">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
+                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-3">Odoo Raw Rows</p>
+                  <p className="text-5xl font-black text-slate-800 dark:text-white">{rows.length.toLocaleString()}</p>
+                  <p className="text-sm font-bold text-slate-400 mt-2">ແຖວຂໍ້ມູນຈາກ Odoo</p>
+                </div>
+              </div>
+
+              {/* Table Control Bar */}
+              <div className="glass-card rounded-[2rem] p-4 flex flex-col lg:flex-row items-center gap-4 border-slate-200 dark:border-slate-800">
+                <div className="flex-1 w-full relative">
+                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="ຄົ້ນຫາບາໂຄ້ດ..."
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                    className="w-full h-14 pl-14 pr-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm outline-none focus:border-blue-500 transition-all shadow-inner"
+                  />
+                </div>
+                <div className="flex gap-3 w-full lg:w-auto">
+                  <button
+                    onClick={downloadCSV}
+                    className="flex-1 lg:flex-none h-14 px-8 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                  >
+                    <FileSpreadsheet size={18} />
+                    <span>ດາວໂຫລດ CSV</span>
+                  </button>
+                  <button
+                    onClick={() => { setStep("upload"); setRows([]); setAggData([]); setSearch(""); }}
+                    className="h-14 px-6 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-500 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    title="Reset"
+                  >
+                    <RotateCw size={18} />
+                    <span className="hidden sm:inline font-black text-sm">ຣີເຊັດ</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Result Table */}
+              <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl overflow-hidden">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100/80 dark:bg-slate-800/80">
+                        {[
+                          { key: "barcode", label: "ບາໂຄ້ດ (Barcode)" },
+                          { key: "count", label: "ຈຳນວນຄັ້ງ", center: true },
+                          { key: "qty", label: "ຈຳນວນລວມ (Qty)", center: true },
+                        ].map((col) => (
+                          <th
+                            key={col.key}
+                            onClick={() => handleSort(col.key)}
+                            className={`px-8 py-6 text-xs font-black text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors group ${col.center ? 'text-center' : ''}`}
+                          >
+                            <div className={`flex items-center gap-2 ${col.center ? 'justify-center' : ''}`}>
+                              {col.label}
+                              <ArrowUpDown size={14} className={`transition-opacity ${sortKey === col.key ? 'opacity-100 text-blue-500' : 'opacity-0 group-hover:opacity-40'}`} />
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {pageSlice.length > 0 ? pageSlice.map((r, i) => (
+                        <tr key={r.barcode} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                                <FileText size={16} />
+                              </div>
+                              <span className="font-mono font-black text-blue-600 dark:text-blue-400">{r.barcode}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5 text-center">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-black text-sm">
+                              {r.count.toLocaleString()} ລາຍການ
+                            </span>
+                          </td>
+                          <td className="px-8 py-5 text-center">
+                            <span className="text-xl font-black text-slate-800 dark:text-white">
+                              {Math.round(r.qty).toLocaleString()}
+                            </span>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="3" className="py-20 text-center">
+                            <div className="flex flex-col items-center gap-4 text-slate-300 dark:text-slate-700">
+                              <Search size={64} strokeWidth={1} />
+                              <p className="text-xl font-bold">ບໍ່ພົບຂໍ້ມູນທີ່ທ່ານຄົ້ນຫາ</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="px-8 py-6 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-sm font-bold text-slate-400">
+                    ສະແດງ {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} ຈາກ {filtered.length.toLocaleString()} ລາຍການ
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronRight className="rotate-180" size={20} />
+                    </button>
+                    <div className="h-12 px-5 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-blue-500/20">
+                      {page + 1} / {totalPages}
+                    </div>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={page + 1 >= totalPages}
+                      className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+      </main>
+
+      {/* --- Footer Decoration --- */}
+      <footer className="h-10 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-1.5 opacity-30">
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Sales Pro Aggregator System</p>
+        </div>
+      </footer>
+
+    </div>
+  );
+
+  return createPortal(content, document.body);
+}

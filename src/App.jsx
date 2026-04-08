@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -32,6 +32,7 @@ import OdooMonitor from './components/features/admin/OdooMonitor';
 import StoreRequest from './components/features/store/StoreRequest';
 import StoreRequestManager from './components/features/store/StoreRequestManager';
 import StoreInventoryMockup from './components/features/store/StoreInventoryMockup';
+import StoreInventory from './components/features/store/StoreInventory';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/features/admin/MasterAudit';
@@ -42,6 +43,7 @@ import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 import ExcelCompressor from './components/Tools/excel-compressor';
+import SalesAggregator from './components/Tools/SalesAggregator';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -966,7 +968,7 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Store Inventory (Mockup) */}
+                  {/* Store Inventory */}
                   {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
                       {/* Image Banner */}
@@ -980,6 +982,25 @@ function AppContent() {
                           <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຂໍ້ມູນຊັ້ນວ່າງເຄື່ອງໜ້າຮ້ານ</h3>
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Store Inventory</p>
                         </div>
+
+                        {/* Branch Selector (Admin only) */}
+                        {isAdmin && (
+                          <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                            <select
+                              value={adminViewBranch || 'ຕະຫຼາດລາວ'}
+                              onChange={(e) => setAdminViewBranch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                            >
+                              <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                              <option value="ສີວິໄລ">ສີວິໄລ</option>
+                              <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                              <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            </select>
+                          </div>
+                        )}
+
                         <button
                           onClick={() => setStep('store-inventory-mockup')}
                           className="w-full btn-primary mt-1 group py-4 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30 border-none"
@@ -1028,6 +1049,27 @@ function AppContent() {
                           <button onClick={() => setStep('excel-compressor')}
                             className="w-full btn-primary mt-1 group py-4 bg-slate-700 hover:bg-slate-800 shadow-slate-500/30 text-white border-none">
                             <FileArchive size={18} />
+                            <span>Open Tool</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sales Aggregator */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-blue-50 dark:bg-slate-800 relative flex items-center justify-center">
+                           <div className="p-8 rounded-[2rem] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                             <TrendingUp size={64} strokeWidth={2.5} />
+                           </div>
+                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                        </div>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Sales Aggregator</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Odoo Sales Summary</p>
+                          </div>
+                          <button onClick={() => setStep('sales-aggregator')}
+                            className="w-full btn-primary mt-1 group py-4 bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 text-white border-none">
+                            <BarChart3 size={18} />
                             <span>Open Tool</span>
                           </button>
                         </div>
@@ -1213,7 +1255,12 @@ function AppContent() {
           )}
 
           {step === 'store-inventory-mockup' && (
-            <StoreInventoryMockup onBack={() => setStep('upload')} />
+            <StoreInventoryMockup
+              onBack={() => setStep('upload')}
+              currentUser={user}
+              isAdmin={isAdmin}
+              initialBranch={isAdmin ? (adminViewBranch || 'ຕະຫຼາດລາວ') : (user?.branch_id || '')}
+            />
           )}
 
           {step === 'store-closing' && (
@@ -1222,6 +1269,10 @@ function AppContent() {
 
           {step === 'excel-compressor' && (
             <ExcelCompressor onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'sales-aggregator' && (
+            <SalesAggregator onBack={() => setStep('upload')} />
           )}
 
           {step === 'hq-dashboard' && isAdmin && (
