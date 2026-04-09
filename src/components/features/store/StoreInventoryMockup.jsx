@@ -5,6 +5,7 @@ import StoreResultTable from './StoreResultTable';
 import { supabase } from '../../../utils/supabaseClient';
 import { useToast } from '../../ui/ToastProvider';
 import { getStoreRackSuggestions, validateStoreRack } from '../../../utils/storeRackUtils';
+import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ'];
 
@@ -111,6 +112,8 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       masterItemName: row.item_name || '',
       rackLocation: rack || '—',
       qty: qty,
+      maxQty: row.max_qty || null,
+      productTag: row.product_tag || null,
       masterQty: qty,
       warehouseQty: warehouseMap[String(row.barcode_no).trim()] ?? 0, 
       category1: masterCategory,
@@ -208,6 +211,21 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         })
         .eq('id', row.id);
       if (error) throw error;
+
+      // Log to history
+      await logStoreInventoryHistory({
+          actionType: 'edited',
+          barcode: row.barcode,
+          itemName: row.itemName,
+          oldQty: row.qty,
+          newQty: updates.qty,
+          oldLocation: row.rackLocation,
+          newLocation: updates.rackLocation || row.rackLocation,
+          reason: updates.reason || 'Manual QTY Update',
+          branchId: selectedBranch,
+          updatedBy: currentUser?.name || 'Staff'
+      });
+
       setResults(prev => prev.map(r =>
         r.rowIndex === rowIndex ? { ...r, ...updates, status: updates.qty > 0 ? 'passed' : 'missing' } : r
       ));
@@ -252,6 +270,8 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         shelf_location: formData.rack_location || '-',
         category_1_actual: formData.category_1_actual || '',
         category_2_actual: formData.category_2_actual || '',
+        max_qty: formData.max_qty ? Number(formData.max_qty) : null,
+        product_tag: formData.product_tag || null,
         branch_id: selectedBranch,
         updated_by: currentUser?.name || 'Staff',
         last_updated: new Date().toISOString()
@@ -266,6 +286,24 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
           console.error('[StoreInventory.DEBUG] ❌ Supabase INSERT Error:', error);
           throw error;
       }
+
+      // Log to history
+      await logStoreInventoryHistory({
+          actionType: 'added',
+          barcode: payload.barcode_no,
+          itemName: payload.item_name,
+          oldQty: 0,
+          newQty: payload.store_qty,
+          oldLocation: null,
+          newLocation: payload.shelf_location,
+          oldTag: null,
+          newTag: payload.product_tag,
+          oldMaxQty: null,
+          newMaxQty: payload.max_qty,
+          reason: formData.reason || 'New Item Add',
+          branchId: selectedBranch,
+          updatedBy: payload.updated_by
+      });
 
       console.log('[StoreInventory.DEBUG] ✅ Success! Refreshing data...');
       await fetchData();

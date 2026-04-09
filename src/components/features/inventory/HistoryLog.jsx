@@ -13,6 +13,7 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
     const [endDate, setEndDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [actionFilter, setActionFilter] = useState('all'); // 'all', 'added', 'edited'
+    const [sourceFilter, setSourceFilter] = useState('all'); // 'all', 'store', 'warehouse'
     const [showExportMenu, setShowExportMenu] = useState(false);
 
     // Refs for click outside
@@ -64,7 +65,19 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
                     console.warn("Added items log table might not exist yet:", addError);
                 }
 
-                // 3. Normalize and Merge Data
+                // 3. Fetch Store History
+                let storeQuery = supabase
+                    .from('store_inventory_history')
+                    .select('*')
+                    .order('updated_at', { ascending: false })
+                    .limit(500);
+                if (branchToFilter) storeQuery = storeQuery.eq('branch_id', branchToFilter);
+                const { data: storeData, error: storeError } = await storeQuery;
+                if (storeError) {
+                    console.warn("Store inventory history error:", storeError);
+                }
+
+                // 4. Normalize and Merge Data
                 const formattedEdits = (editData || []).map(item => {
                     // Priority: details (Smart Log) -> change_reason -> reason
                     let reasonDisplay = item.details || item.change_reason || item.reason;
@@ -96,7 +109,8 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
                         timestamp: item.updated_at,
                         user: item.updated_by,
                         change_qty: changeVal,
-                        details: reasonDisplay
+                        details: reasonDisplay,
+                        source: 'warehouse'
                     };
                 });
 
@@ -123,12 +137,31 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
                         old_qty: 0,
                         new_qty: item.qty,
                         change_qty: item.qty,
-                        details: realReason
+                        details: realReason,
+                        source: 'warehouse'
+                    };
+                });
+
+                const formattedStore = (storeData || []).map(item => {
+                    const changeVal = (item.new_store_qty || 0) - (item.old_store_qty || 0);
+                    return {
+                        ...item,
+                        barcode: item.barcode_no,
+                        old_qty: item.old_store_qty || 0,
+                        new_qty: item.new_store_qty || 0,
+                        old_rack: item.old_shelf_location,
+                        new_rack: item.new_shelf_location,
+                        type: item.action_type || 'edited',
+                        timestamp: item.updated_at,
+                        user: item.updated_by,
+                        change_qty: changeVal,
+                        details: item.change_reason || 'Manual Update',
+                        source: 'store'
                     };
                 });
 
                 // Combine and Sort
-                const combined = [...formattedEdits, ...formattedAdds].sort((a, b) =>
+                const combined = [...formattedEdits, ...formattedAdds, ...formattedStore].sort((a, b) =>
                     new Date(b.timestamp) - new Date(a.timestamp)
                 );
 
@@ -147,7 +180,7 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
     // Reset page on search/filter
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, startDate, endDate, actionFilter]);
+    }, [searchTerm, startDate, endDate, actionFilter, sourceFilter]);
 
     // Filtering Logic
     const filteredData = historyData.filter(log => {
@@ -165,7 +198,10 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
         // Type Action Filter
         const matchesType = actionFilter === 'all' || log.type === actionFilter;
 
-        return matchesSearch && matchesDate && matchesType;
+        // Source Filter
+        const matchesSource = sourceFilter === 'all' || log.source === sourceFilter;
+
+        return matchesSearch && matchesDate && matchesType && matchesSource;
     });
 
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -247,22 +283,24 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
 
             // Add Rows
             dataToExport.forEach(log => {
+                const sourceText = log.source === 'store' ? 'Store' : 'Warehouse';
                 const row = sheet.addRow({
+                    barcode: log.barcode || '',
+                    type: log.type === 'edited' ? 'ແກ້ໄຂ' : 'ເພີ່ມໃໝ່',
+                    user: log.user || 'Unknown',
                     time: new Date(log.timestamp).toLocaleString('lo-LA'),
-                    type: log.type === 'added' ? 'ເພີ່ມສິນຄ້າໃໝ່' : 'ແກ້ໄຂຈຳນວນ',
-                    user: log.user,
-                    barcode: log.barcode,
-                    item: log.item_name,
-                    old_rack: log.old_rack || '-',  // ✅ New
-                    new_rack: log.new_rack || '-',  // ✅ New
-                    old_cat1: log.old_category_1 || '-',  // ✅ New
-                    new_cat1: log.new_category_1 || '-',  // ✅ New
-                    old_cat2: log.old_category_2 || '-',  // ✅ New
-                    new_cat2: log.new_category_2 || '-',  // ✅ New
+                    item: log.item_name || '',
+                    old_rack: log.old_rack || '-',
+                    new_rack: log.new_rack || '-',
+                    old_cat1: log.old_category_1 || '-',
+                    new_cat1: log.new_category_1 || '-',
+                    old_cat2: log.old_category_2 || '-',
+                    new_cat2: log.new_category_2 || '-',
                     old: log.old_qty,
                     new: log.new_qty,
-                    change: log.change_qty > 0 ? `+${log.change_qty}` : log.change_qty,
-                    details: log.details
+                    change: log.change_qty > 0 ? '+' + log.change_qty : log.change_qty,
+                    details: log.details || '-',
+                    source: sourceText
                 });
 
                 // Conditional Coloring
@@ -339,6 +377,20 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
 
                     {/* Filters & Actions Group */}
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                        {/* Source Filter */}
+                        <div className="relative">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                            <select
+                                value={sourceFilter}
+                                onChange={(e) => setSourceFilter(e.target.value)}
+                                className="appearance-none pl-10 pr-10 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer min-w-[140px]"
+                            >
+                                <option value="all">ທັງໝົດ (All Sources)</option>
+                                <option value="store">ໜ້າຮ້ານ (Store)</option>
+                                <option value="warehouse">ຫຼັງສາງ (Warehouse)</option>
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                        </div>
 
                         {/* Action Filter */}
                         <div className="relative">
@@ -496,6 +548,9 @@ const HistoryLog = ({ onClose, currentUser, activeBranch }) => {
                                                             <Edit3 size={10} strokeWidth={3} /> {t('history.edited')}
                                                         </span>
                                                     )}
+                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${row.source === 'store' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'}`}>
+                                                        {row.source === 'store' ? 'Store' : 'WH'}
+                                                    </span>
                                                 </div>
                                                 <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{new Date(row.timestamp).toLocaleDateString('lo-LA')}</span>
                                                 <span className="text-xs text-slate-400 font-mono">{new Date(row.timestamp).toLocaleTimeString('lo-LA')}</span>
