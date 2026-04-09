@@ -225,6 +225,47 @@ export const logInventoryHistory = async ({
     }
 };
 
+/**
+ * 5. Store Inventory History Log
+ */
+export const logStoreInventoryHistory = async ({
+    actionType, barcode, itemName,
+    oldQty, newQty, oldLocation, newLocation,
+    oldTag, newTag, oldMaxQty, newMaxQty,
+    reason, branchId, updatedBy
+}) => {
+    try {
+        const historyRecord = {
+            action_type: actionType || 'edited',
+            barcode_no: barcode,
+            item_name: itemName,
+            old_store_qty: Number(oldQty || 0),
+            new_store_qty: Number(newQty || 0),
+            old_shelf_location: oldLocation || null,
+            new_shelf_location: newLocation || null,
+            old_product_tag: oldTag || null,
+            new_product_tag: newTag || null,
+            old_max_qty: oldMaxQty ? Number(oldMaxQty) : null,
+            new_max_qty: newMaxQty ? Number(newMaxQty) : null,
+            change_reason: reason || '',
+            branch_id: branchId || 'All Branches',
+            updated_by: updatedBy || 'Unknown',
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabase
+            .from('store_inventory_history')
+            .insert([historyRecord])
+            .select();
+
+        if (error) throw error;
+        return { success: true, data };
+    } catch (error) {
+        console.error('logStoreInventoryHistory error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 export const fetchLocationFromSupabase = async (branchId, lastSyncTime = null) => {
     try {
         const branch = branchId || 'ຕະຫຼາດລາວ';
