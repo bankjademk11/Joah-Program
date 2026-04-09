@@ -22,11 +22,8 @@ export const STORE_BRANCH_RACK_RULES = {
         'TOYS': [
             { zones: ['TFE-06', 'TFE-07', 'TFE-08', 'TFE-09', 'TFE-10', 'TFC01-05', 'TFC01-06'], maxLevel: 0, format: 'store_exact' }
         ],
-        'SPORTS': [
-            { zones: ['TFE-11', 'TFE-12', 'TFE-13'], maxLevel: 0, format: 'store_exact' }
-        ],
         'FASHION': [
-            { zones: ['TFA03-01', 'TFA03-02', 'TFA03-03', 'TFA03-04', 'TFA03-05', 'TFA03-06', 'TFA03-07', 'TFA03-08', 'TFA03-09', 'TFA03-10', 'TFA04-07', 'TFA04-08', 'TFA04-09', 'TFA04-10', 'TFB01-01', 'TFB01-02', 'TFB01-03', 'TFB01-04', 'TFB01-05', 'TFB01-06', 'TFB01-07', 'TFB01-08', 'TFB04-01', 'TFB04-02', 'TFB04-03', 'TFB04-04', 'TFB04-05', 'TFB04-06', 'TFB04-07', 'TFB04-08'], maxLevel: 0, format: 'store_exact' }
+            { zones: ['TFA03-01', 'TFA03-02', 'TFA03-03', 'TFA03-04', 'TFA03-05', 'TFA03-06', 'TFA03-07', 'TFA03-08', 'TFA03-09', 'TFA03-10', 'TFA04-07', 'TFA04-08', 'TFA04-09', 'TFA04-10', 'TFB01-01', 'TFB01-02', 'TFB01-03', 'TFB01-04', 'TFB01-05', 'TFB01-06', 'TFB01-07', 'TFB01-08', 'TFB04-01', 'TFB04-02', 'TFB04-03', 'TFB04-04', 'TFB04-05', 'TFB04-06', 'TFB04-07', 'TFB04-08', 'TFE-11', 'TFE-12', 'TFE-13'], maxLevel: 0, format: 'store_exact' }
         ],
         'BEAUTY': [
             { zones: ['TFC01-01', 'TFC01-02', 'TFC01-03', 'TFC01-04', 'TFC02-01', 'TFC02-02', 'TFC02-03', 'TFC02-04', 'TFC02-05', 'TFC02-06', 'TFC03-01', 'TFC03-02', 'TFC03-03', 'TFC03-04', 'TFC03-05', 'TFC03-06'], maxLevel: 0, format: 'store_exact' }
