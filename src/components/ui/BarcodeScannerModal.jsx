@@ -279,7 +279,7 @@ const BarcodeScannerModal = ({ onDetected, onClose }) => {
     };
 
     const modalContent = (
-        <div className="fixed inset-0 z-[999] flex flex-col bg-black">
+        <div className="fixed inset-0 z-[999999] flex flex-col bg-black">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileScan} style={{ display: 'none' }} />
 

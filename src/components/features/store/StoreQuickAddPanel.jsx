@@ -71,7 +71,7 @@ const QuickAddPanel = ({
     useEffect(() => {
         const lookupBarcode = async () => {
             if (!isOpen || !quickAddForm.barcode_no) return;
-            
+
             const barcode = String(quickAddForm.barcode_no).trim();
             if (barcode.length < 3) return; // Don't search too early
 
@@ -87,7 +87,7 @@ const QuickAddPanel = ({
                         .from('master_data')
                         .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
                         .eq('barcode', barcode);
-                    
+
                     if (!error && dbItems && dbItems.length > 0) {
                         // Priority: ຕະຫຼາດລາວ
                         masterItem = dbItems.find(i => i.branch_id === 'ຕະຫຼາດລາວ') || dbItems[0];
@@ -196,7 +196,7 @@ const QuickAddPanel = ({
         ? validateStoreRack(quickAddForm.rack_location, quickAddForm.category_1_actual, currentBranch)
         : true; // Default true if no data yet
 
-    return createPortal(
+    const panelPortal = createPortal(
         <div
             style={{
                 position: 'fixed',
@@ -482,14 +482,14 @@ const QuickAddPanel = ({
                                                         {(() => {
                                                             // 1. Get List of all relevant locations
                                                             const allPossibleRacks = getAllLocations();
-                                                            
+
                                                             // 2. Identify which ones are Recommended (by Rule OR by History)
                                                             const recommendedList = [...new Set([...ruleMatchedRacks, ...recommendedScannedLocs])];
-                                                            
+
                                                             // 3. Filter by search
                                                             const searchFilteredAll = allPossibleRacks.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
                                                             const searchFilteredRec = recommendedList.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
-                                                            
+
                                                             // Header Helper
                                                             const renderHeader = (title, icon) => (
                                                                 <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-b border-t first:border-t-0 dark:border-slate-700 flex items-center gap-2">
@@ -526,7 +526,7 @@ const QuickAddPanel = ({
                                                                                     >
                                                                                         <div className="flex items-center gap-2">
                                                                                             <span className="font-bold">{loc}</span>
-                                                                                            {isMatched ? 
+                                                                                            {isMatched ?
                                                                                                 <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 rounded-full font-black">MATCH</span> :
                                                                                                 <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 rounded-full font-black">HISTORY</span>
                                                                                             }
@@ -715,26 +715,34 @@ const QuickAddPanel = ({
                 )}
             </div>
 
-            {/* 🆕 LOCATION SCANNER MODAL - Moved outside container for better z-index layering */}
-            {showLocationScanner && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 100001 }}>
-                    <BarcodeScannerModal
-                        onDetected={(code) => {
-                            setLocationSearch(code);
-                            setShowLocationScanner(false);
-                            // Auto-set the rack if there's an exact match in current suggestions
-                            const allLocs = getAllLocations();
-                            if (allLocs.includes(code.toUpperCase())) {
-                                setQuickAddForm(prev => ({ ...prev, rack_location: code.toUpperCase() }));
-                                setDropdownOpen(false);
-                            }
-                        }}
-                        onClose={() => setShowLocationScanner(false)}
-                    />
-                </div>
-            )}
         </div>,
         document.body
+    );
+
+    // ✅ FIXED: Scanner is a SEPARATE Portal - completely outside QuickAddPanel's stacking context
+    const scannerPortal = showLocationScanner ? createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200000 }}>
+            <BarcodeScannerModal
+                onDetected={(code) => {
+                    setLocationSearch(code);
+                    setShowLocationScanner(false);
+                    const allLocs = getAllLocations();
+                    if (allLocs.includes(code.toUpperCase())) {
+                        setQuickAddForm(prev => ({ ...prev, rack_location: code.toUpperCase() }));
+                        setDropdownOpen(false);
+                    }
+                }}
+                onClose={() => setShowLocationScanner(false)}
+            />
+        </div>,
+        document.body
+    ) : null;
+
+    return (
+        <>
+            {panelPortal}
+            {scannerPortal}
+        </>
     );
 };
 
