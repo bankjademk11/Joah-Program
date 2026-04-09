@@ -236,14 +236,16 @@ const EditPanel = ({
                                     ແກ້ໄຂ
                                 </button>
                                 <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(''); }}
+                                    disabled
+                                    title="ຍັງไม่เปิดใช้งานในขณะนี้"
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors opacity-40 cursor-not-allowed text-slate-400`}
                                 >
                                     ແບ່ງໄປ
                                 </button>
                                 <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); }}
+                                    disabled
+                                    title="ຍังไม่เปิดใช้งานในขณะนี้"
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors opacity-40 cursor-not-allowed text-slate-400`}
                                 >
                                     ໂຄນສິນຄ້າ
                                 </button>

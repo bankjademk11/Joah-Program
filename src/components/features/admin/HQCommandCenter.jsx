@@ -6,7 +6,7 @@ import {
     BarChart3, GitBranch, Edit3, PlusCircle,
     Loader2, ArrowLeft, Clock,
     AlertCircle, User, ChevronRight, ArrowLeftCircle, Search, RefreshCw,
-    FileSpreadsheet, X, ChevronDown
+    FileSpreadsheet, X, ChevronDown, Store
 } from 'lucide-react';
 
 import imgSvl from '../../../assets/SVLJoah.png';
@@ -28,6 +28,7 @@ const TABS = [
     { id: 'requests', label: 'ລາຍງານ Request', icon: GitBranch, color: 'from-orange-500 to-amber-500' },
     { id: 'edits', label: 'ການແກ້ໄຂສິນຄ້າ', icon: Edit3, color: 'from-indigo-500 to-purple-500' },
     { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
+    { id: 'store_edits', label: 'ປະຫວັດໜ້າຮ້ານ', icon: Store, color: 'from-blue-500 to-cyan-500' },
 ];
 
 // ===================== HELPERS =====================
@@ -105,23 +106,23 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         rows.forEach((r, i) => {
             const isAcc = r.status === 'accepted' || r.status === 'approved';
             const isRej = r.status === 'rejected';
-            
+
             // Stock calculation
             const stockQty = r.stock_at_request ?? null;
             const requestedQty = r.qty ?? 0;
-            
+
             // Pending & Rejected: don't show remaining. Accepted: stock - qty.
-            const remainQty = (stockQty != null && isAcc) 
-                ? stockQty - requestedQty 
+            const remainQty = (stockQty != null && isAcc)
+                ? stockQty - requestedQty
                 : null;
 
             const { name: reqName, empId: reqId } = parseUser(r.request_by);
             const { name: accName, empId: accId } = parseUser(r.accepted_by);
             const row = ws.addRow({
-                branch_id: r.branch_id, 
-                docNo: r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A', 
+                branch_id: r.branch_id,
+                docNo: r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A',
                 product_name: r.product_name || r.barcode,
-                barcode: r.barcode, 
+                barcode: r.barcode,
                 qty: requestedQty,
                 stock_qty: stockQty != null ? stockQty : '-',
                 remain_qty: remainQty != null ? remainQty : '-',
@@ -147,6 +148,57 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
+        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
+        rows.forEach((r, i) => {
+            const ch = (r.new_qty ?? 0) - (r.old_qty ?? 0);
+            const { name: editName, empId: editId } = parseUser(r.updated_by || r.added_by);
+            const isNew = r._source === 'added';
+            const row = ws.addRow({
+                branch_id: r.branch_id,
+                item_name: r.item_name || r.barcode,
+                barcode: r.barcode,
+                updated_by_name: editName,
+                updated_by_id: editId || r.updated_by_id || '-',
+                change: ch > 0 ? `+${ch}` : ch,
+                old_qty: isNew ? '-' : (r.old_qty ?? '-'),
+                new_qty: r.new_qty ?? '-',
+                details: r.details || r.change_reason || r.remarks || (isNew ? 'ສິນຄ້າເຂ້າໃໝ່' : 'ແກ້ໄຂຂໍ້ມູນ'),
+                updated_at: fmtExcel(r.updated_at),
+            });
+            const bg = isNew ? 'FFD1FAE5' : (ch > 0 ? 'FFD1FAE5' : ch < 0 ? 'FFFEE2E2' : 'FFF1F5F9');
+            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? bg : 'FFFFFFFF' } }; });
+            row.getCell('change').font = { bold: true, color: { argb: ch > 0 ? 'FF065F46' : ch < 0 ? 'FF991B1B' : 'FF6B7280' } };
+        });
+    } else if (activeTab === 'store_edits') {
+        ws.columns = [
+            { header: 'ສາຂາ', key: 'branch_id', width: 18 },
+            { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
+            { header: 'Barcode', key: 'barcode', width: 18 },
+            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
+            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', key: 'qty_text', width: 16 },
+            { header: 'Tag (ເກົ່າ -> ໃໝ່)', key: 'tag_text', width: 24 },
+            { header: 'Shelf (ເກົ່າ -> ໃໝ່)', key: 'shelf_text', width: 24 },
+            { header: 'Max Qty (ເກົ່າ -> ໃໝ່)', key: 'max_text', width: 24 },
+            { header: 'ເວລາ', key: 'updated_at', width: 24 },
+        ];
+        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
+        rows.forEach((r, i) => {
+            const { name: editName, empId: editId } = parseUser(r.updated_by);
+            const row = ws.addRow({
+                branch_id: r.branch_id,
+                item_name: r.item_name || r.barcode,
+                barcode: r.barcode,
+                updated_by_name: editName,
+                updated_by_id: editId || r.updated_by_id || '-',
+                qty_text: `${r.old_qty ?? '-'} -> ${r.new_qty ?? '-'}`,
+                tag_text: `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
+                shelf_text: `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
+                max_text: `${r.old_max || '-'} -> ${r.new_max || '-'}`,
+                updated_at: fmtExcel(r.updated_at),
+            });
+            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
+        });
         ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
             const ch = (r.new_qty ?? 0) - (r.old_qty ?? 0);
@@ -264,9 +316,14 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subB = { val: rows.filter(r => r.status === 'accepted' || r.status === 'approved').length, label: 'ອານຸມັດ', color: 'text-emerald-600' };
                 subC = { val: rows.filter(r => r.status === 'rejected').length, label: 'ປະຕິເສດ', color: 'text-rose-500' };
             } else if (activeTab === 'edits') {
-                mainVal = rows.length; mainLabel = 'ການແກ້ໄຂ';
+                mainVal = rows.length; mainLabel = 'ການແກ້ໄຂຄລັງ';
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-indigo-500' };
                 subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-purple-600' };
+                subC = null;
+            } else if (activeTab === 'store_edits') {
+                mainVal = rows.length; mainLabel = 'ການແກ້ໄຂໜ້າຮ້ານ';
+                subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-blue-500' };
+                subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-cyan-600' };
                 subC = null;
             } else {
                 mainVal = rows.length; mainLabel = 'ສິນຄ້າໃໝ່';
@@ -390,6 +447,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
     const headers =
         activeTab === 'requests' ? ['#', 'ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
+            activeTab === 'store_edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', 'Tag', 'Shelf(Hook/Cherp)', 'Max Qty', 'ເວລາ'] :
             activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                 ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
@@ -430,14 +488,14 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
             const stockColor = stockQty == null ? 'text-slate-300'
                 : stockQty <= requestedQty ? 'text-rose-500 font-black'
-                : stockQty <= requestedQty * 2 ? 'text-amber-500 font-black'
-                : 'text-emerald-600 font-black';
+                    : stockQty <= requestedQty * 2 ? 'text-amber-500 font-black'
+                        : 'text-emerald-600 font-black';
 
             const remainColor = remainQty == null ? 'text-slate-300'
                 : remainQty < 0 ? 'text-rose-600 font-black'
-                : remainQty === 0 ? 'text-orange-500 font-bold'
-                : isRejected ? 'text-slate-400 font-semibold'
-                : 'text-slate-700 dark:text-slate-200 font-semibold';
+                    : remainQty === 0 ? 'text-orange-500 font-bold'
+                        : isRejected ? 'text-slate-400 font-semibold'
+                            : 'text-slate-700 dark:text-slate-200 font-semibold';
 
             return (
                 <tr key={i} className={`transition-colors ${isAccepted ? 'bg-emerald-50/40' : isRejected ? 'bg-rose-50/40' : 'hover:bg-amber-50/40'}`}>
@@ -496,6 +554,77 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                             );
                         })() : <span className="text-slate-300">-</span>}
                     </td>
+                </tr>
+            );
+        }
+        if (activeTab === 'store_edits') {
+            const getShelfIcon = (val) => {
+                if (!val || val === '-') return <span className="text-slate-300">-</span>;
+                const s = String(val).trim().toUpperCase();
+                const isHook = s.startsWith('H-') || s.startsWith('HK') || s === 'HOOK' || s.includes('HOOK');
+                if (isHook) {
+                    return <span className="flex items-center gap-1 justify-center">🪝 <span className="text-emerald-700 font-bold">{val}</span></span>;
+                }
+                return <span className="flex items-center gap-1 justify-center">📦 <span className="text-blue-700 font-bold">{val}</span></span>;
+            };
+
+            return (
+                <tr key={i} className="hover:bg-cyan-50/30 transition-colors">
+                    <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
+                    <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                            <p className="text-base font-bold text-slate-800 dark:text-white leading-tight">{r.item_name || r.barcode || '-'}</p>
+                            <p className="text-xs text-slate-400 font-mono mt-1">{r.barcode}</p>
+                        </div>
+                    </td>
+                    <td className="px-6 py-4">
+                        <UserCell value={r.updated_by} iconColor="text-blue-400" />
+                        <p className="text-[10px] text-slate-400 mt-1 font-medium">{fmt(r.updated_at)}</p>
+                    </td>
+                    
+                    {/* QTY */}
+                    <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-900/20 py-2 rounded-xl">
+                            <span className="text-xs font-bold text-slate-400">{r.old_qty ?? '-'}</span>
+                            <span className="text-slate-300">→</span>
+                            <span className="text-lg font-black text-blue-600">{r.new_qty ?? '-'}</span>
+                        </div>
+                    </td>
+
+                    {/* Tag */}
+                    <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_tag || '-'}</span>
+                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
+                            <span className="text-xs font-black text-cyan-600 px-2 py-0.5 rounded-md bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-100 dark:border-cyan-800">
+                                {r.new_tag || '-'}
+                            </span>
+                        </div>
+                    </td>
+
+                    {/* Shelf */}
+                    <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                            <div className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_shelf || '-'}</div>
+                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
+                            <div className="text-xs font-bold">
+                                {getShelfIcon(r.new_shelf)}
+                            </div>
+                        </div>
+                    </td>
+
+                    {/* Max Qty */}
+                    <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_max || '-'}</span>
+                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
+                            <span className="text-xs font-black text-indigo-600 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30">
+                                {r.new_max || '-'}
+                            </span>
+                        </div>
+                    </td>
+
+                    <td className="px-6 py-4 text-slate-500 text-sm font-bold whitespace-nowrap text-left">{fmt(r.updated_at)}</td>
                 </tr>
             );
         }
@@ -570,9 +699,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                                 <button
                                     key={s.key}
                                     onClick={() => setStatusFilter(statusFilter === s.key ? 'all' : s.key)}
-                                    className={`flex flex-col items-center px-4 py-2 rounded-2xl text-white transition-all hover:scale-105 active:scale-95 ${
-                                        statusFilter === s.key ? s.active : s.cls + ' hover:bg-white/30'
-                                    }`}
+                                    className={`flex flex-col items-center px-4 py-2 rounded-2xl text-white transition-all hover:scale-105 active:scale-95 ${statusFilter === s.key ? s.active : s.cls + ' hover:bg-white/30'
+                                        }`}
                                 >
                                     <span className="text-2xl font-black">{s.val}</span>
                                     <span className="text-xs font-bold opacity-80 uppercase">{s.label}</span>
@@ -649,7 +777,16 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead className="bg-slate-50 dark:bg-slate-800">
-                        <tr>{headers.map(h => <th key={h} className="px-6 py-4 text-sm font-black uppercase text-slate-500 tracking-wider text-left whitespace-nowrap">{h}</th>)}</tr>
+                        <tr>
+                            {headers.map((h, idx) => {
+                                const isCenter = ['#', 'จຳນວນ', 'Tag', 'Shelf', 'Max', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ຂໍ', 'ປ່ຽນແປງ', 'ການປ່ຽน'].some(k => h.includes(k));
+                                return (
+                                    <th key={idx} className={`px-6 py-4 text-sm font-black uppercase text-slate-500 tracking-wider whitespace-nowrap ${isCenter ? 'text-center' : 'text-left'}`}>
+                                        {h}
+                                    </th>
+                                );
+                            })}
+                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                         {paginatedData.length > 0 ? paginatedData.map((r, i) => renderRow(r, page * PAGE_SIZE + i)) : <tr><td colSpan={headers.length}><EmptyState label="ບໍ່ພົບຂໍ້ມູນ" /></td></tr>}
@@ -725,7 +862,7 @@ const HQCommandCenter = ({ onBack }) => {
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);
                 rows = await fetchAllChunks(q);
-                
+
             } else if (activeTab === 'edits') {
                 let q = supabase.from('inventory_history').select('*')
                     .order('updated_at', { ascending: false });
@@ -750,6 +887,31 @@ const HQCommandCenter = ({ onBack }) => {
                 rows = [...rows, ...normalizedAdded].sort((a, b) =>
                     new Date(b.updated_at) - new Date(a.updated_at)
                 );
+
+            } else if (activeTab === 'store_edits') {
+                let q = supabase.from('store_inventory_history').select('*')
+                    .order('updated_at', { ascending: false });
+                if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
+                if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
+                const storeData = await fetchAllChunks(q);
+
+                rows = (storeData || []).map(r => ({
+                    ...r,
+                    _source: 'store',
+                    item_name: r.item_name,
+                    barcode: r.barcode_no || r.barcode,
+                    old_qty: r.old_store_qty ?? 0,
+                    new_qty: r.new_store_qty ?? 0,
+                    old_tag: r.old_product_tag,
+                    new_tag: r.new_product_tag,
+                    old_shelf: r.old_shelf_location,
+                    new_shelf: r.new_shelf_location,
+                    old_max: r.old_max_qty,
+                    new_max: r.new_max_qty,
+                    updated_by: r.updated_by,
+                    updated_at: r.updated_at,
+                    details: r.change_reason || 'Manual Update',
+                }));
 
             } else {
                 let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false });
@@ -858,7 +1020,7 @@ const HQCommandCenter = ({ onBack }) => {
                         {/* Summary Banner */}
                         <div className={`rounded-3xl bg-gradient-to-r ${activeTabConfig?.color} p-7 text-white shadow-xl`}>
                             <p className="text-xl font-bold opacity-80 mb-1">
-                                {activeTab === 'requests' ? 'ຄຳຂໍ Store Request' : activeTab === 'edits' ? 'ການແກ້ໄຂສິນຄ້າ' : 'ສິນຄ້າເຂົ້າໃໝ່'} · ທຸກສາຂາ
+                                {activeTab === 'requests' ? 'ຄຳຂໍ Store Request' : activeTab === 'edits' ? 'ການແກ້ໄຂຄລັງ' : activeTab === 'store_edits' ? 'ປະຫວັດໜ້າຮ້ານ' : 'ສິນຄ້າເຂົ້າໃໝ່'} · ທຸກສາຂາ
                             </p>
                             <p className="text-8xl font-black leading-none">{data.length}</p>
                             <p className="text-white/70 font-bold mt-2 text-base">{dateLabel}</p>

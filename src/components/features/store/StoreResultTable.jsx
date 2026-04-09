@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
-import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../../../utils/supabaseSync';
+import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, logInventoryHistory, logStoreInventoryHistory } from '../../../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../../../utils/excelProcessor';
 import databaseUrl from '../../../assets/DataBaseJoah.xlsx';
 import { useToast } from '../../ui/ToastProvider';
@@ -164,6 +164,8 @@ const StoreResultTable = ({
         category_1_actual: '',
         category_2_actual: '',
         qty: 0,
+        max_qty: 0,
+        product_tag: '',
         remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
     });
     // Ref to always access latest quickAddForm inside async callbacks (fixes stale closure)
@@ -321,20 +323,33 @@ const StoreResultTable = ({
         setIsLoadingHistory(true);
         setShowHistory(true);
         try {
-            let query = supabase
+            // 1. Fetch Store History
+            let storeQuery = supabase
+                .from('store_inventory_history')
+                .select('*')
+                .eq('barcode_no', barcode);
+            if (currentBranch) storeQuery = storeQuery.eq('branch_id', currentBranch);
+
+            // 2. Fetch Warehouse History
+            let whQuery = supabase
                 .from('inventory_history')
                 .select('*')
-                .eq('barcode', barcode)
-                .order('updated_at', { ascending: false });
+                .eq('barcode', barcode);
+            if (currentBranch) whQuery = whQuery.eq('branch_id', currentBranch);
 
-            // Ensure we strictly fetch history for the currently viewed branch only
-            if (currentBranch) {
-                query = query.eq('branch_id', currentBranch);
-            }
+            const [storeRes, whRes] = await Promise.all([storeQuery, whQuery]);
 
-            const { data, error } = await query;
-            if (error) throw error;
-            setHistoryData(data || []);
+            if (storeRes.error) console.error('Store History Error:', storeRes.error);
+            if (whRes.error) console.error('Warehouse History Error:', whRes.error);
+
+            // Combine and tag sources
+            const storeData = (storeRes.data || []).map(log => ({ ...log, source: 'store' }));
+            const whData = (whRes.data || []).map(log => ({ ...log, source: 'warehouse' }));
+
+            // Sort by updated_at descending
+            const combinedData = [...storeData, ...whData].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+            setHistoryData(combinedData);
         } catch (err) {
             console.error('History Fetch Error:', err);
         } finally {
@@ -361,22 +376,22 @@ const StoreResultTable = ({
             if (dbSource === 'supabase') {
                 if (!row.id) throw new Error("Missing ID");
                 const { error } = await supabase
-                    .from('location_inventory')
+                    .from('store_inventory')
                     .update({
-                        qty: newQty,
-                        remarks: `Quick Merge from Diagnostic by ${activeUser}`,
-                        uploaded_by: activeUser
+                        store_qty: newQty,
+                        updated_by: activeUser
                     })
                     .eq('id', row.id);
                 if (error) throw error;
 
-                await logInventoryHistory({
+                await logStoreInventoryHistory({
+                    actionType: 'edited',
                     barcode: row.barcode,
                     itemName: row.itemName || row.masterItemName,
                     oldQty: oldQty,
                     newQty: newQty,
-                    oldRack: row.rackLocation,
-                    newRack: row.rackLocation,
+                    oldLocation: row.rackLocation,
+                    newLocation: row.rackLocation,
                     updatedBy: activeUser,
                     reason: reason,
                     branchId: currentBranch || row.branch_id || currentUser?.branch_id || localStorage.getItem('joah_branch_id')
@@ -432,14 +447,13 @@ const StoreResultTable = ({
                 }
 
                 const { error: locError } = await supabase
-                    .from('location_inventory')
+                    .from('store_inventory')
                     .update({
-                        qty: newQtyValue,
-                        rack_location: editLocation || selectedRow.rackLocation,
+                        store_qty: newQtyValue,
+                        shelf_location: editLocation || selectedRow.rackLocation,
                         category_1_actual: editCat1 || selectedRow.category1,
                         category_2_actual: editCat2 || selectedRow.category2,
-                        remarks: `Updated by ${activeUser} at ${now}`,
-                        uploaded_by: activeUser // Update uploader on edit
+                        updated_by: activeUser // Update uploader on edit
                     })
                     .eq('id', selectedRow.id);
                 if (locError) throw locError;
@@ -449,8 +463,6 @@ const StoreResultTable = ({
                 const hasRackChanged = editLocation !== selectedRow.rackLocation;
                 const hasCatChanged = (editCat1 !== selectedRow.category1) || (editCat2 !== selectedRow.category2);
                 const hasQtyChanged = newQtyValue !== oldQtyValue;
-
-
 
                 let detailedReason = '';
                 if (hasRackChanged && hasCatChanged) {
@@ -480,17 +492,14 @@ const StoreResultTable = ({
                     reason: detailedReason
                 });
 
-                await logInventoryHistory({
+                await logStoreInventoryHistory({
+                    actionType: 'edited',
                     barcode: selectedRow.barcode,
                     itemName: selectedRow.itemName || selectedRow.masterItemName,
                     oldQty: oldQtyValue,
                     newQty: newQtyValue,
-                    oldRack: selectedRow.rackLocation || null,
-                    newRack: editLocation || null,
-                    oldCat1: selectedRow.category1 || null,  // ✅ Category tracking
-                    newCat1: editCat1 || null,               // ✅ Category tracking
-                    oldCat2: selectedRow.category2 || null,  // ✅ Category tracking
-                    newCat2: editCat2 || null,               // ✅ Category tracking
+                    oldLocation: selectedRow.rackLocation || null,
+                    newLocation: editLocation || null,
                     updatedBy: activeUser,
                     reason: detailedReason,
                     branchId: currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id')
@@ -539,24 +548,27 @@ const StoreResultTable = ({
                 const clonePayload = {
                     barcode_no: selectedRow.barcode,
                     item_name: selectedRow.itemName || selectedRow.masterItemName,
-                    rack_location: newRackLocation,
+                    shelf_location: newRackLocation,
                     category_1_actual: selectedRow.category1 || '',
                     category_2_actual: selectedRow.category2 || '',
-                    qty: cloneQtyNum,
-                    remarks: `Clone from ${selectedRow.rackLocation || 'N/A'}: ${cloneReason}`,
-                    uploaded_by: activeUser
+                    store_qty: cloneQtyNum,
+                    product_tag: selectedRow.productTag || null,
+                    max_qty: selectedRow.maxQty || null,
+                    updated_by: activeUser,
+                    branch_id: branchToSave
                 };
-                const result = await addLocationRecord(clonePayload, branchToSave);
-                if (!result.success) throw new Error(result.error);
+                const { error: cloneErr } = await supabase.from('store_inventory').insert([clonePayload]);
+                if (cloneErr) throw cloneErr;
 
                 // 2. Log History for the new cloned record
-                await logInventoryHistory({
+                await logStoreInventoryHistory({
+                    actionType: 'added',
                     barcode: selectedRow.barcode,
                     itemName: selectedRow.itemName || selectedRow.masterItemName,
                     oldQty: 0,
                     newQty: cloneQtyNum,
-                    oldRack: null,
-                    newRack: newRackLocation,
+                    oldLocation: null,
+                    newLocation: newRackLocation,
                     updatedBy: activeUser,
                     reason: `ໂຄລນ SKU ຈາກ Rack ${selectedRow.rackLocation || 'N/A'} ໄປ Rack ${newRackLocation} ຈຳນວນ ${cloneQtyNum} : ${cloneReason}`,
                     branchId: branchToSave
@@ -623,51 +635,54 @@ const StoreResultTable = ({
 
                 // 1. Update old record logic
                 const { error: updateError } = await supabase
-                    .from('location_inventory')
+                    .from('store_inventory')
                     .update({
-                        qty: remainingQty,
-                        remarks: `Split ${splitQtyNum} to ${newRackLocation} by ${activeUser}`,
-                        uploaded_by: activeUser
+                        store_qty: remainingQty,
+                        updated_by: activeUser
                     })
                     .eq('id', selectedRow.id);
                 if (updateError) throw updateError;
 
-                // 2. Insert new record logic using logic from addLocationRecord
+                // 2. Insert new record logic
                 const newPayload = {
                     barcode_no: selectedRow.barcode,
                     item_name: selectedRow.itemName || selectedRow.masterItemName,
-                    rack_location: newRackLocation,
+                    shelf_location: newRackLocation,
                     category_1_actual: selectedRow.category1 || '',
                     category_2_actual: selectedRow.category2 || '',
-                    qty: splitQtyNum,
-                    remarks: `Split from ${selectedRow.rackLocation}: ${splitReason}`,
-                    uploaded_by: activeUser
+                    store_qty: splitQtyNum,
+                    product_tag: selectedRow.productTag || null,
+                    max_qty: selectedRow.maxQty || null,
+                    updated_by: activeUser,
+                    branch_id: branchToSave
                 };
                 
-                const result = await addLocationRecord(newPayload, branchToSave);
-                if (!result.success) throw new Error(result.error);
+                const { error: insertError } = await supabase.from('store_inventory').insert([newPayload]);
+                if (insertError) throw insertError;
                 
                 // 3. Log History for Old Record Deduct
-                await logInventoryHistory({
+                await logStoreInventoryHistory({
+                    actionType: 'edited',
                     barcode: selectedRow.barcode,
                     itemName: selectedRow.itemName || selectedRow.masterItemName,
                     oldQty: oldQtyNum,
                     newQty: remainingQty,
-                    oldRack: selectedRow.rackLocation,
-                    newRack: selectedRow.rackLocation,
+                    oldLocation: selectedRow.rackLocation,
+                    newLocation: selectedRow.rackLocation,
                     updatedBy: activeUser,
                     reason: `ແບ່ງເຄື່ອງອອກໄປ Rack ${newRackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
                     branchId: branchToSave
                 });
                 
                 // 4. Log History for New Record Add
-                await logInventoryHistory({
+                await logStoreInventoryHistory({
+                    actionType: 'added',
                     barcode: selectedRow.barcode,
                     itemName: selectedRow.itemName || selectedRow.masterItemName,
                     oldQty: 0,
                     newQty: splitQtyNum,
-                    oldRack: null, // New rack insertion
-                    newRack: newRackLocation,
+                    oldLocation: null, // New rack insertion
+                    newLocation: newRackLocation,
                     updatedBy: activeUser,
                     reason: `ຮັບເຄື່ອງມາແບ່ງຈາກ Rack ${selectedRow.rackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
                     branchId: branchToSave
@@ -1368,12 +1383,13 @@ const StoreResultTable = ({
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.barcode')} / {t('results.itemName')}</th>
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.location')}</th>
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider hidden lg:table-cell">{t('results.category1')} & {t('results.category2')}</th>
+                                    <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider hidden xl:table-cell">{t('results.productTagCol')}</th>
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
                                     >
                                         <div className="flex items-center justify-center gap-2">
-                                            ຈຳນວນໜ້າຮ້ານ
+                                            {t('results.shopQty')}
                                             <div className={`transition-all duration-300 ${sortConfig.key === 'qty' ? 'text-emerald-500 scale-110' : 'text-emerald-300 group-hover/head:text-emerald-500'}`}>
                                                 {sortConfig.key === 'qty' ? (
                                                     sortConfig.direction === 'asc' ? <ChevronDown size={16} strokeWidth={3} /> : <ChevronDown size={16} className="rotate-180" strokeWidth={3} />
@@ -1382,7 +1398,7 @@ const StoreResultTable = ({
                                         </div>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        ຈຳນວນQTY<br/><span className="text-[10px] opacity-80 font-bold">(ຫຼັງສາງ)</span>
+                                        {t('results.actualQty')}<br/><span className="text-[10px] opacity-80 font-bold">{t('results.masterQty')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
                                         {t('results.dcQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
@@ -1394,7 +1410,6 @@ const StoreResultTable = ({
                                         {t('results.scrapQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.scrapQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.status')}</th>
-                                    <th className="px-6 py-6 text-center text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.odooQty')}</th>
                                     <th className="px-8 py-6 text-right text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.actions')}</th>
                                 </tr>
                             </thead>
@@ -1436,10 +1451,25 @@ const StoreResultTable = ({
                                                     </div>
                                                 </div>
                                             </td>
+                                            <td className="px-6 py-6 hidden xl:table-cell">
+                                                <div className="flex flex-col items-start gap-2 max-w-[120px]">
+                                                    {row.productTag && (
+                                                        <div className={`inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
+                                                            <span>{row.productTag === 'hook' ? '🪝' : '📦'}</span>
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest">{row.productTag}</span>
+                                                        </div>
+                                                    )}
+                                                    {row.maxQty && (
+                                                        <div className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                            <span className="text-[10px] font-bold uppercase tracking-widest">{t('results.maxQtyLabel')} {row.maxQty}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">ໜ້າຮ້ານ</div>
+                                                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">{t('results.shopQtySub')}</div>
                                                 </div>
                                             </td>
                                             {/* ຈຳນວນ ຫຼັງສາງ */}
@@ -1448,7 +1478,7 @@ const StoreResultTable = ({
                                                     <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
                                                         {row.warehouseQty ?? 0}
                                                     </span>
-                                                    <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">ສາງ</div>
+                                                    <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
@@ -1459,19 +1489,24 @@ const StoreResultTable = ({
                                                     {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-6 text-center">
-                                                {row.odooQty !== undefined && row.odooQty !== null ? (
-                                                    <div className="flex flex-col items-center">
-                                                        <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>{row.odooQty}</span>
-                                                    </div>
-                                                ) : <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>}
-                                            </td>
                                             <td className="px-8 py-6 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button onClick={() => console.log('Mockup Info clicked')} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="View Diagnostics">
+                                                    <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="View Diagnostics">
                                                         <Info size={18} />
                                                     </button>
-                                                    <button onClick={() => console.log('Mockup Edit clicked')} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="Edit Quantity">
+                                                    <button 
+                                                        onClick={() => {
+                                                            setSelectedRow(row);
+                                                            setEditQty(row.qty || 0);
+                                                            setEditLocation(row.rackLocation || '');
+                                                            setEditCat1(row.category1 || '');
+                                                            setEditCat2(row.category2 || '');
+                                                            setEditReason('');
+                                                            setMergeAmount('');
+                                                        }} 
+                                                        className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" 
+                                                        title="Edit Quantity"
+                                                    >
                                                         <Edit2 size={18} />
                                                     </button>
                                                 </div>
@@ -1505,7 +1540,15 @@ const StoreResultTable = ({
                 {/* --- Modals for Store --- */}
                 <StoreQuickAddPanel
                     isOpen={showQuickAdd}
-                    onClose={() => setShowQuickAdd(false)}
+                    onClose={() => {
+                        setShowQuickAdd(false);
+                        setQuickAddForm({
+                            barcode_no: '', item_name: '', rack_location: '',
+                            category_1_actual: '', category_2_actual: '',
+                            qty: 0, max_qty: 0, product_tag: '',
+                            remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                        });
+                    }}
                     quickAddForm={quickAddForm}
                     setQuickAddForm={setQuickAddForm}
                     isFoundInMaster={isFoundInMaster}
@@ -1519,6 +1562,12 @@ const StoreResultTable = ({
                                 await onAddNewProduct(latestForm);
                             }
                             setShowQuickAdd(false);
+                            setQuickAddForm({
+                                barcode_no: '', item_name: '', rack_location: '',
+                                category_1_actual: '', category_2_actual: '',
+                                qty: 0, max_qty: 0, product_tag: '',
+                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                            });
                             if (onRefresh) onRefresh();
                         } catch (err) {
                             showError('Error saving product: ' + err.message);
