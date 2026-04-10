@@ -1374,16 +1374,16 @@ const StoreResultTable = ({
                 </div>
 
                 {/* Table Area (Reverted to Classic Table for Mockup) */}
-                <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl shadow-slate-200/50 dark:shadow-black/20 overflow-visible mt-6">
-                    <div className="overflow-x-auto custom-scrollbar rounded-[2.5rem]">
-                        <table className="w-full text-left border-collapse">
+                <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl shadow-slate-200/50 dark:shadow-black/20 overflow-hidden mt-6">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[1000px] whitespace-nowrap">
                             <thead>
                                 <tr className="bg-slate-100/80 dark:bg-slate-800/80">
                                     <th className="px-8 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">#</th>
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.barcode')} / {t('results.itemName')}</th>
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.location')}</th>
-                                    <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider hidden lg:table-cell">{t('results.category1')} & {t('results.category2')}</th>
-                                    <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider hidden xl:table-cell">{t('results.productTagCol')}</th>
+                                    <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.category1')} & {t('results.category2')}</th>
+                                    <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.productTagCol')}</th>
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
@@ -1441,7 +1441,7 @@ const StoreResultTable = ({
                                                     <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase whitespace-nowrap">{row.rackLocation}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6 hidden lg:table-cell">
+                                            <td className="px-6 py-6">
                                                 <div className="flex flex-col gap-2 max-w-[180px]">
                                                     <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30 shadow-sm">
                                                         <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
@@ -1451,7 +1451,7 @@ const StoreResultTable = ({
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6 hidden xl:table-cell">
+                                            <td className="px-6 py-6">
                                                 <div className="flex flex-col items-start gap-2 max-w-[120px]">
                                                     {row.productTag && (
                                                         <div className={`inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
