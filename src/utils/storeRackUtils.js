@@ -34,6 +34,41 @@ export const STORE_BRANCH_RACK_RULES = {
         'EVENT': [
             { zones: ['TFF01', 'TFF02', 'TFF03', 'TFH01', 'TFG01', 'TFG02', 'TFG03', 'TFI01', 'TFI02'], maxLevel: 0, format: 'store_exact' }
         ]
+    },
+    'ສີວິໄລ': {
+        'INTERIOR': [
+            { zones: ['SFE02-1', 'SFE02-2', 'SFE02-3', 'SFE02-4', 'SFE02-5', 'SFE02-6', 'SFE02-7', 'SFE03-1', 'SFE03-2', 'SFE03-3', 'SFE03-4', 'SFE03-5', 'SFE03-6', 'SFE03-7', 'SFD02-1', 'SFD02-2', 'SFD02-3', 'SFD02-4', 'SFD02-5', 'SFD02-6', 'SFD02-7', 'SFD02-8', 'SFD02-9', 'SFD02-10', 'SFP25', 'SFP04'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'STORAGE': [
+            { zones: ['SFE03-8', 'SFE03-9', 'SFE03-10', 'SFE03-11', 'SFC04-1', 'SFC04-2', 'SFC04-3', 'SFC04-4', 'SFC04-5', 'SFC04-6', 'SFC04-7', 'SFC04-8', 'SFC04-9', 'SFC04-10', 'SFC03-1', 'SFC03-2', 'SFC03-3', 'SFC03-4', 'SFC03-5', 'SFC03-6', 'SFC03-7', 'SFC03-8', 'SFC03-9', 'SFC03-10', 'SFP13', 'SFP14', 'SFP15', 'SFP16', 'SFE04-4', 'SFE04-5', 'SFE04-6', 'SFP22', 'SFP23', 'SFP11', 'SFP12'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'KITCHEN': [
+            { zones: ['SFB07-1', 'SFB07-2', 'SFB07-3', 'SFB07-4', 'SFB07-5', 'SFB07-6', 'SFB07-7', 'SFB07-8', 'SFB07-9', 'SFB07-10', 'SFB06-1', 'SFB06-2', 'SFB06-3', 'SFB06-4', 'SFB06-5', 'SFB06-6', 'SFB06-7', 'SFB06-8', 'SFB06-9', 'SFB06-10', 'SFB05-1', 'SFB05-2', 'SFB05-3', 'SFB05-4', 'SFB05-5', 'SFB05-6', 'SFB05-7', 'SFB05-8', 'SFB05-9', 'SFB05-10', 'SFB04-1', 'SFB04-2', 'SFB04-3', 'SFB04-4', 'SFB04-5', 'SFB04-6', 'SFB04-7', 'SFB04-8', 'SFB04-9', 'SFB04-10', 'SFB01-1', 'SFB01-2', 'SFB01-3', 'SFB01-4', 'SFB01-5', 'SFB01-6', 'SFB01-7', 'SFB01-8', 'SFB01-9', 'SFB01-10', 'SFP01', 'SFP06', 'SFE04-7', 'SFE04-8', 'SFE04-9', 'SFE04-10', 'SFE04-11', 'SFE04-12', 'SFE04-13', 'SFE04-14', 'SFE04-15', 'SFE04-16', 'SFE04-17', 'SFE04-18', 'SFE04-19', 'SFE04-20', 'SFE04-21', 'SFE04-22', 'SFE04-23', 'SFE04-24', 'SFE04-25'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'CLEANING': [
+            { zones: ['SFC02-1', 'SFC02-2', 'SFC02-3', 'SFC02-4', 'SFC02-5', 'SFC02-6', 'SFC02-7', 'SFC02-8', 'SFC02-9', 'SFC02-10', 'SFC01-1', 'SFC01-2', 'SFC01-3', 'SFC01-4', 'SFC01-5', 'SFC01-6', 'SFC01-7', 'SFC01-8', 'SFC01-9', 'SFC01-10', 'SFE04-1', 'SFE04-2', 'SFE04-3'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'STATIONERY': [
+            { zones: ['SFE01-1', 'SFE01-2', 'SFE01-3', 'SFE01-4', 'SFE01-5', 'SFE01-6', 'SFE01-7', 'SFD04-1', 'SFD04-2', 'SFD04-3', 'SFD04-4', 'SFD04-5', 'SFD04-6', 'SFD04-7', 'SFD04-8', 'SFD03-1', 'SFD03-2', 'SFD03-3', 'SFD03-4', 'SFD03-5', 'SFD03-6', 'SFD03-7', 'SFD03-8', 'SFD03-9', 'SFD03-10', 'SFA07-1', 'SFA07-2', 'SFA07-3', 'SFA07-4', 'SFA07-5', 'SFA07-6', 'SFA07-7', 'SFA07-8'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOYS': [
+            { zones: ['SFA05-1', 'SFA05-2', 'SFA05-3', 'SFA05-4', 'SFA05-5', 'SFA05-6', 'SFA05-7', 'SFA05-8', 'SFE04-32', 'SFP08', 'SFP07', 'SFA01-5', 'SFA01-4'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'SPORTS': [
+            { zones: ['SFP24', 'SFA06-1', 'SFA06-2', 'SFA06-3', 'SFA06-4', 'SFA06-5', 'SFA06-6', 'SFA06-7', 'SFA06-8'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'FASHION': [
+            { zones: ['SFA03-1', 'SFA03-2', 'SFA03-3', 'SFA03-4', 'SFA03-5', 'SFA03-6', 'SFA03-7', 'SFA03-8', 'SFE04-26', 'SFE04-27', 'SFE04-28', 'SFE04-29', 'SFE04-30', 'SFE04-31', 'SFA01-1', 'SFA01-6'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'BEAUTY': [
+            { zones: ['SFA04-1', 'SFA04-2', 'SFA04-3', 'SFA04-4', 'SFA04-5', 'SFA04-6', 'SFA04-7', 'SFA04-8', 'SFA02-1', 'SFA02-2', 'SFA02-3', 'SFA02-4', 'SFA02-5', 'SFA02-6', 'SFA02-7', 'SFA02-8', 'SFP05'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOOL/DIGITAL': [
+            { zones: ['SFD01-1', 'SFD01-2', 'SFD01-3', 'SFD01-4', 'SFD01-5', 'SFD01-6', 'SFD01-7', 'SFD01-8', 'SFD01-9', 'SFD01-10', 'SFB03-1', 'SFB03-2', 'SFB03-3', 'SFB03-4', 'SFB03-5', 'SFB03-6', 'SFB03-7', 'SFB03-8', 'SFB03-9', 'SFB03-10', 'SFB02-1', 'SFB02-2', 'SFB02-3', 'SFB02-4', 'SFB02-5', 'SFB02-6', 'SFB02-7', 'SFB02-8', 'SFB02-9', 'SFB02-10', 'SFP02', 'SFP03', 'SFP09', 'SFP10'], maxLevel: 0, format: 'store_exact' }
+        ],
+        'EVENT': [
+            { zones: ['SFP21', 'SFP17', 'SFP18', 'SFP19', 'SFP20', 'SFA01-2', 'SFA01-3'], maxLevel: 0, format: 'store_exact' }
+        ]
     }
 };
 
@@ -43,6 +78,12 @@ export const STORE_BRANCH_RACK_RULES = {
  */
 const resolveStoreBranchId = (branchId) => {
     if (!branchId) return 'ຕະຫຼາດລາວ';
+
+    const normalizedId = String(branchId).toUpperCase().trim();
+    
+    // Map shortcodes or variations
+    if (normalizedId === 'SVL' || normalizedId.includes('ສີວິໄລ')) return 'ສີວິໄລ';
+    if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
 
     // Direct match first
     if (STORE_BRANCH_RACK_RULES[branchId]) return branchId;
