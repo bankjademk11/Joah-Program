@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
+import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight, Zap, ScanLine, Hash, Trash2 } from 'lucide-react';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
+import { supabase } from '../../../utils/supabaseClient';
+import technoHubLogo from '../../../assets/technohublogo.png';
 
 const EditPanel = ({
     selectedRow,
@@ -35,6 +37,11 @@ const EditPanel = ({
     const [locationSearch, setLocationSearch] = useState('');
     const [isSplitMode, setIsSplitMode] = useState(false);
     const [isCloneMode, setIsCloneMode] = useState(false);
+    // TECHNOHUB Scan-to-Count/Deduct Mode
+    const [isTechnoHubMode, setIsTechnoHubMode] = useState(false);
+    const [scanLog, setScanLog] = useState([]);
+    const [scanInput, setScanInput] = useState('');
+    const scanInputRef = useRef(null);
 
     // --- Helpers ---
     // Use branch-specific rules
@@ -103,21 +110,40 @@ const EditPanel = ({
         }
     }, [selectedReasonOption, otherReasonText, setEditReason]);
 
-    // Reset reason when panel opens/closes (Update based on prop if editing existing reason, though usually empty)
+    // Reset reason when panel opens/closes
     useEffect(() => {
         if (!selectedRow) {
             setSelectedReasonOption('');
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
-            setCustomMode(false); // Reset Custom Mode
-            setSelectedCategory(''); // Reset Category Filter
-            setViewingCategories(false); // Reset View
-            setLocalInspectedLocation(null); // Reset Local Inspector
-            setIsSplitMode(false); // Reset Split Mode
-            setIsCloneMode(false); // Reset Clone Mode
+            setCustomMode(false);
+            setSelectedCategory('');
+            setViewingCategories(false);
+            setLocalInspectedLocation(null);
+            setIsSplitMode(false);
+            setIsCloneMode(false);
+            setIsTechnoHubMode(false);
+            setScanLog([]);
+            setScanInput('');
         }
     }, [selectedRow]);
+
+    // Detect TECHNOHUB source when selectedRow changes
+    useEffect(() => {
+        if (!selectedRow?.barcode) return;
+        supabase.from('master_data').select('source').eq('barcode', String(selectedRow.barcode).trim()).maybeSingle()
+            .then(({ data }) => {
+                const isTH = data?.source === 'TECHNOHUB';
+                setIsTechnoHubMode(isTH);
+                if (isTH) {
+                    setScanLog([]);
+                    setScanInput('');
+                    setMergeAmount(0);
+                    setTimeout(() => scanInputRef.current?.focus(), 300);
+                }
+            });
+    }, [selectedRow?.barcode]);
 
     // Reset search when dropdown closes
     useEffect(() => {
@@ -176,15 +202,35 @@ const EditPanel = ({
                     }}
                     className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
                 >
-                    {/* Minimal Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                    {/* Header — changes based on TECHNOHUB mode */}
+                    <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 transition-colors duration-300 ${isTechnoHubMode ? 'bg-[#3899c8] border-[#2d7ba8]' : 'border-slate-200 dark:border-slate-800'}`}>
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-indigo-500 text-white shadow-sm">
-                                <Edit2 size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('editPanel.title')}</h3>
-                            </div>
+                            {isTechnoHubMode ? (
+                                <div className="flex items-center gap-3">
+                                    <img
+                                        src={technoHubLogo}
+                                        alt="TECHNOHUB"
+                                        style={{ mixBlendMode: 'multiply', width: '80px', height: 'auto' }}
+                                    />
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-white/20 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/30">
+                                                {isSplitMode ? 'Scan to Deduct' : 'Scan to Count'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-white/80 font-semibold mt-0.5">⚡ High Value — {isSplitMode ? 'ສະແກນເພື່ອຕັດຈຳນວນ' : 'ສະແກນເພື່ອເພີ່ມຈຳນວນ'}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="p-2 rounded-lg bg-indigo-500 text-white shadow-sm">
+                                        <Edit2 size={18} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('editPanel.title')}</h3>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <button
                             onClick={onClose}
@@ -221,35 +267,152 @@ const EditPanel = ({
                         </div>
 
                         {/* Quantity Section (With Merge Logic GUI) */}
-                        <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
-                            <div className="flex items-center gap-2">
+                        <div className="rounded-xl border-2 border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                                 <Database size={16} className="text-indigo-500" />
                                 <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('editPanel.quantityManagement')}</p>
                             </div>
 
-                            {/* Mode Toggle - Lao labels */}
+                            {/* Mode Toggle */}
+                            <div className="px-4 pt-3">
                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg gap-0.5">
                                 <button
                                     className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode && !isCloneMode ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsSplitMode(false); setIsCloneMode(false); setMergeAmount(''); }}
+                                    onClick={() => { setIsSplitMode(false); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
                                 >
-                                    ແກ້ໄຂ
+                                    {isTechnoHubMode ? '📦 ຮັບຂອງ' : 'ແກ້ໄຂ'}
                                 </button>
                                 <button
                                     className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(''); }}
+                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
                                 >
                                     ແບ່ງໄປ
                                 </button>
                                 <button
                                     className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); }}
+                                    onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); setScanLog([]); setScanInput(''); }}
                                 >
                                     ໂຄນສິນຄ້າ
                                 </button>
                             </div>
+                            </div>
 
-                            {/* Qty input area — Clone shows full-width only; others show Current + Icon + Input */}
+                            {/* TECHNOHUB Scan Mode (Add or Deduct) */}
+                            {isTechnoHubMode && !isCloneMode ? (
+                                <div className="p-4 space-y-3 bg-sky-50 dark:bg-sky-950/20">
+                                    {/* Count Summary */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Hash size={16} className="text-[#3899c8]" />
+                                            <span className="text-xs font-bold text-sky-700 dark:text-sky-300">
+                                                {isSplitMode ? 'ຈຳນວນທີ່ຕ້ອງການຕັດ' : 'ຈຳນວນທີ່ສະແກນ'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {/* Current */}
+                                            <div className="text-right">
+                                                <div className="text-xs text-slate-400">ປະຈຸບັນ</div>
+                                                <div className="text-lg font-bold text-slate-600">{editQty || 0}</div>
+                                            </div>
+                                            <div className={`text-lg font-black ${isSplitMode ? 'text-rose-500' : 'text-sky-500'}`}>
+                                                {isSplitMode ? '-' : '+'}
+                                            </div>
+                                            {/* Scanned Count */}
+                                            <div className="text-right">
+                                                <div className="text-xs text-slate-400">ສະແກນ</div>
+                                                <div className={`text-4xl font-black tabular-nums ${isSplitMode ? 'text-rose-500' : 'text-[#3899c8]'}`}>
+                                                    {mergeAmount || 0}
+                                                </div>
+                                            </div>
+                                            <div className="text-slate-300 font-bold">=</div>
+                                            {/* Result */}
+                                            <div className="text-right">
+                                                <div className="text-xs text-slate-400">ຜົນລັບ</div>
+                                                <div className={`text-lg font-black ${isSplitMode && Number(mergeAmount) > editQty ? 'text-rose-600' : 'text-slate-800 dark:text-white'}`}>
+                                                    {isSplitMode
+                                                        ? Math.max(0, (editQty || 0) - (Number(mergeAmount) || 0))
+                                                        : (editQty || 0) + (Number(mergeAmount) || 0)
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Scan Input */}
+                                    <div className="relative">
+                                        <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-400" />
+                                        <input
+                                            ref={scanInputRef}
+                                            type="text"
+                                            value={scanInput}
+                                            onChange={(e) => setScanInput(e.target.value.replace(/\s+/g, ''))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === ' ') e.preventDefault();
+                                                if (e.key === 'Enter') {
+                                                    const scanned = scanInput.trim();
+                                                    if (scanned === String(selectedRow?.barcode).trim()) {
+                                                        // Split mode: check max
+                                                        if (isSplitMode && Number(mergeAmount) >= editQty) {
+                                                            setScanInput('⚠️ ເກີນຈຳນວນທີ່ມີ!');
+                                                            setTimeout(() => setScanInput(''), 1000);
+                                                        } else {
+                                                            setScanLog(prev => [...prev, new Date()]);
+                                                            setMergeAmount(prev => Number(prev || 0) + 1);
+                                                            setScanInput('');
+                                                        }
+                                                    } else {
+                                                        setScanInput('❌ ບາໂຄດບໍ່ຕົງ!');
+                                                        setTimeout(() => setScanInput(''), 1000);
+                                                    }
+                                                    e.preventDefault();
+                                                }
+                                            }}
+                                            placeholder={isSplitMode ? 'ສະແກນ Barcode ເພື່ອຕັດ (-1 ຕໍ່ຄັ້ງ)...' : 'ສະແກນ Barcode ຊ້ຳ (+1 ຕໍ່ຄັ້ງ)...'}
+                                            autoFocus
+                                            className={`w-full pl-9 pr-3 py-2.5 text-sm font-mono font-bold bg-white dark:bg-slate-800 border-2 rounded-lg outline-none focus:ring-2 transition-all placeholder:text-slate-300 placeholder:font-normal shadow-sm ${
+                                                isSplitMode
+                                                    ? 'border-rose-200 dark:border-rose-800 focus:border-rose-500 focus:ring-rose-500/20'
+                                                    : 'border-sky-200 dark:border-sky-800 focus:border-[#3899c8] focus:ring-sky-500/20'
+                                            }`}
+                                        />
+                                    </div>
+
+                                    {/* Scan Log */}
+                                    {scanLog.length > 0 && (
+                                        <div className="max-h-24 overflow-y-auto space-y-1 custom-scrollbar">
+                                            <div className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 ${isSplitMode ? 'text-rose-500' : 'text-sky-500'}`}>
+                                                ປະຫວັດການສະແກນ ({scanLog.length} ຄັ້ງ)
+                                            </div>
+                                            {[...scanLog].reverse().map((ts, i) => (
+                                                <div key={i} className="flex items-center justify-between px-2.5 py-1.5 bg-white dark:bg-slate-800 rounded-lg border border-sky-100 dark:border-sky-900/50 shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-4 h-4 rounded-full text-white text-[9px] font-black flex items-center justify-center ${isSplitMode ? 'bg-rose-500' : 'bg-[#3899c8]'}`}>{scanLog.length - i}</div>
+                                                        <span className="text-xs text-sky-700 dark:text-sky-300 font-mono">{selectedRow?.barcode}</span>
+                                                        <span className={`text-[10px] font-bold ${isSplitMode ? 'text-rose-500' : 'text-sky-500'}`}>{isSplitMode ? '-1' : '+1'}</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400">{ts.toLocaleTimeString('lo-LA')}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Undo Last Scan */}
+                                    {scanLog.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setScanLog(prev => prev.slice(0, -1));
+                                                setMergeAmount(prev => Math.max(0, Number(prev || 0) - 1));
+                                            }}
+                                            className="flex items-center gap-1.5 text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors"
+                                        >
+                                            <Trash2 size={11} /> ຍົກເລີກການສະແກນຄັ້ງລ່າສຸດ
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                            /* Normal Qty input area — Clone shows full-width only; others show Current + Icon + Input */
+                            <div className="p-4">
                             {isCloneMode ? (
                                 <div>
                                     <input
@@ -299,6 +462,8 @@ const EditPanel = ({
                                         </p>
                                     </div>
                                 </div>
+                            )}
+                            </div>
                             )}
                         </div>
 

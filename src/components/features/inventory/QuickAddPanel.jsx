@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight, Sparkles } from 'lucide-react';
+import { X, Plus, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, CornerDownRight, Sparkles, ScanLine, Hash, Zap, Trash2 } from 'lucide-react';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories } from '../../../utils/rackUtils';
 import LocationInspector from './LocationInspector';
+import { supabase } from '../../../utils/supabaseClient';
+import technoHubLogo from '../../../assets/technohublogo.png';
 
 const QuickAddPanel = ({
     isOpen,
@@ -29,6 +31,12 @@ const QuickAddPanel = ({
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null); // Local inspector state
     const dropdownRef = useRef(null);
     const [locationSearch, setLocationSearch] = useState('');
+    // TECHNOHUB Scan-to-Count Mode
+    const [isTechnoHubMode, setIsTechnoHubMode] = useState(false);
+    const [scanLog, setScanLog] = useState([]);
+    const [scanInput, setScanInput] = useState('');
+    const scanInputRef = useRef(null);
+
     // Reason Logic
     const [selectedReasonOption, setSelectedReasonOption] = useState('');
     const [otherReasonText, setOtherReasonText] = useState('');
@@ -49,10 +57,13 @@ const QuickAddPanel = ({
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
-            setCustomMode(false); // Reset Custom Mode
-            setSelectedCategory(''); // Reset Category Filter
-            setViewingCategories(false); // Reset View
-            setLocalInspectedLocation(null); // Reset Local Inspector
+            setCustomMode(false);
+            setSelectedCategory('');
+            setViewingCategories(false);
+            setLocalInspectedLocation(null);
+            setIsTechnoHubMode(false);
+            setScanLog([]);
+            setScanInput('');
         }
     }, [isOpen]);
 
@@ -64,35 +75,55 @@ const QuickAddPanel = ({
     }, [dropdownOpen]);
 
     useEffect(() => {
-        if (isOpen && quickAddForm.barcode_no) {
-            const barcode = String(quickAddForm.barcode_no).trim();
-            const masterItem = masterData.find(m =>
-                String(m.barcode || m.Barcode || m['Barcode No.'] || '').trim() === barcode
-            );
+        if (!isOpen || !quickAddForm.barcode_no) return;
 
-            if (masterItem) {
-                setIsFoundInMaster(true);
-                const itemNameValue = masterItem.item_name || masterItem.product_name_la || masterItem['Product Name(LA)'] || masterItem['Item Name'] || '';
-                const cat1Value = masterItem.category_1 || masterItem['CATEGORIES 1'] || masterItem['Category 1'] || '';
-                const cat2Value = masterItem.category_2 || masterItem['CATEGORIES 2'] || masterItem['Category 2'] || '';
+        const barcode = String(quickAddForm.barcode_no).trim();
+        const masterItem = masterData.find(m =>
+            String(m.barcode || m.Barcode || m['Barcode No.'] || '').trim() === barcode
+        );
 
-                setQuickAddForm(prev => ({
-                    ...prev,
-                    item_name: String(itemNameValue).trim(),
-                    category_1_actual: String(cat1Value).trim(),
-                    category_2_actual: String(cat2Value).trim()
-                }));
-            } else {
-                setIsFoundInMaster(false);
-                setQuickAddForm(prev => ({
-                    ...prev,
-                    item_name: '',
-                    category_1_actual: '',
-                    category_2_actual: '',
-                    qty: 0,
-                    rack_location: ''
-                }));
-            }
+        if (masterItem) {
+            setIsFoundInMaster(true);
+            const itemNameValue = masterItem.item_name || masterItem.product_name_la || masterItem['Product Name(LA)'] || masterItem['Item Name'] || '';
+            const cat1Value = masterItem.category_1 || masterItem['CATEGORIES 1'] || masterItem['Category 1'] || '';
+            const cat2Value = masterItem.category_2 || masterItem['CATEGORIES 2'] || masterItem['Category 2'] || '';
+
+            // Always check source from Supabase directly (masterData from Excel won't have source field)
+            supabase.from('master_data').select('source').eq('barcode', barcode).maybeSingle()
+                .then(({ data: sourceData }) => {
+                    const isTH = sourceData?.source === 'TECHNOHUB';
+                    setIsTechnoHubMode(isTH);
+                    if (isTH) {
+                        setScanLog([]);
+                        setScanInput('');
+                        setQuickAddForm(prev => ({
+                            ...prev, qty: 0,
+                            item_name: String(itemNameValue).trim(),
+                            category_1_actual: String(cat1Value).trim(),
+                            category_2_actual: String(cat2Value).trim()
+                        }));
+                        setTimeout(() => scanInputRef.current?.focus(), 300);
+                    } else {
+                        setIsTechnoHubMode(false);
+                        setQuickAddForm(prev => ({
+                            ...prev,
+                            item_name: String(itemNameValue).trim(),
+                            category_1_actual: String(cat1Value).trim(),
+                            category_2_actual: String(cat2Value).trim()
+                        }));
+                    }
+                });
+        } else {
+            setIsFoundInMaster(false);
+            setIsTechnoHubMode(false);
+            setQuickAddForm(prev => ({
+                ...prev,
+                item_name: '',
+                category_1_actual: '',
+                category_2_actual: '',
+                qty: 0,
+                rack_location: ''
+            }));
         }
     }, [quickAddForm.barcode_no, isOpen, masterData, setIsFoundInMaster, setQuickAddForm]);
 
@@ -199,15 +230,35 @@ const QuickAddPanel = ({
                     }}
                     className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
                 >
-                    {/* Minimal Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                    {/* Header — changes based on TECHNOHUB mode */}
+                    <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 transition-colors duration-300 ${isTechnoHubMode ? 'bg-[#3899c8] border-[#2d7ba8]' : 'border-slate-200 dark:border-slate-800'}`}>
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-sm">
-                                <Plus size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('quickAdd.title')}</h3>
-                            </div>
+                            {isTechnoHubMode ? (
+                                /* TECHNOHUB Logo Mode */
+                                <div className="flex items-center gap-3">
+                                    <img
+                                        src={technoHubLogo}
+                                        alt="TECHNOHUB"
+                                        style={{ mixBlendMode: 'multiply', width: '80px', height: 'auto' }}
+                                    />
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-white/20 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/30">Scan to Count</span>
+                                        </div>
+                                        <p className="text-[10px] text-white/80 font-semibold mt-0.5">⚡ High Value Product — ນັບເທື່ອລະຊິ້ນ</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Normal Mode */
+                                <>
+                                    <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-sm">
+                                        <Plus size={18} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">{t('quickAdd.title')}</h3>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <button
                             onClick={onClose}
@@ -274,7 +325,93 @@ const QuickAddPanel = ({
                             </div>
                         </div>
 
-                        {/* Quantity Section (Direct Input) */}
+                        {/* Quantity Section — Normal or TECHNOHUB Scan-to-Count */}
+                        {isTechnoHubMode ? (
+                            <div className="rounded-xl border-2 border-sky-300 dark:border-sky-700 overflow-hidden shadow-sm">
+                                {/* TECHNOHUB Header */}
+                                <div className="flex items-center gap-2 px-4 py-2.5 bg-[#3899c8] text-white border-b border-[#2d7ba8]">
+                                    <Zap size={14} className="shrink-0" />
+                                    <span className="text-xs font-black uppercase tracking-wider">TECHNOHUB — Scan-to-Count Mode</span>
+                                    <span className="ml-auto text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">High Value</span>
+                                </div>
+
+                                <div className="p-4 space-y-3 bg-sky-50 dark:bg-sky-950/20">
+                                    {/* Count Display */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Hash size={16} className="text-[#3899c8]" />
+                                            <span className="text-xs font-bold text-sky-700 dark:text-sky-300">ຈຳນວນທີ່ສະແກນ</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-4xl font-black text-[#3899c8] dark:text-sky-400 tabular-nums min-w-[3rem] text-right">
+                                                {quickAddForm.qty}
+                                            </div>
+                                            <span className="text-xs text-sky-400 font-bold">ຊິ້ນ</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Scan Input */}
+                                    <div className="relative">
+                                        <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-400" />
+                                        <input
+                                            ref={scanInputRef}
+                                            type="text"
+                                            value={scanInput}
+                                            onChange={(e) => setScanInput(e.target.value.replace(/\s+/g, ''))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === ' ') e.preventDefault();
+                                                if (e.key === 'Enter') {
+                                                    const scanned = scanInput.trim();
+                                                    if (scanned === String(quickAddForm.barcode_no).trim()) {
+                                                        setScanLog(prev => [...prev, new Date()]);
+                                                        setQuickAddForm(prev => ({ ...prev, qty: prev.qty + 1 }));
+                                                        setScanInput('');
+                                                    } else {
+                                                        // Wrong barcode — flash red briefly
+                                                        setScanInput('❌ ບາໂຄດບໍ່ຕົງ!');
+                                                        setTimeout(() => setScanInput(''), 1000);
+                                                    }
+                                                    e.preventDefault();
+                                                }
+                                            }}
+                                            placeholder="ສະແກນ Barcode ຊ້ຳ (+1 ຕໍ່ຄັ້ງ)..."
+                                            autoFocus
+                                            className="w-full pl-9 pr-3 py-2.5 text-sm font-mono font-bold bg-white dark:bg-slate-800 border-2 border-sky-200 dark:border-sky-800 rounded-lg outline-none focus:border-[#3899c8] focus:ring-2 focus:ring-sky-500/20 transition-all placeholder:text-slate-300 placeholder:font-normal shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Scan Log */}
+                                    {scanLog.length > 0 && (
+                                        <div className="max-h-28 overflow-y-auto space-y-1 custom-scrollbar">
+                                            <div className="text-[10px] font-bold text-sky-500 uppercase tracking-widest mb-1.5">ປະຫວັດການສະແກນ ({scanLog.length} ຄັ້ງ)</div>
+                                            {[...scanLog].reverse().map((ts, i) => (
+                                                <div key={i} className="flex items-center justify-between px-2.5 py-1.5 bg-white dark:bg-slate-800 rounded-lg border border-sky-100 dark:border-sky-900/50 shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-4 h-4 rounded-full bg-[#3899c8] text-white text-[9px] font-black flex items-center justify-center">{scanLog.length - i}</div>
+                                                        <span className="text-xs text-sky-700 dark:text-sky-300 font-mono">{quickAddForm.barcode_no}</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400">{ts.toLocaleTimeString('lo-LA')}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Undo Last Scan */}
+                                    {scanLog.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setScanLog(prev => prev.slice(0, -1));
+                                                setQuickAddForm(prev => ({ ...prev, qty: Math.max(0, prev.qty - 1) }));
+                                            }}
+                                            className="flex items-center gap-1.5 text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors"
+                                        >
+                                            <Trash2 size={11} /> ຍົກເລີກການສະແກນຄັ້ງລ່າສຸດ
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
                         <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
                             <div className="flex items-center gap-2">
                                 <Database size={16} className="text-emerald-500" />
@@ -295,6 +432,7 @@ const QuickAddPanel = ({
                                 <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
                             </div>
                         </div>
+                        )}
 
                         {/* Location Section (CUSTOM DROPDOWN) */}
                         <div>
