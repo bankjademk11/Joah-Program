@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../../utils/supabaseClient';
 import ExcelJS from 'exceljs';
@@ -6,7 +6,7 @@ import {
     BarChart3, GitBranch, Edit3, PlusCircle,
     Loader2, ArrowLeft, Clock,
     AlertCircle, User, ChevronRight, ArrowLeftCircle, Search, RefreshCw,
-    FileSpreadsheet, X, ChevronDown, Store
+    FileSpreadsheet, X, ChevronDown, Store, Filter
 } from 'lucide-react';
 
 import imgSvl from '../../../assets/SVLJoah.png';
@@ -91,14 +91,14 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'product_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
-            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
             { header: 'ຂໍ (Qty)', key: 'qty', width: 10 },
             { header: 'ສະຕ໋ອກ (Stock)', key: 'stock_qty', width: 14 },
             { header: 'ຄົງເຫຼືອ (Remain)', key: 'remain_qty', width: 16 },
             { header: 'ສະຖານະ', key: 'status', width: 14 },
             { header: 'Employee ID', key: 'request_by_id', width: 16 },
-            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
+            { header: 'ຜູ້ Request', key: 'request_by_name', width: 22 },
             { header: 'Employee ID', key: 'accepted_by_id', width: 16 },
+            { header: 'ຮັບ/ປະຕິເສດ ໂດຍ', key: 'accepted_by_name', width: 22 },
             { header: 'ເວລາ Request', key: 'created_at', width: 24 },
             { header: 'ເວລາ Action', key: 'updated_at', width: 24 },
         ];
@@ -180,6 +180,7 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'Tag (ເກົ່າ -> ໃໝ່)', key: 'tag_text', width: 24 },
             { header: 'Shelf (ເກົ່າ -> ໃໝ່)', key: 'shelf_text', width: 24 },
             { header: 'Max Qty (ເກົ່າ -> ໃໝ່)', key: 'max_text', width: 24 },
+            { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
         ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
@@ -195,30 +196,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
                 tag_text: `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
                 shelf_text: `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
                 max_text: `${r.old_max || '-'} -> ${r.new_max || '-'}`,
+                details: r.details || r.change_reason || 'Manual Update',
                 updated_at: fmtExcel(r.updated_at),
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
-        });
-        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
-        rows.forEach((r, i) => {
-            const ch = (r.new_qty ?? 0) - (r.old_qty ?? 0);
-            const { name: editName, empId: editId } = parseUser(r.updated_by || r.added_by);
-            const isNew = r._source === 'added';
-            const row = ws.addRow({
-                branch_id: r.branch_id,
-                item_name: r.item_name || r.barcode,
-                barcode: r.barcode,
-                updated_by_name: editName,
-                updated_by_id: editId || r.updated_by_id || '-',
-                change: ch > 0 ? `+${ch}` : ch,
-                old_qty: isNew ? '-' : (r.old_qty ?? '-'),
-                new_qty: r.new_qty ?? '-',
-                details: r.details || r.change_reason || r.remarks || (isNew ? 'ສິນຄ້າເຂ້າໃໝ່' : 'ແກ້ໄຂຂໍ້ມູນ'),
-                updated_at: fmtExcel(r.updated_at),
-            });
-            const bg = isNew ? 'FFD1FAE5' : (ch > 0 ? 'FFD1FAE5' : ch < 0 ? 'FFFEE2E2' : 'FFF1F5F9');
-            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? bg : 'FFFFFFFF' } }; });
-            row.getCell('change').font = { bold: true, color: { argb: ch > 0 ? 'FF065F46' : ch < 0 ? 'FF991B1B' : 'FF6B7280' } };
         });
     } else {
         ws.columns = [
@@ -407,24 +388,97 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     const c = BC[branch];
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [columnFilters, setColumnFilters] = useState({});
+    const [openFilterCol, setOpenFilterCol] = useState(null);
     const [page, setPage] = useState(0);
     const PAGE_SIZE = 100;
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const exportRef = useRef(null);
+    const tableHeaderRef = useRef(null);
 
-    // Reset filter when branch changes
-    useEffect(() => { setStatusFilter('all'); setSearch(''); setPage(0); }, [branch]);
-    useEffect(() => { setPage(0); }, [search, statusFilter]);
+    // Reset filter when branch or activeTab changes
+    useEffect(() => { setStatusFilter('all'); setSearch(''); setPage(0); setColumnFilters({}); setOpenFilterCol(null); }, [branch, activeTab]);
+    useEffect(() => { setPage(0); }, [search, statusFilter, columnFilters]);
 
-    // Close dropdown on outside click
+    // Close dropdowns on outside click
     useEffect(() => {
-        const handler = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setShowExportMenu(false); };
+        const handler = (e) => { 
+            if (exportRef.current && !exportRef.current.contains(e.target)) setShowExportMenu(false); 
+            if (tableHeaderRef.current && !tableHeaderRef.current.contains(e.target)) setOpenFilterCol(null);
+        };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
+    const getRowValues = (r, activeTab) => {
+        if (activeTab === 'requests') return [
+            '',
+            r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A',
+            (r.product_name || r.item_name || '') + ' ' + (r.barcode || ''),
+            r.request_by || '',
+            String(r.qty || 0),
+            String(r.stock_at_request ?? ''),
+            String((r.stock_at_request ?? 0) - (r.qty || 0)),
+            r.status || '',
+            r.accepted_by || ''
+        ];
+        if (activeTab === 'store_edits') return [
+            '',
+            (r.item_name || '') + ' ' + (r.barcode || ''),
+            r.updated_by || '',
+            String((r.old_qty ?? 0) + ' ' + (r.new_qty ?? 0)),
+            String((r.old_tag || '') + ' ' + (r.new_tag || '')),
+            String((r.old_shelf || '') + ' ' + (r.new_shelf || '')),
+            String((r.old_max || '') + ' ' + (r.new_max || '')),
+            r.details || '',
+            r.process_started_at ? fmt(r.process_started_at) : '',
+            String(r.process_time_seconds || ''),
+            fmt(r.updated_at)
+        ];
+        if (activeTab === 'edits') return [
+            '',
+            (r.item_name || '') + ' ' + (r.barcode || ''),
+            r.updated_by || '',
+            String((r.new_qty ?? 0) - (r.old_qty ?? 0)),
+            String(r.old_qty ?? ''),
+            String(r.new_qty ?? ''),
+            r.details || '',
+            fmt(r.updated_at)
+        ];
+        return [
+            '',
+            (r.item_name || '') + ' ' + (r.barcode || ''),
+            r.added_by || '',
+            String(r.qty ?? ''),
+            r.remarks || r.reason || '',
+            fmt(r.created_at)
+        ];
+    };
+
     const branchData = data.filter(r => r.branch_id === branch);
+
+    const columnUniqueValues = useMemo(() => {
+        const unique = {};
+        branchData.forEach(r => {
+            const rowValues = getRowValues(r, activeTab);
+            rowValues.forEach((val, idx) => {
+                if (idx > 0) { // skip index 0 ('#')
+                    if (!unique[idx]) unique[idx] = new Set();
+                    const strVal = String(val).trim();
+                    if (strVal && strVal !== '-' && strVal !== '0') {
+                        unique[idx].add(strVal);
+                    }
+                }
+            });
+        });
+        const result = {};
+        for (const idx in unique) {
+            result[idx] = Array.from(unique[idx]).sort((a, b) => a.localeCompare(b, 'lo-LA'));
+        }
+        return result;
+    }, [branchData, activeTab]);
+
     const filtered = branchData.filter(r => {
         // Status filter (requests tab only)
         if (activeTab === 'requests' && statusFilter !== 'all') {
@@ -432,14 +486,33 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             if (statusFilter === 'pending' && r.status !== 'pending') return false;
             if (statusFilter === 'rejected' && r.status !== 'rejected') return false;
         }
-        if (!search) return true;
-        const s = search.toLowerCase();
-        return (
-            (r.product_name || r.item_name || '').toLowerCase().includes(s) ||
-            (r.barcode || '').includes(s) ||
-            (r.request_by || r.updated_by || r.added_by || '').toLowerCase().includes(s) ||
-            (r.accepted_by || '').toLowerCase().includes(s)
-        );
+
+        // Global search
+        if (search) {
+            const s = search.toLowerCase();
+            const matchesGlobal = (
+                (r.product_name || r.item_name || '').toLowerCase().includes(s) ||
+                (r.barcode || '').includes(s) ||
+                (r.request_by || r.updated_by || r.added_by || '').toLowerCase().includes(s) ||
+                (r.accepted_by || '').toLowerCase().includes(s)
+            );
+            if (!matchesGlobal) return false;
+        }
+
+        // Column filters (Excel-like Checkboxes)
+        if (Object.keys(columnFilters).length > 0) {
+            const rowValues = getRowValues(r, activeTab);
+            for (const [colIndexStr, selectedVals] of Object.entries(columnFilters)) {
+                if (!selectedVals || selectedVals.length === 0) continue; // undefined or empty array means all selected (no filter)
+                const colIndex = parseInt(colIndexStr);
+                const cellText = String(rowValues[colIndex] || '').trim();
+                if (!selectedVals.includes(cellText)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -447,9 +520,9 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
 
     const headers =
         activeTab === 'requests' ? ['#', 'ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
-            activeTab === 'store_edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', 'Tag', 'Shelf(Hook/Cherp)', 'Max Qty', 'ເວລາ'] :
-            activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
-                ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
+            activeTab === 'store_edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', 'Tag (Hook/Cherp)', 'Shelf ບ່ອນຈັດເກັບ', 'Max Qty', 'ເຫດຜົນ', 'ເວລາກົດຮັບ', 'ໃຊ້ເວລາ', 'ເວລາສຳເລັດ'] :
+                activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
+                    ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
@@ -581,7 +654,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         <UserCell value={r.updated_by} iconColor="text-blue-400" />
                         <p className="text-[10px] text-slate-400 mt-1 font-medium">{fmt(r.updated_at)}</p>
                     </td>
-                    
+
                     {/* QTY */}
                     <td className="px-4 py-4 text-center">
                         <div className="flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-900/20 py-2 rounded-xl">
@@ -624,7 +697,20 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         </div>
                     </td>
 
-                    <td className="px-6 py-4 text-slate-500 text-sm font-bold whitespace-nowrap text-left">{fmt(r.updated_at)}</td>
+                    <td className="px-6 py-4 max-w-[150px]"><span className="text-sm text-slate-500 italic line-clamp-2" title={r.details}>{r.details}</span></td>
+                    <td className="px-6 py-4 text-slate-500 text-xs font-bold whitespace-nowrap text-center">
+                        {r.process_started_at ? fmt(r.process_started_at) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                        {r.process_time_seconds > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-black rounded-lg whitespace-nowrap">
+                                ⏱️ {r.process_time_seconds} ວິນາທີ
+                            </span>
+                        ) : <span className="text-slate-300">-</span>}
+                    </td>
+                    <td className="px-6 py-4 text-emerald-600 dark:text-emerald-400 text-xs font-bold whitespace-nowrap text-left">
+                        {fmt(r.updated_at)}
+                    </td>
                 </tr>
             );
         }
@@ -776,13 +862,91 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             {/* Table */}
             <div className="overflow-x-auto">
                 <table className="w-full">
-                    <thead className="bg-slate-50 dark:bg-slate-800">
+                    <thead className="bg-slate-50 dark:bg-slate-800" ref={tableHeaderRef}>
                         <tr>
                             {headers.map((h, idx) => {
                                 const isCenter = ['#', 'จຳນວນ', 'Tag', 'Shelf', 'Max', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ຂໍ', 'ປ່ຽນແປງ', 'ການປ່ຽน'].some(k => h.includes(k));
+                                const hasFilter = idx > 0 && columnUniqueValues[idx] && columnUniqueValues[idx].length > 0;
+                                const isFilterOpen = openFilterCol === idx;
+                                const currentFilter = columnFilters[idx];
+                                const isAllSelected = !currentFilter || currentFilter.length === 0;
+
                                 return (
-                                    <th key={idx} className={`px-6 py-4 text-sm font-black uppercase text-slate-500 tracking-wider whitespace-nowrap ${isCenter ? 'text-center' : 'text-left'}`}>
-                                        {h}
+                                    <th key={idx} className={`px-4 py-3 align-top whitespace-nowrap relative ${isCenter ? 'text-center' : 'text-left'}`}>
+                                        <div className={`flex flex-col gap-2 ${isCenter ? 'items-center' : 'items-start'}`}>
+                                            <span className="text-xs font-black uppercase text-slate-500 tracking-wider">
+                                                {h}
+                                            </span>
+                                            {hasFilter && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setOpenFilterCol(isFilterOpen ? null : idx); }}
+                                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${!isAllSelected ? 'bg-orange-50 border-joah-orange text-joah-orange' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                                >
+                                                    <Filter size={12} />
+                                                    <span>{isAllSelected ? 'ກັ່ນຕອງ' : `ເລືອກ (${currentFilter.length})`}</span>
+                                                    <ChevronDown size={12} className={`transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Dropdown Popover */}
+                                        {isFilterOpen && hasFilter && (
+                                            <div 
+                                                className="absolute top-full mt-2 left-0 min-w-[200px] max-w-[280px] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 flex flex-col"
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                <div className="p-2.5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/50">
+                                                    <button 
+                                                        onClick={() => {
+                                                            if (isAllSelected) {
+                                                                setColumnFilters({ ...columnFilters, [idx]: ['__NONE__'] }); // use a dummy string to represent none selected so it's not empty array
+                                                            } else {
+                                                                setColumnFilters({ ...columnFilters, [idx]: undefined });
+                                                            }
+                                                        }}
+                                                        className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors uppercase tracking-wider"
+                                                    >
+                                                        {isAllSelected ? '☐ ຍົກເລີກທັງໝົດ' : '☑ ເລືອກທັງໝົດ'}
+                                                    </button>
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar bg-white dark:bg-slate-800">
+                                                    {columnUniqueValues[idx].map((val, vIdx) => {
+                                                        const isSelected = isAllSelected || currentFilter.includes(val);
+                                                        return (
+                                                            <label key={vIdx} className="flex items-start gap-2.5 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg cursor-pointer transition-colors group">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => {
+                                                                        if (isAllSelected) {
+                                                                            // going from all to all-except-one
+                                                                            setColumnFilters({ ...columnFilters, [idx]: columnUniqueValues[idx].filter(v => v !== val) });
+                                                                        } else {
+                                                                            const newFilter = currentFilter.includes(val) 
+                                                                                ? currentFilter.filter(v => v !== val)
+                                                                                : [...currentFilter, val];
+                                                                            
+                                                                            // if empty, we use dummy string
+                                                                            if (newFilter.length === 0) {
+                                                                                setColumnFilters({ ...columnFilters, [idx]: ['__NONE__'] });
+                                                                            } else if (newFilter.length === columnUniqueValues[idx].length) {
+                                                                                setColumnFilters({ ...columnFilters, [idx]: undefined });
+                                                                            } else {
+                                                                                setColumnFilters({ ...columnFilters, [idx]: newFilter });
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 text-joah-orange focus:ring-joah-orange bg-white checked:bg-joah-orange transition-all cursor-pointer"
+                                                                />
+                                                                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 break-words flex-1 group-hover:text-joah-orange transition-colors whitespace-normal text-left leading-snug">
+                                                                    {val}
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </th>
                                 );
                             })}
@@ -911,6 +1075,8 @@ const HQCommandCenter = ({ onBack }) => {
                     updated_by: r.updated_by,
                     updated_at: r.updated_at,
                     details: r.change_reason || 'Manual Update',
+                    process_time_seconds: r.process_time_seconds || 0,
+                    process_started_at: r.process_started_at || null,
                 }));
 
             } else {
