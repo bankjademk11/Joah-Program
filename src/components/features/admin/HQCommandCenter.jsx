@@ -13,6 +13,7 @@ import imgSvl from '../../../assets/SVLJoah.png';
 import imgTll from '../../../assets/TLLimage.png';
 import imgVx from '../../../assets/VX.png';
 import imgPsn from '../../../assets/PSNimage.png';
+import joahLogo from '../../../assets/Joah.jpeg';
 
 // ===================== CONSTANTS =====================
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
@@ -70,15 +71,15 @@ const UserCell = ({ value, iconColor = 'text-slate-400' }) => {
 };
 
 // ===================== EXCEL EXPORT =====================
-const exportToExcel = async (rows, activeTab, startDate, endDate) => {
+const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, showDetailedTime = true) => {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'HQ Command Center';
     workbook.created = new Date();
 
-    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals' };
-    const ws = workbook.addWorksheet(tabNames[activeTab]);
+    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals', store_edits: 'Store History' };
+    const ws = workbook.addWorksheet(tabNames[activeTab] || 'Export');
 
-    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981' };
+    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981', store_edits: 'FF06B6D4' };
     const headerStyle = {
         font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 12, name: 'Phetsarath OT' },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: headerFill[activeTab] } },
@@ -102,7 +103,6 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ເວລາ Request', key: 'created_at', width: 24 },
             { header: 'ເວລາ Action', key: 'updated_at', width: 24 },
         ];
-        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
             const isAcc = r.status === 'accepted' || r.status === 'approved';
             const isRej = r.status === 'rejected';
@@ -148,7 +148,6 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ເຫດຜົນ', key: 'details', width: 32 },
             { header: 'ເວລາ', key: 'updated_at', width: 24 },
         ];
-        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
             const ch = (r.new_qty ?? 0) - (r.old_qty ?? 0);
             const { name: editName, empId: editId } = parseUser(r.updated_by || r.added_by);
@@ -171,33 +170,72 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         });
     } else if (activeTab === 'store_edits') {
         ws.columns = [
+            { header: 'ເລກບິນ (Bill ID)', key: 'bill_id', width: 22 },
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
-            { header: 'ຜູ້ແກ້ໄຂ', key: 'updated_by_name', width: 22 },
+            { header: 'ພະນັກງານ', key: 'updated_by_name', width: 22 },
             { header: 'Employee ID', key: 'updated_by_id', width: 16 },
-            { header: 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', key: 'qty_text', width: 16 },
-            { header: 'Tag (ເກົ່າ -> ໃໝ່)', key: 'tag_text', width: 24 },
-            { header: 'Shelf (ເກົ່າ -> ໃໝ່)', key: 'shelf_text', width: 24 },
-            { header: 'Max Qty (ເກົ່າ -> ໃໝ່)', key: 'max_text', width: 24 },
-            { header: 'ເຫດຜົນ', key: 'details', width: 32 },
-            { header: 'ເວລາ', key: 'updated_at', width: 24 },
+            { header: 'ຈຳນວນ(ເກົ່າ → ໃໝ່)', key: 'qty_text', width: 20 },
+            { header: 'Tag (ປະເພດ)', key: 'tag_text', width: 20 },
+            { header: 'Shelf (ບ່ອນເກັບ)', key: 'shelf_text', width: 20 },
+            { header: 'Max (ຄວາມຈຸ)', key: 'max_text', width: 20 },
+            { header: 'ເຫດຜົນ', key: 'details', width: 24 },
+            { header: 'ເວລາທັງບິນ', key: 'batch_time', width: 20 },
+            ...(showDetailedTime ? [
+                { header: 'ເວລາກົດຮັບ SKU', key: 'sku_start', width: 24 },
+                { header: 'ເວລາ/SKU', key: 'sku_time', width: 16 },
+                { header: 'ເວລາເລີ່ມບິນ', key: 'batch_start', width: 24 },
+                { header: 'ເວລາສຳເລັດບິນ', key: 'batch_end', width: 24 },
+                { header: 'ເວລາບັນທຶກ', key: 'updated_at', width: 24 },
+            ] : []),
         ];
-        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
+
+        // Share batch info for Excel export too
+        const billMap = {};
+        rows.forEach(r => {
+            if (!r.bill_id) return;
+            if (!billMap[r.bill_id]) billMap[r.bill_id] = {};
+            if (r.batch_started_at && !billMap[r.bill_id].batch_started_at) billMap[r.bill_id].batch_started_at = r.batch_started_at;
+            if (r.batch_ended_at && !billMap[r.bill_id].batch_ended_at) billMap[r.bill_id].batch_ended_at = r.batch_ended_at;
+            if (r.batch_total_seconds && !billMap[r.bill_id].batch_total_seconds) billMap[r.bill_id].batch_total_seconds = r.batch_total_seconds;
+        });
+
+        const fmtSecs = (s) => {
+            if (!s || s <= 0) return '-';
+            if (s < 60) return `${s} ວິ`;
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return sec > 0 ? `${m} ນາທີ ${sec} ວິ` : `${m} ນາທີ`;
+        };
+
         rows.forEach((r, i) => {
             const { name: editName, empId: editId } = parseUser(r.updated_by);
+            const billInfo = (r.bill_id && billMap[r.bill_id]) || {};
+            const batchSecs = billInfo.batch_total_seconds || r.batch_total_seconds;
+            const batchStartedAt = billInfo.batch_started_at || r.batch_started_at;
+            const batchEndedAt = billInfo.batch_ended_at || r.batch_ended_at;
+
             const row = ws.addRow({
+                bill_id: r.bill_id || '-',
                 branch_id: r.branch_id,
                 item_name: r.item_name || r.barcode,
                 barcode: r.barcode,
                 updated_by_name: editName,
                 updated_by_id: editId || r.updated_by_id || '-',
                 qty_text: `${r.old_qty ?? '-'} -> ${r.new_qty ?? '-'}`,
-                tag_text: `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
-                shelf_text: `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
-                max_text: `${r.old_max || '-'} -> ${r.new_max || '-'}`,
+                tag_text: r.old_tag === r.new_tag ? (r.new_tag || '-') : `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
+                shelf_text: r.old_shelf === r.new_shelf ? (r.new_shelf || '-') : `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
+                max_text: String(r.old_max) === String(r.new_max) ? (r.new_max ?? '-') : `${r.old_max ?? '-'} -> ${r.new_max ?? '-'}`,
                 details: r.details || r.change_reason || 'Manual Update',
-                updated_at: fmtExcel(r.updated_at),
+                batch_time: fmtSecs(batchSecs),
+                ...(showDetailedTime ? {
+                    sku_start: r.process_started_at ? fmtExcel(r.process_started_at) : '-',
+                    sku_time: fmtSecs(r.process_time_seconds),
+                    batch_start: batchStartedAt ? fmtExcel(batchStartedAt) : '-',
+                    batch_end: batchEndedAt ? fmtExcel(batchEndedAt) : '-',
+                    updated_at: fmtExcel(r.updated_at),
+                } : {}),
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
         });
@@ -212,7 +250,6 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
             { header: 'ເຫດຜົນ', key: 'remarks', width: 32 },
             { header: 'ເວລາ', key: 'created_at', width: 24 },
         ];
-        ws.getRow(1).eachCell(c => Object.assign(c, headerStyle));
         rows.forEach((r, i) => {
             const { name: addName, empId: addId } = parseUser(r.added_by);
             const row = ws.addRow({
@@ -226,18 +263,65 @@ const exportToExcel = async (rows, activeTab, startDate, endDate) => {
         });
     }
 
+    // Insert 5 rows at the top for the Logo and Header details
+    ws.spliceRows(1, 0, [], [], [], [], []);
+
+    // Fetch and add Joah Logo
+    try {
+        const res = await fetch(joahLogo);
+        const buf = await res.arrayBuffer();
+        const logoId = workbook.addImage({ buffer: buf, extension: 'jpeg' });
+        // Place logo covering A1:B4
+        ws.addImage(logoId, {
+            tl: { col: 0, row: 0 },
+            br: { col: 2, row: 4 },
+            editAs: 'absolute'
+        });
+        ws.mergeCells('A1:B4');
+    } catch (e) {
+        console.error("Could not load logo for Excel", e);
+    }
+
+    // Add Title and Info
+    const displayDateStr = startDate && endDate ? `${startDate} ຫາ ${endDate}` : startDate || endDate || 'ທັງໝົດ';
+    
+    ws.mergeCells('C1:F2');
+    const titleCell = ws.getCell('C1');
+    titleCell.value = `ລາຍງານ: ${tabNames[activeTab]}`;
+    titleCell.font = { name: 'Phetsarath OT', size: 18, bold: true };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    ws.mergeCells('C3:F3');
+    const branchCell = ws.getCell('C3');
+    branchCell.value = `ສາຂາ: ${branchName || 'ທັງໝົດ'}`;
+    branchCell.font = { name: 'Phetsarath OT', size: 12, bold: true };
+    branchCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    ws.mergeCells('C4:F4');
+    const dateCell = ws.getCell('C4');
+    dateCell.value = `ວັນທີ: ${displayDateStr}`;
+    dateCell.font = { name: 'Phetsarath OT', size: 12 };
+    dateCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    // Apply header style to row 6 (which is our data table header now)
+    ws.getRow(6).eachCell(c => Object.assign(c, headerStyle));
+
     // Apply Phetsarath OT font + center alignment to ALL cells
     ws.eachRow((row, rowNumber) => {
-        row.height = rowNumber === 1 ? 30 : 22;
+        if (rowNumber === 6) row.height = 30;
+        else if (rowNumber > 6) row.height = 22;
+        
         row.eachCell(cell => {
-            cell.font = { ...cell.font, name: 'Phetsarath OT' };
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            if (!cell.border) {
+            if (rowNumber >= 6) {
+                cell.font = { ...cell.font, name: 'Phetsarath OT' };
+                if (rowNumber > 6) {
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                }
                 cell.border = {
-                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                    bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                    left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                    right: { style: 'thin', color: { argb: 'FF94A3B8' } },
                 };
             }
         });
@@ -394,6 +478,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     const PAGE_SIZE = 100;
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [showDetailedTime, setShowDetailedTime] = useState(false); // Toggle for detailed timing columns
     const exportRef = useRef(null);
     const tableHeaderRef = useRef(null);
 
@@ -425,16 +510,24 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
         ];
         if (activeTab === 'store_edits') return [
             '',
+            r.bill_id || '-',
             (r.item_name || '') + ' ' + (r.barcode || ''),
             r.updated_by || '',
             String((r.old_qty ?? 0) + ' ' + (r.new_qty ?? 0)),
-            String((r.old_tag || '') + ' ' + (r.new_tag || '')),
-            String((r.old_shelf || '') + ' ' + (r.new_shelf || '')),
-            String((r.old_max || '') + ' ' + (r.new_max || '')),
-            r.details || '',
-            r.process_started_at ? fmt(r.process_started_at) : '',
-            String(r.process_time_seconds || ''),
-            fmt(r.updated_at)
+            String((r.old_tag || '-') + ' ' + (r.new_tag || '-')),
+            String((r.old_shelf || '-') + ' ' + (r.new_shelf || '-')),
+            String((r.old_max ?? '-') + ' ' + (r.new_max ?? '-')),
+            r.details || r.change_reason || 'Manual Update',
+            ...(showDetailedTime ? [
+                r.process_started_at ? fmt(r.process_started_at) : '',
+                String(r.process_time_seconds || ''),
+                r.batch_started_at ? fmt(r.batch_started_at) : ''
+            ] : []),
+            String(r.batch_total_seconds || ''),
+            ...(showDetailedTime ? [
+                r.batch_ended_at ? fmt(r.batch_ended_at) : '',
+                fmt(r.updated_at)
+            ] : [])
         ];
         if (activeTab === 'edits') return [
             '',
@@ -477,7 +570,24 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             result[idx] = Array.from(unique[idx]).sort((a, b) => a.localeCompare(b, 'lo-LA'));
         }
         return result;
-    }, [branchData, activeTab]);
+    }, [branchData, activeTab, showDetailedTime]);
+
+    // Build a map: bill_id -> batch timing info (from whichever row has it)
+    const billSummaryMap = useMemo(() => {
+        const map = {};
+        branchData.forEach(r => {
+            if (!r.bill_id) return;
+            if (!map[r.bill_id]) map[r.bill_id] = {};
+            // Take any non-null value found in any row for this bill
+            if (r.batch_started_at && !map[r.bill_id].batch_started_at)
+                map[r.bill_id].batch_started_at = r.batch_started_at;
+            if (r.batch_ended_at && !map[r.bill_id].batch_ended_at)
+                map[r.bill_id].batch_ended_at = r.batch_ended_at;
+            if (r.batch_total_seconds && !map[r.bill_id].batch_total_seconds)
+                map[r.bill_id].batch_total_seconds = r.batch_total_seconds;
+        });
+        return map;
+    }, [branchData]);
 
     const filtered = branchData.filter(r => {
         // Status filter (requests tab only)
@@ -506,6 +616,15 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                 if (!selectedVals || selectedVals.length === 0) continue; // undefined or empty array means all selected (no filter)
                 const colIndex = parseInt(colIndexStr);
                 const cellText = String(rowValues[colIndex] || '').trim();
+
+                if (selectedVals.includes('__NEGATIVE__')) {
+                    const numVal = parseFloat(cellText.replace(/,/g, ''));
+                    if (isNaN(numVal) || numVal >= 0) {
+                        return false;
+                    }
+                    continue; // matches negative
+                }
+
                 if (!selectedVals.includes(cellText)) {
                     return false;
                 }
@@ -518,9 +637,16 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paginatedData = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
+    // Columns visible depends on showDetailedTime toggle (for store_edits)
     const headers =
         activeTab === 'requests' ? ['#', 'ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
-            activeTab === 'store_edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ຈຳນວນ(ເກົ່າ-ໃໝ່)', 'Tag (Hook/Cherp)', 'Shelf ບ່ອນຈັດເກັບ', 'Max Qty', 'ເຫດຜົນ', 'ເວລາກົດຮັບ', 'ໃຊ້ເວລາ', 'ເວລາສຳເລັດ'] :
+            activeTab === 'store_edits' ? [
+                '#', 'ເລກບິນ', 'ສິນຄ້າ', 'ພະນັກງານ', 'ຈຳນວນ(ເກົ່າ→ໃໝ່)',
+                'Tag (ເກົ່າ→ໃໝ່)', 'Shelf (ເກົ່າ→ໃໝ່)', 'Max Qty (ເກົ່າ→ໃໝ່)', 'ເຫດຜົນ',
+                ...showDetailedTime ? ['ເວລາກົດຮັບ SKU', 'ເວລາ/SKU', 'ເລີ່ມບິນ'] : [],
+                'ເວລາທັງບິນ',
+                ...showDetailedTime ? ['ສຳເລັດບິນ', 'ບັນທຶກ'] : [],
+            ] :
                 activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                     ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
@@ -539,7 +665,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             const exportRows = mode === 'dated' ? filtered : branchData;
             const s = mode === 'dated' ? startDate : '';
             const e = mode === 'dated' ? endDate : '';
-            await exportToExcel(exportRows, activeTab, s, e);
+            await exportToExcel(exportRows, activeTab, s, e, branch, showDetailedTime);
         } catch (err) { console.error(err); }
         finally { setIsExporting(false); }
     };
@@ -631,86 +757,181 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             );
         }
         if (activeTab === 'store_edits') {
-            const getShelfIcon = (val) => {
-                if (!val || val === '-') return <span className="text-slate-300">-</span>;
-                const s = String(val).trim().toUpperCase();
-                const isHook = s.startsWith('H-') || s.startsWith('HK') || s === 'HOOK' || s.includes('HOOK');
-                if (isHook) {
-                    return <span className="flex items-center gap-1 justify-center">🪝 <span className="text-emerald-700 font-bold">{val}</span></span>;
-                }
-                return <span className="flex items-center gap-1 justify-center">📦 <span className="text-blue-700 font-bold">{val}</span></span>;
+            const fmtSecs = (s) => {
+                if (!s || s <= 0) return null;
+                if (s < 60) return `${s} ວິ`;
+                const m = Math.floor(s / 60);
+                const sec = s % 60;
+                return sec > 0 ? `${m} ນາທີ ${sec} ວິ` : `${m} ນາທີ`;
             };
+
+            // Use shared bill summary for ALL rows in the same bill
+            const billInfo = (r.bill_id && billSummaryMap[r.bill_id]) || {};
+            const batchSecs = billInfo.batch_total_seconds || r.batch_total_seconds;
+            const batchStartedAt = billInfo.batch_started_at || r.batch_started_at;
+            const batchEndedAt = billInfo.batch_ended_at || r.batch_ended_at;
+
+            const skuSecs = r.process_time_seconds;
+            const speedLabel = batchSecs > 0
+                ? batchSecs < 300 ? { txt: '⚡ ໄວ', cls: 'bg-emerald-100 text-emerald-700' }
+                    : batchSecs < 900 ? { txt: '⏳ ປົກກະຕິ', cls: 'bg-amber-100 text-amber-700' }
+                        : { txt: '🐢 ຊ້າ', cls: 'bg-rose-100 text-rose-700' }
+                : null;
 
             return (
                 <tr key={i} className="hover:bg-cyan-50/30 transition-colors">
                     <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
-                    <td className="px-6 py-4">
+
+                    {/* Bill ID */}
+                    <td className="px-4 py-3">
+                        {r.bill_id ? (
+                            <span className="inline-block px-2 py-1 rounded-lg text-[10px] font-black tracking-widest bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50 max-w-[120px] truncate" title={r.bill_id}>
+                                {r.bill_id}
+                            </span>
+                        ) : <span className="text-slate-300 text-sm">-</span>}
+                    </td>
+
+                    {/* Product */}
+                    <td className="px-4 py-3">
                         <div className="flex flex-col">
-                            <p className="text-base font-bold text-slate-800 dark:text-white leading-tight">{r.item_name || r.barcode || '-'}</p>
-                            <p className="text-xs text-slate-400 font-mono mt-1">{r.barcode}</p>
+                            <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{r.item_name || r.barcode || '-'}</p>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{r.barcode}</p>
                         </div>
                     </td>
-                    <td className="px-6 py-4">
+
+                    {/* Employee */}
+                    <td className="px-4 py-3">
                         <UserCell value={r.updated_by} iconColor="text-blue-400" />
-                        <p className="text-[10px] text-slate-400 mt-1 font-medium">{fmt(r.updated_at)}</p>
                     </td>
 
                     {/* QTY */}
-                    <td className="px-4 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-900/20 py-2 rounded-xl">
+                    <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 py-1.5 px-2 rounded-xl">
                             <span className="text-xs font-bold text-slate-400">{r.old_qty ?? '-'}</span>
                             <span className="text-slate-300">→</span>
-                            <span className="text-lg font-black text-blue-600">{r.new_qty ?? '-'}</span>
+                            <span className="text-base font-black text-blue-600">{r.new_qty ?? '-'}</span>
                         </div>
                     </td>
 
-                    {/* Tag */}
-                    <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_tag || '-'}</span>
-                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
-                            <span className="text-xs font-black text-cyan-600 px-2 py-0.5 rounded-md bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-100 dark:border-cyan-800">
-                                {r.new_tag || '-'}
+                    {/* TAG */}
+                    <td className="px-4 py-3 text-center">
+                        {(() => {
+                            const oldV = r.old_tag || '-';
+                            const newV = r.new_tag || '-';
+                            const changed = oldV !== newV;
+                            return changed ? (
+                                <div className="flex items-center justify-center gap-1 bg-amber-50 dark:bg-amber-900/20 py-1.5 px-2 rounded-xl">
+                                    <span className="text-xs font-bold text-slate-400 line-through">{oldV}</span>
+                                    <span className="text-amber-400 text-xs">→</span>
+                                    <span className="text-xs font-black text-amber-700 dark:text-amber-300">{newV}</span>
+                                </div>
+                            ) : (
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 py-1.5 px-3 rounded-xl">{newV}</span>
+                            );
+                        })()}
+                    </td>
+
+                    {/* SHELF */}
+                    <td className="px-4 py-3 text-center">
+                        {(() => {
+                            const oldV = r.old_shelf || '-';
+                            const newV = r.new_shelf || '-';
+                            const changed = oldV !== newV;
+                            return changed ? (
+                                <div className="flex items-center justify-center gap-1 bg-amber-50 dark:bg-amber-900/20 py-1.5 px-2 rounded-xl">
+                                    <span className="text-xs font-bold text-slate-400 line-through">{oldV}</span>
+                                    <span className="text-amber-400 text-xs">→</span>
+                                    <span className="text-xs font-black text-amber-700 dark:text-amber-300">{newV}</span>
+                                </div>
+                            ) : (
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 py-1.5 px-3 rounded-xl">{newV}</span>
+                            );
+                        })()}
+                    </td>
+
+                    {/* MAX QTY */}
+                    <td className="px-4 py-3 text-center">
+                        {(() => {
+                            const oldV = r.old_max ?? '-';
+                            const newV = r.new_max ?? '-';
+                            const changed = String(oldV) !== String(newV);
+                            return changed ? (
+                                <div className="flex items-center justify-center gap-1 bg-amber-50 dark:bg-amber-900/20 py-1.5 px-2 rounded-xl">
+                                    <span className="text-xs font-bold text-slate-400 line-through">{oldV}</span>
+                                    <span className="text-amber-400 text-xs">→</span>
+                                    <span className="text-xs font-black text-amber-700 dark:text-amber-300">{newV}</span>
+                                </div>
+                            ) : (
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 py-1.5 px-3 rounded-xl">{newV}</span>
+                            );
+                        })()}
+                    </td>
+
+                    {/* Details */}
+                    <td className="px-4 py-3">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">
+                            {r.details || r.change_reason || 'Manual Update'}
+                        </span>
+                    </td>
+
+                    {/* SKU Start Time - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                                {r.process_started_at ? fmt(r.process_started_at) : <span className="text-slate-300">-</span>}
                             </span>
-                        </div>
-                    </td>
+                        </td>
+                    )}
 
-                    {/* Shelf */}
-                    <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                            <div className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_shelf || '-'}</div>
-                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
-                            <div className="text-xs font-bold">
-                                {getShelfIcon(r.new_shelf)}
+                    {/* Per-SKU Duration - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-center">
+                            {skuSecs > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-black rounded-lg whitespace-nowrap">
+                                    ⏱️ {fmtSecs(skuSecs)}
+                                </span>
+                            ) : <span className="text-slate-300">-</span>}
+                        </td>
+                    )}
+
+                    {/* Batch Start - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                                {batchStartedAt ? fmt(batchStartedAt) : <span className="text-slate-300">-</span>}
+                            </span>
+                        </td>
+                    )}
+
+                    {/* Batch Total Duration - always visible */}
+                    <td className="px-4 py-3 text-center">
+                        {batchSecs > 0 ? (
+                            <div className="flex flex-col items-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[11px] font-black rounded-lg whitespace-nowrap">
+                                    📦 {fmtSecs(batchSecs)}
+                                </span>
+                                {speedLabel && (
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${speedLabel.cls}`}>{speedLabel.txt}</span>
+                                )}
                             </div>
-                        </div>
-                    </td>
-
-                    {/* Max Qty */}
-                    <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[9px] text-slate-400 uppercase font-black">Old: {r.old_max || '-'}</span>
-                            <div className="h-px w-8 bg-slate-100 dark:bg-slate-800"></div>
-                            <span className="text-xs font-black text-indigo-600 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30">
-                                {r.new_max || '-'}
-                            </span>
-                        </div>
-                    </td>
-
-                    <td className="px-6 py-4 max-w-[150px]"><span className="text-sm text-slate-500 italic line-clamp-2" title={r.details}>{r.details}</span></td>
-                    <td className="px-6 py-4 text-slate-500 text-xs font-bold whitespace-nowrap text-center">
-                        {r.process_started_at ? fmt(r.process_started_at) : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                        {r.process_time_seconds > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-black rounded-lg whitespace-nowrap">
-                                ⏱️ {r.process_time_seconds} ວິນາທີ
-                            </span>
                         ) : <span className="text-slate-300">-</span>}
                     </td>
-                    <td className="px-6 py-4 text-emerald-600 dark:text-emerald-400 text-xs font-bold whitespace-nowrap text-left">
-                        {fmt(r.updated_at)}
-                    </td>
+
+                    {/* Batch End - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
+                                {batchEndedAt ? fmt(batchEndedAt) : <span className="text-slate-300">-</span>}
+                            </span>
+                        </td>
+                    )}
+
+                    {/* Recorded At - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap">
+                            {fmt(r.updated_at)}
+                        </td>
+                    )}
                 </tr>
             );
         }
@@ -850,11 +1071,30 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         )}
                     </div>
 
-                    {/* Search */}
-                    <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60" size={18} />
-                        <input type="text" placeholder="ຄົ້ນຫາ..." value={search} onChange={e => setSearch(e.target.value)}
-                            className="pl-11 pr-4 py-3 rounded-2xl bg-white/20 text-white placeholder:text-white/60 text-base font-bold outline-none focus:bg-white/30 transition-all w-48" />
+                    {/* Search + Detail Time Toggle */}
+                    <div className="flex items-center gap-2">
+                        {activeTab === 'store_edits' && (
+                            <button
+                                onClick={() => setShowDetailedTime(v => !v)}
+                                title={showDetailedTime ? '຋່ອນເວລາລະເອີຍດ' : 'ແສດເວລາລະເອີຍດ'}
+                                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border text-xs font-black transition-all whitespace-nowrap ${
+                                    showDetailedTime
+                                        ? 'bg-violet-500 border-violet-400 text-white shadow-lg shadow-violet-500/30'
+                                        : 'bg-white/20 border-white/30 text-white hover:bg-white/30'
+                                }`}
+                            >
+                                <Clock size={14} />
+                                <span>{showDetailedTime ? 'ເວລາລະເອີຍດ' : 'ເວລາລະເອີຍດ'}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black ${
+                                    showDetailedTime ? 'bg-white/20 text-white' : 'bg-white/30 text-white'
+                                }`}>{showDetailedTime ? 'ON' : 'OFF'}</span>
+                            </button>
+                        )}
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60" size={18} />
+                            <input type="text" placeholder="ຄົ້ນຫາ..." value={search} onChange={e => setSearch(e.target.value)}
+                                className="pl-11 pr-4 py-3 rounded-2xl bg-white/20 text-white placeholder:text-white/60 text-base font-bold outline-none focus:bg-white/30 transition-all w-48" />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -865,8 +1105,9 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                     <thead className="bg-slate-50 dark:bg-slate-800" ref={tableHeaderRef}>
                         <tr>
                             {headers.map((h, idx) => {
-                                const isCenter = ['#', 'จຳນວນ', 'Tag', 'Shelf', 'Max', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ຂໍ', 'ປ່ຽນແປງ', 'ການປ່ຽน'].some(k => h.includes(k));
-                                const hasFilter = idx > 0 && columnUniqueValues[idx] && columnUniqueValues[idx].length > 0;
+                                const isCenter = ['#', 'จຳນວນ', 'Tag', 'Shelf', 'Max', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ຂໍ', 'ປ່ຽນແປງ', 'ການປ່ຽນ', 'ເວລາ', 'ເລີ່ມບິນ', 'ສຳເລັດບິນ', 'ບັນທຶກ'].some(k => h.includes(k));
+                                const disabledCols = ['ຂໍ', 'ສະຕ໋ອກ'];
+                                const hasFilter = idx > 0 && columnUniqueValues[idx] && columnUniqueValues[idx].length > 0 && !disabledCols.includes(h);
                                 const isFilterOpen = openFilterCol === idx;
                                 const currentFilter = columnFilters[idx];
                                 const isAllSelected = !currentFilter || currentFilter.length === 0;
@@ -909,6 +1150,30 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                                                         {isAllSelected ? '☐ ຍົກເລີກທັງໝົດ' : '☑ ເລືອກທັງໝົດ'}
                                                     </button>
                                                 </div>
+
+                                                {/* Special Negative Filter for ຄົງເຫຼືອ */}
+                                                {h.includes('ຄົງເຫຼືອ') && (
+                                                    <div className="p-2 border-b border-slate-100 dark:border-slate-700 bg-rose-50/50 dark:bg-rose-900/10">
+                                                        <label className="flex items-start gap-2.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 p-1.5 rounded-lg cursor-pointer transition-colors group">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!isAllSelected && currentFilter.includes('__NEGATIVE__')}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setColumnFilters({ ...columnFilters, [idx]: ['__NEGATIVE__'] });
+                                                                    } else {
+                                                                        setColumnFilters({ ...columnFilters, [idx]: undefined });
+                                                                    }
+                                                                }}
+                                                                className="mt-0.5 w-3.5 h-3.5 rounded border-rose-300 text-rose-500 focus:ring-rose-500 bg-white checked:bg-rose-500 transition-all cursor-pointer"
+                                                            />
+                                                            <span className="text-[11px] font-black text-rose-600 dark:text-rose-400 flex-1 leading-snug">
+                                                                🚨 ສະເພາະລາຍການຕິດລົບ (&lt; 0)
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                )}
+
                                                 <div className="max-h-60 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar bg-white dark:bg-slate-800">
                                                     {columnUniqueValues[idx].map((val, vIdx) => {
                                                         const isSelected = isAllSelected || currentFilter.includes(val);
