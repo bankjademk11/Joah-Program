@@ -30,6 +30,7 @@ const TABS = [
     { id: 'edits', label: 'ການແກ້ໄຂສິນຄ້າ', icon: Edit3, color: 'from-indigo-500 to-purple-500' },
     { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
     { id: 'store_edits', label: 'ປະຫວັດໜ້າຮ້ານ', icon: Store, color: 'from-blue-500 to-cyan-500' },
+    { id: 'store_manual_edits', label: 'ປະຫວັດແກ້ໄຂໜ້າຮ້ານ', icon: Edit3, color: 'from-violet-500 to-purple-600' },
 ];
 
 // ===================== HELPERS =====================
@@ -76,10 +77,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
     workbook.creator = 'HQ Command Center';
     workbook.created = new Date();
 
-    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals', store_edits: 'Store History' };
+    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals', store_edits: 'Store History', store_manual_edits: 'Store Edit History' };
     const ws = workbook.addWorksheet(tabNames[activeTab] || 'Export');
 
-    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981', store_edits: 'FF06B6D4' };
+    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981', store_edits: 'FF06B6D4', store_manual_edits: 'FF7C3AED' };
     const headerStyle = {
         font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 12, name: 'Phetsarath OT' },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: headerFill[activeTab] } },
@@ -168,26 +169,26 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? bg : 'FFFFFFFF' } }; });
             row.getCell('change').font = { bold: true, color: { argb: ch > 0 ? 'FF065F46' : ch < 0 ? 'FF991B1B' : 'FF6B7280' } };
         });
-    } else if (activeTab === 'store_edits') {
+    } else if (activeTab === 'store_edits' || activeTab === 'store_manual_edits') {
         ws.columns = [
             { header: 'ເລກບິນ (Bill ID)', key: 'bill_id', width: 22 },
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
             { header: 'Barcode', key: 'barcode', width: 18 },
-            { header: 'ພະນັກງານ', key: 'updated_by_name', width: 22 },
             { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ພະນັກງານ', key: 'updated_by_name', width: 22 },
             { header: 'ຈຳນວນ(ເກົ່າ → ໃໝ່)', key: 'qty_text', width: 20 },
             { header: 'Tag (ປະເພດ)', key: 'tag_text', width: 20 },
             { header: 'Shelf (ບ່ອນເກັບ)', key: 'shelf_text', width: 20 },
             { header: 'Max (ຄວາມຈຸ)', key: 'max_text', width: 20 },
             { header: 'ເຫດຜົນ', key: 'details', width: 24 },
+            { header: 'ເວລາບັນທຶກ', key: 'updated_at', width: 24 },
             { header: 'ເວລາທັງບິນ', key: 'batch_time', width: 20 },
             ...(showDetailedTime ? [
                 { header: 'ເວລາກົດຮັບ SKU', key: 'sku_start', width: 24 },
                 { header: 'ເວລາ/SKU', key: 'sku_time', width: 16 },
                 { header: 'ເວລາເລີ່ມບິນ', key: 'batch_start', width: 24 },
                 { header: 'ເວລາສຳເລັດບິນ', key: 'batch_end', width: 24 },
-                { header: 'ເວລາບັນທຶກ', key: 'updated_at', width: 24 },
             ] : []),
         ];
 
@@ -221,20 +222,20 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
                 branch_id: r.branch_id,
                 item_name: r.item_name || r.barcode,
                 barcode: r.barcode,
-                updated_by_name: editName,
                 updated_by_id: editId || r.updated_by_id || '-',
+                updated_by_name: editName,
                 qty_text: `${r.old_qty ?? '-'} -> ${r.new_qty ?? '-'}`,
                 tag_text: r.old_tag === r.new_tag ? (r.new_tag || '-') : `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
                 shelf_text: r.old_shelf === r.new_shelf ? (r.new_shelf || '-') : `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
                 max_text: String(r.old_max) === String(r.new_max) ? (r.new_max ?? '-') : `${r.old_max ?? '-'} -> ${r.new_max ?? '-'}`,
                 details: r.details || r.change_reason || 'Manual Update',
+                updated_at: fmtExcel(r.updated_at || r.created_at),
                 batch_time: fmtSecs(batchSecs),
                 ...(showDetailedTime ? {
                     sku_start: r.process_started_at ? fmtExcel(r.process_started_at) : '-',
                     sku_time: fmtSecs(r.process_time_seconds),
                     batch_start: batchStartedAt ? fmtExcel(batchStartedAt) : '-',
                     batch_end: batchEndedAt ? fmtExcel(batchEndedAt) : '-',
-                    updated_at: fmtExcel(r.updated_at),
                 } : {}),
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
@@ -385,10 +386,10 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-indigo-500' };
                 subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-purple-600' };
                 subC = null;
-            } else if (activeTab === 'store_edits') {
-                mainVal = rows.length; mainLabel = 'ການແກ້ໄຂໜ້າຮ້ານ';
-                subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-blue-500' };
-                subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-cyan-600' };
+            } else if (activeTab === 'store_edits' || activeTab === 'store_manual_edits') {
+                mainVal = rows.length; mainLabel = activeTab === 'store_manual_edits' ? 'ການແກ້ໄຂ Panel' : 'ການແກ້ໄຂໜ້າຮ້ານ';
+                subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: activeTab === 'store_manual_edits' ? 'text-violet-500' : 'text-blue-500' };
+                subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: activeTab === 'store_manual_edits' ? 'text-purple-600' : 'text-cyan-600' };
                 subC = null;
             } else {
                 mainVal = rows.length; mainLabel = 'ສິນຄ້າໃໝ່';
@@ -508,7 +509,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             r.status || '',
             r.accepted_by || ''
         ];
-        if (activeTab === 'store_edits') return [
+        if (activeTab === 'store_edits' || activeTab === 'store_manual_edits') return [
             '',
             r.bill_id || '-',
             (r.item_name || '') + ' ' + (r.barcode || ''),
@@ -640,12 +641,11 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
     // Columns visible depends on showDetailedTime toggle (for store_edits)
     const headers =
         activeTab === 'requests' ? ['#', 'ເລກທີບິນ', 'ສິນຄ້າ', 'ຜູ້ Request', 'ຂໍ', 'ສະຕ໋ອກ', 'ຄົງເຫຼືອ', 'ສະຖານະ', 'ຮັບ/ປະຕິເສດ ໂດຍ'] :
-            activeTab === 'store_edits' ? [
+            (activeTab === 'store_edits' || activeTab === 'store_manual_edits') ? [
                 '#', 'ເລກບິນ', 'ສິນຄ້າ', 'ພະນັກງານ', 'ຈຳນວນ(ເກົ່າ→ໃໝ່)',
                 'Tag (ເກົ່າ→ໃໝ່)', 'Shelf (ເກົ່າ→ໃໝ່)', 'Max Qty (ເກົ່າ→ໃໝ່)', 'ເຫດຜົນ',
-                ...showDetailedTime ? ['ເວລາກົດຮັບ SKU', 'ເວລາ/SKU', 'ເລີ່ມບິນ'] : [],
-                'ເວລາທັງບິນ',
-                ...showDetailedTime ? ['ສຳເລັດບິນ', 'ບັນທຶກ'] : [],
+                'ເວລາບັນທຶກ', 'ເວລາທັງບິນ',
+                ...showDetailedTime ? ['ເວລາກົດຮັບ SKU', 'ເວລາ/SKU', 'ເລີ່ມບິນ', 'ສຳເລັດບິນ'] : [],
             ] :
                 activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                     ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
@@ -756,7 +756,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                 </tr>
             );
         }
-        if (activeTab === 'store_edits') {
+        if (activeTab === 'store_edits' || activeTab === 'store_manual_edits') {
             const fmtSecs = (s) => {
                 if (!s || s <= 0) return null;
                 if (s < 60) return `${s} ວິ`;
@@ -903,6 +903,11 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         </td>
                     )}
 
+                    {/* Recorded At - always visible for edits */}
+                    <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap text-center">
+                        {fmt(r.updated_at || r.created_at)}
+                    </td>
+
                     {/* Batch Total Duration - always visible */}
                     <td className="px-4 py-3 text-center">
                         {batchSecs > 0 ? (
@@ -923,13 +928,6 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                             <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
                                 {batchEndedAt ? fmt(batchEndedAt) : <span className="text-slate-300">-</span>}
                             </span>
-                        </td>
-                    )}
-
-                    {/* Recorded At - detail only */}
-                    {showDetailedTime && (
-                        <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap">
-                            {fmt(r.updated_at)}
                         </td>
                     )}
                 </tr>
@@ -1319,6 +1317,7 @@ const HQCommandCenter = ({ onBack }) => {
 
             } else if (activeTab === 'store_edits') {
                 let q = supabase.from('store_inventory_history').select('*')
+                    .not('action_type', 'eq', 'edited')  // ທຸກ action ຍົກເວັ້ນ edited
                     .order('updated_at', { ascending: false });
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
@@ -1338,7 +1337,37 @@ const HQCommandCenter = ({ onBack }) => {
                     old_max: r.old_max_qty,
                     new_max: r.new_max_qty,
                     updated_by: r.updated_by,
-                    updated_at: r.updated_at,
+                    updated_at: r.updated_at || r.created_at,
+                    created_at: r.created_at,
+                    details: r.change_reason || 'Manual Update',
+                    process_time_seconds: r.process_time_seconds || 0,
+                    process_started_at: r.process_started_at || null,
+                }));
+
+            } else if (activeTab === 'store_manual_edits') {
+                let q = supabase.from('store_inventory_history').select('*')
+                    .eq('action_type', 'edited')  // ສະເພາະ edited ຈາກ StoreEditPanel
+                    .order('updated_at', { ascending: false });
+                if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
+                if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
+                const storeManualData = await fetchAllChunks(q);
+
+                rows = (storeManualData || []).map(r => ({
+                    ...r,
+                    _source: 'store',
+                    item_name: r.item_name,
+                    barcode: r.barcode_no || r.barcode,
+                    old_qty: r.old_store_qty ?? 0,
+                    new_qty: r.new_store_qty ?? 0,
+                    old_tag: r.old_product_tag,
+                    new_tag: r.new_product_tag,
+                    old_shelf: r.old_shelf_location,
+                    new_shelf: r.new_shelf_location,
+                    old_max: r.old_max_qty,
+                    new_max: r.new_max_qty,
+                    updated_by: r.updated_by,
+                    updated_at: r.updated_at || r.created_at,
+                    created_at: r.created_at,
                     details: r.change_reason || 'Manual Update',
                     process_time_seconds: r.process_time_seconds || 0,
                     process_started_at: r.process_started_at || null,
