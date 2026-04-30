@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
+import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight, RefreshCw } from 'lucide-react';
 import { getStoreRackSuggestions, getStoreBranchCategories } from '../../../utils/storeRackUtils';
 import LocationInspector from '../inventory/LocationInspector';
 
@@ -13,6 +13,8 @@ const EditPanel = ({
     editCat1, setEditCat1,
     editCat2, setEditCat2,
     editReason, setEditReason,
+    editTag, setEditTag,
+    editMaxQty, setEditMaxQty,
     currentUser,
     isUpdating,
     handleUpdate,
@@ -110,12 +112,14 @@ const EditPanel = ({
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
-            setCustomMode(false); // Reset Custom Mode
-            setSelectedCategory(''); // Reset Category Filter
-            setViewingCategories(false); // Reset View
-            setLocalInspectedLocation(null); // Reset Local Inspector
-            setIsSplitMode(false); // Reset Split Mode
-            setIsCloneMode(false); // Reset Clone Mode
+            setCustomMode(false);
+            setSelectedCategory('');
+            setViewingCategories(false);
+            setLocalInspectedLocation(null);
+            setIsSplitMode(false);
+            setIsCloneMode(false);
+            if (setEditTag) setEditTag('');
+            if (setEditMaxQty) setEditMaxQty('');
         }
     }, [selectedRow]);
 
@@ -488,16 +492,76 @@ const EditPanel = ({
                             </div>
                         </div>
 
-                        {/* Static Categories Display */}
+                        {/* Product Tag + Max Qty Section */}
                         <div className="grid grid-cols-2 gap-3">
+                            {/* Product Tag */}
+                            <div className="p-3.5 rounded-lg border-2 border-slate-200 dark:border-slate-700 space-y-2 col-span-2">
+                                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                    <span>🏷️</span> ປະເພດການວາງສິນຄ້າ
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditTag && setEditTag((editTag || selectedRow.productTag) === 'hook' ? '' : 'hook')}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${
+                                            (editTag || selectedRow.productTag) === 'hook'
+                                                ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300'
+                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:border-violet-300 hover:bg-violet-50/50'
+                                        }`}
+                                    >
+                                        <span>🪝</span>
+                                        <div className="text-left">
+                                            <p className="text-xs font-black leading-tight">Hook</p>
+                                            <p className="text-[9px] opacity-60 leading-tight">ແຂວນ Hook</p>
+                                        </div>
+                                        {(editTag || selectedRow.productTag) === 'hook' && <CheckCircle size={14} className="ml-auto text-violet-500" />}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditTag && setEditTag((editTag || selectedRow.productTag) === 'shelf' ? '' : 'shelf')}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${
+                                            (editTag || selectedRow.productTag) === 'shelf'
+                                                ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300'
+                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:border-sky-300 hover:bg-sky-50/50'
+                                        }`}
+                                    >
+                                        <span>📦</span>
+                                        <div className="text-left">
+                                            <p className="text-xs font-black leading-tight">Shelf</p>
+                                            <p className="text-[9px] opacity-60 leading-tight">ວາງຊັ້ນ</p>
+                                        </div>
+                                        {(editTag || selectedRow.productTag) === 'shelf' && <CheckCircle size={14} className="ml-auto text-sky-500" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Max Qty */}
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                    <RefreshCw size={12} className="text-slate-400" />
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Max Qty</p>
+                                </div>
+                                <input
+                                    type="number"
+                                    value={editMaxQty !== '' ? editMaxQty : (selectedRow.maxQty || '')}
+                                    onChange={(e) => setEditMaxQty && setEditMaxQty(e.target.value)}
+                                    placeholder={selectedRow.maxQty || '—'}
+                                    className="w-full p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-lg font-black text-center text-slate-500 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 transition-all number-input-no-arrows"
+                                />
+                                <p className="text-[9px] text-slate-400 text-center">ຄວາມຈຸສູງສຸດ</p>
+                            </div>
+
+                            {/* Category 1 */}
                             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t('results.category1')}</p>
                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{editCat1 || selectedRow.category1 || '-'}</p>
                             </div>
-                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t('results.category2')}</p>
-                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{editCat2 || selectedRow.category2 || '-'}</p>
-                            </div>
+                        </div>
+
+                        {/* Category 2 */}
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t('results.category2')}</p>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{editCat2 || selectedRow.category2 || '-'}</p>
                         </div>
 
                         {/* Reason Selection */}

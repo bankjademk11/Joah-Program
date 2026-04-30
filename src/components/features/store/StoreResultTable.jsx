@@ -40,6 +40,8 @@ const StoreResultTable = ({
     const [editCat1, setEditCat1] = useState('');
     const [editCat2, setEditCat2] = useState('');
     const [editReason, setEditReason] = useState('');
+    const [editTag, setEditTag] = useState('');
+    const [editMaxQty, setEditMaxQty] = useState('');
     const [mergeAmount, setMergeAmount] = useState(''); // New state for pending merge amount
     const [employeeName, setEmployeeName] = useState(localStorage.getItem('joah_employee_name') || '');
     const [showExportDropdown, setShowExportDropdown] = useState(false);
@@ -119,7 +121,7 @@ const StoreResultTable = ({
         if (onRefresh) {
             await onRefresh({ skipMaster: true, silent: true }); // Avoid downloading Master if we can
         }
-        
+
         setCooldownRemaining(3); // 3 seconds cooldown
         setIsRefreshing(false);
     };
@@ -132,7 +134,7 @@ const StoreResultTable = ({
 
             const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
             let query = supabase.from('location_inventory').select('*').eq('barcode_no', row.barcode);
-            
+
             if (row.rackLocation) {
                 query = query.eq('rack_location', row.rackLocation);
             }
@@ -405,7 +407,9 @@ const StoreResultTable = ({
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
-        const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const activeUser = currentUser 
+            ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
+            : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
         if (dbSource === 'supabase' && !activeUser) {
             showError('Error: User not identified. Please login again.');
@@ -446,15 +450,19 @@ const StoreResultTable = ({
                     return;
                 }
 
+                const updatePayload = {
+                    store_qty: newQtyValue,
+                    shelf_location: editLocation || selectedRow.rackLocation,
+                    category_1_actual: editCat1 || selectedRow.category1,
+                    category_2_actual: editCat2 || selectedRow.category2,
+                    updated_by: activeUser
+                };
+                if (editTag !== '') updatePayload.product_tag = editTag;
+                if (editMaxQty !== '') updatePayload.max_qty = Number(editMaxQty);
+
                 const { error: locError } = await supabase
                     .from('store_inventory')
-                    .update({
-                        store_qty: newQtyValue,
-                        shelf_location: editLocation || selectedRow.rackLocation,
-                        category_1_actual: editCat1 || selectedRow.category1,
-                        category_2_actual: editCat2 || selectedRow.category2,
-                        updated_by: activeUser // Update uploader on edit
-                    })
+                    .update(updatePayload)
                     .eq('id', selectedRow.id);
                 if (locError) throw locError;
 
@@ -500,6 +508,10 @@ const StoreResultTable = ({
                     newQty: newQtyValue,
                     oldLocation: selectedRow.rackLocation || null,
                     newLocation: editLocation || null,
+                    oldTag: selectedRow.productTag || null,
+                    newTag: editTag || selectedRow.productTag || null,
+                    oldMaxQty: selectedRow.maxQty || null,
+                    newMaxQty: editMaxQty !== '' ? Number(editMaxQty) : (selectedRow.maxQty || null),
                     updatedBy: activeUser,
                     reason: detailedReason,
                     branchId: currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id')
@@ -507,8 +519,10 @@ const StoreResultTable = ({
             }
             success(t('results.saveSuccess'));
             setSelectedRow(null);
-            setEditReason(''); // Reset reason
-            setMergeAmount(''); // Reset merge amount after save
+            setEditReason('');
+            setEditTag('');
+            setEditMaxQty('');
+            setMergeAmount('');
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -537,7 +551,7 @@ const StoreResultTable = ({
         }
 
         const activeUser = currentUser
-            ? `${currentUser.name} (${currentUser.id})`
+            ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
             : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
         const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
 
@@ -604,7 +618,9 @@ const StoreResultTable = ({
 
     const handleSplitMasterQty = async (splitAmount, newRackLocation, splitReason) => {
         if (!selectedRow || !splitAmount || !newRackLocation) return;
-        const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
+        const activeUser = currentUser 
+            ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
+            : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
         if (dbSource === 'supabase' && !activeUser) {
             showError('Error: User not identified. Please login again.');
@@ -613,11 +629,11 @@ const StoreResultTable = ({
 
         setIsUpdating(true);
         const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
-        
+
         try {
             const splitQtyNum = Number(splitAmount);
             const oldQtyNum = Number(selectedRow.qty || 0);
-            
+
             if (splitQtyNum <= 0 || splitQtyNum > oldQtyNum) {
                 throw new Error("ຈຳນວນແບ່ງຕ້ອງຫຼາຍກວ່າ 0 ແລະ ບໍ່ເກີນຈຳນວນທີ່ມີຢູ່. (Invalid split amount)");
             }
@@ -627,7 +643,7 @@ const StoreResultTable = ({
             if (newRackLocation === selectedRow.rackLocation) {
                 throw new Error("ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້ (Must select different Rack)");
             }
-            
+
             const remainingQty = oldQtyNum - splitQtyNum;
 
             if (dbSource === 'supabase') {
@@ -656,10 +672,10 @@ const StoreResultTable = ({
                     updated_by: activeUser,
                     branch_id: branchToSave
                 };
-                
+
                 const { error: insertError } = await supabase.from('store_inventory').insert([newPayload]);
                 if (insertError) throw insertError;
-                
+
                 // 3. Log History for Old Record Deduct
                 await logStoreInventoryHistory({
                     actionType: 'edited',
@@ -673,7 +689,7 @@ const StoreResultTable = ({
                     reason: `ແບ່ງເຄື່ອງອອກໄປ Rack ${newRackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
                     branchId: branchToSave
                 });
-                
+
                 // 4. Log History for New Record Add
                 await logStoreInventoryHistory({
                     actionType: 'added',
@@ -691,12 +707,12 @@ const StoreResultTable = ({
 
             // Local state optimistic update
             if (onUpdateRowQty) {
-                onUpdateRowQty(selectedRow.rowIndex, { 
+                onUpdateRowQty(selectedRow.rowIndex, {
                     qty: remainingQty,
                     updatedBy: activeUser,
                     updatedAt: new Date().toISOString()
                 });
-                
+
                 // Insert optimistic new item
                 const newOptimisticItem = {
                     id: `temp-split-${Date.now()}`,
@@ -716,7 +732,7 @@ const StoreResultTable = ({
 
             success(t('results.saveSuccess'));
             setSelectedRow(null);
-            
+
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -736,63 +752,90 @@ const StoreResultTable = ({
                 ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
                 : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
-            // Ensure we preserve the specified rack_location even if QTY is 0
             const finalPayload = {
                 ...quickAddForm,
                 rack_location: quickAddForm.rack_location,
-
                 uploaded_by: activeUser
             };
 
             const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
-            const result = await addLocationRecord(finalPayload, branchToSave);
-            if (result.success) {
-                // Log History for New Item
-                await logInventoryHistory({
+
+            const payload = {
+                barcode_no: quickAddForm.barcode_no,
+                item_name: quickAddForm.item_name,
+                shelf_location: quickAddForm.rack_location,
+                category_1_actual: quickAddForm.category_1_actual || '',
+                category_2_actual: quickAddForm.category_2_actual || '',
+                store_qty: Number(quickAddForm.qty) || 0,
+                max_qty: Number(quickAddForm.max_qty) || null,
+                product_tag: quickAddForm.product_tag || null,
+                updated_by: activeUser,
+                branch_id: branchToSave,
+            };
+
+            const { error: insertErr } = await supabase.from('store_inventory').insert([payload]);
+
+            if (!insertErr) {
+                // ── Determine if this is from Inbox flow ─────────────
+                const inboxBatchId = quickAddForm._inboxBatchId || null;
+                const inboxItemId = quickAddForm._inboxItemId || null;
+
+                // Log History for New Item — include billId if from Inbox
+                await logStoreInventoryHistory({
+                    actionType: 'added',
                     barcode: quickAddForm.barcode_no,
                     itemName: quickAddForm.item_name,
                     oldQty: 0,
-                    newQty: quickAddForm.qty,
+                    newQty: Number(quickAddForm.qty),
+                    oldLocation: null,
+                    newLocation: quickAddForm.rack_location,
+                    oldTag: null,
+                    newTag: quickAddForm.product_tag,
+                    oldMaxQty: null,
+                    newMaxQty: Number(quickAddForm.max_qty) || null,
+                    reason: quickAddForm.remarks || 'Direct Addition to Store Inventory',
+                    branchId: branchToSave,
                     updatedBy: activeUser,
-                    reason: quickAddForm.remarks || 'Direct Addition to Inventory',
-                    branchId: branchToSave
+                    // ── Batch/Bill fields (only when from Inbox) ──
+                    billId: inboxBatchId,
+                    batchStartedAt: inboxBatchId ? new Date().toISOString() : null,
+                    batchEndedAt: inboxBatchId ? new Date().toISOString() : null,
+                    batchTotalSeconds: null,
                 });
 
-                // --- NEW: Log to dedicated "Added Items" Log (For Tracking New Insertions) ---
-                const { error: logError } = await supabase.from('added_items_log').insert({
-                    barcode: quickAddForm.barcode_no,
-                    item_name: quickAddForm.item_name,
-                    qty: quickAddForm.qty,
-                    added_by: activeUser,
-                    location: finalPayload.rack_location,
-                    remarks: quickAddForm.remarks || 'Direct Addition to Inventory',
-                    branch_id: branchToSave
-                });
-                if (logError) console.error("Failed to log added item:", logError);
-                // --------------------------------------------------------------------------
+                // ── If from Inbox: mark the request as confirmed ──────
+                if (inboxItemId) {
+                    await supabase
+                        .from('store_requests')
+                        .update({
+                            store_confirmed_at: new Date().toISOString(),
+                            store_confirmed_by: activeUser
+                        })
+                        .eq('id', inboxItemId);
+                }
 
-                // Optimistic UI Update: Add to local state immediately
+                // Optimistic UI Update
                 const newOptimisticItem = {
-                    id: `temp-${Date.now()}`, // Temporary ID
+                    id: `temp-${Date.now()}`,
                     barcode: quickAddForm.barcode_no,
                     itemName: quickAddForm.item_name,
                     qty: Number(quickAddForm.qty),
-                    rackLocation: finalPayload.rack_location, // Use specified location
+                    rackLocation: finalPayload.rack_location,
                     category1: quickAddForm.category_1_actual,
                     category2: quickAddForm.category_2_actual,
-                    masterItemName: quickAddForm.item_name, // Assume same as entered
-                    odooQty: 0, // New item usually 0 in Odoo initially
-                    status: 'passed', // Temporarily mark as passed or new
-                    rowIndex: results.length + optimisticItems.length + 1 // Approximate index
+                    masterItemName: quickAddForm.item_name,
+                    odooQty: 0,
+                    status: 'passed',
+                    rowIndex: results.length + optimisticItems.length + 1
                 };
 
                 setOptimisticItems(prev => [newOptimisticItem, ...prev]);
-                setSearchTerm(quickAddForm.barcode_no); // Auto-search new item
+                setSearchTerm(quickAddForm.barcode_no);
 
-                success(t('results.saveSuccess')); // Standardized success message
+                success(t('results.saveSuccess'));
                 setShowQuickAdd(false);
             } else {
-                alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + result.error);
+                alert('❌ ເພີ່ມບໍ່ສຳເລັດ: ' + insertErr.message);
             }
         } catch (error) {
             alert('Error: ' + error.message);
@@ -824,7 +867,7 @@ const StoreResultTable = ({
                     .select('barcode, change_reason, details, updated_at')
                     .order('updated_at', { ascending: false })
                     .limit(5000); // Increased limit for broader coverage
-                
+
                 if (currentBranch) {
                     histQuery = histQuery.eq('branch_id', currentBranch);
                 }
@@ -1222,9 +1265,9 @@ const StoreResultTable = ({
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
                                 className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all placeholder:text-slate-400/70 shadow-inner"
                                 value={searchTerm}
-                                onChange={(e) => { 
-                                    setSearchTerm(e.target.value.replace(/\s+/g, '')); 
-                                    setCurrentPage(1); 
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value.replace(/\s+/g, ''));
+                                    setCurrentPage(1);
                                 }}
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
@@ -1398,16 +1441,16 @@ const StoreResultTable = ({
                                         </div>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.actualQty')}<br/><span className="text-[10px] opacity-80 font-bold">{t('results.masterQty')}</span>
+                                        {t('results.actualQty')}<br /><span className="text-[10px] opacity-80 font-bold">{t('results.masterQty')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.dcQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
+                                        {t('results.dcQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.salesQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.salesQtySub')}</span>
+                                        {t('results.salesQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.salesQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.scrapQty')}<br/><span className="text-[10px] opacity-70 font-bold">{t('results.scrapQtySub')}</span>
+                                        {t('results.scrapQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.scrapQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.status')}</th>
                                     <th className="px-8 py-6 text-right text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.actions')}</th>
@@ -1494,7 +1537,7 @@ const StoreResultTable = ({
                                                     <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="View Diagnostics">
                                                         <Info size={18} />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => {
                                                             setSelectedRow(row);
                                                             setEditQty(row.qty || 0);
@@ -1503,8 +1546,8 @@ const StoreResultTable = ({
                                                             setEditCat2(row.category2 || '');
                                                             setEditReason('');
                                                             setMergeAmount('');
-                                                        }} 
-                                                        className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" 
+                                                        }}
+                                                        className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all"
                                                         title="Edit Quantity"
                                                     >
                                                         <Edit2 size={18} />
@@ -1581,35 +1624,22 @@ const StoreResultTable = ({
                     t={t}
                     currentBranch={currentBranch}
                 />
-                
+
                 <StoreEditPanel
                     selectedRow={selectedRow}
-                    onClose={() => { setSelectedRow(null); setEditQty(''); setEditLocation(''); setEditReason(''); }}
+                    onClose={() => { setSelectedRow(null); setEditQty(''); setEditLocation(''); setEditReason(''); setEditTag(''); setEditMaxQty(''); }}
                     editQty={editQty} setEditQty={setEditQty}
                     editLocation={editLocation} setEditLocation={setEditLocation}
                     editCat1={editCat1} setEditCat1={setEditCat1}
                     editCat2={editCat2} setEditCat2={setEditCat2}
                     editReason={editReason} setEditReason={setEditReason}
+                    editTag={editTag} setEditTag={setEditTag}
+                    editMaxQty={editMaxQty} setEditMaxQty={setEditMaxQty}
                     currentUser={currentUser}
                     isUpdating={isUpdating}
-                    handleUpdate={async () => {
-                         // Basic update wrapper
-                         setIsUpdating(true);
-                         try {
-                              if (onUpdateRowQty && selectedRow) {
-                                  await onUpdateRowQty(selectedRow.rowIndex, { 
-                                     qty: Number(editQty || 0), 
-                                     rackLocation: editLocation || selectedRow.rackLocation,
-                                     category1: editCat1 || selectedRow.category1,
-                                     category2: editCat2 || selectedRow.category2
-                                  });
-                              }
-                              setSelectedRow(null);
-                         } catch(e) {}
-                         finally { setIsUpdating(false); }
-                    }}
-                    handleSplit={() => {}} 
-                    handleClone={() => {}}
+                    handleUpdate={handleUpdateMasterQty}
+                    handleSplit={() => { }}
+                    handleClone={handleCloneMasterQty}
                     results={results}
                     allResults={allResults}
                     mergeAmount={mergeAmount}

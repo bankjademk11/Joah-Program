@@ -69,6 +69,76 @@ export const STORE_BRANCH_RACK_RULES = {
         'EVENT': [
             { zones: ['SFP21', 'SFP17', 'SFP18', 'SFP19', 'SFP20', 'SFA01-2', 'SFA01-3'], maxLevel: 0, format: 'store_exact' }
         ]
+    },
+    'ໂພນສີນວນ': {
+        'KITCHEN': [
+            { zones: ["PFA01-1","PFA01-2","PFA01-3","PFA01-4","PFA01-5","PFA01-6","PFA01-7","PFA01-8","PFA01-9","PFA01-10","PFA01-11","PFA01-12","PFA02-1","PFA02-2","PFA02-3","PFA02-4","PFA02-5","PFA02-6","PFA02-7","PFA02-8","PFA02-9","PFA02-10","PFA02-11","PFA02-12","PFA03-1","PFA03-2","PFA03-3","PFA03-4","PFA03-5","PFA03-6","PFA03-7","PFA03-8","PFA03-9","PFA03-10","PFA03-11","PFA03-12","PFA04-1","PFA04-2","PFA04-3","PFA04-4","PFA04-5","PFA04-6","PFA04-7","PFA04-8","PFA04-9","PFA04-10","PFA04-11","PFA04-12","PFA05-1","PFA05-2","PFA05-3","PFA05-4","PFA05-5","PFA05-6","PFA05-7","PFA05-8","PFA05-9","PFA05-10","PFA06-1","PFA06-2","PFA06-3","PFA06-4","PFA06-5","PFA06-6","PFA06-7","PFA06-8","PFA06-9","PFA06-10","PFA06-11","PFA06-12","PFA07-1","PFA07-2","PFA07-3","PFA07-4","PFA07-5","PFA07-6","PFA07-7","PFA07-8","PFA07-9","PFA07-10","PFA07-11","PFA07-12","PFA08-1","PFA08-2","PFA08-3","PFA08-4","PFA08-5","PFA08-6","PFA08-7","PFA08-8","PFA08-9","PFA08-10","PFA08-11","PFA08-12","PFA09-1","PFA09-2","PFA09-3","PFA09-4","PFA09-5","PFA09-6","PFA09-7","PFA09-8","PFA09-9","PFA09-10","PFA09-11","PFA09-12","PFB09-1","PFB09-2","PFB09-3","PFB09-4","PFB09-5","PFB09-6","PFB09-7","PFB09-8","PFB09-9","PFB09-10","PFB09-11","PFB09-12","PFB09-13","PFB09-14","PFB08-1","PFB08-2","PFB08-3","PFB08-4","PFB08-5","PFB08-6","PFB08-7","PFB08-8","PFB08-9","PFB08-10","PFB08-11","PFB08-12","PFB08-13","PFB08-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOYS': [
+            { zones: ["PFA10-1","PFA10-2","PFA10-3","PFA10-4","PFA10-5","PFA10-6","PFA10-7","PFA10-8","PFA10-9","PFA10-10","PFA10-11","PFA10-12","PFA11-1","PFA11-2","PFA11-3","PFA11-4","PFA11-5","PFA11-6","PFA11-7","PFA11-8","PFA11-9","PFA11-10","PFA11-11","PFA11-12"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'SPORTS': [
+            { zones: ["PFA12-1","PFA12-2","PFA12-3","PFA12-4","PFA12-5","PFA12-6","PFA12-7","PFA12-8","PFA12-9","PFA12-10","PFA12-11","PFA12-12","PFA13-1","PFA13-2","PFA13-3","PFA13-4","PFA13-5","PFA13-6","PFA13-7","PFA13-8","PFA13-9","PFA13-10","PFA13-11","PFA13-12"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'FASHION': [
+            { zones: ["PFB01-1","PFB01-2","PFB01-3","PFB01-4","PFB01-5","PFB01-6","PFB01-7","PFB01-8","PFB01-9","PFB01-10","PFB01-11","PFB01-12","PFB01-13","PFB01-14","PFB02-1","PFB02-2","PFB02-3","PFB02-4","PFB02-5","PFB02-6","PFB02-7","PFB02-8","PFB02-9","PFB02-10","PFB02-11","PFB02-12","PFB02-13","PFB02-14","PFB03-1","PFB03-2","PFB03-3","PFB03-4","PFB03-5","PFB03-6","PFB03-7","PFB03-8","PFB03-9","PFB03-10","PFB03-11","PFB03-12","PFB03-13","PFB03-14","PFB04-1","PFB04-2","PFB04-3","PFB04-4","PFB04-5","PFB04-6","PFB04-7","PFB04-8","PFB04-9","PFB04-10","PFB04-11","PFB04-12","PFB04-13","PFB04-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'CLEANING': [
+            { zones: ["PFB05-1","PFB05-2","PFB05-3","PFB05-4","PFB05-5","PFB05-6","PFB05-7","PFB05-8","PFB05-9","PFB05-10","PFB05-11","PFB05-12","PFB05-13","PFB06-1","PFB06-2","PFB06-3","PFB06-4","PFB06-5","PFB06-6","PFB06-7","PFB06-8","PFB06-9","PFB06-10","PFB06-11","PFB06-12","PFB06-13","PFB06-14","PFB07-1","PFB07-2","PFB07-3","PFB07-4","PFB07-5","PFB07-6","PFB07-7","PFB07-8","PFB07-9","PFB07-10","PFB07-11","PFB07-12","PFB07-13","PFB07-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'STATIONERY': [
+            { zones: ["PFB10-1","PFB10-2","PFB10-3","PFB10-4","PFB10-5","PFB10-6","PFB10-7","PFB10-8","PFB10-9","PFB10-10","PFB10-11","PFB10-12","PFB10-13","PFB10-14","PFB11-1","PFB11-2","PFB11-3","PFB11-4","PFB11-5","PFB11-6","PFB11-7","PFB11-8","PFB11-9","PFB11-10","PFB11-11","PFB11-12","PFB11-13","PFB11-14","PFB12-1","PFB12-2","PFB12-3","PFB12-4","PFB12-5","PFB12-6","PFB12-7","PFB12-8","PFB12-9","PFB12-10","PFB12-11","PFB12-12","PFB12-13","PFB12-14","PFB13-1","PFB13-2","PFB13-3","PFB13-4","PFB13-5","PFB13-6","PFB13-7","PFB13-8","PFB13-9","PFB13-10","PFB13-11","PFB13-12","PFB13-13","PFB13-14","PFB14-1","PFB14-2","PFB14-3","PFB14-4","PFB14-5","PFB14-6","PFB14-7","PFB14-8","PFB14-9","PFB14-10","PFB14-11","PFB14-12","PFB14-13","PFB14-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOOL/DIGITAL': [
+            { zones: ["PFC01-1","PFC01-2","PFC01-3","PFC01-4","PFC01-5","PFC01-6","PFC01-7","PFC01-8","PFC01-9","PFC01-10","PFC01-11","PFC01-12","PFC01-13","PFC01-14","PFC02-1","PFC02-2","PFC02-3","PFC02-4","PFC02-5","PFC02-6","PFC02-7","PFC02-8","PFC02-9","PFC02-10","PFC02-11","PFC02-12","PFC02-13","PFC02-14","PFC03-1","PFC03-2","PFC03-3","PFC03-4","PFC03-5","PFC03-6","PFC03-7","PFC03-8","PFC03-9","PFC03-10","PFC03-11","PFC03-12","PFC03-13"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'BEAUTY': [
+            { zones: ["PFC04-1","PFC04-2","PFC04-3","PFC04-4","PFC04-5","PFC04-6","PFC04-7","PFC04-8","PFC04-9","PFC04-10","PFC04-11","PFC04-12","PFC04-13","PFC04-14","PFC05-1","PFC05-2","PFC05-3","PFC05-4","PFC05-5","PFC05-6","PFC05-7","PFC05-8","PFC05-9","PFC05-10","PFC05-11","PFC05-12","PFC05-13","PFC05-14","PFC06-1","PFC06-2","PFC06-3","PFC06-4","PFC06-5","PFC06-6","PFC06-7","PFC06-8","PFC06-9","PFC06-10","PFC06-11","PFC06-12","PFC06-13","PFC06-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'STORAGE': [
+            { zones: ["PFC07-1","PFC07-2","PFC07-3","PFC07-4","PFC07-5","PFC07-6","PFC07-7","PFC07-8","PFC07-9","PFC07-10","PFC07-11","PFC07-12","PFC07-13","PFC07-14","PFC08-1","PFC08-2","PFC08-3","PFC08-4","PFC08-5","PFC08-6","PFC08-7","PFC08-8","PFC08-9","PFC08-10","PFC08-11","PFC08-12","PFC08-13","PFC08-14","PFC09-1","PFC09-2","PFC09-3","PFC09-4","PFC09-5","PFC09-6","PFC09-7","PFC09-8","PFC09-9","PFC09-10","PFC09-11","PFC09-12","PFC09-13","PFC09-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'INTERIOR': [
+            { zones: ["PFC10-1","PFC10-2","PFC10-3","PFC10-4","PFC10-5","PFC10-6","PFC10-7","PFC10-8","PFC10-9","PFC10-10","PFC10-11","PFC10-12","PFC10-13","PFC10-14","PFD01-1","PFD01-2","PFD01-3","PFD01-4","PFD01-5","PFD01-6"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'EVENT': [
+            { zones: ["PFP01","PFP02","PFP03","PFP04","PFP05","PFP06","PFP07","PFP08","PFP09","PFP10","PFP11","PFP12","PFP13","PFP14","PFP15","PFP16","PFP17","PFP18","PFP19","PFP20","PFP21","PFP22","PFP23","PFP24","PFP25","PFP26","PFP27","PFP28","PFP29","PFP30","PFP31","PFP32","PFP33","PFP34","PFP35"], maxLevel: 0, format: 'store_exact' }
+        ]
+    },
+    'ວັງຊາຍ': {
+        'STATIONERY': [
+            { zones: ["VFG01-18","VFG01-19","VFG01-20","VFG01-21","VFG01-22","VFG01-23","VFG01-24","VFG01-25","VFD02-1","VFD02-2","VFD02-3","VFD02-4","VFD02-5","VFD02-6","VFD02-7","VFD02-8"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'INTERIOR': [
+            { zones: ["VFG01-1","VFG01-2","VFG01-3","VFG01-4","VFG01-5","VFG01-6","VFG01-7","VFA01-1","VFA01-2","VFA01-3","VFA01-4","VFA01-5","VFA01-6","VFA01-7","VFA01-8"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'STORAGE': [
+            { zones: ["VFG01-8","VFG01-9","VFG01-10","VFG01-11","VFG01-12","VFG01-13","VFG01-14","VFG01-15","VFG01-16","VFG01-17"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'FASHION': [
+            { zones: ["VFB01-1","VFB01-2","VFB01-3","VFB01-4","VFB01-5","VFB01-6","VFB01-7","VFB01-8","VFB01-9","VFB01-10","VFB01-11","VFB01-12","VFC01-1","VFC01-2","VFC01-3","VFC01-4","VFC01-5","VFC01-6"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'KITCHEN': [
+            { zones: ["VFF01-5","VFF01-6","VFF01-7","VFF01-8","VFF01-9","VFA03-1","VFA03-2","VFA03-3","VFA03-4","VFA03-5","VFA03-6","VFA03-7","VFA03-8","VFA03-9","VFA03-10","VFA03-11","VFA03-12","VFA03-13","VFA03-14","VFA04-1","VFA04-2","VFA04-3","VFA04-4","VFA04-5","VFA04-6","VFA04-7","VFA04-8","VFA04-9","VFA04-10","VFA04-11","VFA04-12","VFA04-13","VFA04-14","VFB03-1","VFB03-2","VFB03-3","VFB03-4","VFB03-5","VFB03-6","VFB03-7","VFB03-8","VFB03-9","VFB03-10","VFB04-1","VFB04-2","VFB04-3","VFB04-4","VFB04-5","VFB04-6","VFB04-7","VFB04-8","VFB04-9","VFB04-10","VFB04-11","VFB04-12"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'CLEANING': [
+            { zones: ["VFF01-1","VFF01-2","VFF01-3","VFF01-4","VFA02-1","VFA02-2","VFA02-3","VFA02-4","VFA02-5","VFA02-6","VFA02-7","VFA02-8","VFA02-9","VFA02-10","VFA02-11","VFA02-12","VFA02-13","VFA02-14"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOYS': [
+            { zones: ["VFC04-1","VFC04-2","VFC04-3","VFC04-4","VFC04-5","VFC04-6","VFG01-30"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'BEAUTY': [
+            { zones: ["VFC03-1","VFC03-2","VFC03-3","VFC03-4","VFC03-5","VFC03-6","VFD01-1","VFD01-2","VFD01-3","VFD01-4","VFD01-5","VFD01-6","VFD01-7","VFD01-8"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'EVENT': [
+            { zones: ["VFE01","VFE02","VFE03","VFE04","VFE05","VFE06","VFE07","VFE08","VFE09","VFE10","VFE11","VFE12","VFE13","VFE14","VFE15","VFE16","VFE17","VFE18","VFE19","VFE20"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'SPORTS': [
+            { zones: ["VFG01-26","VFG01-27","VFG01-28","VFG01-29"], maxLevel: 0, format: 'store_exact' }
+        ],
+        'TOOL/DIGITAL': [
+            { zones: ["VFB02-1","VFB02-2","VFB02-3","VFB02-4","VFB02-5","VFB02-6","VFB02-7","VFB02-8","VFB02-9","VFB02-10","VFB02-11","VFB02-12","VFC02-1","VFC02-2","VFC02-3","VFC02-4","VFC02-5","VFC02-6"], maxLevel: 0, format: 'store_exact' }
+        ]
     }
 };
 
@@ -83,6 +153,8 @@ const resolveStoreBranchId = (branchId) => {
     
     // Map shortcodes or variations
     if (normalizedId === 'SVL' || normalizedId.includes('ສີວິໄລ')) return 'ສີວິໄລ';
+    if (normalizedId === 'PSN' || normalizedId.includes('ໂພນສີນວນ')) return 'ໂພນສີນວນ';
+    if (normalizedId === 'VX' || normalizedId.includes('ວັງຊາຍ')) return 'ວັງຊາຍ';
     if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
 
     // Direct match first

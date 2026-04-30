@@ -202,6 +202,7 @@ const translations = {
         },
         // Reasons Options (Shared)
         reasons: {
+            firstTimeRecord: 'ການບັນທຶກຂໍ້ມູນສິນຄ້າໜ້າຮ້ານຄັ້ງທຳອິດ',
             newStock: 'ສິນຄ້າເຂົ້າໃໝ່ (New Stock In)',
             stockOut: 'ຈ່າຍສິນຄ້າອອກ (Goods Issued Out)',
             actualCount: 'ອ້າງອີງຈາກສິນຄ້າຕົວຈິງ (Based on Actual Count)',
@@ -506,6 +507,7 @@ const translations = {
         },
         // Reasons Options (Shared)
         reasons: {
+            firstTimeRecord: 'First-time product data recording',
             newStock: 'New Stock In',
             stockOut: 'Goods Issued Out',
             actualCount: 'Based on Actual Count',

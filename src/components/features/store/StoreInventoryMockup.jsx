@@ -196,42 +196,11 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     return () => supabase.removeChannel(channel);
   }, [selectedBranch, fetchData]);
 
-  // Update qty in store_inventory
-  const handleUpdateRowQty = async (rowIndex, updates) => {
-    const row = results.find(r => r.rowIndex === rowIndex);
-    if (!row?.id) return;
-    try {
-      const { error } = await supabase
-        .from('store_inventory')
-        .update({
-          store_qty: updates.qty,
-          shelf_location: updates.rackLocation || row.rackLocation,
-          updated_by: currentUser?.name || 'Staff',
-          last_updated: new Date().toISOString(),
-        })
-        .eq('id', row.id);
-      if (error) throw error;
-
-      // Log to history
-      await logStoreInventoryHistory({
-          actionType: 'edited',
-          barcode: row.barcode,
-          itemName: row.itemName,
-          oldQty: row.qty,
-          newQty: updates.qty,
-          oldLocation: row.rackLocation,
-          newLocation: updates.rackLocation || row.rackLocation,
-          reason: updates.reason || 'Manual QTY Update',
-          branchId: selectedBranch,
-          updatedBy: currentUser?.name || 'Staff'
-      });
-
-      setResults(prev => prev.map(r =>
-        r.rowIndex === rowIndex ? { ...r, ...updates, status: updates.qty > 0 ? 'passed' : 'missing' } : r
-      ));
-    } catch (err) {
-      toast.error('ອັບເດດຜິດພາດ: ' + err.message);
-    }
+  // Update qty in local state (DB update handled by StoreResultTable)
+  const handleUpdateRowQty = (rowIndex, updates) => {
+    setResults(prev => prev.map(r =>
+      r.rowIndex === rowIndex ? { ...r, ...updates, status: updates.qty > 0 ? 'passed' : 'missing' } : r
+    ));
   };
 
   const handleAddNewProduct = async (formData) => {
@@ -273,7 +242,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         max_qty: formData.max_qty ? Number(formData.max_qty) : null,
         product_tag: formData.product_tag || null,
         branch_id: selectedBranch,
-        updated_by: currentUser?.name || 'Staff',
+        updated_by: currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Staff'),
         last_updated: new Date().toISOString()
       };
 

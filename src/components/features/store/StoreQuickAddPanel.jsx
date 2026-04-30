@@ -114,11 +114,11 @@ const QuickAddPanel = ({
                     setIsFoundInMaster(false);
                     setQuickAddForm(prev => ({
                         ...prev,
-                        item_name: '',
+                        // Only clear item_name if it wasn't pre-filled from Inbox (preserve Inbox product name)
+                        item_name: prev.item_name || '',
                         category_1_actual: '',
                         category_2_actual: '',
-                        qty: 0,
-                        rack_location: ''
+                        // NOTE: Do NOT reset qty or rack_location here — they may be pre-filled from inbox flow
                     }));
                 }
                 console.groupEnd();
@@ -707,6 +707,7 @@ const QuickAddPanel = ({
                                 className="w-full py-2 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800/50 rounded-lg focus:border-joah-orange outline-none"
                             >
                                 <option value="">{t('quickAdd.selectReason')}</option>
+                                <option value={t('reasons.firstTimeRecord')}>{t('reasons.firstTimeRecord')}</option>
                                 <option value={t('reasons.newStock')}>{t('reasons.newStock')}</option>
                                 <option value={t('reasons.stockOut')}>{t('reasons.stockOut')}</option>
                                 <option value={t('reasons.actualCount')}>{t('reasons.actualCount')}</option>

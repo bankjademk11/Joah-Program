@@ -13,7 +13,7 @@ import {
   suggestSheetMapping
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
-import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase } from './utils/supabaseSync';
+import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
 import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
@@ -33,6 +33,8 @@ import StoreRequest from './components/features/store/StoreRequest';
 import StoreRequestManager from './components/features/store/StoreRequestManager';
 import StoreInventoryMockup from './components/features/store/StoreInventoryMockup';
 import StoreInventory from './components/features/store/StoreInventory';
+import StoreInboxPanel from './components/features/store/StoreInboxPanel';
+import StoreQuickAddPanel from './components/features/store/StoreQuickAddPanel';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import MasterAudit from './components/features/admin/MasterAudit';
@@ -86,7 +88,13 @@ function AppContent() {
   });
   const [showHistory, setShowHistory] = useState(false);
   const [showStoreRequestManager, setShowStoreRequestManager] = useState(false);
+  const [showStoreInbox, setShowStoreInbox] = useState(false);
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
+  // Inbox → QuickAdd flow (for new products received from store_requests)
+  const [inboxQuickAddData, setInboxQuickAddData] = useState(null); // { barcode_no, item_name, qty, _inboxItemId, _inboxBatchId }
+  const [inboxQuickAddForm, setInboxQuickAddForm] = useState({ barcode_no: '', item_name: '', qty: 0, max_qty: 0, rack_location: '', category_1_actual: '', category_2_actual: '', product_tag: '', remarks: '' });
+  const [isInboxQuickAddFoundInMaster, setIsInboxQuickAddFoundInMaster] = useState(false);
+  const [isSavingInboxQuickAdd, setIsSavingInboxQuickAdd] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
@@ -178,6 +186,7 @@ function AppContent() {
     setLoadedFileName('');
     setShowHistory(false);
     setShowStoreRequestManager(false);
+    setShowStoreInbox(false);
     setPreFilledBarcode(null);
     setShowAdminMenu(false); // <--- Bug Fix: Close admin menu
     setLocationFilter('');
@@ -802,6 +811,7 @@ function AppContent() {
           onReset={handleReset}
           currentUser={user}
           onOpenRequests={() => setShowStoreRequestManager(true)}
+          onOpenStoreInbox={() => setShowStoreInbox(true)}
           onLogout={handleLogout}
         />
 
@@ -1054,10 +1064,10 @@ function AppContent() {
                       {/* Sales Aggregator */}
                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
                         <div className="w-full h-44 overflow-hidden bg-blue-50 dark:bg-slate-800 relative flex items-center justify-center">
-                           <div className="p-8 rounded-[2rem] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
-                             <TrendingUp size={64} strokeWidth={2.5} />
-                           </div>
-                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                          <div className="p-8 rounded-[2rem] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                            <TrendingUp size={64} strokeWidth={2.5} />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                         </div>
                         <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
                           <div className="space-y-1.5 text-center">
@@ -1230,7 +1240,7 @@ function AppContent() {
                           <h3 className="text-2xl font-black text-slate-400 dark:text-slate-500 tracking-tight">ເລືອກໄຟລ໌ໜ້າວຽກ</h3>
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">XLSX / CSV File (Maintenance)</p>
                         </div>
-                        
+
                         {/* Status Badge */}
                         <div className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ປິດໃຊ້ງານຊົ່ວຄາວ</span>
@@ -1468,6 +1478,148 @@ function AppContent() {
             />
           )
         }
+
+        {/* Store Inbox Panel (For Store Staff) */}
+        {
+          showStoreInbox && (
+            <StoreInboxPanel
+              onClose={() => setShowStoreInbox(false)}
+              currentUser={user}
+              activeBranch={adminViewBranch}
+              onOpenQuickAdd={(prefill) => {
+                setInboxQuickAddData(prefill);
+                setInboxQuickAddForm({
+                  barcode_no: prefill.barcode_no || '',
+                  item_name: prefill.item_name || '',
+                  qty: prefill.qty || 0,
+                  max_qty: 0,
+                  rack_location: '',
+                  category_1_actual: '',
+                  category_2_actual: '',
+                  product_tag: '',
+                  remarks: prefill.remarks || 'ຮັບສິນຄ້າຈາກສາງ (Inbox)',
+                });
+                setIsInboxQuickAddFoundInMaster(false);
+              }}
+            />
+          )
+        }
+        {/* Inbox → QuickAdd Panel: new product not yet in store_inventory */}
+        <StoreQuickAddPanel
+          isOpen={!!inboxQuickAddData}
+          onClose={() => {
+            setInboxQuickAddData(null);
+            setInboxQuickAddForm({ barcode_no: '', item_name: '', qty: 0, max_qty: 0, rack_location: '', category_1_actual: '', category_2_actual: '', product_tag: '', remarks: '' });
+          }}
+          quickAddForm={inboxQuickAddForm}
+          setQuickAddForm={setInboxQuickAddForm}
+          isFoundInMaster={isInboxQuickAddFoundInMaster}
+          setIsFoundInMaster={setIsInboxQuickAddFoundInMaster}
+          isSaving={isSavingInboxQuickAdd}
+          masterData={masterData}
+          results={[]} allResults={validationResults}
+          t={t}
+          currentBranch={adminViewBranch || user?.branch_id}
+          onSave={async () => {
+            if (!inboxQuickAddData) return;
+            setIsSavingInboxQuickAdd(true);
+            try {
+              const { supabase: sb } = await import('./utils/supabaseClient');
+              const branchToSave = adminViewBranch || user?.branch_id || '';
+              const activeUser = user ? `${user.name} (${user.id})` : 'Store Staff';
+
+              // 1. SAFE CHECK: Look up existing record first to prevent duplicate rows & data loss
+              let lookupQ = sb
+                .from('store_inventory')
+                .select('id, store_qty, shelf_location, product_tag, max_qty')
+                .eq('barcode_no', inboxQuickAddForm.barcode_no.trim());
+              if (branchToSave) lookupQ = lookupQ.eq('branch_id', branchToSave);
+              const { data: existingRows } = await lookupQ.limit(1);
+              const existingRow = existingRows?.[0] || null;
+
+              const incomingQty = Number(inboxQuickAddForm.qty) || 0;
+              let oldQty = 0;
+              let newQty = incomingQty;
+              // Preserve existing values if user left fields blank
+              let shelfToSave = inboxQuickAddForm.rack_location || '';
+              let tagToSave = inboxQuickAddForm.product_tag || null;
+              let maxQtyToSave = Number(inboxQuickAddForm.max_qty) || null;
+
+              if (existingRow) {
+                // Row already exists — ADD qty, preserve original values if user left them blank
+                oldQty = existingRow.store_qty || 0;
+                newQty = oldQty + incomingQty;
+                if (!shelfToSave) shelfToSave = existingRow.shelf_location || '';
+                if (!tagToSave) tagToSave = existingRow.product_tag || null;        // ← fix: preserve tag
+                if (!maxQtyToSave) maxQtyToSave = existingRow.max_qty || null;
+
+                const { error: updateErr } = await sb
+                  .from('store_inventory')
+                  .update({ store_qty: newQty, updated_by: activeUser, shelf_location: shelfToSave, product_tag: tagToSave })
+                  .eq('id', existingRow.id);
+                if (updateErr) throw updateErr;
+              } else {
+                // New record — safe to insert
+                const payload = {
+                  barcode_no: inboxQuickAddForm.barcode_no,
+                  item_name: inboxQuickAddForm.item_name,
+                  shelf_location: shelfToSave,
+                  category_1_actual: inboxQuickAddForm.category_1_actual || '',
+                  category_2_actual: inboxQuickAddForm.category_2_actual || '',
+                  store_qty: newQty,
+                  max_qty: maxQtyToSave,
+                  product_tag: tagToSave,
+                  updated_by: activeUser,
+                  branch_id: branchToSave,
+                };
+                const { error: insertErr } = await sb.from('store_inventory').insert([payload]);
+                if (insertErr) throw insertErr;
+              }
+
+              // 2. Log to store_inventory_history
+              const nowMs = Date.now();
+              const batchStartMs = inboxQuickAddData._batchStartedAt || null;
+              const batchTotalSecs = batchStartMs ? Math.floor((nowMs - batchStartMs) / 1000) : null;
+
+              await logStoreInventoryHistory({
+                actionType: existingRow ? 'received' : 'added',
+                barcode: inboxQuickAddForm.barcode_no,
+                itemName: inboxQuickAddForm.item_name,
+                oldQty,
+                newQty,
+                oldLocation: existingRow?.shelf_location || null,
+                newLocation: shelfToSave,
+                oldTag: existingRow?.product_tag || null,
+                newTag: tagToSave,
+                oldMaxQty: existingRow?.max_qty || null,
+                newMaxQty: maxQtyToSave,
+                reason: inboxQuickAddForm.remarks || 'ຮັບສິນຄ້າຈາກສາງ (Inbox)',
+                branchId: branchToSave,
+                updatedBy: activeUser,
+                // ── Batch/Bill fields from Inbox ──
+                billId: inboxQuickAddData._inboxBatchId || null,
+                batchStartedAt: batchStartMs ? new Date(batchStartMs).toISOString() : null,
+                batchEndedAt: new Date(nowMs).toISOString(),
+                batchTotalSeconds: batchTotalSecs,
+              });
+
+              // 3. Mark store_request as confirmed
+              if (inboxQuickAddData._inboxItemId) {
+                const { error: confirmErr } = await sb
+                  .from('store_requests')
+                  .update({ store_confirmed_at: new Date().toISOString(), store_confirmed_by: user?.name || 'Store Staff' })
+                  .eq('id', inboxQuickAddData._inboxItemId);
+                if (confirmErr) throw confirmErr;
+              }
+              setInboxQuickAddData(null);
+              setInboxQuickAddForm({ barcode_no: '', item_name: '', qty: 0, max_qty: 0, rack_location: '', category_1_actual: '', category_2_actual: '', product_tag: '', remarks: '' });
+            } catch (err) {
+              console.error('Inbox QuickAdd Save Error:', err);
+            } finally {
+              setIsSavingInboxQuickAdd(false);
+            }
+          }}
+        />
       </div >
     </ToastProvider >
   );

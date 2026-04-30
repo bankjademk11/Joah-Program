@@ -949,7 +949,7 @@ const ResultTable = ({
                     const headersStd = [
                         'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
                         'Actual QTY', 'System QTY', 'Status', 'Status Reason',
-                        'Last Update', 'Verifier', 'Employee ID', 'Manual Change Reason'
+                        'Last Update', 'Employee ID', 'Verifier', 'Manual Change Reason'
                     ];
 
                     const fixRow = (res) => {
@@ -974,8 +974,8 @@ const ResultTable = ({
                             'Passed',  // ← Force ทุกอันเป็น Passed
                             '',        // ← ไม่มี Reason เพราะ Passed หมด
                             res.updatedAt ? new Date(res.updatedAt).toLocaleDateString() : '',
-                            sanitize(vName),
                             sanitize(vId),
+                            sanitize(vName),
                             sanitize(reasonMap[String(res.barcode || '').trim()] || '')
                         ];
                     };
@@ -991,7 +991,7 @@ const ResultTable = ({
                     const setStdColWidths = (sheet) => {
                         sheet.columns = [
                             { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
-                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
+                            { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 15 }, { width: 20 }, { width: 30 }
                         ];
                     };
 
@@ -1010,12 +1010,12 @@ const ResultTable = ({
                     // --- FUNCTION TO POPULATE A SHEET ---
                     let headers;
                     if (template === 'simple') {
-                        headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Verifier', 'Employee ID'];
+                        headers = ['Barcode No.', 'Item Name', 'Rack Location', 'Actual QTY', 'Employee ID', 'Verifier'];
                     } else {
                         headers = [
                             'Barcode No.', 'Item Name', 'Rack Location', 'Category-1', 'Category-2',
                             'Actual QTY', 'System QTY', 'Status', 'Status Reason',
-                            'Last Update', 'Verifier', 'Employee ID', 'Manual Change Reason'
+                            'Last Update', 'Employee ID', 'Verifier', 'Manual Change Reason'
                         ];
                     }
 
@@ -1045,8 +1045,8 @@ const ResultTable = ({
                                     sanitize(res.masterItemName || res.itemName || ''),
                                     sanitize(res.rackLocation || ''),
                                     isNaN(Number(res.qty)) ? 0 : Number(res.qty),
-                                    sanitize(vName),
-                                    sanitize(vId)
+                                    sanitize(vId),
+                                    sanitize(vName)
                                 ];
                             } else {
                                 rowData = [
@@ -1060,8 +1060,8 @@ const ResultTable = ({
                                     sanitize(res.status === 'passed' ? 'Passed' : res.status === 'mismatch' ? 'Mismatch' : (res.status === 'missing' ? 'Missing' : 'Incomplete')),
                                     sanitize(res.reason || ''),
                                     res.updatedAt ? new String(new Date(res.updatedAt).toLocaleDateString()).toString() : '',
-                                    sanitize(vName),
                                     sanitize(vId),
+                                    sanitize(vName),
                                     sanitize(reasonMap[String(res.barcode || '').trim()] || res.manualReason || (res.editReason && res.editReason !== '' ? res.editReason : ''))
                                 ];
                             }
@@ -1080,11 +1080,11 @@ const ResultTable = ({
 
                         // Set Columns width
                         if (template === 'simple') {
-                            sheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 20 }, { width: 15 }];
+                            sheet.columns = [{ width: 15 }, { width: 35 }, { width: 15 }, { width: 12 }, { width: 15 }, { width: 20 }];
                         } else {
                             sheet.columns = [
                                 { width: 15 }, { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 },
-                                { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 30 }
+                                { width: 12 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 15 }, { width: 15 }, { width: 20 }, { width: 30 }
                             ];
                         }
                     };

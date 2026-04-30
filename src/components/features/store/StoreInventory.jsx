@@ -183,7 +183,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
       <div className="space-y-6 animate-fade-in-up">
 
         {/* ===== ACTION BAR ===== */}
-        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-[40px] rounded-[3rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-8 items-center border-[1.5px] border-white/80 dark:border-slate-800 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-50">
+        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-[40px] rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 lg:p-8 flex flex-col xl:flex-row gap-4 sm:gap-8 items-center border-[1.5px] border-white/80 dark:border-slate-800 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-50">
 
           {/* Back Button + Title */}
           <div className="flex items-center gap-4 w-full xl:w-auto">
@@ -203,7 +203,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
           </div>
 
           {/* Inputs */}
-          <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {/* Search */}
             <div className="relative group">
               <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
@@ -212,7 +212,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
               <input
                 type="text"
                 placeholder="ຄົ້ນຫາບາໂຄ້ດ, ຊື່ ຫຼື ຊັ້ນວາງ..."
-                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all placeholder:text-slate-400/70 shadow-inner"
+                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-12 sm:pr-14 py-3 sm:py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all placeholder:text-slate-400/70 shadow-inner"
                 value={searchTerm}
                 onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               />
@@ -231,7 +231,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
                 <Filter className="text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={20} strokeWidth={2.5} />
               </div>
               <select
-                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 outline-none transition-all appearance-none cursor-pointer shadow-inner"
+                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 outline-none transition-all appearance-none cursor-pointer shadow-inner"
                 value={filterStatus}
                 onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
               >
@@ -250,7 +250,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
                   <MapPin className="text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={20} strokeWidth={2.5} />
                 </div>
                 <select
-                  className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 outline-none transition-all appearance-none cursor-pointer shadow-inner"
+                  className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 outline-none transition-all appearance-none cursor-pointer shadow-inner"
                   value={selectedBranch}
                   onChange={e => setSelectedBranch(e.target.value)}
                 >
@@ -262,23 +262,23 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
           </div>
 
           {/* Right Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 w-full xl:w-auto xl:border-l-2 border-slate-100 dark:border-slate-800 pt-6 xl:pt-0 xl:pl-8">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 w-full xl:w-auto xl:border-l-2 border-slate-100 dark:border-slate-800 pt-4 sm:pt-6 xl:pt-0 xl:pl-8">
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:via-teal-400 hover:to-teal-400 text-white shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)] transition-all hover:-translate-y-1 py-4 px-8 rounded-[2rem] text-xs flex items-center justify-center gap-3 font-black tracking-widest uppercase active:translate-y-0"
+              className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:via-teal-400 hover:to-teal-400 text-white shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)] transition-all hover:-translate-y-1 py-3 sm:py-4 px-5 sm:px-8 rounded-[2rem] text-[11px] sm:text-xs flex items-center justify-center gap-2 sm:gap-3 font-black tracking-widest uppercase active:translate-y-0 min-w-0"
             >
-              {isExporting ? <RotateCw className="animate-spin" size={16} /> : <Download size={16} />}
-              <span>Export Excel</span>
+              {isExporting ? <RotateCw className="animate-spin shrink-0" size={15} /> : <Download size={15} className="shrink-0" />}
+              <span className="truncate">Export Excel</span>
             </button>
 
             <button
               onClick={handleRefresh}
               disabled={isLoading || cooldownRemaining > 0}
-              className={`bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-300 text-slate-600 dark:text-slate-300 hover:text-emerald-600 py-4 px-8 rounded-[2rem] text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(16,185,129,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-3 uppercase tracking-widest active:translate-y-0 ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 sm:flex-none bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-300 text-slate-600 dark:text-slate-300 hover:text-emerald-600 py-3 sm:py-4 px-5 sm:px-8 rounded-[2rem] text-[11px] sm:text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(16,185,129,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-2 sm:gap-3 uppercase tracking-widest active:translate-y-0 min-w-0 ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <RotateCw size={18} strokeWidth={2.5} className={isLoading ? 'animate-spin' : ''} />
-              <span>{isLoading ? 'ກຳລັງໂຫລດ...' : cooldownRemaining > 0 ? `ລໍຖ້າ ${cooldownRemaining}s` : 'Refresh'}</span>
+              <RotateCw size={16} strokeWidth={2.5} className={`shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+              <span className="truncate">{isLoading ? 'ກຳລັງໂຫລດ...' : cooldownRemaining > 0 ? `ລໍຖ້າ ${cooldownRemaining}s` : 'Refresh'}</span>
             </button>
           </div>
         </div>
@@ -332,41 +332,41 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
                         className={`group transition-all duration-300 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.05] ${isZero ? 'opacity-50' : ''}`}
                       >
                         <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{startIndex + idx + 1}</td>
-                        <td className="px-6 py-6">
-                          <div className="flex flex-col gap-2 min-w-[200px] py-1">
+                        <td className="px-3 sm:px-6 py-4 sm:py-6">
+                          <div className="flex flex-col gap-1.5 sm:gap-2 py-1">
                             <div className="flex items-center">
-                              <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-xs sm:text-sm font-black font-mono tracking-wider shadow-sm truncate max-w-[140px] sm:max-w-none">
                                 {row.barcode_no}
                               </span>
                             </div>
-                            <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed">
+                            <span className="text-[10px] sm:text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[160px] sm:max-w-[280px] leading-relaxed">
                               {row.item_name || <span className="opacity-50 italic">Unnamed Item</span>}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-6">
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-emerald-500/50 transition-all font-mono whitespace-nowrap">
-                            <MapPin size={13} className="text-emerald-500 shrink-0" />
-                            <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase">
+                        <td className="px-3 sm:px-6 py-4 sm:py-6">
+                          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-emerald-500/50 transition-all font-mono whitespace-nowrap">
+                            <MapPin size={12} className="text-emerald-500 shrink-0 sm:w-[13px] sm:h-[13px]" />
+                            <span className="text-xs sm:text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase">
                               {row.shelf_location || '—'}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-6">
+                        <td className="px-4 sm:px-6 py-4 sm:py-6">
                           <div className="flex flex-col items-center">
-                            <span className={`text-2xl font-black leading-none ${
+                            <span className={`text-xl sm:text-2xl font-black leading-none ${
                               isZero ? 'text-rose-400 dark:text-rose-500'
                               : isLow ? 'text-amber-500 dark:text-amber-400'
                               : 'text-slate-800 dark:text-white'
                             }`}>
                               {qty}
                             </span>
-                            <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest mt-2 p-1 px-2 rounded-lg ${
+                            <div className={`hidden sm:flex items-center gap-1 text-[9px] font-black uppercase tracking-widest mt-2 p-1 px-2 rounded-lg ${
                               isZero ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-400'
                               : isLow ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
                               : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500'
                             }`}>
-                              {isZero ? '🔴 Out of Stock' : isLow ? '🟡 Low Stock' : '🟢 In Stock'}
+                              {isZero ? '🔴 Out' : isLow ? '🟡 Low' : '🟢 OK'}
                             </div>
                           </div>
                         </td>

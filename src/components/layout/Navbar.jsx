@@ -3,9 +3,11 @@ import joahLogo from '../../assets/Joah.jpeg';
 import laosFlag from '../../assets/Laos.png';
 import englishFlag from '../../assets/EnglishFlang.png';
 import { supabase } from '../../utils/supabaseClient';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import notificationSound from '../../assets/notification_compact.mp3';
+
+const STORE_STEPS = ['store-inventory-mockup', 'store-request'];
 
 const Navbar = ({
     step,
@@ -19,71 +21,135 @@ const Navbar = ({
     onReset,
     currentUser,
     onOpenRequests,
+    onOpenStoreInbox,
     onLogout
 }) => {
     const [pendingCount, setPendingCount] = useState(0);
     const prevPendingCountRef = useRef(0);
     const isFirstLoadRef = useRef(true);
+    const lastSoundTimeRef = useRef(0);
+    const shouldPlaySoundRef = useRef(false);
+    const [soundTrigger, setSoundTrigger] = useState(0);
 
-    // Play sound when pending count increases
+    // Play sound when relevant change occurs (with 10s cooldown)
     useEffect(() => {
-        if (step === 'results' && !isFirstLoadRef.current && pendingCount > prevPendingCountRef.current) {
+        if (soundTrigger === 0) return; // Don't play on initial load
+
+        const now = Date.now();
+        const canPlaySound = now - lastSoundTimeRef.current > 10000; // 10s cooldown
+
+        if (['upload', 'results', 'store-inventory-mockup', 'store-request', 'hq-dashboard'].includes(step) &&
+            !isFirstLoadRef.current &&
+            shouldPlaySoundRef.current &&
+            canPlaySound) {
             try {
                 const audio = new Audio(notificationSound);
-                audio.volume = 1.0;
+                audio.volume = 0.8;
                 audio.play().catch(e => console.error("Audio play failed", e));
+                lastSoundTimeRef.current = now;
             } catch (error) {
                 console.error("Audio error:", error);
             }
         }
+
+        // Reset sound flag
+        shouldPlaySoundRef.current = false;
+    }, [soundTrigger, step]);
+
+    // Keep track of counts
+    useEffect(() => {
         prevPendingCountRef.current = pendingCount;
         if (isFirstLoadRef.current) {
             isFirstLoadRef.current = false;
         }
-    }, [pendingCount, step]);
+    }, [pendingCount]);
 
 
-    useEffect(() => {
-        // Re-fetch when user changes (different branch)
-        fetchPendingCount();
+    const isStoreMode = STORE_STEPS.includes(step);
 
-        // Subscribe to real-time changes
-        const subscription = supabase
-            .channel('store_requests_count')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'store_requests' }, () => {
-                fetchPendingCount();
-            })
-            .subscribe();
-
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, [currentUser]); // Re-subscribe when user/branch changes
-
-    const fetchPendingCount = async () => {
+    const fetchPendingCount = useCallback(async () => {
         try {
             const isHQ = currentUser?.role === 'HQ';
             const userBranch = currentUser?.branch_id;
 
             let query = supabase
                 .from('store_requests')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'pending');
+                .select('*', { count: 'exact', head: true });
 
-            // Non-HQ: only count requests from their own branch
-            if (!isHQ && userBranch) {
-                query = query.eq('branch_id', userBranch);
+            if (isStoreMode) {
+                // Store pages: count accepted requests waiting for store confirmation for THIS user only
+                const requestByStr = currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Store Staff');
+                query = query.eq('status', 'accepted').is('store_confirmed_at', null).eq('request_by', requestByStr);
+
+                // Keep branch filter as a safety boundary
+                if (userBranch) query = query.eq('branch_id', userBranch);
+                
+                // IGNORE legacy bills created before 4/30/2026
+                query = query.gte('created_at', '2026-04-30T00:00:00.000Z');
+            } else {
+                // Inventory/HQ page: count pending requests
+                query = query.eq('status', 'pending');
+                if (!isHQ && userBranch) query = query.eq('branch_id', userBranch);
             }
 
             const { count, error } = await query;
-
-            if (!error) {
-                setPendingCount(count || 0);
-            }
+            if (!error) setPendingCount(count || 0);
         } catch (err) {
             console.error(err);
         }
-    };
+    }, [currentUser, isStoreMode]);
+
+    useEffect(() => {
+        fetchPendingCount();
+
+        const debounceTimer = { current: null };
+
+        const subscription = supabase
+            .channel('store_requests_count')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'store_requests' }, (payload) => {
+                const { eventType, new: newData, old: oldData } = payload;
+                const isWarehouseStaff = currentUser?.role === 'HQ' || currentUser?.workplace === 'back';
+                const userBranch = currentUser?.branch_id;
+
+                let isRelevant = false;
+
+                if (isWarehouseStaff) {
+                    // Warehouse/HQ cares about NEW pending requests coming in
+                    if (eventType === 'INSERT' && newData.status === 'pending') {
+                        if (!userBranch || newData.branch_id === userBranch) isRelevant = true;
+                    }
+                } else {
+                    // Store ('front') cares about their requests being ACCEPTED by HQ
+                    const userName = currentUser?.name;
+                    const userId = currentUser?.id;
+
+                    if (eventType === 'UPDATE' && newData.status === 'accepted') {
+                        // Match by ID in the string or just the name
+                        const reqBy = newData.request_by || '';
+                        const matchesUser = (userId && reqBy.includes(`(${userId})`)) || (userName && reqBy.includes(userName));
+
+                        if (matchesUser) isRelevant = true;
+                    }
+                }
+
+                if (isRelevant) {
+                    console.log('🔔 Relevant notification event:', eventType, newData);
+                    shouldPlaySoundRef.current = true;
+                    setSoundTrigger(prev => prev + 1); // <--- Trigger the sound effect
+                    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+                    debounceTimer.current = setTimeout(fetchPendingCount, 1000);
+                } else {
+                    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+                    debounceTimer.current = setTimeout(fetchPendingCount, 1000);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            if (debounceTimer.current) clearTimeout(debounceTimer.current);
+            subscription.unsubscribe();
+        };
+    }, [fetchPendingCount]);
 
     // Language toggle
     const { language, toggleLanguage, t } = useLanguage();
@@ -91,54 +157,54 @@ const Navbar = ({
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
             <div className="w-full">
-                <div className="flex items-center justify-between h-28 px-6 lg:px-12">
+                <div className="flex items-center justify-between h-14 sm:h-20 lg:h-28 px-3 sm:px-6 lg:px-12 gap-2">
 
                     {/* === LEFT: Brand Section with LED Border === */}
-                    <div className="relative rounded-[1.75rem] p-[2.5px] led-border-glow overflow-hidden">
+                    <div className="relative rounded-[1.25rem] sm:rounded-[1.75rem] p-[2px] sm:p-[2.5px] led-border-glow overflow-hidden shrink-0">
                         {/* Spinning gradient layer */}
                         <div className="led-spinner absolute inset-[-50%] z-0"></div>
                         {/* Inner content */}
-                        <div className="relative z-10 flex items-center gap-6 bg-white dark:bg-slate-950 rounded-[1.6rem] px-6 py-3">
+                        <div className="relative z-10 flex items-center gap-2.5 sm:gap-6 bg-white dark:bg-slate-950 rounded-[1.15rem] sm:rounded-[1.6rem] px-2.5 sm:px-6 py-1.5 sm:py-3">
                             {/* Logo Image */}
                             <div className="relative">
-                                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 transition-all duration-500">
+                                <div className="w-9 h-9 sm:w-14 sm:h-14 lg:w-20 lg:h-20 rounded-xl sm:rounded-2xl overflow-hidden bg-white dark:bg-slate-800 transition-all duration-500">
                                     <img
                                         src={joahLogo}
                                         alt="JOAH Logo"
-                                        className="w-full h-full object-contain p-1"
+                                        className="w-full h-full object-contain p-0.5 sm:p-1"
                                     />
                                 </div>
-                                {/* Online Status Indicator */}
-                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-3 border-white dark:border-slate-950 flex items-center justify-center">
-                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
+                                {/* Online dot */}
+                                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-950 flex items-center justify-center">
+                                    <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full animate-ping"></div>
                                 </div>
                             </div>
 
                             {/* Brand Text */}
-                            <div className="flex flex-col">
-                                <div className="flex items-baseline gap-3">
-                                    <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                            <div className="flex flex-col min-w-0">
+                                <div className="flex items-baseline gap-1 sm:gap-3">
+                                    <h1 className="text-base sm:text-xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
                                         JOAH
                                     </h1>
-                                    <span className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-joah-orange via-orange-500 to-amber-500">
+                                    <span className="text-base sm:text-xl lg:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-joah-orange via-orange-500 to-amber-500 leading-none">
                                         INVENTORY
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-4 mt-1.5">
-                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em]">
+                                {/* Subtitle — hidden on mobile */}
+                                <div className="hidden sm:flex items-center gap-2 lg:gap-4 mt-1 lg:mt-1.5 flex-wrap">
+                                    <p className="text-[9px] lg:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] lg:tracking-[0.25em]">
                                         {t('navbar.title')}
                                     </p>
-                                    <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700"></div>
-                                    {/* Mode Badge */}
-                                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${dbSource === 'supabase'
+                                    <div className="h-3 w-px bg-slate-200 dark:bg-slate-700 hidden lg:block"></div>
+                                    {/* Mode Badge — hidden on sm, show on lg */}
+                                    <div className={`hidden lg:flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${dbSource === 'supabase'
                                         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                                         : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                                         }`}>
                                         {dbSource === 'supabase' ? <ShieldCheck size={12} /> : <Database size={12} />}
                                         <span>{dbSource === 'supabase' ? t('navbar.cloudMode') : t('navbar.localMode')}</span>
                                     </div>
-                                    <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700"></div>
-                                    <div className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                                    <div className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 hidden lg:block">
                                         v3.0
                                     </div>
                                 </div>
@@ -147,24 +213,32 @@ const Navbar = ({
                     </div>
 
                     {/* === RIGHT: Actions Section === */}
-                    <div className="flex items-center gap-4">
-                        {/* Notifications - Only show in results step */}
-                        {step === 'results' && (
-                            <div className="relative group cursor-pointer mr-4" onClick={onOpenRequests}>
-                                <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-all">
-                                    <Mail size={24} />
+                    <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4">
+                        {/* Notifications */}
+                        {['results', 'store-inventory-mockup', 'store-request'].includes(step) && (!isStoreMode || currentUser?.branch_id === 'ໂພນສີນວນ' || currentUser?.role === 'HQ') && (
+                            <div
+                                className="relative group cursor-pointer"
+                                onClick={isStoreMode ? onOpenStoreInbox : onOpenRequests}
+                                title={isStoreMode ? 'ຂອງທີ່ສາງອະນຸມັດ · ລໍຖ້າຢືນຢັນ' : 'ຈັດການ Store Requests'}
+                            >
+                                <div className={`p-2 sm:p-3 rounded-full transition-all ${isStoreMode
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40'
+                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400'
+                                    }`}>
+                                    <Mail size={20} className="sm:w-6 sm:h-6" />
                                 </div>
                                 {pendingCount > 0 && (
-                                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 animate-bounce">
+                                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] sm:w-6 sm:h-6 text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-slate-950 animate-bounce ${isStoreMode ? 'bg-emerald-500' : 'bg-rose-500'
+                                        }`}>
                                         {pendingCount > 99 ? '99+' : pendingCount}
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* User Profile Badge */}
+                        {/* User Profile Badge — hidden on mobile */}
                         {currentUser && (
-                            <div className="hidden md:flex flex-col items-end mr-2">
+                            <div className="hidden lg:flex flex-col items-end mr-1">
                                 <div className="flex items-center gap-2">
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${currentUser.workplace === 'back'
                                         ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
@@ -174,7 +248,7 @@ const Navbar = ({
                                     </span>
                                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('navbar.loggedInAs')}</p>
                                 </div>
-                                <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{currentUser.name}</p>
+                                <p className="text-sm font-bold text-slate-800 dark:text-white truncate max-w-[160px]">{currentUser.name}</p>
                                 {currentUser.branch_id && (
                                     <div className="flex items-center gap-1 mt-0.5">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
@@ -185,40 +259,40 @@ const Navbar = ({
                         )}
 
                         {/* Action Buttons Container */}
-                        <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                            {/* History Button - Hidden on Upload page and for Front store workers */}
+                        <div className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-2 bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
+                            {/* History Button - hidden on upload and for front workers */}
                             {step !== 'upload' && currentUser?.workplace !== 'front' && (
                                 <button
                                     onClick={onShowHistory}
-                                    className="w-14 h-14 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg transition-all duration-300"
+                                    className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg transition-all duration-300"
                                     title="ປະຫວັດການແກ້ໄຂ (Audit Log)"
                                 >
-                                    <History size={22} />
+                                    <History size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" />
                                 </button>
                             )}
 
-                            {/* Refresh Button - Only visible in results step */}
+                            {/* Refresh Button */}
                             {step === 'results' && (
                                 <button
                                     onClick={onRefresh}
                                     disabled={isProcessing}
-                                    className="w-14 h-14 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="ໂຍນຂໍ້ມູນໃໝ່ (Refresh)"
                                 >
-                                    <RotateCw size={22} className={isProcessing ? 'animate-spin' : ''} />
+                                    <RotateCw size={18} className={`sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px] ${isProcessing ? 'animate-spin' : ''}`} />
                                 </button>
                             )}
 
                             {/* Divider */}
-                            <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                            <div className="w-px h-5 sm:h-8 bg-slate-200 dark:bg-slate-700 mx-0.5 sm:mx-1"></div>
 
                             {/* Language Toggle */}
                             <button
                                 onClick={toggleLanguage}
-                                className="w-14 h-14 flex items-center justify-center rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group relative overflow-hidden"
+                                className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group"
                                 title={language === 'lo' ? 'Switch to English' : 'ປ່ຽນເປັນພາສາລາວ'}
                             >
-                                <div className="relative w-8 h-8 rounded-lg overflow-hidden ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-joah-orange group-hover:scale-110 transition-all duration-300">
+                                <div className="relative w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 rounded-md sm:rounded-lg overflow-hidden ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-joah-orange group-hover:scale-110 transition-all duration-300">
                                     <img
                                         src={language === 'lo' ? laosFlag : englishFlag}
                                         alt={language === 'lo' ? 'Lao' : 'English'}
@@ -230,34 +304,32 @@ const Navbar = ({
                             {/* Theme Toggle */}
                             <button
                                 onClick={() => setIsDarkMode(!isDarkMode)}
-                                className="w-14 h-14 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-amber-500 dark:hover:text-amber-400 hover:shadow-lg transition-all duration-300"
+                                className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-amber-500 dark:hover:text-amber-400 hover:shadow-lg transition-all duration-300"
                                 title="ປ່ຽນໂໝດສີ (Toggle Theme)"
                             >
-                                {isDarkMode ? <Sun size={22} /> : <Moon size={22} />}
+                                {isDarkMode ? <Sun size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" /> : <Moon size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" />}
                             </button>
-
-
                         </div>
 
-                        {/* Reset/Home Button - Visible only when not on upload step */}
+                        {/* Reset/Home Button */}
                         {step !== 'upload' && (
                             <button
                                 onClick={onReset}
-                                className="h-14 px-6 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300"
+                                className="h-9 sm:h-12 lg:h-14 px-3 sm:px-5 lg:px-6 flex items-center gap-1.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-xs sm:text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-lg sm:shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300 shrink-0"
                             >
-                                <Home size={20} />
-                                <span>HOME</span>
+                                <Home size={16} className="sm:w-5 sm:h-5" />
+                                <span className="hidden sm:inline">HOME</span>
                             </button>
                         )}
 
-                        {/* Logout Button - Always Visible */}
+                        {/* Logout Button */}
                         {currentUser && (
                             <button
                                 onClick={onLogout}
-                                className="h-14 px-4 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:border-rose-200 dark:hover:border-rose-800 transition-all duration-300 shadow-sm"
+                                className="h-9 sm:h-12 lg:h-14 px-3 sm:px-4 flex items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:border-rose-200 dark:hover:border-rose-800 transition-all duration-300 shadow-sm shrink-0"
                                 title="ອອກຈາກລະບົບ (Logout)"
                             >
-                                <LogOut size={20} />
+                                <LogOut size={16} className="sm:w-[18px] sm:h-[18px] lg:w-5 lg:h-5" />
                             </button>
                         )}
                     </div>
