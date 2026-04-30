@@ -197,49 +197,19 @@ const QuickAddPanel = ({
         : true; // Default true if no data yet
 
     const panelPortal = createPortal(
-        <div
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 99999,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-            }}
-        >
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-0 sm:p-4 bg-black/40">
             {/* Simple Backdrop */}
             <div
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                }}
+                className="absolute inset-0"
                 onClick={!isSaving ? onClose : undefined}
             />
 
             {/* Container for Side-by-Side Layout */}
-            <div className="relative z-10 flex items-start gap-4 max-h-[90vh]">
+            <div className="relative z-10 flex items-start gap-4 w-full h-full sm:w-auto sm:h-auto sm:max-h-[90vh]">
 
                 {/* Compact Modal (Matched EditPanel Style) */}
                 <div
-                    style={{
-                        width: '100%',
-                        maxWidth: '520px',
-                        backgroundColor: 'white',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        // maxHeight handled by parent
-                        overflow: 'hidden',
-                    }}
-                    className="dark:!bg-slate-900 border border-slate-200 dark:border-slate-800"
+                    className="w-full h-full sm:h-auto sm:max-w-[520px] bg-white dark:bg-slate-900 rounded-none sm:rounded-xl shadow-none sm:shadow-md flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800"
                 >
                     {/* Minimal Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">

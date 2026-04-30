@@ -433,10 +433,10 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2.5rem] sm:rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden border border-white/20 dark:border-slate-800">
+        <div className="w-full h-full sm:h-auto sm:max-w-lg bg-white dark:bg-slate-900 rounded-none sm:rounded-[3rem] shadow-none sm:shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col sm:max-h-[90vh] overflow-hidden border-0 sm:border border-white/20 dark:border-slate-800">
 
           {/* ── Clean Header with Brand Logo ──────────────────────── */}
           <div className="relative shrink-0 bg-white dark:bg-slate-900 px-5 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
