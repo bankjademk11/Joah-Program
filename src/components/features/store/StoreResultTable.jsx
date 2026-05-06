@@ -162,7 +162,7 @@ const StoreResultTable = ({
     const [quickAddForm, setQuickAddForm] = useState({
         barcode_no: '',
         item_name: '',
-        rack_location: '',
+        rack_location: localStorage.getItem('joah_last_rack_location') || '',
         category_1_actual: '',
         category_2_actual: '',
         qty: 0,
@@ -832,6 +832,11 @@ const StoreResultTable = ({
                 setOptimisticItems(prev => [newOptimisticItem, ...prev]);
                 setSearchTerm(quickAddForm.barcode_no);
 
+                // 💾 Persist last used rack so next item pre-fills it
+                if (quickAddForm.rack_location) {
+                    localStorage.setItem('joah_last_rack_location', quickAddForm.rack_location);
+                }
+
                 success(t('results.saveSuccess'));
                 setShowQuickAdd(false);
             } else {
@@ -1281,7 +1286,7 @@ const StoreResultTable = ({
                                             setQuickAddForm({
                                                 barcode_no: searchTerm,
                                                 item_name: '',
-                                                rack_location: '',
+                                                rack_location: localStorage.getItem('joah_last_rack_location') || '',
                                                 category_1_actual: '',
                                                 category_2_actual: '',
                                                 qty: 0,
@@ -1495,15 +1500,15 @@ const StoreResultTable = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
-                                                <div className="flex flex-col items-start gap-2 max-w-[120px]">
+                                                <div className="flex flex-col items-stretch gap-2 w-28">
                                                     {row.productTag && (
-                                                        <div className={`inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
+                                                        <div className={`inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
                                                             <span>{row.productTag === 'hook' ? '🪝' : '📦'}</span>
                                                             <span className="text-[10px] font-extrabold uppercase tracking-widest">{row.productTag}</span>
                                                         </div>
                                                     )}
                                                     {row.maxQty && (
-                                                        <div className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                        <div className="inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
                                                             <span className="text-[10px] font-bold uppercase tracking-widest">{t('results.maxQtyLabel')} {row.maxQty}</span>
                                                         </div>
                                                     )}
@@ -1525,7 +1530,16 @@ const StoreResultTable = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
-                                            <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                            <td className="px-6 py-6 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    {row.salesQty != null ? (
+                                                        <span className="text-2xl font-black text-orange-500 dark:text-orange-400 leading-none">{Math.round(row.salesQty).toLocaleString()}</span>
+                                                    ) : (
+                                                        <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                    )}
+                                                    <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mt-1">Sales</div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
                                             <td className="px-6 py-6 text-center">
                                                 <button className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
@@ -1585,12 +1599,12 @@ const StoreResultTable = ({
                     isOpen={showQuickAdd}
                     onClose={() => {
                         setShowQuickAdd(false);
-                        setQuickAddForm({
-                            barcode_no: '', item_name: '', rack_location: '',
+                        setQuickAddForm(prev => ({
+                            barcode_no: '', item_name: '', rack_location: prev.rack_location || localStorage.getItem('joah_last_rack_location') || '',
                             category_1_actual: '', category_2_actual: '',
                             qty: 0, max_qty: 0, product_tag: '',
                             remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
-                        });
+                        }));
                     }}
                     quickAddForm={quickAddForm}
                     setQuickAddForm={setQuickAddForm}
@@ -1605,12 +1619,12 @@ const StoreResultTable = ({
                                 await onAddNewProduct(latestForm);
                             }
                             setShowQuickAdd(false);
-                            setQuickAddForm({
-                                barcode_no: '', item_name: '', rack_location: '',
+                            setQuickAddForm(prev => ({
+                                barcode_no: '', item_name: '', rack_location: prev.rack_location || localStorage.getItem('joah_last_rack_location') || '',
                                 category_1_actual: '', category_2_actual: '',
                                 qty: 0, max_qty: 0, product_tag: '',
                                 remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
-                            });
+                            }));
                             if (onRefresh) onRefresh();
                         } catch (err) {
                             showError('Error saving product: ' + err.message);

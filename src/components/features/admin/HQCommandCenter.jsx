@@ -26,10 +26,10 @@ const BC = {
 };
 
 const TABS = [
-    { id: 'requests', label: 'ລາຍງານ Request', icon: GitBranch, color: 'from-orange-500 to-amber-500' },
-    { id: 'edits', label: 'ການແກ້ໄຂສິນຄ້າ', icon: Edit3, color: 'from-indigo-500 to-purple-500' },
-    { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
-    { id: 'store_edits', label: 'ປະຫວັດໜ້າຮ້ານ', icon: Store, color: 'from-blue-500 to-cyan-500' },
+    { id: 'requests', label: 'ລາຍການສາງຕອບຮັບ Request', icon: GitBranch, color: 'from-orange-500 to-amber-500' },
+    { id: 'edits', label: 'ປະຫວັດການເເກ້ໄຂStockຫຼັງສາງ', icon: Edit3, color: 'from-indigo-500 to-purple-500' },
+    // { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
+    { id: 'store_edits', label: 'ປະຫວັດການເຕີມເຄືອງຫຼັງ Request', icon: Store, color: 'from-blue-500 to-cyan-500' },
     { id: 'store_manual_edits', label: 'ປະຫວັດແກ້ໄຂໜ້າຮ້ານ', icon: Edit3, color: 'from-violet-500 to-purple-600' },
 ];
 
@@ -182,14 +182,17 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
             { header: 'Shelf (ບ່ອນເກັບ)', key: 'shelf_text', width: 20 },
             { header: 'Max (ຄວາມຈຸ)', key: 'max_text', width: 20 },
             { header: 'ເຫດຜົນ', key: 'details', width: 24 },
-            { header: 'ເວລາບັນທຶກ', key: 'updated_at', width: 24 },
-            { header: 'ເວລາທັງບິນ', key: 'batch_time', width: 20 },
             ...(showDetailedTime ? [
                 { header: 'ເວລາກົດຮັບ SKU', key: 'sku_start', width: 24 },
-                { header: 'ເວລາ/SKU', key: 'sku_time', width: 16 },
+                { header: 'ບັນທຶກການສຳເລັດແຕ່ລະ SKU', key: 'updated_at', width: 24 },
+                { header: 'ເວລາທີ່ໃຊ້ຂອງແຕ່ລະ SKU', key: 'sku_time', width: 24 },
                 { header: 'ເວລາເລີ່ມບິນ', key: 'batch_start', width: 24 },
                 { header: 'ເວລາສຳເລັດບິນ', key: 'batch_end', width: 24 },
-            ] : []),
+                { header: 'ເວລາທັງບິນ', key: 'batch_time', width: 20 },
+            ] : [
+                { header: 'ເວລາບັນທຶກ', key: 'updated_at', width: 24 },
+                { header: 'ເວລາທັງບິນ', key: 'batch_time', width: 20 },
+            ]),
         ];
 
         // Share batch info for Excel export too
@@ -644,8 +647,10 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             (activeTab === 'store_edits' || activeTab === 'store_manual_edits') ? [
                 '#', 'ເລກບິນ', 'ສິນຄ້າ', 'ພະນັກງານ', 'ຈຳນວນ(ເກົ່າ→ໃໝ່)',
                 'Tag (ເກົ່າ→ໃໝ່)', 'Shelf (ເກົ່າ→ໃໝ່)', 'Max Qty (ເກົ່າ→ໃໝ່)', 'ເຫດຜົນ',
-                'ເວລາບັນທຶກ', 'ເວລາທັງບິນ',
-                ...showDetailedTime ? ['ເວລາກົດຮັບ SKU', 'ເວລາ/SKU', 'ເລີ່ມບິນ', 'ສຳເລັດບິນ'] : [],
+                ...(showDetailedTime ? [
+                    'ເວລາກົດຮັບ SKU', 'ບັນທຶກການສຳເລັດແຕ່ລະ SKU', 'ເວລາທີ່ໃຊ້ຂອງແຕ່ລະ SKU', 
+                    'ເວລາເລີ່ມບິນ', 'ເວລາສຳເລັດບິນ', 'ເວລາທັງບິນ'
+                ] : ['ເວລາບັນທຶກ', 'ເວລາທັງບິນ']),
             ] :
                 activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                     ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
@@ -883,6 +888,11 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         </td>
                     )}
 
+                    {/* Recorded At / ບັນທຶກການສຳເລັດແຕ່ລະ SKU */}
+                    <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap text-center">
+                        {fmt(r.updated_at || r.created_at)}
+                    </td>
+
                     {/* Per-SKU Duration - detail only */}
                     {showDetailedTime && (
                         <td className="px-4 py-3 text-center">
@@ -903,12 +913,16 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         </td>
                     )}
 
-                    {/* Recorded At - always visible for edits */}
-                    <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap text-center">
-                        {fmt(r.updated_at || r.created_at)}
-                    </td>
+                    {/* Batch End - detail only */}
+                    {showDetailedTime && (
+                        <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
+                                {batchEndedAt ? fmt(batchEndedAt) : <span className="text-slate-300">-</span>}
+                            </span>
+                        </td>
+                    )}
 
-                    {/* Batch Total Duration - always visible */}
+                    {/* Batch Total Duration */}
                     <td className="px-4 py-3 text-center">
                         {batchSecs > 0 ? (
                             <div className="flex flex-col items-center gap-1">
@@ -921,15 +935,6 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                             </div>
                         ) : <span className="text-slate-300">-</span>}
                     </td>
-
-                    {/* Batch End - detail only */}
-                    {showDetailedTime && (
-                        <td className="px-4 py-3 text-center">
-                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
-                                {batchEndedAt ? fmt(batchEndedAt) : <span className="text-slate-300">-</span>}
-                            </span>
-                        </td>
-                    )}
                 </tr>
             );
         }

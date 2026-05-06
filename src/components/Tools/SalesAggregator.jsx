@@ -1,11 +1,14 @@
 import { useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
+import { supabase } from "../../utils/supabaseClient";
 import {
   X, Upload, BarChart3, ChevronRight, ChevronDown, FileSpreadsheet,
   Search, ArrowUpDown, Download, RotateCw, ArrowLeft,
-  CheckCircle2, FileText, LayoutDashboard, Database, TrendingUp, Info
+  CheckCircle2, FileText, LayoutDashboard, Database, TrendingUp, Info,
+  UploadCloud, Loader2, History, User
 } from "lucide-react";
+
 
 const PAGE_SIZE = 50;
 
@@ -23,6 +26,24 @@ export default function SalesAggregator({ onBack }) {
   const [isReading, setIsReading] = useState(false);
   const [fileName, setFileName] = useState("");
   const [dragging, setDragging] = useState(false);
+
+  // --- Import to Store Inventory ---
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importBranch, setImportBranch] = useState('ໂພນສີນວນ');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  // --- History ---
+  const [historyData, setHistoryData] = useState([]);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  
+  const [selectedHistory, setSelectedHistory] = useState(null);
+  const [historyDetailsData, setHistoryDetailsData] = useState([]);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+
+  // --- History Filters ---
+  const [historyDateFrom, setHistoryDateFrom] = useState('');
+  const [historyDateTo, setHistoryDateTo] = useState('');
 
   // --- Logic ---
   const parseFile = useCallback((file) => {
@@ -132,6 +153,124 @@ export default function SalesAggregator({ onBack }) {
     URL.revokeObjectURL(url);
   };
 
+  const handleImport = async () => {
+    if (!importBranch || aggData.length === 0) return;
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const importedBy = localStorage.getItem('joah_employee_name') || 'unknown';
+      
+      // Prepare JSON payload
+      const formattedData = aggData.map(item => ({
+        barcode: item.barcode,
+        qty: Math.round(item.qty)
+      }));
+
+      // Call the Supabase RPC function for bulk import
+      const { data, error } = await supabase.rpc('bulk_import_sales', {
+        p_branch_id: importBranch,
+        p_sales_data: formattedData,
+        p_imported_by: importedBy
+      });
+
+      if (error) throw error;
+
+      setImportResult({ 
+        updated: data?.updated || 0, 
+        notFound: data?.notFound || 0, 
+        errors: 0 
+      });
+    } catch (err) {
+      console.error('Import error:', err);
+      setImportResult({ updated: 0, notFound: 0, errors: aggData.length });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    setIsFetchingHistory(true);
+    setSelectedHistory(null);
+    setStep("history");
+    try {
+      const { data, error } = await supabase
+        .from('vw_sales_import_history')
+        .select('*')
+        .order('import_date', { ascending: false })
+        .limit(100);
+      
+      if (error) throw error;
+      setHistoryData(data || []);
+    } catch (err) {
+      console.error('Error fetching history:', err);
+      alert('ບໍ່ສາມາດດึงຂໍ້ມູນປະຫວັດໄດ້');
+    } finally {
+      setIsFetchingHistory(false);
+    }
+  };
+
+  const fetchHistoryDetails = async (record) => {
+    setSelectedHistory(record);
+    setIsFetchingDetails(true);
+    try {
+      const { data, error } = await supabase
+        .from('store_sales_log')
+        .select('barcode_no, sales_qty')
+        .eq('import_date', record.import_date)
+        .eq('branch_id', record.branch_id)
+        .order('sales_qty', { ascending: false });
+        
+      if (error) throw error;
+      setHistoryDetailsData(data || []);
+    } catch (err) {
+      console.error('Error fetching history details:', err);
+      alert('ບໍ່ສາມາດດึงຂໍ້ມູນລາຍລະອຽດໄດ້');
+      setSelectedHistory(null);
+    } finally {
+      setIsFetchingDetails(false);
+    }
+  };
+
+  const exportHistoryCSV = () => {
+    if (historyData.length === 0) return;
+    const csvRows = [
+      ['Date/Time', 'Branch', 'Total SKUs', 'Total Sales Qty', 'Imported By'],
+      ...historyData.map(r => [
+        new Date(r.import_date).toLocaleString('lo-LA'),
+        r.branch_id,
+        r.total_skus,
+        r.total_sales_qty,
+        r.imported_by || 'Unknown'
+      ])
+    ];
+    const content = '\uFEFF' + csvRows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `import_history_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportDetailsCSV = () => {
+    if (!selectedHistory || historyDetailsData.length === 0) return;
+    const csvRows = [
+      ['Barcode', 'Sales Qty'],
+      ...historyDetailsData.map(r => [r.barcode_no, r.sales_qty])
+    ];
+    const content = '\uFEFF' + csvRows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeDate = new Date(selectedHistory.import_date).toISOString().split('T')[0];
+    a.download = `sales_detail_${selectedHistory.branch_id}_${safeDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const content = (
     <div className="fixed inset-0 z-[300] bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-300">
 
@@ -177,12 +316,21 @@ export default function SalesAggregator({ onBack }) {
           ))}
         </div>
 
-        <button
-          onClick={onBack}
-          className="p-2.5 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all"
-        >
-          <X size={24} />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => step === 'history' ? setStep('upload') : fetchHistory()}
+            className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all flex items-center gap-2 font-black text-xs"
+          >
+            <History size={16} />
+            <span className="hidden sm:inline">{step === 'history' ? 'ກັບຄືນ' : 'ປະຫວັດ'}</span>
+          </button>
+          <button
+            onClick={onBack}
+            className="p-2.5 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all"
+          >
+            <X size={24} />
+          </button>
+        </div>
       </header>
 
       {/* --- Main Content --- */}
@@ -356,23 +504,31 @@ export default function SalesAggregator({ onBack }) {
                     className="w-full h-14 pl-14 pr-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-white font-black text-sm outline-none focus:border-blue-500 transition-all shadow-inner"
                   />
                 </div>
-                <div className="flex gap-3 w-full lg:w-auto">
+                <div className="flex gap-3 w-full lg:w-auto flex-wrap">
                   <button
                     onClick={downloadCSV}
-                    className="flex-1 lg:flex-none h-14 px-8 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                    className="flex-1 lg:flex-none h-14 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
                   >
                     <FileSpreadsheet size={18} />
                     <span>ດາວໂຫລດ CSV</span>
                   </button>
                   <button
+                    onClick={() => { setShowImportModal(true); setImportResult(null); }}
+                    className="flex-1 lg:flex-none h-14 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                  >
+                    <UploadCloud size={18} />
+                    <span>Import to Store</span>
+                  </button>
+                  <button
                     onClick={() => { setStep("upload"); setRows([]); setAggData([]); setSearch(""); }}
-                    className="h-14 px-6 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-500 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    className="h-14 px-5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-500 transition-all flex items-center justify-center gap-2 active:scale-95"
                     title="Reset"
                   >
                     <RotateCw size={18} />
                     <span className="hidden sm:inline font-black text-sm">ຣີເຊັດ</span>
                   </button>
                 </div>
+
               </div>
 
               {/* Result Table */}
@@ -465,8 +621,318 @@ export default function SalesAggregator({ onBack }) {
             </div>
           )}
 
+          {/* Step 4: History */}
+          {step === "history" && !selectedHistory && (
+            <div className="max-w-6xl mx-auto w-full animate-in slide-in-from-bottom-4 duration-500 pb-10">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 shadow-inner">
+                      <History size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-800 dark:text-white">ປະຫວັດການນຳເຂົ້າ (History)</h2>
+                      <p className="text-sm font-bold text-slate-400 mt-1">ສະຫຼຸບຍອດການ Import ເຂົ້າ Store Inventory</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={exportHistoryCSV}
+                    disabled={historyData.length === 0}
+                    className="h-11 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-sm transition-all flex items-center gap-2 shadow-md shadow-emerald-500/20"
+                  >
+                    <Download size={16} />
+                    Export Excel
+                  </button>
+                </div>
+
+                {/* Date Filter Bar */}
+                <div className="flex flex-wrap items-center gap-3 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <Search size={16} />
+                    <span className="font-black text-xs uppercase tracking-widest">ຄົ້ນຫາ</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-400">ຕັ້ງແຕ່</label>
+                    <input
+                      type="date"
+                      value={historyDateFrom}
+                      onChange={e => setHistoryDateFrom(e.target.value)}
+                      className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-400">ຮອດ</label>
+                    <input
+                      type="date"
+                      value={historyDateTo}
+                      onChange={e => setHistoryDateTo(e.target.value)}
+                      className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchHistory}
+                    className="h-9 px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs transition-all shadow-sm"
+                  >
+                    ຄົ້ນຫາ
+                  </button>
+                  {(historyDateFrom || historyDateTo) && (
+                    <button
+                      onClick={() => { setHistoryDateFrom(''); setHistoryDateTo(''); }}
+                      className="h-9 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 font-black text-xs transition-all"
+                    >
+                      ລ້າງ
+                    </button>
+                  )}
+                  {historyData.length > 0 && (
+                    <span className="ml-auto text-xs font-bold text-slate-400">
+                      ພົບ {historyData.length.toLocaleString()} ລາຍການ
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl overflow-hidden">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100/80 dark:bg-slate-800/80">
+                        <th className="px-8 py-5 font-black text-xs text-slate-400 uppercase tracking-widest whitespace-nowrap">ວັນທີ ແລະ ເວລາ</th>
+                        <th className="px-8 py-5 font-black text-xs text-slate-400 uppercase tracking-widest whitespace-nowrap">ສາຂາ</th>
+                        <th className="px-8 py-5 font-black text-xs text-slate-400 uppercase tracking-widest whitespace-nowrap text-center">SKUs ທັງໝົດ</th>
+                        <th className="px-8 py-5 font-black text-xs text-slate-400 uppercase tracking-widest whitespace-nowrap text-center">ຍອດຂາຍລວມ (Qty)</th>
+                        <th className="px-8 py-5 font-black text-xs text-slate-400 uppercase tracking-widest whitespace-nowrap">ຜູ້ບັນທຶກ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                      {isFetchingHistory ? (
+                        <tr>
+                          <td colSpan="5" className="py-20 text-center">
+                            <Loader2 size={32} className="animate-spin text-blue-500 mx-auto" />
+                          </td>
+                        </tr>
+                      ) : historyData.length > 0 ? (
+                        historyData.map((r, i) => (
+                          <tr 
+                            key={i} 
+                            onClick={() => fetchHistoryDetails(r)}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group cursor-pointer"
+                          >
+                            <td className="px-8 py-5">
+                              <span className="font-mono font-bold text-slate-600 dark:text-slate-300">
+                                {new Date(r.import_date).toLocaleString('lo-LA')}
+                              </span>
+                            </td>
+                            <td className="px-8 py-5">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 font-black text-sm text-slate-700 dark:text-slate-300">
+                                {r.branch_id}
+                              </span>
+                            </td>
+                            <td className="px-8 py-5 text-center">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-black text-sm">
+                                {Number(r.total_skus).toLocaleString()} ລາຍການ
+                              </span>
+                            </td>
+                            <td className="px-8 py-5 text-center">
+                              <span className="text-xl font-black text-amber-600 dark:text-amber-400">
+                                {Number(r.total_sales_qty).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-2 text-slate-500">
+                                <User size={14} />
+                                <span className="font-bold text-sm">{r.imported_by || 'Unknown'}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="py-20 text-center">
+                            <div className="flex flex-col items-center gap-4 text-slate-300 dark:text-slate-700">
+                              <History size={64} strokeWidth={1} />
+                              <p className="text-lg font-black">ຍັງບໍ່ມີປະຫວັດການນຳເຂົ້າ</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4.1: History Details */}
+          {step === "history" && selectedHistory && (
+            <div className="max-w-4xl mx-auto w-full animate-in slide-in-from-right-4 duration-300 pb-10">
+              <div className="flex items-center gap-4 mb-6">
+                <button 
+                  onClick={() => setSelectedHistory(null)}
+                  className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-purple-600 hover:border-purple-300 dark:hover:border-purple-700 transition-all flex items-center justify-center shadow-sm"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+                    ລາຍລະອຽດການນຳເຂົ້າ
+                  </h2>
+                  <p className="text-sm font-bold text-slate-400 mt-1">
+                    ວັນທີ: {new Date(selectedHistory.import_date).toLocaleString('lo-LA')} 
+                    <span className="mx-2 text-slate-300">•</span> 
+                    ສາຂາ: <span className="text-purple-500">{selectedHistory.branch_id}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl overflow-hidden">
+                <div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <FileText size={20} className="text-slate-400" />
+                    <span className="font-bold text-slate-600 dark:text-slate-300">
+                      ລາຍການທັງໝົດ: <span className="font-black text-slate-800 dark:text-white">{Number(selectedHistory.total_skus).toLocaleString()}</span> SKUs
+                    </span>
+                  </div>
+                  <button
+                    onClick={exportDetailsCSV}
+                    disabled={historyDetailsData.length === 0}
+                    className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs transition-all flex items-center gap-2 shadow-sm"
+                  >
+                    <Download size={14} />
+                    Export Excel
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto custom-scrollbar max-h-[60vh]">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
+                      <tr>
+                        <th className="px-8 py-4 font-black text-xs text-slate-400 uppercase tracking-widest">Barcode</th>
+                        <th className="px-8 py-4 font-black text-xs text-slate-400 uppercase tracking-widest text-right">Qty (ຍອດຂາຍ)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                      {isFetchingDetails ? (
+                        <tr>
+                          <td colSpan="2" className="py-20 text-center">
+                            <Loader2 size={32} className="animate-spin text-purple-500 mx-auto" />
+                            <p className="text-sm font-bold text-slate-400 mt-4">ກຳລັງດึงຂໍ້ມູນ...</p>
+                          </td>
+                        </tr>
+                      ) : historyDetailsData.length > 0 ? (
+                        historyDetailsData.map((r, i) => (
+                          <tr key={i} className="hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-colors">
+                            <td className="px-8 py-4">
+                              <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{r.barcode_no}</span>
+                            </td>
+                            <td className="px-8 py-4 text-right">
+                              <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+                                {Number(r.sales_qty).toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="2" className="py-20 text-center text-slate-400">
+                            ບໍ່ພົບຂໍ້ມູນລາຍລະອຽດ
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </main>
+
+      {/* --- Import Modal --- */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white">Import to Store Inventory</h3>
+                <p className="text-sm text-slate-400 font-medium mt-1">ໂພນວນ <span className="font-black text-emerald-500">{aggData.length.toLocaleString()}</span> SKUs ເຂົ້າບັນທຶກ</p>
+              </div>
+              <button onClick={() => setShowImportModal(false)} className="p-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">ເລືອກສາຂາ</label>
+              <div className="relative">
+                <select
+                  value={importBranch}
+                  onChange={(e) => setImportBranch(e.target.value)}
+                  className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-emerald-500 transition-all appearance-none cursor-pointer"
+                >
+                  {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'].map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+              </div>
+            </div>
+
+            {!importResult && !isImporting && (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-6">
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                  ⚠️ ຈະບວກເພີ່ມ <strong>sales_qty</strong> ໃນ store_inventory ສະເພາະ Barcode ທີ່ມີພ້ອມໄວ້ແລ້ວ. Barcode ທີ່ບໍ່ມີໃນລາຍການຈະຖືກຂ້າມ.
+                </p>
+              </div>
+            )}
+
+            {importResult && (
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 mb-6 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={18} />
+                  <span className="font-black text-sm">ນຳເຂົ້າສຳເລັດ!</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                    <p className="text-2xl font-black text-emerald-600">{importResult.updated}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Updated</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                    <p className="text-2xl font-black text-amber-500">{importResult.notFound}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Not Found</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                    <p className="text-2xl font-black text-rose-500">{importResult.errors}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Errors</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="flex-1 h-12 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-500 font-black text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+              >
+                {importResult ? 'ປິດ' : 'ຍກເລີກ'}
+              </button>
+              {!importResult && (
+                <button
+                  onClick={handleImport}
+                  disabled={isImporting}
+                  className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
+                >
+                  {isImporting ? (
+                    <><Loader2 size={18} className="animate-spin" /> ກຳລັງ Import...</>
+                  ) : (
+                    <><UploadCloud size={18} /> ເລີ່ມ Import</>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- Footer Decoration --- */}
       <footer className="h-10 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center shrink-0">
