@@ -12,7 +12,7 @@ export default defineConfig({
       additionalLegacyPolyfills: ['regenerator-runtime/runtime']
     }),
     VitePWA({
-      registerType: 'prompt', // ไม่บังคับ reload อัตโนมัติ แค่แจ้งเตือนพนักงาน
+      registerType: 'autoUpdate', // บังคับอัปเดต SW อัตโนมัติ ไม่ต้องให้ users ล้าง cache
       injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
