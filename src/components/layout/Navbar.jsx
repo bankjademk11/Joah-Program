@@ -84,8 +84,8 @@ const Navbar = ({
                 // Keep branch filter as a safety boundary
                 if (userBranch) query = query.eq('branch_id', userBranch);
                 
-                // IGNORE legacy bills created before 4/30/2026
-                query = query.gte('created_at', '2026-04-30T00:00:00.000Z');
+                // IGNORE legacy bills created before 14/5/2026
+                query = query.gte('created_at', '2026-05-14T00:00:00.000Z');
             } else {
                 // Inventory/HQ page: count pending requests
                 query = query.eq('status', 'pending');
@@ -215,7 +215,7 @@ const Navbar = ({
                     {/* === RIGHT: Actions Section === */}
                     <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4">
                         {/* Notifications */}
-                        {['results', 'store-inventory-mockup', 'store-request'].includes(step) && (!isStoreMode || currentUser?.branch_id === 'ໂພນສີນວນ' || currentUser?.role === 'HQ') && (
+                        {['results', 'store-inventory-mockup', 'store-request'].includes(step) && (
                             <div
                                 className="relative group cursor-pointer"
                                 onClick={isStoreMode ? onOpenStoreInbox : onOpenRequests}
