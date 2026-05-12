@@ -1,7 +1,4 @@
-# Map Layout (TLL)
 
-| Location   | CATEGORIES 1      |
-|:-----------|:------------------|
 | A01-1      | kitchen           |
 | A01-2      | kitchen           |
 | A01-3      | kitchen           |

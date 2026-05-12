@@ -25,9 +25,9 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
   // Helper to find category from masterDataList
   const getCategoryFromMaster = (barcode) => {
-      const bc = String(barcode).trim();
-      const match = masterDataList.find(m => String(m.barcode).trim() === bc);
-      return match?.category_1 || match?.category_2 || '';
+    const bc = String(barcode).trim();
+    const match = masterDataList.find(m => String(m.barcode).trim() === bc);
+    return match?.category_1 || match?.category_2 || '';
   };
 
   // Fetch master_data ສຳລັບ QuickAdd auto-fill
@@ -40,25 +40,25 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         let hasMore = true;
 
         while (hasMore) {
-            const { data: pageData, error } = await supabase
-              .from('master_data')
-              .select('barcode, product_name_la, item_name, category_1, category_2, branch_id', { count: 'exact' })
-              .order('barcode', { ascending: true })
-              .range(page * pageSize, (page + 1) * pageSize - 1);
-            
-            if (error) {
-                console.error('[StoreInventory] Error fetching master_data page:', error);
-                break;
-            }
-            
-            if (!pageData || pageData.length === 0) {
-                hasMore = false;
-            } else {
-                allMasterData = [...allMasterData, ...pageData];
-                if (pageData.length < pageSize) hasMore = false;
-                page++;
-            }
-            if (page > 50) break; // 50k Limit safety
+          const { data: pageData, error } = await supabase
+            .from('master_data')
+            .select('barcode, product_name_la, item_name, category_1, category_2, branch_id', { count: 'exact' })
+            .order('barcode', { ascending: true })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+          if (error) {
+            console.error('[StoreInventory] Error fetching master_data page:', error);
+            break;
+          }
+
+          if (!pageData || pageData.length === 0) {
+            hasMore = false;
+          } else {
+            allMasterData = [...allMasterData, ...pageData];
+            if (pageData.length < pageSize) hasMore = false;
+            page++;
+          }
+          if (page > 50) break; // 50k Limit safety
         }
 
         if (allMasterData.length > 0) {
@@ -87,21 +87,21 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
 
   // Map store_inventory row → StoreResultTable row shape
-  const mapRow = (row, idx, warehouseMap = {}) => {
+  const mapRow = (row, idx, warehouseMap = {}, dcMap = {}) => {
     const qty = row.store_qty ?? 0;
     const rack = row.shelf_location || '';
-    
+
     // 🚀 PRIORITIZE: Use category saved in DB, fallback to master data lookup
     const masterCategory = row.category_1_actual || getCategoryFromMaster(row.barcode_no);
-    
+
     // Determine status based on Rules
     let status = 'passed';
     if (qty === 0) {
-        status = 'missing';
+      status = 'missing';
     } else if (!masterCategory) {
-        status = 'incomplete'; // No category in master_data
+      status = 'incomplete'; // No category in master_data
     } else if (!validateStoreRack(rack, masterCategory, selectedBranch)) {
-        status = 'mismatch'; // Wrong rack for this category
+      status = 'mismatch'; // Wrong rack for this category
     }
 
     return {
@@ -116,7 +116,9 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       productTag: row.product_tag || null,
       masterQty: qty,
       warehouseQty: warehouseMap[String(row.barcode_no).trim()] ?? 0,
+      dcQty: dcMap[String(row.barcode_no).trim()] ?? 0,
       salesQty: row.sales_qty ?? null,
+      pendingSalesDeduct: row.pending_sales_deduct ?? 0,
       category1: masterCategory,
       category2: row.category_2_actual || '',
       status: status,
@@ -137,42 +139,51 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         .order('item_name', { ascending: true });
       if (storeErr) throw storeErr;
 
-      // 2. OPTIMIZATION: Fetch ONLY relevant barcodes from location_inventory
+      // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ)
       const relevantBarcodes = [...new Set((storeData || []).map(r => r.barcode_no))].filter(Boolean);
-      
+
       let whData = [];
+      let dcData = [];
       if (relevantBarcodes.length > 0) {
-          // Chunk barcodes if there are too many (Supabase URL limit)
-          const chunkSize = 200; 
-          for (let i = 0; i < relevantBarcodes.length; i += chunkSize) {
-              const chunk = relevantBarcodes.slice(i, i + chunkSize);
-              const { data: chunkData, error: whErr } = await supabase
-                .from('location_inventory')
-                .select('barcode_no, qty, branch_id, rack_location')
-                .eq('branch_id', selectedBranch)
-                .in('barcode_no', chunk);
-              
-              if (!whErr && chunkData) {
-                  whData = [...whData, ...chunkData];
-              }
-          }
+        const chunkSize = 200;
+        for (let i = 0; i < relevantBarcodes.length; i += chunkSize) {
+          const chunk = relevantBarcodes.slice(i, i + chunkSize);
+
+          // location_inventory → warehouseQty (ຫຼັງສາງ)
+          const { data: whChunk, error: whErr } = await supabase
+            .from('location_inventory')
+            .select('barcode_no, qty')
+            .eq('branch_id', selectedBranch)
+            .in('barcode_no', chunk);
+          if (!whErr && whChunk) whData = [...whData, ...whChunk];
+
+          // table_dc_stock → dcQty (QTY DC Warehouse)
+          const { data: dcChunk, error: dcErr } = await supabase
+            .from('table_dc_stock')
+            .select('barcode, qty')
+            .eq('branch_id', selectedBranch)
+            .in('barcode', chunk);
+          if (!dcErr && dcChunk) dcData = [...dcData, ...dcChunk];
+        }
       }
 
-      console.group(`[StoreInventory.OPTIMIZED] ⚡ Warehouse Sync`);
-      console.log('Store items:', storeData.length);
-      console.log('Warehouse rows fetched (relevant items only):', whData.length);
-      
-      // Build barcode → sum of qty map
+      // Build warehouseMap (location_inventory)
       const warehouseMap = {};
       whData.forEach(row => {
         const bc = String(row.barcode_no || '').trim();
-        if (bc) {
-            warehouseMap[bc] = (warehouseMap[bc] || 0) + Number(row.qty || 0);
-        }
+        if (bc) warehouseMap[bc] = (warehouseMap[bc] || 0) + Number(row.qty || 0);
       });
-      console.groupEnd();
 
-      setResults((storeData || []).map((row, idx) => mapRow(row, idx, warehouseMap)));
+      // Build dcMap (table_dc_stock)
+      const dcMap = {};
+      dcData.forEach(row => {
+        const bc = String(row.barcode || '').trim();
+        if (bc) dcMap[bc] = (dcMap[bc] || 0) + Number(row.qty || 0);
+      });
+
+      console.log(`[StoreInventory] warehouse: ${whData.length} rows | DC stock: ${dcData.length} rows`);
+
+      setResults((storeData || []).map((row, idx) => mapRow(row, idx, warehouseMap, dcMap)));
     } catch (err) {
       console.error('[StoreInventory.DEBUG] ❌ Critical Error in fetchData:', err);
       toast.error('ດຶງຂໍ້ມູນຜິດພາດ: ' + err.message);
@@ -208,7 +219,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     try {
       const searchBarcode = String(formData.barcode_no).trim();
       console.group(`[StoreInventory.DEBUG] 💾 Saving New Product: "${searchBarcode}"`);
-      
+
       // Additional check to warehouse data
       console.log('Searching for warehouse QTY in location_inventory...');
       const { data: debugWh, error: debugWhErr } = await supabase
@@ -217,20 +228,20 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         .eq('branch_id', selectedBranch);
 
       if (!debugWhErr && debugWh) {
-          const match = debugWh.filter(r => String(r.barcode_no || '').trim() === searchBarcode);
-          if (match.length > 0) {
-              const totalWh = match.reduce((sum, r) => sum + Number(r.qty || 0), 0);
-              console.log(`✅ MATCH FOUND in location_inventory! Total Qty: ${totalWh}`);
-              console.log('Match details (rows):', match);
-          } else {
-              console.warn(`❌ NO MATCH found for barcode "${searchBarcode}" in branch "${selectedBranch}" of location_inventory table.`);
-              const partialMatch = debugWh.filter(r => String(r.barcode_no || '').includes(searchBarcode));
-              if (partialMatch.length > 0) {
-                  console.log('💡 Found items with SIMILAR barcode (partial match):', partialMatch);
-              }
+        const match = debugWh.filter(r => String(r.barcode_no || '').trim() === searchBarcode);
+        if (match.length > 0) {
+          const totalWh = match.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+          console.log(`✅ MATCH FOUND in location_inventory! Total Qty: ${totalWh}`);
+          console.log('Match details (rows):', match);
+        } else {
+          console.warn(`❌ NO MATCH found for barcode "${searchBarcode}" in branch "${selectedBranch}" of location_inventory table.`);
+          const partialMatch = debugWh.filter(r => String(r.barcode_no || '').includes(searchBarcode));
+          if (partialMatch.length > 0) {
+            console.log('💡 Found items with SIMILAR barcode (partial match):', partialMatch);
           }
+        }
       } else if (debugWhErr) {
-          console.error('❌ Error querying location_inventory for debug:', debugWhErr);
+        console.error('❌ Error querying location_inventory for debug:', debugWhErr);
       }
 
       const payload = {
@@ -253,26 +264,26 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       const { error } = await supabase.from('store_inventory').insert(payload);
 
       if (error) {
-          console.error('[StoreInventory.DEBUG] ❌ Supabase INSERT Error:', error);
-          throw error;
+        console.error('[StoreInventory.DEBUG] ❌ Supabase INSERT Error:', error);
+        throw error;
       }
 
       // Log to history
       await logStoreInventoryHistory({
-          actionType: 'added',
-          barcode: payload.barcode_no,
-          itemName: payload.item_name,
-          oldQty: 0,
-          newQty: payload.store_qty,
-          oldLocation: null,
-          newLocation: payload.shelf_location,
-          oldTag: null,
-          newTag: payload.product_tag,
-          oldMaxQty: null,
-          newMaxQty: payload.max_qty,
-          reason: formData.reason || 'New Item Add',
-          branchId: selectedBranch,
-          updatedBy: payload.updated_by
+        actionType: 'added',
+        barcode: payload.barcode_no,
+        itemName: payload.item_name,
+        oldQty: 0,
+        newQty: payload.store_qty,
+        oldLocation: null,
+        newLocation: payload.shelf_location,
+        oldTag: null,
+        newTag: payload.product_tag,
+        oldMaxQty: null,
+        newMaxQty: payload.max_qty,
+        reason: formData.reason || 'New Item Add',
+        branchId: selectedBranch,
+        updatedBy: payload.updated_by
       });
 
       console.log('[StoreInventory.DEBUG] ✅ Success! Refreshing data...');

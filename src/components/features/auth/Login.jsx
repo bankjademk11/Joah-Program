@@ -35,20 +35,17 @@ const Login = ({ onLogin }) => {
         setError('');
 
         try {
-            // Run API call + minimum 4s delay in parallel
-            const [result] = await Promise.all([
-                supabase
-                    .from('employees')
-                    .insert([{
-                        employee_id: regEmployeeId.trim().toUpperCase(),
-                        name: regEmployeeId.trim(),
-                        password: regPassword,
-                        role: 'staff',
-                        workplace: regWorkplace,
-                        branch_id: address
-                    }]),
-                new Promise(resolve => setTimeout(resolve, 4000))
-            ]);
+            // Run API call directly
+            const result = await supabase
+                .from('employees')
+                .insert([{
+                    employee_id: regEmployeeId.trim().toUpperCase(),
+                    name: regEmployeeId.trim(),
+                    password: regPassword,
+                    role: 'staff',
+                    workplace: regWorkplace,
+                    branch_id: address
+                }]);
 
             if (result.error) throw result.error;
 
@@ -74,15 +71,12 @@ const Login = ({ onLogin }) => {
         }
 
         try {
-            // Run API call + minimum 4s delay in parallel
-            const [{ data: employee, error: dbError }] = await Promise.all([
-                supabase
-                    .from('employees')
-                    .select('*')
-                    .ilike('employee_id', employeeId.trim())
-                    .maybeSingle(),
-                new Promise(resolve => setTimeout(resolve, 4000))
-            ]);
+            // Run API call directly
+            const { data: employee, error: dbError } = await supabase
+                .from('employees')
+                .select('*')
+                .ilike('employee_id', employeeId.trim())
+                .maybeSingle();
 
             if (dbError || !employee) {
                 throw new Error('ລະຫັດພະນັກງານບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ມີສິດເຂົ້າໃນລະບົບ');

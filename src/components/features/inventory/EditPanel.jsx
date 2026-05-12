@@ -154,6 +154,32 @@ const EditPanel = ({
 
     if (!selectedRow) return null;
 
+    // ---- DC Transfer Logic ----
+    const isNewStockReason = selectedReasonOption === t('reasons.newStock');
+    // mergeAmount (Add Amount) = qty transferred from DC when reason is New Stock In
+    const isDcTransferValid = !isNewStockReason || (mergeAmount !== '' && parseInt(mergeAmount) > 0);
+
+    const handleSave = async () => {
+        // 1. Standard update
+        if (isSplitMode) {
+            handleSplit(mergeAmount, editLocation, editReason);
+        } else if (isCloneMode) {
+            handleClone(mergeAmount, editLocation, editReason);
+        } else {
+            handleUpdate();
+        }
+        // 2. Auto-deduct DC stock if New Stock In
+        if (isNewStockReason && mergeAmount && parseInt(mergeAmount) > 0 && selectedRow?.barcode && currentBranch) {
+            const deductAmt = parseInt(mergeAmount);
+            const currentDc = selectedRow.dcQty || 0;
+            const newDcQty = Math.max(0, currentDc - deductAmt);
+            await supabase
+                .from('table_dc_stock')
+                .update({ qty: newDcQty, updated_at: new Date().toISOString() })
+                .eq('barcode', selectedRow.barcode)
+                .eq('branch_id', currentBranch);
+        }
+    };
 
     // Use allResults if available, fallback to filtered results for inspector
     const inspectorData = allResults || results || [];
@@ -460,6 +486,12 @@ const EditPanel = ({
                                         <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">
                                             {isSplitMode ? 'ແບ່ງຈຳນວນອອກ' : t('editPanel.addAmount')}
                                         </p>
+                                        {/* DC hint — only when New Stock In */}
+                                        {isNewStockReason && (
+                                            <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
+                                                ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {selectedRow.dcQty ?? 0})
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -728,16 +760,8 @@ const EditPanel = ({
                             {t('editPanel.cancel')}
                         </button>
                         <button
-                            onClick={() => {
-                                if (isSplitMode) {
-                                    handleSplit(mergeAmount, editLocation, editReason);
-                                } else if (isCloneMode) {
-                                    handleClone(mergeAmount, editLocation, editReason);
-                                } else {
-                                    handleUpdate();
-                                }
-                            }}
-                            disabled={isUpdating || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
+                            onClick={() => handleSave()}
+                            disabled={isUpdating || !isDcTransferValid || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
                             title={isCloneMode && editLocation === selectedRow?.rackLocation ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' : ''}
                             className={`px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isCloneMode
                                     ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')

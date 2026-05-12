@@ -4,7 +4,7 @@ import {
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     UploadCloud, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles, ScanLine
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, EyeOff, ClipboardList, Sparkles, ScanLine
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
@@ -55,6 +55,7 @@ const StoreResultTable = ({
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
+    const [showPendingDeductCol, setShowPendingDeductCol] = useState(false);
 
     // --- Helper: Extract & Filter Locations ---
     const uniqueLocations = useMemo(() => {
@@ -1432,6 +1433,24 @@ const StoreResultTable = ({
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.location')}</th>
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.category1')} & {t('results.category2')}</th>
                                     <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.productTagCol')}</th>
+                                    {/* ລວມທັງໝົດ = ໜ້າຮ້ານ + ຫຼັງສາງ */}
+                                    <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span>ລວມທັງໝົດຂອງສາຂາ</span>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setShowPendingDeductCol(!showPendingDeductCol); }}
+                                                className={`p-1.5 rounded-lg transition-all ${showPendingDeductCol ? 'bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-300' : 'bg-amber-100/50 dark:bg-amber-900/30 text-amber-600/50 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50'}`}
+                                                title="ສະແດງ/ເຊື່ອງ ຍອດລໍຖ້າຕັດສະຕ໋ອກ"
+                                            >
+                                                {showPendingDeductCol ? <Eye size={14} strokeWidth={2.5} /> : <EyeOff size={14} strokeWidth={2.5} />}
+                                            </button>
+                                        </div>
+                                    </th>
+                                    {showPendingDeductCol && (
+                                        <th className="px-6 py-6 text-center text-xs font-black text-rose-500 dark:text-rose-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-rose-50/50 dark:bg-rose-900/10">
+                                            ລໍຖ້າຕັດສະຕ໋ອກ<br /><span className="text-[10px] opacity-70 font-bold">Pending Deduct</span>
+                                        </th>
+                                    )}
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
@@ -1514,6 +1533,47 @@ const StoreResultTable = ({
                                                     )}
                                                 </div>
                                             </td>
+                                            {/* ລວມທັງໝົດ = ໜ້າຮ້ານ + ຫຼັງສາງ + DC */}
+                                            <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
+                                                <div className="flex flex-col items-center relative">
+                                                    <span className={`text-2xl font-black leading-none ${((row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0) - (row.pendingSalesDeduct || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                        {Math.max(0, (row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0) - (row.pendingSalesDeduct || 0))}
+                                                    </span>
+                                                    
+                                                    {/* Hover Tooltip Breakdown */}
+                                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
+                                                        <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex justify-between gap-4"><span>ໜ້າຮ້ານ (Shop):</span> <span className="font-mono">{row.qty || 0}</span></div>
+                                                                <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (WH):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
+                                                                <div className="flex justify-between gap-4"><span>DC Stock:</span> <span className="font-mono">{row.dcQty || 0}</span></div>
+                                                                <div className="border-t border-white/20 my-0.5"></div>
+                                                                <div className="flex justify-between gap-4 text-rose-400"><span>ລໍຖ້າຕັດ (Deduct):</span> <span className="font-mono">-{row.pendingSalesDeduct || 0}</span></div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
+                                                    </div>
+
+                                                    <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mt-1 flex items-center justify-center gap-1.5">
+                                                        <span>TOTAL</span>
+                                                        {(row.pendingSalesDeduct || 0) > 0 && !showPendingDeductCol && (
+                                                            <span className="text-[8px] px-1 py-0.5 rounded-sm bg-rose-100 dark:bg-rose-900/30 text-rose-500 tracking-tighter font-mono" title="ຍອດລໍຖ້າຕັດສະຕ໋ອກ">
+                                                                -{row.pendingSalesDeduct}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            {showPendingDeductCol && (
+                                                <td className="px-6 py-6 text-center bg-rose-50/30 dark:bg-rose-900/10">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-2xl font-black leading-none ${(row.pendingSalesDeduct || 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            {row.pendingSalesDeduct || 0}
+                                                        </span>
+                                                        <div className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">Sales Drop</div>
+                                                    </div>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
@@ -1529,7 +1589,15 @@ const StoreResultTable = ({
                                                     <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                            {/* QTY DC (Warehouse) */}
+                                            <td className="px-6 py-6 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-2xl font-black leading-none ${(row.dcQty ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                        {row.dcQty ?? 0}
+                                                    </span>
+                                                    <div className="text-[9px] font-black text-violet-400 uppercase tracking-widest mt-1">DC</div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-6 text-center">
                                                 <div className="flex flex-col items-center">
                                                     {row.salesQty != null ? (

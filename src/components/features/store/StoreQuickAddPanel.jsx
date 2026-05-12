@@ -36,7 +36,6 @@ const QuickAddPanel = ({
     const [selectedReasonOption, setSelectedReasonOption] = useState('');
     const [otherReasonText, setOtherReasonText] = useState('');
 
-    // Sync reason to form
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
             setQuickAddForm(prev => ({ ...prev, remarks: otherReasonText ? `Other: ${otherReasonText}` : 'Other' }));
@@ -44,6 +43,13 @@ const QuickAddPanel = ({
             setQuickAddForm(prev => ({ ...prev, remarks: selectedReasonOption }));
         }
     }, [selectedReasonOption, otherReasonText, setQuickAddForm]);
+
+    // Persist Rack Location to localStorage whenever it changes
+    useEffect(() => {
+        if (quickAddForm.rack_location) {
+            localStorage.setItem('joah_last_rack_location', quickAddForm.rack_location);
+        }
+    }, [quickAddForm.rack_location]);
 
     // Reset reason when panel opens/closes
     useEffect(() => {
@@ -337,11 +343,10 @@ const QuickAddPanel = ({
                                 <button
                                     type="button"
                                     onClick={() => setQuickAddForm(prev => ({ ...prev, product_tag: prev.product_tag === 'hook' ? '' : 'hook' }))}
-                                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${
-                                        quickAddForm.product_tag === 'hook'
+                                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'hook'
                                             ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-200 dark:shadow-violet-900/20'
                                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-900/10'
-                                    }`}
+                                        }`}
                                 >
                                     <span className="text-base">🪝</span>
                                     <div className="text-left">
@@ -357,11 +362,10 @@ const QuickAddPanel = ({
                                 <button
                                     type="button"
                                     onClick={() => setQuickAddForm(prev => ({ ...prev, product_tag: prev.product_tag === 'shelf' ? '' : 'shelf' }))}
-                                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${
-                                        quickAddForm.product_tag === 'shelf'
+                                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'shelf'
                                             ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-sm shadow-sky-200 dark:shadow-sky-900/20'
                                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-sky-300 hover:bg-sky-50/50 dark:hover:bg-sky-900/10'
-                                    }`}
+                                        }`}
                                 >
                                     <span className="text-base">📦</span>
                                     <div className="text-left">
@@ -382,6 +386,30 @@ const QuickAddPanel = ({
                                 {t('quickAdd.targetLocation')}
                                 {customMode && <span className="text-[10px] text-emerald-500 font-normal ml-2">{t('quickAdd.customMode')}</span>}
                             </p>
+
+                            {/* 🔁 Smart Rack Memory Badge */}
+                            {localStorage.getItem('joah_last_rack_location') && (
+                                <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700">
+                                    <span className="text-[11px] font-black text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                                        🔁 ເກັບຄ່າ Rack ຫຼ້າສຸດ:
+                                        <span className="font-mono bg-emerald-100 dark:bg-emerald-800 px-1.5 py-0.5 rounded-md">
+                                            {localStorage.getItem('joah_last_rack_location')}
+                                        </span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            localStorage.removeItem('joah_last_rack_location');
+                                            setQuickAddForm(prev => ({ ...prev, rack_location: '' }));
+                                        }}
+                                        className="ml-auto text-[9px] font-black text-rose-400 hover:text-rose-600 transition-colors uppercase tracking-wide"
+                                        title="ລ້າງ Rack ທີ່ຈຳໄວ້"
+                                    >
+                                        ✕ ລ້າງ
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="flex gap-2" ref={dropdownRef}>
                                 {/* CUSTOM SELECT TRIGGER */}
