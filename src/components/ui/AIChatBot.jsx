@@ -145,7 +145,7 @@ const AIChatBot = ({ onBack, currentUser }) => {
     setIsLoading(true);
 
     try {
-      const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || ''; 
+      const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b'; 
       
       if (!DEEPSEEK_API_KEY) {
         setMessages(prev => [...prev, { 
