@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -46,6 +46,7 @@ import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 import ExcelCompressor from './components/Tools/excel-compressor';
 import SalesAggregator from './components/Tools/SalesAggregator';
+import DcStockImporter from './components/Tools/DcStockImporter';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -55,6 +56,8 @@ import {
   StoreRequestIcon
 } from './components/ui/AnimatedIcons';
 
+
+import AIChatBot from './components/ui/AIChatBot';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -1081,6 +1084,27 @@ function AppContent() {
                           </button>
                         </div>
                       </div>
+                      {/* DC Stock Importer */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-indigo-500 hover:shadow-indigo-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-indigo-50 dark:bg-slate-800 relative flex items-center justify-center">
+                          <div className="p-8 rounded-[2rem] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                            <TrendingDown size={64} strokeWidth={2.5} />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                        </div>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">DC Stock Importer</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Odoo Warehouse Stock</p>
+                          </div>
+                          <button onClick={() => setStep('dc-stock-importer')}
+                            className="w-full btn-primary mt-1 group py-4 bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30 text-white border-none">
+                            <TrendingDown size={18} />
+                            <span>Open Tool</span>
+                          </button>
+                        </div>
+                      </div>
+
                     </>
                   )}
 
@@ -1109,6 +1133,29 @@ function AppContent() {
                         >
                           <BarChart3 size={18} />
                           <span>Open Dashboard</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Assistant Card (Admin Only) */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-violet-500 hover:shadow-violet-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      <div className="w-full h-44 overflow-hidden bg-violet-50 dark:bg-slate-800 relative flex items-center justify-center">
+                        <div className="p-8 rounded-[2rem] bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                          <Bot size={64} strokeWidth={2.5} />
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">AI Assistant</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Smart Warehouse Support</p>
+                        </div>
+                        <button onClick={() => setStep('ai-chat')}
+                          className="w-full btn-primary mt-1 group py-4 bg-violet-600 hover:bg-violet-700 shadow-violet-500/30 text-white border-none">
+                          <Sparkles size={18} />
+                          <span>ເຂົ້າໃຊ້ງານ AI</span>
                         </button>
                       </div>
                     </div>
@@ -1310,6 +1357,10 @@ function AppContent() {
             <SalesAggregator onBack={() => setStep('upload')} />
           )}
 
+          {step === 'dc-stock-importer' && (
+            <DcStockImporter onBack={() => setStep('upload')} />
+          )}
+
           {step === 'hq-dashboard' && isAdmin && (
             <HQCommandCenter onBack={() => setStep('upload')} />
           )}
@@ -1341,6 +1392,10 @@ function AppContent() {
               activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
               isAdmin={isAdmin}
             />
+          )}
+
+          {step === 'ai-chat' && (
+            <AIChatBot onBack={() => setStep('upload')} currentUser={user} />
           )}
 
           {step === 'results' && (
@@ -1620,8 +1675,8 @@ function AppContent() {
             }
           }}
         />
-      </div >
-    </ToastProvider >
+      </div>
+    </ToastProvider>
   );
 }
 
