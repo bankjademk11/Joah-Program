@@ -19,12 +19,12 @@ export default function DcStockImporter({ onBack }) {
   const [importResult, setImportResult] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [importBranch, setImportBranch] = useState('');
+  const [lastImportPayload, setLastImportPayload] = useState(null);
   const fileInputRef = useRef(null);
 
   // ─── Parse Excel/CSV ───────────────────────────────────────────
   const parseFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
-    if (!importBranch) { alert('⚠️ ກະລຸນາເລືອກສາຂາກ່ອນ!'); return; }
     setFile(selectedFile);
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -48,7 +48,7 @@ export default function DcStockImporter({ onBack }) {
       }
     };
     reader.readAsArrayBuffer(selectedFile);
-  }, [importBranch]);
+  }, []);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -59,6 +59,7 @@ export default function DcStockImporter({ onBack }) {
 
   // ─── Build Preview ─────────────────────────────────────────────
   const buildPreview = () => {
+    if (!importBranch) { alert('⚠️ ກະລຸນາເລືອກສາຂາທີ່ຈະ Import ກ່ອນ!'); return; }
     const agg = {};
     rawRows.forEach(row => {
       const bc = String(row[barcodeCol] || '').trim();
@@ -78,30 +79,68 @@ export default function DcStockImporter({ onBack }) {
     setIsImporting(true);
     setImportResult(null);
     try {
-      // Step 1: Delete old data for this branch
-      const { error: delErr } = await supabase
-        .from('table_dc_stock')
-        .delete()
-        .eq('branch_id', importBranch);
-      if (delErr) throw delErr;
+      // Step 1: Fetch existing data for this branch to merge quantities
+      let existingData = [];
+      let page = 0;
+      let isFetching = true;
+      while (isFetching) {
+        const { data, error: fetchErr } = await supabase
+          .from('table_dc_stock')
+          .select('id, barcode, qty')
+          .eq('branch_id', importBranch)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        
+        if (fetchErr) throw fetchErr;
+        if (data && data.length > 0) {
+          existingData = [...existingData, ...data];
+          page++;
+        } else {
+          isFetching = false;
+        }
+      }
 
-      // Step 2: Insert new data in chunks
-      const payload = previewData.map(r => ({
-        barcode: r.barcode,
-        qty: r.qty,
-        branch_id: importBranch,
-        updated_at: new Date().toISOString()
-      }));
+      // Create a map for fast lookup
+      const existingMap = {};
+      existingData.forEach(item => {
+        existingMap[item.barcode] = item;
+      });
+
+      // Step 2: Merge new data with existing data (Add Qty)
+      const addedData = [];
+      const payload = previewData.map(r => {
+        addedData.push({ barcode: r.barcode, qtyAdded: r.qty });
+        const existing = existingMap[r.barcode];
+        if (existing) {
+          return {
+            id: existing.id, // Provide ID to trigger an UPDATE
+            barcode: r.barcode,
+            qty: (existing.qty || 0) + r.qty, // Add new qty to existing qty
+            branch_id: importBranch,
+            updated_at: new Date().toISOString()
+          };
+        } else {
+          return {
+            barcode: r.barcode,
+            qty: r.qty,
+            branch_id: importBranch,
+            updated_at: new Date().toISOString()
+          };
+        }
+      });
+
+      // Step 3: Upsert merged data in chunks
       const CHUNK = 1000;
       let successCount = 0;
       for (let i = 0; i < payload.length; i += CHUNK) {
         const chunk = payload.slice(i, i + CHUNK);
-        const { error } = await supabase.from('table_dc_stock').insert(chunk);
+        // upsert updates if 'id' exists, otherwise inserts
+        const { error } = await supabase.from('table_dc_stock').upsert(chunk);
         if (error) {
           throw error;
         }
         successCount += chunk.length;
       }
+      setLastImportPayload({ branch_id: importBranch, addedData });
       setImportResult({ success: successCount, total: previewData.length, branch: importBranch });
       setStep('result');
     } catch (err) {
@@ -115,13 +154,100 @@ export default function DcStockImporter({ onBack }) {
   // ─── Clear all DC Stock ───────────────────────────────────────
   const handleClearAll = async () => {
     if (!importBranch) { alert('ກະລຸນາເລືອກສາຂາກ່ອນ'); return; }
-    if (!window.confirm(`ແນ່ໃຈບໍ? ລົບ DC Stock ສາຂາ "${importBranch}" ທັງໝົດ!`)) return;
+    
+    const pin = window.prompt(`ກະລຸນາໃສ່ PIN ເພື່ອຢືນຢັນການລົບຂໍ້ມູນສາຂາ "${importBranch}" ທັງໝົດ:`);
+    if (pin !== '248248') {
+      if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ! ການລົບຖືກຍົກເລີກ.');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('table_dc_stock').delete().eq('branch_id', importBranch);
       if (error) throw error;
-      alert('ລົບຂໍ້ມູນສຳເລັດ!');
+      alert('✅ ລົບຂໍ້ມູນສຳເລັດ!');
     } catch (err) {
-      alert('ລົບຜິດພາດ: ' + err.message);
+      alert('❌ ລົບຜິດພາດ: ' + err.message);
+    }
+  };
+
+  // ─── Rollback ─────────────────────────────────────────────────
+  const handleRollback = async () => {
+    if (!lastImportPayload) return;
+    
+    const pin = window.prompt(`ກະລຸນາໃສ່ PIN ເພື່ອຢືນຢັນການ Rollback ສາຂາ "${lastImportPayload.branch_id}":`);
+    if (pin !== '248248') {
+      if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ!');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      let currentData = [];
+      let page = 0;
+      let isFetching = true;
+      while (isFetching) {
+        const { data, error: fetchErr } = await supabase
+          .from('table_dc_stock')
+          .select('id, barcode, qty')
+          .eq('branch_id', lastImportPayload.branch_id)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        
+        if (fetchErr) throw fetchErr;
+        if (data && data.length > 0) {
+          currentData = [...currentData, ...data];
+          page++;
+        } else {
+          isFetching = false;
+        }
+      }
+      
+      const currentMap = {};
+      currentData.forEach(item => {
+        currentMap[item.barcode] = item;
+      });
+      
+      const rollbackPayload = [];
+      const deleteIds = [];
+      
+      lastImportPayload.addedData.forEach(added => {
+        const current = currentMap[added.barcode];
+        if (current) {
+          const newQty = current.qty - added.qtyAdded;
+          if (newQty <= 0) {
+             deleteIds.push(current.id);
+          } else {
+             rollbackPayload.push({
+               id: current.id,
+               barcode: current.barcode,
+               qty: newQty,
+               branch_id: lastImportPayload.branch_id,
+               updated_at: new Date().toISOString()
+             });
+          }
+        }
+      });
+      
+      // Delete 0-qty items
+      const CHUNK = 1000;
+      for (let i = 0; i < deleteIds.length; i += CHUNK) {
+        const chunk = deleteIds.slice(i, i + CHUNK);
+        await supabase.from('table_dc_stock').delete().in('id', chunk);
+      }
+      
+      // Update decreased qty items
+      for (let i = 0; i < rollbackPayload.length; i += CHUNK) {
+        const chunk = rollbackPayload.slice(i, i + CHUNK);
+        await supabase.from('table_dc_stock').upsert(chunk);
+      }
+      
+      alert('✅ Rollback ສຳເລັດ! ຍອດຖືກຫັກອອກແລ້ວ');
+      setLastImportPayload(null);
+      setStep('upload'); // Return to upload screen
+    } catch (err) {
+      console.error(err);
+      alert('❌ Rollback ຜິດພາດ: ' + err.message);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -182,8 +308,9 @@ export default function DcStockImporter({ onBack }) {
         {step === 'upload' && (
           <div className="max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div
+              onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
+              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-[2.5rem] p-16 flex flex-col items-center gap-6 cursor-pointer transition-all duration-300 ${
@@ -300,6 +427,32 @@ export default function DcStockImporter({ onBack }) {
                       {headers.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
                     <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                  </div>
+                </div>
+
+                {/* Branch Selector moved to Config Step */}
+                <div className="space-y-2 mt-4">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center text-[10px]">3</span>
+                    ເລືອກສາຂາທີ່ຈະ Import
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={importBranch}
+                      onChange={e => setImportBranch(e.target.value)}
+                      className={`w-full h-14 pl-5 pr-12 rounded-2xl border-2 font-black text-sm outline-none transition-all appearance-none cursor-pointer ${
+                        importBranch
+                          ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-400 dark:border-emerald-600 text-slate-700 dark:text-white'
+                          : 'bg-slate-50 dark:bg-slate-800 border-red-300 dark:border-red-700 text-red-400'
+                      }`}
+                    >
+                      <option value="" disabled>-- ເລືອກສາຂາ --</option>
+                      <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
+                      <option value="ສີວິໄລ">ສີວິໄລ</option>
+                      <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                      <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                    </select>
+                    <ChevronDown className={`absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none ${importBranch ? 'text-emerald-500' : 'text-red-400'}`} size={18} />
                   </div>
                 </div>
 
@@ -434,11 +587,21 @@ export default function DcStockImporter({ onBack }) {
             </div>
 
             <div className="flex flex-col gap-3 w-full">
+              {lastImportPayload && (
+                <button
+                  onClick={handleRollback}
+                  disabled={isImporting}
+                  className="w-full h-14 rounded-2xl border-2 border-rose-500 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  {isImporting ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
+                  ຍົກເລີກການນຳເຂົ້າລ່າສຸດ (Rollback)
+                </button>
+              )}
               <button
                 onClick={() => { setStep('upload'); setFile(null); setRawRows([]); setPreviewData([]); setImportResult(null); }}
                 className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
               >
-                <RotateCcw size={18} />
+                <Upload size={18} />
                 Import ໄຟລ໌ໃໝ່
               </button>
               <button

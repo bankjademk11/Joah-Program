@@ -1,8 +1,76 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, User, Sparkles, LayoutDashboard, Paperclip, FileText, Trash2, Volume2, VolumeX } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import {
+  MessageSquare, X, Send, Sparkles, LayoutDashboard,
+  Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User
+} from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
 
+const BOT_NAME = 'Joi';
+const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MB
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b';
+
+// ── Markdown Components (Claude-style) ──────────────────────
+const mdComponents = {
+  h1: ({ children }) => <h1 className="text-xl font-black text-slate-800 dark:text-white mt-4 mb-2 border-b border-slate-200 dark:border-slate-700 pb-1">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-lg font-black text-slate-800 dark:text-white mt-3 mb-1">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-base font-bold text-slate-700 dark:text-slate-200 mt-2 mb-1">{children}</h3>,
+  p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+  strong: ({ children }) => <strong className="font-black text-slate-900 dark:text-white">{children}</strong>,
+  em: ({ children }) => <em className="italic text-slate-700 dark:text-slate-300">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 my-2 text-slate-500 dark:text-slate-400 italic">{children}</blockquote>,
+  code: ({ inline, children }) => inline
+    ? <code className="bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md text-sm font-mono">{children}</code>
+    : <pre className="bg-slate-900 dark:bg-slate-950 text-green-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-700"><code>{children}</code></pre>,
+  table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-sm border-collapse rounded-xl overflow-hidden">{children}</table></div>,
+  thead: ({ children }) => <thead className="bg-blue-600 text-white">{children}</thead>,
+  th: ({ children }) => <th className="px-4 py-2 text-left font-black text-xs uppercase tracking-wider">{children}</th>,
+  td: ({ children }) => <td className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">{children}</td>,
+  tr: ({ children }) => <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">{children}</tr>,
+  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-500 underline hover:text-blue-700 transition-colors">{children}</a>,
+  hr: () => <hr className="my-4 border-slate-200 dark:border-slate-700" />,
+};
+
+// ── Thinking / Loading Animation ─────────────────────────────
+const ThinkingDots = () => (
+  <div className="flex justify-start items-end gap-3">
+    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-500 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-violet-500/30 shrink-0">
+      <Sparkles size={16} />
+    </div>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[1.5rem] rounded-bl-none px-5 py-3.5 shadow-md">
+      <div className="flex items-center gap-1.5">
+        {[0, 1, 2].map(i => (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full bg-blue-500"
+            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+          />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// ── File/Image Preview Badge ──────────────────────────────────
+const AttachmentBadge = ({ file, imagePreview, onRemove }) => (
+  <div className="absolute -top-16 left-4 flex items-center gap-2 bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700 rounded-2xl px-3 py-2 shadow-lg animate-in slide-in-from-bottom-2 duration-200 max-w-xs">
+    {imagePreview
+      ? <img src={imagePreview} alt="preview" className="w-8 h-8 rounded-lg object-cover border border-blue-200" />
+      : <FileText size={16} className="text-blue-500 shrink-0" />
+    }
+    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{file.name}</span>
+    <button onClick={onRemove} className="p-1 rounded-full hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 transition-all text-slate-400">
+      <X size={14} />
+    </button>
+  </div>
+);
+
+// ── Main Component ────────────────────────────────────────────
 const AIChatBot = ({ onBack, currentUser }) => {
   const { t } = useLanguage();
   const [messages, setMessages] = useState([]);
@@ -13,71 +81,49 @@ const AIChatBot = ({ onBack, currentUser }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [attachedFile, setAttachedFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
+  const [imagePreview, setImagePreview] = useState(null);
   const [isTTSEnabled, setIsTTSEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isTechToSpec, setIsTechToSpec] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
-  // ── Text-to-Speech ──────────────────────────────────────
+  // ── TTS ──────────────────────────────────────────────────
   const speakText = (text) => {
     if (!isTTSEnabled || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel(); // หยุดเสียงเก่าก่อน
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'th-TH'; // ภาษาไทย / ลาว
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[#*`_~]/g, ''));
+    utterance.lang = 'th-TH';
     utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
   };
+  const stopSpeaking = () => { window.speechSynthesis?.cancel(); setIsSpeaking(false); };
+  const toggleTTS = () => { if (isTTSEnabled) stopSpeaking(); setIsTTSEnabled(p => !p); };
 
-  const stopSpeaking = () => {
-    window.speechSynthesis?.cancel();
-    setIsSpeaking(false);
-  };
-
-  const toggleTTS = () => {
-    if (isTTSEnabled) stopSpeaking();
-    setIsTTSEnabled(prev => !prev);
-  };
-  // ────────────────────────────────────────────────────────
-
-  // Load History on Mount
+  // ── History ───────────────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('joah_ai_history');
     if (saved) {
       const parsed = JSON.parse(saved);
       setChatHistory(parsed);
-      if (parsed.length > 0) {
-        setCurrentChatId(parsed[0].id);
-        setMessages(parsed[0].messages);
-      } else {
-        startNewChat();
-      }
-    } else {
-      startNewChat();
-    }
+      if (parsed.length > 0) { setCurrentChatId(parsed[0].id); setMessages(parsed[0].messages); }
+      else startNewChat();
+    } else startNewChat();
   }, []);
 
-  // Save current chat to history
   useEffect(() => {
     if (messages.length > 0 && currentChatId) {
-      const updatedHistory = chatHistory.map(chat =>
-        chat.id === currentChatId ? { ...chat, messages, lastActive: Date.now() } : chat
-      );
+      const updated = chatHistory.map(c => c.id === currentChatId ? { ...c, messages, lastActive: Date.now() } : c);
       if (!chatHistory.find(c => c.id === currentChatId)) {
-        const firstUserMsg = messages.find(m => m.role === 'user')?.content || 'New Chat';
-        updatedHistory.unshift({
-          id: currentChatId,
-          title: firstUserMsg.substring(0, 30) + (firstUserMsg.length > 30 ? '...' : ''),
-          messages,
-          lastActive: Date.now()
-        });
+        const title = messages.find(m => m.role === 'user')?.content?.substring(0, 30) || 'New Chat';
+        updated.unshift({ id: currentChatId, title: title + (title.length >= 30 ? '...' : ''), messages, lastActive: Date.now() });
       }
-      setChatHistory(updatedHistory);
-      localStorage.setItem('joah_ai_history', JSON.stringify(updatedHistory));
+      setChatHistory(updated);
+      localStorage.setItem('joah_ai_history', JSON.stringify(updated));
     }
   }, [messages]);
 
@@ -85,167 +131,161 @@ const AIChatBot = ({ onBack, currentUser }) => {
     const newId = Date.now().toString();
     setCurrentChatId(newId);
     stopSpeaking();
-    const userName = currentUser?.name || currentUser?.user_metadata?.full_name || 'ທ່ານ';
-    setMessages([{
-      role: 'assistant',
-      content: `ສະບາຍດີ ທ່ານ ${userName}, ມີຫຍັງໃຫ້ Joah AI ຊ່ວຍບໍ່?`
-    }]);
-    setAttachedFile(null);
-    setFileContent('');
+    const name = currentUser?.name || currentUser?.user_metadata?.full_name || 'ທ່ານ';
+    setMessages([{ role: 'assistant', content: `ສະບາຍດີ ທ່ານ **${name}** 👋\nຂ້ອຍຊື່ **${BOT_NAME}** — AI Assistant ຂອງ Joah Inventory\nມີຫຍັງໃຫ້ຊ່ວຍບໍ່? ສາມາດສົ່ງຂໍ້ຄວາມ, ໄຟລ໌ ຫຼື ຮູບພາບໄດ້ເລີຍ 📎` }]);
+    setAttachedFile(null); setFileContent(''); setImagePreview(null);
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+  const loadChat = (chat) => { stopSpeaking(); setCurrentChatId(chat.id); setMessages(chat.messages); setAttachedFile(null); setFileContent(''); setImagePreview(null); };
+  const deleteChat = (e, id) => { e.stopPropagation(); const u = chatHistory.filter(c => c.id !== id); setChatHistory(u); localStorage.setItem('joah_ai_history', JSON.stringify(u)); if (currentChatId === id) startNewChat(); };
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+
+  // ── File/Image Handler ────────────────────────────────────
+  const processFile = useCallback(async (file) => {
     if (!file) return;
+    if (file.size > MAX_FILE_BYTES) { alert(`ขนาดไฟล์ต้องไม่เกิน 1MB (ไฟล์นี้: ${(file.size / 1024 / 1024).toFixed(2)}MB)`); return; }
     setAttachedFile(file);
-    setIsLoading(true);
-    try {
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        const workbook = await readExcelFile(file);
-        const firstSheetName = workbook.SheetNames[0];
-        const jsonData = sheetToJSON(workbook, firstSheetName);
-        const textPreview = jsonData.slice(0, 50).map(row => JSON.stringify(row)).join('\n');
-        setFileContent(`[Excel File Content - First 50 Rows]:\n${textPreview}`);
-      } else {
-        const text = await file.text();
-        setFileContent(`[File Content]:\n${text.substring(0, 5000)}`);
-      }
-    } catch (error) {
-      console.error('File Read Error:', error);
-      alert('Error reading file. Please use .xlsx or .txt');
-      setAttachedFile(null);
-    } finally {
-      setIsLoading(false);
+    const isImage = file.type.startsWith('image/');
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => { setImagePreview(e.target.result); setFileContent(''); };
+      reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
+      setIsLoading(true);
+      try {
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          const wb = await readExcelFile(file);
+          const json = sheetToJSON(wb, wb.SheetNames[0]);
+          setFileContent(`[Excel - First 50 rows]:\n${json.slice(0, 50).map(r => JSON.stringify(r)).join('\n')}`);
+        } else {
+          const text = await file.text();
+          setFileContent(`[File Content]:\n${text.substring(0, 5000)}`);
+        }
+      } catch { alert('ไม่สามารถอ่านไฟล์ได้'); setAttachedFile(null); }
+      finally { setIsLoading(false); }
     }
-  };
+  }, []);
 
-  const loadChat = (chat) => {
-    stopSpeaking();
-    setCurrentChatId(chat.id);
-    setMessages(chat.messages);
-    setAttachedFile(null);
-    setFileContent('');
-  };
+  const handleFileChange = (e) => processFile(e.target.files[0]);
 
-  const deleteChat = (e, id) => {
-    e.stopPropagation();
-    const updated = chatHistory.filter(c => c.id !== id);
-    setChatHistory(updated);
-    localStorage.setItem('joah_ai_history', JSON.stringify(updated));
-    if (currentChatId === id) startNewChat();
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // ── Paste Image from Clipboard ────────────────────────────
+  const handlePaste = useCallback((e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        processFile(item.getAsFile());
+        return;
+      }
+    }
+  }, [processFile]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
 
+  // ── Auto-resize textarea ──────────────────────────────────
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
+  }, [input]);
+
+  // ── Send Message ──────────────────────────────────────────
   const handleSend = async () => {
     if (!input.trim() && !attachedFile) return;
     stopSpeaking();
 
-    let finalPrompt = input;
-    if (fileContent) {
-      finalPrompt = `I have attached a file named "${attachedFile.name}". Here is the content:\n\n${fileContent}\n\nUser Question: ${input || 'Please summarize this file.'}`;
-    }
-
-    const userMessage = {
+    // Build user message for display
+    const userMsg = {
       role: 'user',
-      content: input || `Uploaded: ${attachedFile?.name}`,
+      content: input || (attachedFile ? `📎 ${attachedFile.name}` : ''),
       fileName: attachedFile?.name,
-      hasFile: !!attachedFile
+      hasFile: !!attachedFile && !imagePreview,
+      imagePreview: imagePreview || null
     };
-
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput('');
-    setAttachedFile(null);
-    setFileContent('');
+    setMessages(prev => [...prev, userMsg]);
+    setInput(''); setAttachedFile(null); setFileContent(''); setImagePreview(null);
     setIsLoading(true);
 
     try {
-      const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b';
+      // Build system prompt — inject Tech to Spec mode if enabled
+      const techSpecExtra = isTechToSpec
+        ? `\n\nTECH TO SPEC MODE ENABLED: Structure every response as a technical specification document. Use headings, bullet points, tables, and code blocks where appropriate. Be precise, detailed, and engineering-focused.`
+        : '';
+      const systemPrompt = `You are ${BOT_NAME}, a smart and friendly AI assistant built for Joah Inventory system, created by Santisouk Laxayphone. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Always respond in the same language the user writes in. Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
 
-      if (!DEEPSEEK_API_KEY) {
-        setMessages(prev => [...prev, { role: 'assistant', content: '❌ Error: API Key not found.' }]);
-        setIsLoading(false);
-        return;
+      // Build API messages — DeepSeek chat does NOT support image_url, strip images from history
+      const apiHistory = messages.slice(-10).map(m => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : ''
+      }));
+
+      // Build current user content
+      let userContent;
+      if (userMsg.imagePreview) {
+        // DeepSeek doesn't support vision — embed image as base64 text context
+        const base64Data = userMsg.imagePreview.split(',')[1] || '';
+        userContent = `[User attached an image: ${userMsg.fileName || 'image'}]\nImage data (base64, first 200 chars): ${base64Data.substring(0, 200)}...\n\nNote: You cannot see the actual image. Acknowledge the image was shared and ask the user to describe what they need help with regarding it, or answer their text question if provided.\n\nUser question: ${input || '(No text provided — ask them to describe the image)'}`;
+      } else if (fileContent) {
+        userContent = `I attached a file: "${userMsg.fileName || 'file'}"\n\n${fileContent}\n\nQuestion: ${input || 'Please summarize this file.'}`;
+      } else {
+        userContent = input;
       }
 
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
         body: JSON.stringify({
           model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are Joah AI, an intelligent and friendly assistant developed by Santisouk Laxayphone. 
-              Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
-              Current Time: ${new Date().toLocaleTimeString('en-US', { hour12: false })}.
-              You can process file content provided in the prompt. If a user provides file data, analyze it carefully. 
-              IMPORTANT: Always state you are Joah AI created by Santisouk Laxayphone. Never mention DeepSeek.`
-            },
-            ...messages.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: finalPrompt }
-          ],
+          messages: [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: userContent }],
           temperature: 0.8
         })
       });
 
-      const data = await response.json();
+      const data = await res.json();
       if (data.choices?.[0]) {
-        const aiMessage = data.choices[0].message;
-        setMessages(prev => [...prev, aiMessage]);
-        // 🔊 Auto-speak if TTS is ON
-        if (isTTSEnabled) {
-          speakText(aiMessage.content);
-        }
+        const aiMsg = data.choices[0].message;
+        setMessages(prev => [...prev, aiMsg]);
+        if (isTTSEnabled) speakText(aiMsg.content);
+      } else {
+        throw new Error(data.error?.message || 'No response');
       }
-    } catch (error) {
-      console.error('Chat Error:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'ຂໍອະໄພ, ມີຂໍ້ຜິດພາດບາງຢ່າງ.' }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `❌ ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ: ${err.message}` }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="w-full h-[calc(100vh-120px)] flex animate-fade-in gap-4">
+    <div className="w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300">
+      <style>{`@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }`}</style>
+
       {/* Sidebar */}
-      <div className={`transition-all duration-500 overflow-hidden bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-[2.5rem] flex flex-col ${isSidebarOpen ? 'w-80 p-6' : 'w-0 p-0'}`}>
-        <div className="flex items-center justify-between mb-8 whitespace-nowrap">
-          <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Recent Chats</h3>
-          <button onClick={startNewChat} className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">
-            <Sparkles size={18} />
+      <div className={`transition-all duration-500 overflow-hidden bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5' : 'w-0 p-0'}`}>
+        <div className="flex items-center justify-between mb-6 whitespace-nowrap">
+          <div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Chat History</h3>
+          </div>
+          <button onClick={startNewChat} className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95">
+            <Sparkles size={16} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
-          {chatHistory.map((chat) => (
-            <div
-              key={chat.id}
-              onClick={() => loadChat(chat)}
-              className={`group p-4 rounded-2xl cursor-pointer transition-all border ${
-                currentChatId === chat.id
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                  : 'bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <MessageSquare size={16} className={currentChatId === chat.id ? 'text-blue-500' : 'text-slate-400'} />
-                  <span className={`text-sm font-bold truncate ${currentChatId === chat.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                    {chat.title}
-                  </span>
+        <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-hide">
+          {chatHistory.map(chat => (
+            <div key={chat.id} onClick={() => loadChat(chat)}
+              className={`group p-3.5 rounded-2xl cursor-pointer transition-all border text-sm ${currentChatId === chat.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <MessageSquare size={14} className={currentChatId === chat.id ? 'text-blue-500 shrink-0' : 'text-slate-400 shrink-0'} />
+                  <span className={`font-bold truncate ${currentChatId === chat.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>{chat.title}</span>
                 </div>
-                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all">
-                  <X size={14} />
+                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all text-slate-400 shrink-0">
+                  <X size={12} />
                 </button>
               </div>
             </div>
@@ -253,136 +293,115 @@ const AIChatBot = ({ onBack, currentUser }) => {
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 px-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500"
-            >
-              <LayoutDashboard size={20} />
+            <button onClick={() => setIsSidebarOpen(p => !p)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-all">
+              <LayoutDashboard size={18} />
             </button>
-            <button
-              onClick={onBack}
-              className="px-4 py-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-sm font-bold text-slate-500"
-            >
-              Close AI
+            <button onClick={onBack} className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
+              ✕ Close
             </button>
-
-            {/* TTS Toggle Button */}
+            {/* Tech to Spec Toggle */}
             <button
-              onClick={toggleTTS}
-              title={isTTSEnabled ? 'ปิด Text-to-Speech' : 'เปิด Text-to-Speech'}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                isTTSEnabled
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 animate-pulse'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'
+              onClick={() => setIsTechToSpec(p => !p)}
+              title={isTechToSpec ? 'ปิด Tech to Spec' : 'เปิด Tech to Spec Mode'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                isTechToSpec
+                  ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 scale-105'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600'
               }`}
             >
-              {isTTSEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              <span className="hidden sm:inline">{isTTSEnabled ? (isSpeaking ? 'ກຳລັງອ່ານ...' : 'TTS ON') : 'TTS OFF'}</span>
+              <span>⚙️</span>
+              <span className="hidden sm:inline">Tech to Spec</span>
+              {isTechToSpec && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
             </button>
           </div>
-
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-500 to-pink-500">Joah AI</h2>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 p-[2px]">
-              <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center">
-                <Sparkles size={20} className="text-blue-600" />
+            <button onClick={toggleTTS} title={isTTSEnabled ? 'ปิด TTS' : 'เปิด TTS'}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isTTSEnabled ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+              {isTTSEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              <span className="hidden sm:inline">{isTTSEnabled ? (isSpeaking ? 'Reading...' : 'TTS ON') : 'TTS'}</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 via-blue-500 to-cyan-400 p-[2px] shadow-lg shadow-blue-500/20">
+                <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center">
+                  <Sparkles size={14} className="text-blue-500" />
+                </div>
+              </div>
+              <div>
+                <h2 className="text-base font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-violet-500 to-cyan-500">{BOT_NAME}</h2>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest -mt-0.5">Joah Intelligence</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-12 space-y-8 scrollbar-hide pb-10">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 scrollbar-hide">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-              <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                  m.role === 'user' ? 'bg-slate-200 dark:bg-slate-800' : 'bg-gradient-to-tr from-blue-500 to-purple-600 text-white'
-                }`}>
-                  {m.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+              <div className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                {/* Avatar */}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-1 shadow-sm ${m.role === 'user' ? 'bg-slate-200 dark:bg-slate-700' : 'bg-gradient-to-tr from-violet-500 to-blue-500 text-white shadow-blue-500/20'}`}>
+                  {m.role === 'user' ? <User size={16} /> : <Sparkles size={14} />}
                 </div>
-                <div className={`mt-1 text-[15px] leading-relaxed flex flex-col gap-2 ${
-                  m.role === 'user'
-                    ? 'bg-slate-100 dark:bg-slate-800 p-4 rounded-[1.5rem] rounded-tr-none text-slate-800 dark:text-slate-200'
-                    : 'text-slate-800 dark:text-slate-100 font-medium whitespace-pre-wrap'
-                }`}>
+                {/* Bubble */}
+                <div className={`text-sm leading-relaxed ${m.role === 'user'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-5 py-3.5 rounded-[1.5rem] rounded-tr-none shadow-sm'
+                    : 'text-slate-800 dark:text-slate-100 prose prose-sm dark:prose-invert max-w-none'
+                  }`}>
+                  {m.imagePreview && <img src={m.imagePreview} alt="attachment" className="max-h-48 rounded-2xl mb-2 border border-slate-200 dark:border-slate-700 object-contain" />}
                   {m.hasFile && (
-                    <div className="flex items-center gap-2 p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold mb-1">
-                      <FileText size={14} />
-                      <span className="truncate max-w-[200px]">{m.fileName}</span>
+                    <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 text-blue-600 text-xs font-bold">
+                      <FileText size={12} /> <span>{m.fileName}</span>
                     </div>
                   )}
-                  {m.content}
-                  {/* Speaker icon on AI messages */}
+                  {m.role === 'assistant'
+                    ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+                    : <span>{m.content}</span>
+                  }
                   {m.role === 'assistant' && (
-                    <button
-                      onClick={() => speakText(m.content)}
-                      className="self-start mt-1 p-1.5 rounded-full text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
-                      title="ฟังข้อความนี้"
-                    >
-                      <Volume2 size={14} />
+                    <button onClick={() => speakText(m.content)} className="mt-2 p-1.5 rounded-full text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="ฟัง">
+                      <Volume2 size={13} />
                     </button>
                   )}
                 </div>
               </div>
             </div>
           ))}
-          {isLoading && (
-            <div className="flex justify-start items-center gap-4 animate-pulse">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 flex items-center justify-center text-white">
-                <Sparkles size={18} className="animate-spin" />
-              </div>
-              <div className="h-4 w-48 bg-slate-100 dark:bg-slate-800 rounded-full"></div>
-            </div>
-          )}
+          {isLoading && <ThinkingDots />}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="px-4 pb-8">
-          <div className="max-w-3xl mx-auto relative group">
-            {attachedFile && (
-              <div className="absolute -top-14 left-6 flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-blue-500/30 rounded-2xl shadow-lg animate-fade-in-up">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600">
-                  <FileText size={18} />
-                </div>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate max-w-[150px]">{attachedFile.name}</span>
-                <button onClick={() => { setAttachedFile(null); setFileContent(''); }} className="p-1 hover:text-rose-500 transition-colors">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )}
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-[2.5rem] opacity-20 blur-lg group-focus-within:opacity-40 transition-opacity"></div>
-            <div className="relative flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-xl p-2 pl-6">
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls,.txt,.csv" className="hidden" />
-              <button onClick={() => fileInputRef.current.click()} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                <Paperclip size={20} />
+        {/* Input */}
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="max-w-3xl mx-auto relative">
+            {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setFileContent(''); setImagePreview(null); }} />}
+            <div className="relative flex items-end bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-[1.5rem] shadow-lg focus-within:border-blue-400 dark:focus-within:border-blue-600 focus-within:shadow-blue-500/10 transition-all p-2 pl-4 gap-2">
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls,.txt,.csv,.png,.jpg,.jpeg,.webp,.gif" className="hidden" />
+              <button onClick={() => fileInputRef.current.click()} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 transition-all shrink-0 mb-0.5" title="แนบไฟล์">
+                {imagePreview ? <Image size={18} className="text-blue-500" /> : <Paperclip size={18} />}
               </button>
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Enter a prompt here..."
-                className="flex-1 h-12 bg-transparent outline-none text-slate-800 dark:text-white font-medium ml-2"
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="ພິມຂໍ້ຄວາມ... (Shift+Enter ຂຶ້ນບັນທັດໃໝ່, ວາງຮູບ Ctrl+V)"
+                rows={1}
+                className="flex-1 bg-transparent outline-none text-slate-800 dark:text-white text-sm font-medium resize-none leading-relaxed py-2 scrollbar-hide placeholder:text-slate-400"
+                style={{ maxHeight: 160 }}
               />
-              <button
-                onClick={handleSend}
-                disabled={isLoading || (!input.trim() && !attachedFile)}
-                className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${
-                  (input.trim() || attachedFile) ? 'bg-blue-600 text-white shadow-lg active:scale-90' : 'text-slate-300'
-                }`}
-              >
-                <Send size={20} />
+              <button onClick={handleSend} disabled={isLoading || (!input.trim() && !attachedFile)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 mb-0.5 ${(input.trim() || attachedFile) && !isLoading ? 'bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-105 active:scale-95' : 'text-slate-300 cursor-not-allowed'}`}>
+                <Send size={18} />
               </button>
             </div>
-            <p className="text-center text-[10px] text-slate-400 mt-4 font-medium">
-              Joah AI · Translation · File Analysis · TTS
+            <p className="text-center text-[10px] text-slate-400 mt-2 font-medium tracking-wide">
+              {BOT_NAME} · Joah Intelligence · PNG/Image · Markdown · TTS · วาง Ctrl+V
             </p>
           </div>
         </div>

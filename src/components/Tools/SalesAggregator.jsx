@@ -30,6 +30,7 @@ export default function SalesAggregator({ onBack }) {
   // --- Import to Store Inventory ---
   const [showImportModal, setShowImportModal] = useState(false);
   const [importBranch, setImportBranch] = useState('ໂພນສີນວນ');
+  const [importMode, setImportMode] = useState('deduct'); // deduct | history_only
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
@@ -167,23 +168,109 @@ export default function SalesAggregator({ onBack }) {
         qty: Math.round(item.qty)
       }));
 
-      // Call the Supabase RPC function for bulk import
-      const { data, error } = await supabase.rpc('bulk_import_sales', {
-        p_branch_id: importBranch,
-        p_sales_data: formattedData,
-        p_imported_by: importedBy
-      });
+      if (importMode === 'deduct') {
+        // Call the Supabase RPC function for bulk import
+        const { data, error } = await supabase.rpc('bulk_import_sales', {
+          p_branch_id: importBranch,
+          p_sales_data: formattedData,
+          p_imported_by: importedBy
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setImportResult({ 
-        updated: data?.updated || 0, 
-        notFound: data?.notFound || 0, 
-        errors: 0 
-      });
+        setImportResult({ 
+          updated: data?.updated || 0, 
+          notFound: data?.notFound || 0, 
+          errors: 0,
+          mode: 'deduct'
+        });
+      } else {
+        // Mode: History Only — Update sales_qty in store_inventory WITHOUT touching store_qty
+        
+        // Step 1: Fetch all existing store_inventory records for this branch
+        let existingData = [];
+        let isFetching = true;
+        let rangeStart = 0;
+        const RANGE_SIZE = 1000;
+        while (isFetching) {
+          const { data: chunk, error } = await supabase
+            .from('store_inventory')
+            .select('id, barcode_no, sales_qty')
+            .eq('branch_id', importBranch)
+            .range(rangeStart, rangeStart + RANGE_SIZE - 1);
+          if (error) throw error;
+          if (chunk && chunk.length > 0) {
+            existingData = existingData.concat(chunk);
+            rangeStart += RANGE_SIZE;
+            if (chunk.length < RANGE_SIZE) isFetching = false;
+          } else {
+            isFetching = false;
+          }
+        }
+
+        // Step 2: Build a map barcode -> {id, sales_qty}
+        const existingMap = {};
+        existingData.forEach(item => {
+          existingMap[item.barcode_no] = item;
+        });
+
+        // Step 3: Build update list — add to sales_qty only, do NOT change store_qty
+        let updatedCount = 0;
+        let notFoundCount = 0;
+        const updateList = []; // [{id, newSalesQty}]
+        for (const item of formattedData) {
+          const existing = existingMap[item.barcode];
+          if (existing) {
+            updateList.push({
+              id: existing.id,
+              sales_qty: (existing.sales_qty || 0) + item.qty
+            });
+            updatedCount++;
+          } else {
+            notFoundCount++;
+          }
+        }
+
+        // Step 4: Update sales_qty using individual update calls batched in parallel chunks
+        // We use .update().eq('id') to safely update ONLY sales_qty without touching other columns
+        const CHUNK = 50; // parallel batch size
+        for (let i = 0; i < updateList.length; i += CHUNK) {
+          const chunk = updateList.slice(i, i + CHUNK);
+          await Promise.all(
+            chunk.map(({ id, sales_qty }) =>
+              supabase
+                .from('store_inventory')
+                .update({ sales_qty })
+                .eq('id', id)
+            )
+          );
+        }
+
+        // Step 5: Log to store_sales_log for history tracking
+        const timestamp = new Date().toISOString();
+        const logPayload = formattedData.map(item => ({
+          barcode_no: item.barcode,
+          sales_qty: item.qty,
+          import_date: timestamp,
+          branch_id: importBranch,
+          imported_by: importedBy
+        }));
+        for (let i = 0; i < logPayload.length; i += CHUNK) {
+          const chunk = logPayload.slice(i, i + CHUNK);
+          const { error } = await supabase.from('store_sales_log').insert(chunk);
+          if (error) throw error;
+        }
+
+        setImportResult({ 
+          updated: updatedCount, 
+          notFound: notFoundCount, 
+          errors: 0,
+          mode: 'history_only'
+        });
+      }
     } catch (err) {
       console.error('Import error:', err);
-      setImportResult({ updated: 0, notFound: 0, errors: aggData.length });
+      setImportResult({ updated: 0, notFound: 0, errors: aggData.length, mode: importMode });
     } finally {
       setIsImporting(false);
     }
@@ -864,7 +951,7 @@ export default function SalesAggregator({ onBack }) {
 
             <div className="mb-6">
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">ເລືອກສາຂາ</label>
-              <div className="relative">
+              <div className="relative mb-4">
                 <select
                   value={importBranch}
                   onChange={(e) => setImportBranch(e.target.value)}
@@ -876,36 +963,82 @@ export default function SalesAggregator({ onBack }) {
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
               </div>
+
+              {!importResult && (
+                <>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">ຮູບແບບການ Import</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setImportMode('deduct')}
+                      className={`h-14 rounded-2xl border-2 font-black text-xs flex flex-col items-center justify-center transition-all ${
+                        importMode === 'deduct'
+                          ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-md shadow-emerald-500/10'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:border-emerald-300'
+                      }`}
+                    >
+                      <span>ຕັດສະຕ໋ອກ</span>
+                      <span className="text-[10px] opacity-70">(ລົບຈຳນວນ)</span>
+                    </button>
+                    <button
+                      onClick={() => setImportMode('history_only')}
+                      className={`h-14 rounded-2xl border-2 font-black text-xs flex flex-col items-center justify-center transition-all ${
+                        importMode === 'history_only'
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400 shadow-md shadow-blue-500/10'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:border-blue-300'
+                      }`}
+                    >
+                      <span>ບັນທຶກປະຫວັດຢ່າງດຽວ</span>
+                      <span className="text-[10px] opacity-70">(ບໍ່ລົບຈຳນວນ)</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
-            {!importResult && !isImporting && (
-              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-6">
+            {!importResult && !isImporting && importMode === 'deduct' && (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-6 animate-in fade-in zoom-in-95 duration-200">
                 <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
-                  ⚠️ ຈະບວກເພີ່ມ <strong>sales_qty</strong> ໃນ store_inventory ສະເພາະ Barcode ທີ່ມີພ້ອມໄວ້ແລ້ວ. Barcode ທີ່ບໍ່ມີໃນລາຍການຈະຖືກຂ້າມ.
+                  ⚠️ <strong>ຕັດສະຕ໋ອກ:</strong> ຈະບວກເພີ່ມ <strong>sales_qty</strong> ໃນ store_inventory ສະເພາະ Barcode ທີ່ມີແລ້ວ. ອັນທີ່ບໍ່ມີຈະຖືກຂ້າມ.
+                </p>
+              </div>
+            )}
+            {!importResult && !isImporting && importMode === 'history_only' && (
+              <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 mb-6 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">
+                  ℹ️ <strong>ບັນທຶກປະຫວັດຢ່າງດຽວ:</strong> ຈະບັນທຶກເຂົ້າໜ້າ History ເທົ່ານັ້ນ. ຈະບໍ່ໄປຫັກຈຳນວນສິນຄ້າໃນສະຕ໋ອກ.
                 </p>
               </div>
             )}
 
             {importResult && (
-              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 mb-6 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <div className={`p-4 rounded-2xl border mb-6 space-y-3 ${importResult.mode === 'history_only' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'}`}>
+                <div className={`flex items-center gap-2 ${importResult.mode === 'history_only' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                   <CheckCircle2 size={18} />
-                  <span className="font-black text-sm">ນຳເຂົ້າສຳເລັດ!</span>
+                  <span className="font-black text-sm">
+                    {importResult.mode === 'history_only' ? 'ບັນທຶກປະຫວັດສຳເລັດ!' : 'ນຳເຂົ້າສຳເລັດ!'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
-                    <p className="text-2xl font-black text-emerald-600">{importResult.updated}</p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Updated</p>
+                {importResult.mode === 'deduct' ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                      <p className="text-2xl font-black text-emerald-600">{importResult.updated}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Updated</p>
+                    </div>
+                    <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                      <p className="text-2xl font-black text-amber-500">{importResult.notFound}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Not Found</p>
+                    </div>
+                    <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
+                      <p className="text-2xl font-black text-rose-500">{importResult.errors}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Errors</p>
+                    </div>
                   </div>
-                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
-                    <p className="text-2xl font-black text-amber-500">{importResult.notFound}</p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Not Found</p>
+                ) : (
+                  <div className="text-center p-4 rounded-xl bg-white dark:bg-slate-800 border border-blue-100 dark:border-blue-800">
+                    <p className="text-3xl font-black text-blue-600">{importResult.updated.toLocaleString()}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase mt-1">ລາຍການຖືກບັນທຶກລົງປະຫວັດ</p>
                   </div>
-                  <div className="text-center p-3 rounded-xl bg-white dark:bg-slate-800">
-                    <p className="text-2xl font-black text-rose-500">{importResult.errors}</p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Errors</p>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
