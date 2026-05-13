@@ -90,12 +90,30 @@ const AIChatBot = ({ onBack, currentUser }) => {
   const textareaRef = useRef(null);
 
   // ── TTS ──────────────────────────────────────────────────
-  const speakText = (text) => {
-    if (!isTTSEnabled || !window.speechSynthesis) return;
+  const speakText = (text, forceSpeak = false) => {
+    if (!window.speechSynthesis) return;
+    // forceSpeak=true: always speak (per-message button)
+    // forceSpeak=false: only speak when TTS toggle is ON (auto-speak)
+    if (!forceSpeak && !isTTSEnabled) return;
+
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[#*`_~]/g, ''));
-    utterance.lang = 'th-TH';
+    const clean = text.replace(/[#*`_~\[\]()>]/g, '').substring(0, 2000);
+    const utterance = new SpeechSynthesisUtterance(clean);
     utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    // Smart voice selection: try preferred langs, fallback to any available
+    const tryLangs = ['th-TH', 'th', 'lo-LA', 'en-US'];
+    const voices = window.speechSynthesis.getVoices();
+    let picked = null;
+    for (const lang of tryLangs) {
+      picked = voices.find(v => v.lang === lang || v.lang.startsWith(lang.split('-')[0]));
+      if (picked) break;
+    }
+    if (picked) utterance.voice = picked;
+    // If no voice found, browser will use its default voice
+
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
@@ -212,11 +230,21 @@ const AIChatBot = ({ onBack, currentUser }) => {
     setIsLoading(true);
 
     try {
-      // Build system prompt — inject Tech to Spec mode if enabled
+      // Detect language from the current user message
+      const userText = input || '';
+      const isLao = /[\u0E80-\u0EFF]/.test(userText);
+      const isThai = /[\u0E00-\u0E7F]/.test(userText);
+      const isEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;@#]+$/.test(userText.trim());
+      const detectedLang = isLao ? 'Lao (ພາສາລາວ)' : isThai ? 'Thai (ภาษาไทย)' : isEnglish ? 'English' : 'the same language as the user message';
+
       const techSpecExtra = isTechToSpec
         ? `\n\nTECH TO SPEC MODE ENABLED: Structure every response as a technical specification document. Use headings, bullet points, tables, and code blocks where appropriate. Be precise, detailed, and engineering-focused.`
         : '';
-      const systemPrompt = `You are ${BOT_NAME}, a smart and friendly AI assistant built for Joah Inventory system, created by Santisouk Laxayphone. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Always respond in the same language the user writes in. Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
+      const systemPrompt = `You are ${BOT_NAME}, a smart and friendly AI assistant built for Joah Inventory system, created by Santisouk Laxayphone. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+
+CRITICAL LANGUAGE RULE: You MUST reply in ${detectedLang}. Detect the language from the user's latest message and respond ONLY in that language. Do NOT switch languages. Do NOT default to Lao unless the user writes in Lao.
+
+Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
 
       // Build API messages — DeepSeek chat does NOT support image_url, strip images from history
       const apiHistory = messages.slice(-10).map(m => ({
@@ -364,7 +392,7 @@ const AIChatBot = ({ onBack, currentUser }) => {
                     : <span>{m.content}</span>
                   }
                   {m.role === 'assistant' && (
-                    <button onClick={() => speakText(m.content)} className="mt-2 p-1.5 rounded-full text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="ฟัง">
+                    <button onClick={() => speakText(m.content, true)} className="mt-2 p-1.5 rounded-full text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="ฟังข้อความนี้">
                       <Volume2 size={13} />
                     </button>
                   )}
