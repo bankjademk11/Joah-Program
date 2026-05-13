@@ -11,6 +11,7 @@ import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
 const BOT_NAME = 'Joi';
 const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MB
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // ── Markdown Components (Claude-style) ──────────────────────
 const mdComponents = {
@@ -246,35 +247,65 @@ CRITICAL LANGUAGE RULE: You MUST reply in ${detectedLang}. Detect the language f
 
 Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
 
-      // Build API messages — DeepSeek chat does NOT support image_url, strip images from history
-      const apiHistory = messages.slice(-10).map(m => ({
-        role: m.role,
-        content: typeof m.content === 'string' ? m.content : ''
-      }));
-
-      // Build current user content
-      let userContent;
-      if (userMsg.imagePreview) {
-        // DeepSeek doesn't support vision — embed image as base64 text context
+      let data;
+      if (userMsg.imagePreview && GEMINI_API_KEY) {
+        // ── Use Gemini for Images ──
         const base64Data = userMsg.imagePreview.split(',')[1] || '';
-        userContent = `[User attached an image: ${userMsg.fileName || 'image'}]\nImage data (base64, first 200 chars): ${base64Data.substring(0, 200)}...\n\nNote: You cannot see the actual image. Acknowledge the image was shared and ask the user to describe what they need help with regarding it, or answer their text question if provided.\n\nUser question: ${input || '(No text provided — ask them to describe the image)'}`;
-      } else if (fileContent) {
-        userContent = `I attached a file: "${userMsg.fileName || 'file'}"\n\n${fileContent}\n\nQuestion: ${input || 'Please summarize this file.'}`;
+        const mimeType = userMsg.imagePreview.split(';')[0].split(':')[1] || 'image/png';
+        
+        const geminiPayload = {
+          contents: [{
+            parts: [
+              { text: `${systemPrompt}\n\nUser Question: ${input || 'Please describe this image.'}` },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+          }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 2048 }
+        };
+
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiPayload)
+        });
+
+        const geminiData = await res.json();
+        if (geminiData.candidates?.[0]?.content?.parts?.[0]?.text) {
+          data = { choices: [{ message: { role: 'assistant', content: geminiData.candidates[0].content.parts[0].text } }] };
+        } else {
+          throw new Error(geminiData.error?.message || 'Gemini error');
+        }
       } else {
-        userContent = input;
+        // ── Use DeepSeek for Text/Files ──
+        // Build API messages — DeepSeek chat does NOT support image_url, strip images from history
+        const apiHistory = messages.slice(-10).map(m => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : ''
+        }));
+
+        let userContent;
+        if (userMsg.imagePreview) {
+          // Fallback if Gemini key is missing
+          const base64Data = userMsg.imagePreview.split(',')[1] || '';
+          userContent = `[User attached an image: ${userMsg.fileName || 'image'}]\nImage data (base64, first 200 chars): ${base64Data.substring(0, 200)}...\n\nNote: DeepSeek cannot see images. Acknowledge the image and ask for description.\n\nUser question: ${input || '(No text provided)'}`;
+        } else if (fileContent) {
+          userContent = `I attached a file: "${userMsg.fileName || 'file'}"\n\n${fileContent}\n\nQuestion: ${input || 'Please summarize this file.'}`;
+        } else {
+          userContent = input;
+        }
+
+        const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: userContent }],
+            temperature: 0.8
+          })
+        });
+        data = await res.json();
       }
 
-      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: userContent }],
-          temperature: 0.8
-        })
-      });
-
-      const data = await res.json();
       if (data.choices?.[0]) {
         const aiMsg = data.choices[0].message;
         setMessages(prev => [...prev, aiMsg]);
