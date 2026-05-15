@@ -118,7 +118,6 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       warehouseQty: warehouseMap[String(row.barcode_no).trim()] ?? 0,
       dcQty: dcMap[String(row.barcode_no).trim()] ?? 0,
       salesQty: row.sales_qty ?? null,
-      pendingSalesDeduct: row.pending_sales_deduct ?? 0,
       category1: masterCategory,
       category2: row.category_2_actual || '',
       status: status,

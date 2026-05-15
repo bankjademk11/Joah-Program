@@ -1,12 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   MessageSquare, X, Send, Sparkles, LayoutDashboard,
-  Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User
+  Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User,
+  Plus, Settings
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
+import { supabase } from '../../utils/supabaseClient';
 
 const BOT_NAME = 'Joi';
 const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MB
@@ -64,85 +66,74 @@ const AttachmentBadge = ({ file, imagePreview, onRemove }) => (
       ? <img src={imagePreview} alt="preview" className="w-8 h-8 rounded-lg object-cover border border-blue-200" />
       : <FileText size={16} className="text-blue-500 shrink-0" />
     }
-    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{file.name}</span>
-    <button onClick={onRemove} className="p-1 rounded-full hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 transition-all text-slate-400">
-      <X size={14} />
+    <div className="flex flex-col overflow-hidden mr-2">
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Attachment</span>
+      <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{file.name}</span>
+    </div>
+    <button onClick={onRemove} className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-400 hover:text-rose-500 rounded-full transition-all">
+      <Trash2 size={14} />
     </button>
   </div>
 );
 
-// ── Main Component ────────────────────────────────────────────
 const AIChatBot = ({ onBack, currentUser }) => {
-  const { t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isTechToSpec, setIsTechToSpec] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
-  const [isTTSEnabled, setIsTTSEnabled] = useState(false);
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isTechToSpec, setIsTechToSpec] = useState(false);
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const { language } = useLanguage();
+  const detectedLang = language === 'la' ? 'Lao' : 'Thai';
 
-  // ── TTS ──────────────────────────────────────────────────
-  const speakText = (text, forceSpeak = false) => {
-    if (!window.speechSynthesis) return;
-    // forceSpeak=true: always speak (per-message button)
-    // forceSpeak=false: only speak when TTS toggle is ON (auto-speak)
-    if (!forceSpeak && !isTTSEnabled) return;
-
+  // ── Speech Synthesis (TTS) ──────────────────────────────────
+  const speakText = (text) => {
+    if (!isTTSEnabled || !text) return;
     window.speechSynthesis.cancel();
-    const clean = text.replace(/[#*`_~\[\]()>]/g, '').substring(0, 2000);
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    // Smart voice selection: try preferred langs, fallback to any available
-    const tryLangs = ['th-TH', 'th', 'lo-LA', 'en-US'];
-    const voices = window.speechSynthesis.getVoices();
-    let picked = null;
-    for (const lang of tryLangs) {
-      picked = voices.find(v => v.lang === lang || v.lang.startsWith(lang.split('-')[0]));
-      if (picked) break;
-    }
-    if (picked) utterance.voice = picked;
-    // If no voice found, browser will use its default voice
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    const cleanText = text.replace(/[*#`_]/g, '');
+    const ut = new SpeechSynthesisUtterance(cleanText);
+    ut.lang = language === 'la' ? 'th-TH' : 'th-TH'; // Lao uses Thai TTS engine usually
+    ut.rate = 1.0; ut.pitch = 1.0;
+    ut.onstart = () => setIsSpeaking(true);
+    ut.onend = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(ut);
   };
-  const stopSpeaking = () => { window.speechSynthesis?.cancel(); setIsSpeaking(false); };
-  const toggleTTS = () => { if (isTTSEnabled) stopSpeaking(); setIsTTSEnabled(p => !p); };
+  const stopSpeaking = () => { window.speechSynthesis.cancel(); setIsSpeaking(false); };
+  const toggleTTS = () => { if (isTTSEnabled) stopSpeaking(); setIsTTSEnabled(!isTTSEnabled); };
 
-  // ── History ───────────────────────────────────────────────
+  // ── Chat History Logic ────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('joah_ai_history');
     if (saved) {
       const parsed = JSON.parse(saved);
       setChatHistory(parsed);
-      if (parsed.length > 0) { setCurrentChatId(parsed[0].id); setMessages(parsed[0].messages); }
-      else startNewChat();
-    } else startNewChat();
+      if (parsed.length > 0) {
+        setCurrentChatId(parsed[0].id);
+        setMessages(parsed[0].messages);
+      } else {
+        startNewChat();
+      }
+    } else {
+      startNewChat();
+    }
   }, []);
 
   useEffect(() => {
-    if (messages.length > 0 && currentChatId) {
-      const updated = chatHistory.map(c => c.id === currentChatId ? { ...c, messages, lastActive: Date.now() } : c);
+    if (currentChatId && messages.length > 0) {
+      const u = chatHistory.map(c => c.id === currentChatId ? { ...c, messages, title: messages[1]?.content?.substring(0, 30) || 'New Conversation' } : c);
       if (!chatHistory.find(c => c.id === currentChatId)) {
-        const title = messages.find(m => m.role === 'user')?.content?.substring(0, 30) || 'New Chat';
-        updated.unshift({ id: currentChatId, title: title + (title.length >= 30 ? '...' : ''), messages, lastActive: Date.now() });
+        u.push({ id: currentChatId, messages, title: messages[1]?.content?.substring(0, 30) || 'New Conversation' });
       }
-      setChatHistory(updated);
-      localStorage.setItem('joah_ai_history', JSON.stringify(updated));
+      setChatHistory(u);
+      localStorage.setItem('joah_ai_history', JSON.stringify(u));
     }
   }, [messages]);
 
@@ -151,7 +142,7 @@ const AIChatBot = ({ onBack, currentUser }) => {
     setCurrentChatId(newId);
     stopSpeaking();
     const name = currentUser?.name || currentUser?.user_metadata?.full_name || 'ທ່ານ';
-    setMessages([{ role: 'assistant', content: `ສະບາຍດີ ທ່ານ **${name}** 👋\nຂ້ອຍຊື່ **${BOT_NAME}** — AI Assistant ຂອງ Joah Inventory\nມີຫຍັງໃຫ້ຊ່ວຍບໍ່? ສາມາດສົ່ງຂໍ້ຄວາມ, ໄຟລ໌ ຫຼື ຮູບພາບໄດ້ເລີຍ 📎` }]);
+    setMessages([{ role: 'assistant', content: `ສະບາຍດີ ທ່ານ **${name}** 👋\nຂ້ອຍຊື່ **${BOT_NAME}** — AI Assistant ຂອງ Joah Inventory\nມີຫຍັງໃຫ້ຊ່ວຍບໍ່? ສາມາດສົ່ງຂໍ້ຄວາມ, ໄຟລ໌ ຫຼື ຮູບພາບໄດ້ເລີย 📎` }]);
     setAttachedFile(null); setFileContent(''); setImagePreview(null);
   };
 
@@ -189,7 +180,6 @@ const AIChatBot = ({ onBack, currentUser }) => {
 
   const handleFileChange = (e) => processFile(e.target.files[0]);
 
-  // ── Paste Image from Clipboard ────────────────────────────
   const handlePaste = useCallback((e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -207,7 +197,6 @@ const AIChatBot = ({ onBack, currentUser }) => {
     return () => window.removeEventListener('paste', handlePaste);
   }, [handlePaste]);
 
-  // ── Auto-resize textarea ──────────────────────────────────
   useEffect(() => {
     const el = textareaRef.current;
     if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
@@ -215,103 +204,186 @@ const AIChatBot = ({ onBack, currentUser }) => {
 
   // ── Send Message ──────────────────────────────────────────
   const handleSend = async () => {
-    if (!input.trim() && !attachedFile) return;
-    stopSpeaking();
+    const inputMsg = input.trim();
+    if (!inputMsg && !attachedFile) return;
 
-    // Build user message for display
-    const userMsg = {
-      role: 'user',
-      content: input || (attachedFile ? `📎 ${attachedFile.name}` : ''),
-      fileName: attachedFile?.name,
-      hasFile: !!attachedFile && !imagePreview,
-      imagePreview: imagePreview || null
-    };
+    const userMsg = { role: 'user', content: inputMsg, hasFile: !!attachedFile, fileName: attachedFile?.name, imagePreview };
     setMessages(prev => [...prev, userMsg]);
-    setInput(''); setAttachedFile(null); setFileContent(''); setImagePreview(null);
+    setInput('');
+    setAttachedFile(null);
+    setImagePreview(null);
     setIsLoading(true);
 
     try {
-      // Detect language from the current user message
-      const userText = input || '';
-      const isLao = /[\u0E80-\u0EFF]/.test(userText);
-      const isThai = /[\u0E00-\u0E7F]/.test(userText);
-      const isEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;@#]+$/.test(userText.trim());
-      const detectedLang = isLao ? 'Lao (ພາສາລາວ)' : isThai ? 'Thai (ภาษาไทย)' : isEnglish ? 'English' : 'the same language as the user message';
+      // --- TOOL FUNCTIONS DEFINITIONS ---
+      const fetchStockData = async (barcode) => {
+        const [{ data: storeData }, { data: dcData }, { data: locData }] = await Promise.all([
+          supabase.from('store_inventory').select('*').eq('barcode_no', barcode),
+          supabase.from('table_dc_stock').select('*').eq('barcode_no', barcode),
+          supabase.from('location_inventory').select('*').eq('barcode_no', barcode)
+        ]);
+        let res = `Stock data for ${barcode}:\n`;
+        const itemName = storeData?.[0]?.item_name || locData?.[0]?.item_name || dcData?.[0]?.item_name || 'Unknown Item';
+        res += `- Name: ${itemName}\n`;
+        if (storeData?.length) storeData.forEach(r => res += `- Shop ${r.branch_id}: Qty=${r.store_qty || 0}, Sales=${r.sales_qty || 0}\n`);
+        if (locData?.length) locData.forEach(r => res += `- Backstore ${r.branch_id}: Qty=${r.qty || 0}, Rack=${r.rack_location}\n`);
+        if (dcData?.length) dcData.forEach(r => res += `- DC ${r.branch_id}: Qty=${r.qty || 0}\n`);
+        if (!storeData?.length && !locData?.length && !dcData?.length) res = 'No data found.';
+        return res;
+      };
 
-      const techSpecExtra = isTechToSpec
-        ? `\n\nTECH TO SPEC MODE ENABLED: Structure every response as a technical specification document. Use headings, bullet points, tables, and code blocks where appropriate. Be precise, detailed, and engineering-focused.`
-        : '';
-      const systemPrompt = `You are ${BOT_NAME}, a smart and friendly AI assistant built for Joah Inventory system, created by Santisouk Laxayphone. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+      const fetchDailyRequests = async () => {
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const { data: requests } = await supabase.from('store_requests')
+          .select('*')
+          .gte('created_at', `${today}T00:00:00`)
+          .lte('created_at', `${today}T23:59:59`)
+          .order('created_at', { ascending: false });
 
-CRITICAL LANGUAGE RULE: You MUST reply in ${detectedLang}. Detect the language from the user's latest message and respond ONLY in that language. Do NOT switch languages. Do NOT default to Lao unless the user writes in Lao.
+        if (!requests?.length) return `No requests found for today (${today}).`;
 
-Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
+        let details = `REAL DATA ONLY - Requests for ${today}. Show this data EXACTLY as given. DO NOT rename, translate, or substitute any product names.\n`;
+        details += `Total: ${requests.length} requests\n\n`;
+        requests.slice(0, 50).forEach((r, i) => {
+          const stockBefore = r.stock_at_request ?? '-';
+          const remaining = (r.stock_at_request != null && r.qty != null) ? r.stock_at_request - r.qty : '-';
+          details += `${i + 1}. DocNo: ${r.doc_no || '-'} | Branch: ${r.branch_id} | Barcode: ${r.barcode || 'N/A'} | Product: ${r.product_name || r.barcode || 'N/A'} | Requested: ${r.qty} | Stock@Request: ${stockBefore} | Remaining: ${remaining} | Status: ${r.status} | RequestBy: ${r.request_by} | ApprovedBy: ${r.accepted_by || '-'}\n`;
+        });
+        return details;
+      };
 
-      let data;
+      const fetchRequestHistoryByBarcode = async (barcode, fromDate, toDate) => {
+        const d = new Date();
+        const defaultTo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const defaultFrom = new Date(d.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const defaultFromStr = `${defaultFrom.getFullYear()}-${String(defaultFrom.getMonth() + 1).padStart(2, '0')}-${String(defaultFrom.getDate()).padStart(2, '0')}`;
+        const from = fromDate || defaultFromStr;
+        const to = toDate || defaultTo;
+
+        const { data: records, error } = await supabase.from('store_requests')
+          .select('*')
+          .eq('barcode', barcode)
+          .gte('created_at', `${from}T00:00:00`)
+          .lte('created_at', `${to}T23:59:59`)
+          .order('created_at', { ascending: false });
+
+        if (error) return `Error fetching history: ${error.message}`;
+        if (!records?.length) return `No request history found for barcode ${barcode} between ${from} and ${to}.`;
+
+        let out = `Request history for barcode ${barcode} (${from} to ${to}): ${records.length} records found.\n\n`;
+        records.forEach((r, i) => {
+          const stockBefore = r.stock_at_request ?? '-';
+          const remaining = (r.stock_at_request != null && r.qty != null) ? r.stock_at_request - r.qty : '-';
+          const date = new Date(r.created_at).toLocaleDateString('en-GB');
+          out += `${i + 1}. Date: ${date} | DocNo: ${r.doc_no || '-'} | Branch: ${r.branch_id} | Product: ${r.product_name || r.barcode} | Requested: ${r.qty} | Stock@Request: ${stockBefore} | Remaining: ${remaining} | Status: ${r.status} | By: ${r.request_by}\n`;
+        });
+        return out;
+      };
+
+      const tools = [
+        {
+          type: "function",
+          function: {
+            name: "check_stock_by_barcode",
+            description: "Check real-time stock balance for a product barcode across all branches.",
+            parameters: { type: "object", properties: { barcode: { type: "string" } }, required: ["barcode"] }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "get_daily_requests",
+            description: "Get today's store requests. Use ONLY when user asks about today's requests.",
+            parameters: { type: "object", properties: {} }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "get_request_history_by_barcode",
+            description: "Get historical request records for a specific barcode over a date range. Use when user asks about past requests, history, or how many times an item was requested. If no dates given, default to last 90 days.",
+            parameters: {
+              type: "object",
+              properties: {
+                barcode: { type: "string", description: "The product barcode" },
+                from_date: { type: "string", description: "Start date in YYYY-MM-DD format (optional)" },
+                to_date: { type: "string", description: "End date in YYYY-MM-DD format (optional)" }
+              },
+              required: ["barcode"]
+            }
+          }
+        }
+      ];
+
+      const techSpecExtra = isTechToSpec ? `\n\nTECH MODE: Respond as a technical specification.` : '';
+      const VALID_BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
+      const systemPrompt = `You are ${BOT_NAME}, a data-accurate AI assistant for Joah Inventory.
+Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+Branches: ${VALID_BRANCHES.join(', ')}.
+
+CRITICAL RULES — READ CAREFULLY:
+1. TOOL DATA IS LAW: Every product name, barcode, qty, and status you report MUST come from the tool result verbatim. Copy the text exactly.
+2. ZERO HALLUCINATION: You are FORBIDDEN from using your own knowledge to fill in or rename product names. If the tool says 'Product: ຄັນຮົ່ມ /4842', you must say 'ຄັນຮົ່ມ /4842' — not 'umbrella', not 'C-VIT', not anything else.
+3. MISSING DATA = SAY SO: If a field is 'N/A' or '-', say it is not available. Never substitute.
+4. FORMAT LIKE HQ: Present requests in a clear table with columns: # | Doc | Branch | Barcode | Product | Qty Requested | Stock Before | Remaining | Status | Approved By
+5. Reply in ${detectedLang}.
+
+Never mention DeepSeek.${techSpecExtra}`;
+
+      let finalAiMsg;
+
       if (userMsg.imagePreview && GEMINI_API_KEY) {
-        // ── Use Gemini for Images ──
+        // --- Gemini (Images) ---
         const base64Data = userMsg.imagePreview.split(',')[1] || '';
         const mimeType = userMsg.imagePreview.split(';')[0].split(':')[1] || 'image/png';
-        
-        const geminiPayload = {
-          contents: [{
-            parts: [
-              { text: `${systemPrompt}\n\nUser Question: ${input || 'Please describe this image.'}` },
-              { inline_data: { mime_type: mimeType, data: base64Data } }
-            ]
-          }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 2048 }
-        };
-
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(geminiPayload)
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\nQuestion: ${inputMsg}` }, { inline_data: { mime_type: mimeType, data: base64Data } }] }] })
         });
-
-        const geminiData = await res.json();
-        if (geminiData.candidates?.[0]?.content?.parts?.[0]?.text) {
-          data = { choices: [{ message: { role: 'assistant', content: geminiData.candidates[0].content.parts[0].text } }] };
-        } else {
-          throw new Error(geminiData.error?.message || 'Gemini error');
-        }
+        const data = await res.json();
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          finalAiMsg = { role: 'assistant', content: data.candidates[0].content.parts[0].text };
+        } else throw new Error('Gemini failed');
       } else {
-        // ── Use DeepSeek for Text/Files ──
-        // Build API messages — DeepSeek chat does NOT support image_url, strip images from history
-        const apiHistory = messages.slice(-10).map(m => ({
-          role: m.role,
-          content: typeof m.content === 'string' ? m.content : ''
-        }));
+        // --- DeepSeek (Text + Tools) ---
+        const apiHistory = messages.slice(-10).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
+        let apiMessages = [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: fileContent ? `[File: ${userMsg.fileName}]\n${fileContent}\n\n${inputMsg}` : inputMsg }];
 
-        let userContent;
-        if (userMsg.imagePreview) {
-          // Fallback if Gemini key is missing
-          const base64Data = userMsg.imagePreview.split(',')[1] || '';
-          userContent = `[User attached an image: ${userMsg.fileName || 'image'}]\nImage data (base64, first 200 chars): ${base64Data.substring(0, 200)}...\n\nNote: DeepSeek cannot see images. Acknowledge the image and ask for description.\n\nUser question: ${input || '(No text provided)'}`;
-        } else if (fileContent) {
-          userContent = `I attached a file: "${userMsg.fileName || 'file'}"\n\n${fileContent}\n\nQuestion: ${input || 'Please summarize this file.'}`;
-        } else {
-          userContent = input;
+        let isDone = false;
+        let iters = 0;
+        while (!isDone && iters < 5) {
+          iters++;
+          const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+            body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, tools: tools, temperature: 0.7 })
+          });
+          const data = await res.json();
+          if (!data.choices?.[0]) throw new Error(data.error?.message || 'DeepSeek error');
+          const msg = data.choices[0].message;
+          apiMessages.push(msg);
+
+          if (msg.tool_calls) {
+            for (const toolCall of msg.tool_calls) {
+              const fn = toolCall.function.name;
+              const args = JSON.parse(toolCall.function.arguments || '{}');
+              let content;
+              if (fn === "check_stock_by_barcode") content = await fetchStockData(args.barcode);
+              else if (fn === "get_daily_requests") content = await fetchDailyRequests();
+              else if (fn === "get_request_history_by_barcode") content = await fetchRequestHistoryByBarcode(args.barcode, args.from_date, args.to_date);
+              else content = `Unknown function: ${fn}`;
+              apiMessages.push({ role: "tool", tool_call_id: toolCall.id, name: fn, content });
+            }
+          } else {
+            isDone = true;
+            finalAiMsg = msg;
+          }
         }
-
-        const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: userContent }],
-            temperature: 0.8
-          })
-        });
-        data = await res.json();
       }
 
-      if (data.choices?.[0]) {
-        const aiMsg = data.choices[0].message;
-        setMessages(prev => [...prev, aiMsg]);
-        if (isTTSEnabled) speakText(aiMsg.content);
-      } else {
-        throw new Error(data.error?.message || 'No response');
+      if (finalAiMsg) {
+        setMessages(prev => [...prev, finalAiMsg]);
+        if (isTTSEnabled) speakText(finalAiMsg.content);
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `❌ ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ: ${err.message}` }]);
@@ -322,29 +394,34 @@ Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
 
   return (
     <div className="w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300">
-      <style>{`@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }`}</style>
+      <style>{`
+        @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }
+        @keyframes eye-blink { 0%,90%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
+        .animate-spin-slow { animation: spin 8s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
 
       {/* Sidebar */}
-      <div className={`transition-all duration-500 overflow-hidden bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5' : 'w-0 p-0'}`}>
+      <div className={`transition-all duration-500 overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5 mr-4 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
         <div className="flex items-center justify-between mb-6 whitespace-nowrap">
-          <div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Chat History</h3>
-          </div>
-          <button onClick={startNewChat} className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95">
-            <Sparkles size={16} />
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
+          <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
+            <Plus size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
           {chatHistory.map(chat => (
             <div key={chat.id} onClick={() => loadChat(chat)}
-              className={`group p-3.5 rounded-2xl cursor-pointer transition-all border text-sm ${currentChatId === chat.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <MessageSquare size={14} className={currentChatId === chat.id ? 'text-blue-500 shrink-0' : 'text-slate-400 shrink-0'} />
-                  <span className={`font-bold truncate ${currentChatId === chat.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>{chat.title}</span>
+              className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-white/80 dark:bg-blue-600/20 border-blue-200 dark:border-blue-700/50 shadow-md' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-800/50 hover:border-slate-200 dark:hover:border-slate-700'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                    <MessageSquare size={14} />
+                  </div>
+                  <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{chat.title}</span>
                 </div>
-                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all text-slate-400 shrink-0">
-                  <X size={12} />
+                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
+                  <X size={14} />
                 </button>
               </div>
             </div>
@@ -352,81 +429,79 @@ Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
         </div>
       </div>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden">
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-indigo-500/5 relative">
+
+        {/* Animated Background Blobs */}
+        <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-400/10 blur-[100px] rounded-full pointer-events-none animate-pulse" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-purple-400/10 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(p => !p)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-all">
-              <LayoutDashboard size={18} />
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100/50 dark:border-slate-800/50 shrink-0 relative z-10">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(p => !p)} className="p-2.5 rounded-2xl hover:bg-white/80 dark:hover:bg-slate-800/80 text-slate-400 hover:text-blue-500 transition-all shadow-sm">
+              <LayoutDashboard size={20} />
             </button>
-            <button onClick={onBack} className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
-              ✕ Close
-            </button>
-            {/* Tech to Spec Toggle */}
-            <button
-              onClick={() => setIsTechToSpec(p => !p)}
-              title={isTechToSpec ? 'ปิด Tech to Spec' : 'เปิด Tech to Spec Mode'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                isTechToSpec
-                  ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 scale-105'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600'
-              }`}
-            >
-              <span>⚙️</span>
-              <span className="hidden sm:inline">Tech to Spec</span>
-              {isTechToSpec && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={toggleTTS} title={isTTSEnabled ? 'ปิด TTS' : 'เปิด TTS'}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isTTSEnabled ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
-              {isTTSEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              <span className="hidden sm:inline">{isTTSEnabled ? (isSpeaking ? 'Reading...' : 'TTS ON') : 'TTS'}</span>
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 via-blue-500 to-cyan-400 p-[2px] shadow-lg shadow-blue-500/20">
-                <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center">
-                  <Sparkles size={14} className="text-blue-500" />
+            <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+
+            {/* Pet Personality Mascot */}
+            <div className="flex items-center gap-4 group">
+              <div className="relative">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-violet-400 p-[3px] shadow-xl shadow-blue-500/20 transition-all duration-500 ${isLoading ? 'scale-110 rotate-6' : 'hover:scale-105 hover:-rotate-3'}`}>
+                  <div className="w-full h-full rounded-[0.8rem] bg-white dark:bg-slate-950 flex items-center justify-center overflow-hidden relative">
+                    {/* JOI PET FACE (SVG) */}
+                    <svg viewBox="0 0 100 100" className={`w-10 h-10 transition-all duration-300 ${isLoading ? 'animate-bounce' : ''}`}>
+                      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500/20" />
+                      <g className="fill-blue-500 dark:fill-blue-400">
+                        <circle cx="35" cy="45" r="5" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
+                        <circle cx="65" cy="45" r="5" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
+                      </g>
+                      <path d={isLoading ? "M 40 65 Q 50 75 60 65" : "M 40 65 Q 50 70 60 65"} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-blue-600" />
+                    </svg>
+                    {isLoading && <div className="absolute inset-0 bg-blue-500/10 animate-pulse" />}
+                  </div>
                 </div>
+                <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-950 shadow-sm ${isLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
               </div>
-              <div>
-                <h2 className="text-base font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-violet-500 to-cyan-500">{BOT_NAME}</h2>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest -mt-0.5">Joah Intelligence</p>
+              <div className="hidden sm:block">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">{BOT_NAME}</h2>
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-600 text-[10px] font-black uppercase tracking-wider">Active</span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Your Inventory Companion</p>
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsTechToSpec(p => !p)} className={`hidden md:flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all ${isTechToSpec ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+              <Settings size={14} className={isTechToSpec ? 'animate-spin-slow' : ''} />
+              <span>Tech Mode</span>
+            </button>
+            <button onClick={toggleTTS} className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all ${isTTSEnabled ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+              {isTTSEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              <span className="hidden lg:inline">{isTTSEnabled ? 'Audio ON' : 'Audio OFF'}</span>
+            </button>
+            <button onClick={onBack} className="p-2.5 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all">
+              <X size={20} />
+            </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide relative z-10">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-              <div className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                {/* Avatar */}
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-1 shadow-sm ${m.role === 'user' ? 'bg-slate-200 dark:bg-slate-700' : 'bg-gradient-to-tr from-violet-500 to-blue-500 text-white shadow-blue-500/20'}`}>
-                  {m.role === 'user' ? <User size={16} /> : <Sparkles size={14} />}
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ animationDelay: `${i * 0.1}s` }}>
+              <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-blue-500 border border-slate-100 dark:border-slate-700'}`}>
+                  {m.role === 'user' ? <User size={18} /> : <Sparkles size={18} />}
                 </div>
-                {/* Bubble */}
-                <div className={`text-sm leading-relaxed ${m.role === 'user'
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-5 py-3.5 rounded-[1.5rem] rounded-tr-none shadow-sm'
-                    : 'text-slate-800 dark:text-slate-100 prose prose-sm dark:prose-invert max-w-none'
-                  }`}>
-                  {m.imagePreview && <img src={m.imagePreview} alt="attachment" className="max-h-48 rounded-2xl mb-2 border border-slate-200 dark:border-slate-700 object-contain" />}
-                  {m.hasFile && (
-                    <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 text-blue-600 text-xs font-bold">
-                      <FileText size={12} /> <span>{m.fileName}</span>
-                    </div>
-                  )}
-                  {m.role === 'assistant'
-                    ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
-                    : <span>{m.content}</span>
-                  }
-                  {m.role === 'assistant' && (
-                    <button onClick={() => speakText(m.content, true)} className="mt-2 p-1.5 rounded-full text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="ฟังข้อความนี้">
-                      <Volume2 size={13} />
-                    </button>
-                  )}
+                <div className={`flex flex-col gap-2 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`px-6 py-4 rounded-[2rem] shadow-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'}`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+                    {m.hasFile && <div className="mt-3 p-3 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20"><FileText size={14} /> <span className="text-xs font-bold">{m.fileName}</span></div>}
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">{m.role === 'user' ? 'You' : BOT_NAME}</span>
                 </div>
               </div>
             </div>
@@ -435,33 +510,26 @@ Format your response using Markdown. Never mention DeepSeek.${techSpecExtra}`;
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="px-5 pb-5 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="max-w-3xl mx-auto relative">
-            {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setFileContent(''); setImagePreview(null); }} />}
-            <div className="relative flex items-end bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-[1.5rem] shadow-lg focus-within:border-blue-400 dark:focus-within:border-blue-600 focus-within:shadow-blue-500/10 transition-all p-2 pl-4 gap-2">
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls,.txt,.csv,.png,.jpg,.jpeg,.webp,.gif" className="hidden" />
-              <button onClick={() => fileInputRef.current.click()} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 transition-all shrink-0 mb-0.5" title="แนบไฟล์">
-                {imagePreview ? <Image size={18} className="text-blue-500" /> : <Paperclip size={18} />}
-              </button>
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="ພິມຂໍ້ຄວາມ... (Shift+Enter ຂຶ້ນບັນທັດໃໝ່, ວາງຮູບ Ctrl+V)"
-                rows={1}
-                className="flex-1 bg-transparent outline-none text-slate-800 dark:text-white text-sm font-medium resize-none leading-relaxed py-2 scrollbar-hide placeholder:text-slate-400"
-                style={{ maxHeight: 160 }}
-              />
-              <button onClick={handleSend} disabled={isLoading || (!input.trim() && !attachedFile)}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 mb-0.5 ${(input.trim() || attachedFile) && !isLoading ? 'bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-105 active:scale-95' : 'text-slate-300 cursor-not-allowed'}`}>
-                <Send size={18} />
+        {/* Input Area */}
+        <div className="p-8 border-t border-slate-100/50 dark:border-slate-800/50 bg-white/20 dark:bg-slate-900/20 backdrop-blur-md relative z-10">
+          <div className="max-w-4xl mx-auto relative">
+            {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} />}
+            <div className="flex items-end gap-4 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[2.5rem] shadow-xl focus-within:ring-2 ring-blue-500/20 transition-all">
+              <div className="flex gap-1 pl-2 mb-1">
+                <button onClick={() => document.getElementById('ai-file-input').click()} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-all">
+                  <Paperclip size={20} />
+                </button>
+                <input id="ai-file-input" type="file" className="hidden" onChange={handleFileChange} />
+                <button onClick={() => document.getElementById('ai-img-input').click()} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-all">
+                  <Image size={20} />
+                </button>
+                <input id="ai-img-input" type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              </div>
+              <textarea ref={textareaRef} rows={1} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder="Ask Joi anything..." className="flex-1 bg-transparent border-none focus:ring-0 py-3.5 text-sm resize-none scrollbar-hide dark:text-white placeholder:text-slate-400" />
+              <button onClick={handleSend} disabled={isLoading || (!input.trim() && !attachedFile)} className="p-4 rounded-[1.5rem] bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:grayscale transition-all mr-1 mb-1">
+                <Send size={20} />
               </button>
             </div>
-            <p className="text-center text-[10px] text-slate-400 mt-2 font-medium tracking-wide">
-              {BOT_NAME} · Joah Intelligence · PNG/Image · Markdown · TTS · วาง Ctrl+V
-            </p>
           </div>
         </div>
       </div>

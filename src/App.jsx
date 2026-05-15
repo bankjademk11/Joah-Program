@@ -13,7 +13,7 @@ import {
   suggestSheetMapping
 } from './utils/excelProcessor';
 import { supabase } from './utils/supabaseClient';
-import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory } from './utils/supabaseSync';
+import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory, fetchDcFromSupabase, fetchStoreInventoryFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
 import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
@@ -349,17 +349,19 @@ function AppContent() {
       let dataRows = [];
       let locationRows = [];
       let odooRows = [];
+      let dcRows = [];
+      let storeRows = [];
       const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
 
       if (activeSource === 'supabase') {
         const masterBranch = branchToLoad;
 
-        // 🧹 Auto-cleanup has been removed. We now preserve rack_location even if qty is 0.
-
-        const [cloudMaster, cloudLocation, cloudOdoo] = await Promise.all([
+        const [cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore] = await Promise.all([
           fetchMasterFromSupabase(masterBranch),
           fetchLocationFromSupabase(branchToLoad),
-          fetchOdooFromSupabase(branchToLoad)
+          fetchOdooFromSupabase(branchToLoad),
+          fetchDcFromSupabase(branchToLoad),
+          fetchStoreInventoryFromSupabase(branchToLoad)
         ]);
 
         if (!cloudMaster || cloudMaster.length === 0) {
@@ -396,34 +398,31 @@ function AppContent() {
           qty: o.qty_odoo
         }));
 
+        dcRows = cloudDc || [];
+        storeRows = cloudStore || [];
+
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
 
-        // Use the dataSheet selected by user in SheetMapper, fallback to 'DATA'
         const resolvedDataSheet = dataSheet || 'DATA';
-        console.log('📂 Excel Mode — Reading sheets:');
-        console.log('  📊 DATA sheet:', resolvedDataSheet);
-        console.log('  📍 Location sheet:', locationSheet);
-        console.log('  📋 All sheets in file:', workbook.SheetNames);
-
         dataRows = sheetToJSON(workbook, resolvedDataSheet);
         locationRows = sheetToJSON(workbook, locationSheet);
 
-        console.log(`  ✅ DATA rows loaded: ${dataRows.length}`);
-        console.log(`  ✅ Location rows loaded: ${locationRows.length}`);
+        const [cloudOdoo, cloudDc, cloudStore] = await Promise.all([
+          fetchOdooFromSupabase(user?.branch_id),
+          fetchDcFromSupabase(user?.branch_id),
+          fetchStoreInventoryFromSupabase(user?.branch_id)
+        ]);
 
-        if (dataRows.length === 0) {
-          console.warn(`  ⚠️ Sheet "${resolvedDataSheet}" is EMPTY or NOT FOUND. Available: ${workbook.SheetNames.join(', ')}`);
-        }
-
-        const cloudOdoo = await fetchOdooFromSupabase(user?.branch_id);
         odooRows = (cloudOdoo || []).map(o => ({
           barcode: o.barcode,
           qty: o.qty_odoo
         }));
+        dcRows = cloudDc || [];
+        storeRows = cloudStore || [];
       }
 
-      const { results, stats } = validateData(locationRows, dataRows, odooRows, branchToLoad);
+      const { results, stats } = validateData(locationRows, dataRows, odooRows, branchToLoad, dcRows, storeRows);
       setValidationResults(results);
       setMasterData(dataRows);
       setStats(stats);
@@ -496,7 +495,8 @@ function AppContent() {
       // Fetch dynamic data always using branchToLoad
       const fetchTasks = [
         fetchLocationFromSupabase(branchToLoad, isDeltaSync ? lastLocationSyncTime : null),
-        fetchOdooFromSupabase(branchToLoad)
+        fetchOdooFromSupabase(branchToLoad),
+        fetchDcFromSupabase(branchToLoad)
       ];
 
       // Only fetch master if explicitly asked or if we don't have it yet
@@ -509,7 +509,8 @@ function AppContent() {
       const results = await Promise.all(fetchTasks);
       const cloudLocation = results[0]; // Full data OR Delta data
       const cloudOdoo = results[1];
-      const cloudMaster = shouldFetchMaster ? results[2] : null;
+      const cloudDc = results[2];
+      const cloudMaster = shouldFetchMaster ? results[3] : null;
 
       // Update master data state if we fetched it
       let activeMasterData = masterData;
@@ -586,9 +587,7 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      // branchToLoad is already calculated above
-
-      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad);
+      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad, cloudDc || []);
       setValidationResults(validatedResults);
       setStats(validatedStats);
       setRefreshTrigger(Date.now());

@@ -169,23 +169,144 @@ export default function SalesAggregator({ onBack }) {
       }));
 
       if (importMode === 'deduct') {
-        // Call the Supabase RPC function for bulk import
-        const { data, error } = await supabase.rpc('bulk_import_sales', {
-          p_branch_id: importBranch,
-          p_sales_data: formattedData,
-          p_imported_by: importedBy
+        // ===== GM FORMULA: F2 = Q1 - S1 - T1 - D1 =====
+        // F = ໜ້າຮ້ານ (Shop Front)  Q = ລວມທັງໝົດ (Total)
+        // S = ຍອດຂາຍ (Sales)        T = ຫຼັງສາງ (Backstore)  D = DC Warehouse
+
+        // Step 1: Fetch all store_inventory records for this branch
+        let existingData = [];
+        let rangeStart = 0;
+        const RANGE_SIZE = 1000;
+        let isFetching = true;
+        while (isFetching) {
+          const { data: chunk, error } = await supabase
+            .from('store_inventory')
+            .select('id, barcode_no, store_qty, q_qty, sales_qty')
+            .eq('branch_id', importBranch)
+            .range(rangeStart, rangeStart + RANGE_SIZE - 1);
+          if (error) throw error;
+          if (chunk && chunk.length > 0) {
+            existingData = existingData.concat(chunk);
+            rangeStart += RANGE_SIZE;
+            if (chunk.length < RANGE_SIZE) isFetching = false;
+          } else {
+            isFetching = false;
+          }
+        }
+
+        // Build barcode → store_inventory map
+        const storeMap = {};
+        existingData.forEach(item => { storeMap[item.barcode_no] = item; });
+
+        // Get relevant barcodes (only ones that exist in our inventory)
+        const barcodes = formattedData.map(d => d.barcode).filter(b => storeMap[b]);
+
+        // Step 2: Bulk fetch T (location_inventory = ຫຼັງສາງ/Backstore)
+        let whData = [];
+        const CHUNK = 200;
+        for (let i = 0; i < barcodes.length; i += CHUNK) {
+          const chunk = barcodes.slice(i, i + CHUNK);
+          const { data: whChunk } = await supabase
+            .from('location_inventory')
+            .select('barcode_no, qty')
+            .eq('branch_id', importBranch)
+            .in('barcode_no', chunk);
+          if (whChunk) whData = whData.concat(whChunk);
+        }
+        const tMap = {};
+        whData.forEach(r => {
+          const bc = String(r.barcode_no || '').trim();
+          if (bc) tMap[bc] = (tMap[bc] || 0) + Number(r.qty || 0);
         });
 
-        if (error) throw error;
+        // Step 3: Bulk fetch D (table_dc_stock = DC Warehouse)
+        let dcData = [];
+        for (let i = 0; i < barcodes.length; i += CHUNK) {
+          const chunk = barcodes.slice(i, i + CHUNK);
+          const { data: dcChunk } = await supabase
+            .from('table_dc_stock')
+            .select('barcode, qty')
+            .eq('branch_id', importBranch)
+            .in('barcode', chunk);
+          if (dcChunk) dcData = dcData.concat(dcChunk);
+        }
+        const dMap = {};
+        dcData.forEach(r => {
+          const bc = String(r.barcode || '').trim();
+          if (bc) dMap[bc] = (dMap[bc] || 0) + Number(r.qty || 0);
+        });
+
+        // Step 4: Apply GM Formula for each imported item
+        let updatedCount = 0;
+        let notFoundCount = 0;
+        const updateList = [];
+        const timestamp = new Date().toISOString();
+        const logPayload = [];
+
+        for (const item of formattedData) {
+          const existing = storeMap[item.barcode];
+          if (existing) {
+            const T1 = tMap[item.barcode] || 0;  // ຫຼັງສາງ current
+            const D1 = dMap[item.barcode] || 0;  // DC current
+            const S1 = item.qty;                  // ຍອດຂາຍ from import
+
+            // Calculate Q1 dynamically to ensure it includes all components before GM Formula
+            const Q1 = Number(existing.store_qty || 0) + T1 + D1;
+
+            // ===== GM FORMULA: F2 = Q1 - S1 - T1 - D1 =====
+            const F2 = Math.max(0, Q1 - S1 - T1 - D1);
+            
+            // Q2 = Q1 - S1 (total reduces by sales amount)
+            const Q2 = Math.max(0, Q1 - S1);
+
+            updateList.push({
+              id: existing.id,
+              store_qty: F2,
+              q_qty: Q2,
+              sales_qty: (existing.sales_qty || 0) + S1
+            });
+            logPayload.push({
+              barcode_no: item.barcode,
+              sales_qty: S1,
+              import_date: timestamp,
+              branch_id: importBranch,
+              imported_by: importedBy
+            });
+            updatedCount++;
+          } else {
+            notFoundCount++;
+          }
+        }
+
+        // Step 5: Batch update store_inventory (store_qty + q_qty + sales_qty)
+        const UPDATE_CHUNK = 50;
+        for (let i = 0; i < updateList.length; i += UPDATE_CHUNK) {
+          const chunk = updateList.slice(i, i + UPDATE_CHUNK);
+          await Promise.all(
+            chunk.map(({ id, store_qty, q_qty, sales_qty }) =>
+              supabase
+                .from('store_inventory')
+                .update({ store_qty, q_qty, sales_qty, last_updated: timestamp })
+                .eq('id', id)
+            )
+          );
+        }
+
+        // Step 6: Log to store_sales_log for history tracking
+        for (let i = 0; i < logPayload.length; i += UPDATE_CHUNK) {
+          const chunk = logPayload.slice(i, i + UPDATE_CHUNK);
+          const { error } = await supabase.from('store_sales_log').insert(chunk);
+          if (error) throw error;
+        }
 
         setImportResult({ 
-          updated: data?.updated || 0, 
-          notFound: data?.notFound || 0, 
+          updated: updatedCount, 
+          notFound: notFoundCount, 
           errors: 0,
           mode: 'deduct'
         });
       } else {
-        // Mode: History Only — Update sales_qty in store_inventory WITHOUT touching store_qty
+        // Mode: History Only — Update sales_qty ONLY, do NOT touch store_qty or q_qty
         
         // Step 1: Fetch all existing store_inventory records for this branch
         let existingData = [];
@@ -214,10 +335,10 @@ export default function SalesAggregator({ onBack }) {
           existingMap[item.barcode_no] = item;
         });
 
-        // Step 3: Build update list — add to sales_qty only, do NOT change store_qty
+        // Step 3: Build update list — add to sales_qty only, do NOT change store_qty/q_qty
         let updatedCount = 0;
         let notFoundCount = 0;
-        const updateList = []; // [{id, newSalesQty}]
+        const updateList = [];
         for (const item of formattedData) {
           const existing = existingMap[item.barcode];
           if (existing) {
@@ -231,9 +352,8 @@ export default function SalesAggregator({ onBack }) {
           }
         }
 
-        // Step 4: Update sales_qty using individual update calls batched in parallel chunks
-        // We use .update().eq('id') to safely update ONLY sales_qty without touching other columns
-        const CHUNK = 50; // parallel batch size
+        // Step 4: Update sales_qty in parallel chunks
+        const CHUNK = 50;
         for (let i = 0; i < updateList.length; i += CHUNK) {
           const chunk = updateList.slice(i, i + CHUNK);
           await Promise.all(

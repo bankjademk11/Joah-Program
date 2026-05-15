@@ -493,6 +493,7 @@ const ResultTable = ({
                 });
             }
             success(t('results.saveSuccess'));
+            if (onRefresh) onRefresh({ silent: true, delta: true }); // Trigger refresh to update DC stock etc.
             setSelectedRow(null);
             setEditReason(''); // Reset reason
             setMergeAmount(''); // Reset merge amount after save
@@ -571,11 +572,12 @@ const ResultTable = ({
                 masterItemName: selectedRow.masterItemName,
                 odooQty: selectedRow.odooQty,
                 status: selectedRow.status,
-                rowIndex: results.length + optimisticItems.length + 1
+                rowIndex: results.length + (typeof optimisticItems !== 'undefined' ? optimisticItems.length : 0) + 1
             };
             setOptimisticItems(prev => [newOptimisticItem, ...prev]);
 
             success('ໂຄລນ SKU ສຳເລັດ! ✅');
+            if (onRefresh) onRefresh({ silent: true, delta: true });
             setSelectedRow(null);
             setEditReason('');
             setMergeAmount('');
@@ -695,9 +697,11 @@ const ResultTable = ({
                 setOptimisticItems(prev => [newOptimisticItem, ...prev]);
             }
 
-            success(t('results.saveSuccess'));
+            success('ແຍກ SKU ສຳເລັດ! ✅');
+            if (onRefresh) onRefresh({ silent: true, delta: true });
             setSelectedRow(null);
-            
+            setEditReason('');
+            setMergeAmount('');
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -1550,13 +1554,13 @@ const ResultTable = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.shopQty || 0}</span>
                                             </td>
                                             <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{row.dcQty || 0}</span>
                                             </td>
                                             <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                <span className="text-xl font-black text-amber-600 dark:text-amber-500 leading-none">{row.salesQty || 0}</span>
                                             </td>
                                             <td className="px-6 py-6 text-center">
                                                 <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>

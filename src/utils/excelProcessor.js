@@ -126,7 +126,7 @@ const createMasterDataMap = (dataRows) => {
  * - สีแดง: Categories ไม่ตรงกัน
  * - ปกติ: ข้อมูลถูกต้องทั้งหมด
  */
-export const validateData = (locationRows, dataRows, odooRows = [], targetBranch = 'ສີວິໄລ') => {
+export const validateData = (locationRows, dataRows, odooRows = [], targetBranch = 'ສີວິໄລ', dcRows = [], storeRows = []) => {
     const masterMap = createMasterDataMap(dataRows);
 
     // Create Odoo Map for fast lookup
@@ -134,6 +134,25 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
     odooRows.forEach(row => {
         const bc = normalizeBarcode(row.barcode || row.Barcode || row['Barcode No.']);
         if (bc) odooMap.set(bc, Number(row.qty || row.qty_odoo || 0));
+    });
+
+    // Create DC Map for fast lookup
+    const dcMap = new Map();
+    dcRows.forEach(row => {
+        const bc = normalizeBarcode(row.barcode || row.barcode_no);
+        if (bc) dcMap.set(bc, Number(row.qty || 0));
+    });
+
+    // Create Store Map for fast lookup (Shop Qty & Sales)
+    const storeMap = new Map();
+    storeRows.forEach(row => {
+        const bc = normalizeBarcode(row.barcode_no);
+        if (bc) {
+            storeMap.set(bc, {
+                shopQty: Number(row.store_qty || 0),
+                salesQty: Number(row.sales_qty || 0)
+            });
+        }
     });
 
     const results = [];
@@ -418,6 +437,8 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
             }
         }
 
+        const storeData = storeMap.get(barcode) || { shopQty: 0, salesQty: 0 };
+
         results.push({
             id: row.id, // Preserve ID for potential database updates
             branch_id: row.branch_id, // Preserve branch for warehouse filter
@@ -436,6 +457,9 @@ export const validateData = (locationRows, dataRows, odooRows = [], targetBranch
             masterCategory2: masterData?.category2 || '',
             masterQty: masterData?.qty || 0,
             odooQty: odooQty, // Included in result
+            dcQty: dcMap.get(barcode) || 0, // Mapped from table_dc_stock
+            shopQty: storeData.shopQty, // Added from storeMap
+            salesQty: storeData.salesQty, // Added from storeMap
             masterItemName: masterData?.itemName || '',
             masterUpdatedAt: masterData?.updatedAt || '', // Renamed to keep separate
             masterUpdatedBy: masterData?.updatedBy || '', // Renamed to keep separate

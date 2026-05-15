@@ -432,3 +432,70 @@ export const fetchOdooFromSupabase = async (branchId) => {
         return [];
     }
 };
+/**
+ * 8. Fetch DC Stock Data
+ */
+export const fetchDcFromSupabase = async (branchId) => {
+    try {
+        const branch = branchId || 'ຕະຫຼາດລາວ';
+        let allData = [];
+        let curPage = 0;
+        const pageSize = 2000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('table_dc_stock')
+                .select('*')
+                .eq('branch_id', branch)
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                curPage++;
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
+    } catch (error) {
+        console.error('Fetch DC Error:', error);
+        return [];
+    }
+};
+
+/**
+ * 9. Fetch Store Inventory Data
+ */
+export const fetchStoreInventoryFromSupabase = async (branchId) => {
+    try {
+        const branch = branchId || 'ຕະຫຼາດລາວ';
+        let allData = [];
+        let curPage = 0;
+        const pageSize = 2000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('store_inventory')
+                .select('*')
+                .eq('branch_id', branch)
+                .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                curPage++;
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
+    } catch (error) {
+        console.error('Fetch Store Inventory Error:', error);
+        return [];
+    }
+};

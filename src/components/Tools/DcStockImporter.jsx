@@ -2,7 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Upload, Database, CheckCircle, AlertCircle,
   Loader2, FileSpreadsheet, TrendingDown, BarChart3, Trash2,
-  Download, ChevronDown, RotateCcw, Package
+  Download, ChevronDown, RotateCcw, Package, Layers, ShieldCheck,
+  History, Info
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../utils/supabaseClient';
@@ -38,13 +39,13 @@ export default function DcStockImporter({ onBack }) {
         setHeaders(hdrs);
         setRawRows(json);
         // Auto-detect columns
-        const autoBarcode = hdrs.find(h => /barcode|บาร์โค้ด|ບາ/i.test(h)) || hdrs[0];
-        const autoQty = hdrs.find(h => /qty|quantity|ຈຳນວນ|จำนวน|on.hand|on_hand/i.test(h)) || hdrs[1];
+        const autoBarcode = hdrs.find(h => /barcode|ບາໂຄດ|ບາ/i.test(h)) || hdrs[0];
+        const autoQty = hdrs.find(h => /qty|quantity|ຈຳນວນ|ຈຳ/i.test(h)) || hdrs[1];
         setBarcodeCol(autoBarcode);
         setQtyCol(autoQty);
         setStep('config');
       } catch (err) {
-        alert('ອ່ານໄຟລ໌ຜິດພາດ: ' + err.message);
+        alert('ເກີດຂໍ້ຜິດພາດໃນການອ່ານໄຟລ໌: ' + err.message);
       }
     };
     reader.readAsArrayBuffer(selectedFile);
@@ -59,7 +60,7 @@ export default function DcStockImporter({ onBack }) {
 
   // ─── Build Preview ─────────────────────────────────────────────
   const buildPreview = () => {
-    if (!importBranch) { alert('⚠️ ກະລຸນາເລືອກສາຂາທີ່ຈະ Import ກ່ອນ!'); return; }
+    if (!importBranch) { alert('⚠️ ກະລຸນາເລືອກສາຂາປາຍທາງກ່ອນ!'); return; }
     const agg = {};
     rawRows.forEach(row => {
       const bc = String(row[barcodeCol] || '').trim();
@@ -72,403 +73,329 @@ export default function DcStockImporter({ onBack }) {
     setStep('preview');
   };
 
-  // ─── Import to Supabase ────────────────────────────────────────
+  // ─── Import Logic (GM Formula Integrated) ──────────────────────
   const handleImport = async () => {
     if (!previewData.length) return;
     if (!importBranch) { alert('ກະລຸນາເລືອກສາຂາ'); return; }
     setIsImporting(true);
     setImportResult(null);
     try {
-      // Step 1: Fetch existing data for this branch to merge quantities
-      let existingData = [];
+      // 1. Fetch current DC data
+      let existingDcData = [];
       let page = 0;
       let isFetching = true;
       while (isFetching) {
-        const { data, error: fetchErr } = await supabase
+        const { data, error } = await supabase
           .from('table_dc_stock')
           .select('id, barcode, qty')
           .eq('branch_id', importBranch)
           .range(page * 1000, (page + 1) * 1000 - 1);
-        
-        if (fetchErr) throw fetchErr;
+        if (error) throw error;
         if (data && data.length > 0) {
-          existingData = [...existingData, ...data];
+          existingDcData = [...existingDcData, ...data];
           page++;
-        } else {
-          isFetching = false;
-        }
+        } else isFetching = false;
       }
+      const dcMap = {};
+      existingDcData.forEach(item => { dcMap[item.barcode] = item; });
 
-      // Create a map for fast lookup
-      const existingMap = {};
-      existingData.forEach(item => {
-        existingMap[item.barcode] = item;
-      });
+      // 2. Fetch current Store Inventory (Q)
+      let storeInventory = [];
+      page = 0;
+      isFetching = true;
+      while (isFetching) {
+        const { data, error } = await supabase
+          .from('store_inventory')
+          .select('id, barcode_no, q_qty, store_qty')
+          .eq('branch_id', importBranch)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          storeInventory = [...storeInventory, ...data];
+          page++;
+        } else isFetching = false;
+      }
+      const storeMap = {};
+      storeInventory.forEach(item => { storeMap[item.barcode_no] = item; });
 
-      // Step 2: Merge new data with existing data (Add Qty)
+      // 3. Prepare Payloads
       const addedData = [];
-      const payload = previewData.map(r => {
-        addedData.push({ barcode: r.barcode, qtyAdded: r.qty });
-        const existing = existingMap[r.barcode];
-        if (existing) {
-          return {
-            id: existing.id, // Provide ID to trigger an UPDATE
-            barcode: r.barcode,
-            qty: (existing.qty || 0) + r.qty, // Add new qty to existing qty
-            branch_id: importBranch,
-            updated_at: new Date().toISOString()
-          };
-        } else {
-          return {
-            barcode: r.barcode,
-            qty: r.qty,
-            branch_id: importBranch,
-            updated_at: new Date().toISOString()
-          };
+      const dcPayload = [];
+      const storeUpdatePayload = [];
+      const timestamp = new Date().toISOString();
+
+      previewData.forEach(r => {
+        const qtyToAdd = r.qty;
+        addedData.push({ barcode: r.barcode, qtyAdded: qtyToAdd });
+
+        const existingDc = dcMap[r.barcode];
+        dcPayload.push({
+          ...(existingDc ? { id: existingDc.id } : {}),
+          barcode: r.barcode,
+          qty: (existingDc?.qty || 0) + qtyToAdd,
+          branch_id: importBranch,
+          updated_at: timestamp
+        });
+
+        const existingStore = storeMap[r.barcode];
+        if (existingStore) {
+          const currentQ = (existingStore.q_qty != null && existingStore.q_qty > 0)
+            ? Number(existingStore.q_qty)
+            : Number(existingStore.store_qty || 0);
+          storeUpdatePayload.push({
+            id: existingStore.id,
+            q_qty: currentQ + qtyToAdd,
+            last_updated: timestamp
+          });
         }
       });
 
-      // Step 3: Upsert merged data in chunks
-      const CHUNK = 1000;
-      let successCount = 0;
-      for (let i = 0; i < payload.length; i += CHUNK) {
-        const chunk = payload.slice(i, i + CHUNK);
-        // upsert updates if 'id' exists, otherwise inserts
-        const { error } = await supabase.from('table_dc_stock').upsert(chunk);
-        if (error) {
-          throw error;
-        }
-        successCount += chunk.length;
+      // 4. Batch Updates
+      const CHUNK = 500;
+      for (let i = 0; i < dcPayload.length; i += CHUNK) {
+        const { error } = await supabase.from('table_dc_stock').upsert(dcPayload.slice(i, i + CHUNK));
+        if (error) throw error;
       }
+
+      for (let i = 0; i < storeUpdatePayload.length; i += CHUNK) {
+        const chunk = storeUpdatePayload.slice(i, i + CHUNK);
+        await Promise.all(chunk.map(item => 
+          supabase.from('store_inventory').update({ q_qty: item.q_qty, last_updated: item.last_updated }).eq('id', item.id)
+        ));
+      }
+
       setLastImportPayload({ branch_id: importBranch, addedData });
-      setImportResult({ success: successCount, total: previewData.length, branch: importBranch });
+      setImportResult({ success: previewData.length, total: previewData.length, branch: importBranch });
       setStep('result');
     } catch (err) {
-      console.error('[DC DEBUG] import failed:', err);
-      alert('ນຳເຂົ້າຜິດພາດ: ' + err.message);
+      console.error('[DC IMPORT] Error:', err);
+      alert('ການນຳເຂົ້າລົ້ມເຫຼວ: ' + err.message);
     } finally {
       setIsImporting(false);
     }
   };
 
-  // ─── Clear all DC Stock ───────────────────────────────────────
   const handleClearAll = async () => {
-    if (!importBranch) { alert('ກະລຸນາເລືອກສາຂາກ່ອນ'); return; }
-    
-    const pin = window.prompt(`ກະລຸນາໃສ່ PIN ເພື່ອຢືນຢັນການລົບຂໍ້ມູນສາຂາ "${importBranch}" ທັງໝົດ:`);
-    if (pin !== '248248') {
-      if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ! ການລົບຖືກຍົກເລີກ.');
-      return;
-    }
+    if (!importBranch) return;
+    const pin = window.prompt(`ໃສ່ PIN ເພື່ອຢືນຢັນການລ້າງຂໍ້ມູນສາຂາ "${importBranch}" (ຍອດລວມ Q ຈະຖືກຫັກອອກ):`);
+    if (pin !== '248248') { if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ!'); return; }
 
     try {
-      const { error } = await supabase.from('table_dc_stock').delete().eq('branch_id', importBranch);
-      if (error) throw error;
-      alert('✅ ລົບຂໍ້ມູນສຳເລັດ!');
-    } catch (err) {
-      alert('❌ ລົບຜິດພາດ: ' + err.message);
-    }
+      const { data: dcItems } = await supabase.from('table_dc_stock').select('barcode, qty').eq('branch_id', importBranch);
+      if (dcItems?.length > 0) {
+        const { data: storeItems } = await supabase.from('store_inventory').select('id, barcode_no, q_qty').eq('branch_id', importBranch);
+        const storeMap = {};
+        storeItems?.forEach(si => { storeMap[si.barcode_no] = si; });
+        const updates = dcItems.map(dc => {
+          const si = storeMap[dc.barcode];
+          return si ? { id: si.id, q_qty: Math.max(0, (si.q_qty || 0) - (dc.qty || 0)) } : null;
+        }).filter(Boolean);
+        await Promise.all(updates.map(u => supabase.from('store_inventory').update({ q_qty: u.q_qty }).eq('id', u.id)));
+      }
+      await supabase.from('table_dc_stock').delete().eq('branch_id', importBranch);
+      alert('✅ ລ້າງຂໍ້ມູນສຳເລັດແລ້ວ!');
+    } catch (err) { alert('❌ ຜິດພາດ: ' + err.message); }
   };
 
-  // ─── Rollback ─────────────────────────────────────────────────
   const handleRollback = async () => {
     if (!lastImportPayload) return;
-    
-    const pin = window.prompt(`ກະລຸນາໃສ່ PIN ເພື່ອຢືນຢັນການ Rollback ສາຂາ "${lastImportPayload.branch_id}":`);
-    if (pin !== '248248') {
-      if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ!');
-      return;
-    }
-
+    const pin = window.prompt('ໃສ່ PIN ເພື່ອ Rollback (ຫັກຍອດຄືນ):');
+    if (pin !== '248248') { if (pin !== null) alert('❌ PIN ບໍ່ຖືກຕ້ອງ!'); return; }
     setIsImporting(true);
     try {
-      let currentData = [];
-      let page = 0;
-      let isFetching = true;
-      while (isFetching) {
-        const { data, error: fetchErr } = await supabase
-          .from('table_dc_stock')
-          .select('id, barcode, qty')
-          .eq('branch_id', lastImportPayload.branch_id)
-          .range(page * 1000, (page + 1) * 1000 - 1);
-        
-        if (fetchErr) throw fetchErr;
-        if (data && data.length > 0) {
-          currentData = [...currentData, ...data];
-          page++;
-        } else {
-          isFetching = false;
-        }
-      }
-      
-      const currentMap = {};
-      currentData.forEach(item => {
-        currentMap[item.barcode] = item;
-      });
-      
-      const rollbackPayload = [];
-      const deleteIds = [];
-      
+      const { data: dcItems } = await supabase.from('table_dc_stock').select('id, barcode, qty').eq('branch_id', lastImportPayload.branch_id);
+      const { data: storeItems } = await supabase.from('store_inventory').select('id, barcode_no, q_qty').eq('branch_id', lastImportPayload.branch_id);
+      const dcMap = {}; dcItems?.forEach(d => dcMap[d.barcode] = d);
+      const storeMap = {}; storeItems?.forEach(s => storeMap[s.barcode_no] = s);
+
+      const dcUpdate = []; const dcDelete = []; const storeUpdate = [];
       lastImportPayload.addedData.forEach(added => {
-        const current = currentMap[added.barcode];
-        if (current) {
-          const newQty = current.qty - added.qtyAdded;
-          if (newQty <= 0) {
-             deleteIds.push(current.id);
-          } else {
-             rollbackPayload.push({
-               id: current.id,
-               barcode: current.barcode,
-               qty: newQty,
-               branch_id: lastImportPayload.branch_id,
-               updated_at: new Date().toISOString()
-             });
-          }
+        const dc = dcMap[added.barcode];
+        if (dc) {
+          const newQty = Math.max(0, (dc.qty || 0) - added.qtyAdded);
+          if (newQty <= 0) dcDelete.push(dc.id);
+          else dcUpdate.push({ id: dc.id, barcode: dc.barcode, qty: newQty, branch_id: lastImportPayload.branch_id, updated_at: new Date().toISOString() });
         }
+        const store = storeMap[added.barcode];
+        if (store) storeUpdate.push({ id: store.id, q_qty: Math.max(0, (store.q_qty || 0) - added.qtyAdded) });
       });
+
+      if (dcDelete.length) await supabase.from('table_dc_stock').delete().in('id', dcDelete);
+      if (dcUpdate.length) await supabase.from('table_dc_stock').upsert(dcUpdate);
+      await Promise.all(storeUpdate.map(u => supabase.from('store_inventory').update({ q_qty: u.q_qty }).eq('id', u.id)));
       
-      // Delete 0-qty items
-      const CHUNK = 1000;
-      for (let i = 0; i < deleteIds.length; i += CHUNK) {
-        const chunk = deleteIds.slice(i, i + CHUNK);
-        await supabase.from('table_dc_stock').delete().in('id', chunk);
-      }
-      
-      // Update decreased qty items
-      for (let i = 0; i < rollbackPayload.length; i += CHUNK) {
-        const chunk = rollbackPayload.slice(i, i + CHUNK);
-        await supabase.from('table_dc_stock').upsert(chunk);
-      }
-      
-      alert('✅ Rollback ສຳເລັດ! ຍອດຖືກຫັກອອກແລ້ວ');
-      setLastImportPayload(null);
-      setStep('upload'); // Return to upload screen
-    } catch (err) {
-      console.error(err);
-      alert('❌ Rollback ຜິດພາດ: ' + err.message);
-    } finally {
-      setIsImporting(false);
-    }
+      alert('✅ Rollback ສຳເລັດ!');
+      setLastImportPayload(null); setStep('upload');
+    } catch (err) { alert('❌ Error: ' + err.message); } finally { setIsImporting(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-[300] bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-300">
-
-      {/* ─── Header ─────────────────────────────────────────── */}
-      <header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 shadow-sm">
-        <div className="flex items-center gap-4">
+    <div className="fixed inset-0 z-[300] bg-slate-50 dark:bg-[#020617] flex flex-col overflow-hidden animate-in fade-in duration-500 font-sans">
+      
+      {/* ─── Modern Header ─────────────────────────────────────── */}
+      <header className="h-24 bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-10 shrink-0 backdrop-blur-xl z-10 shadow-sm">
+        <div className="flex items-center gap-6">
           <button
             onClick={onBack}
-            className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all group"
+            className="p-3 rounded-2xl bg-white dark:bg-slate-800 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all border border-slate-200 dark:border-slate-700 shadow-sm group"
           >
             <ArrowLeft size={22} className="group-hover:-translate-x-1 transition-transform" />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-                <Package size={18} />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                <Package size={22} />
               </div>
-              <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">DC Stock Importer</h1>
+              <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">DC Stock Importer</h1>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">ນຳເຂົ້າສະຕ໋ອກຄັງ (Warehouse) ຈາກ Odoo</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 flex items-center gap-2">
+              <Layers size={10} /> ນຳເຂົ້າສະຕ໋ອກສາງ (Warehouse) ຈາກ Odoo
+            </p>
           </div>
         </div>
 
-        {/* Step Indicators */}
-        <div className="hidden md:flex items-center gap-3">
+        {/* Dynamic Stepper UI */}
+        <div className="hidden lg:flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800">
           {[
             { id: 'upload', label: 'ອັບໂຫລດ', icon: Upload },
             { id: 'config', label: 'ຕັ້ງຄ່າ', icon: Database },
             { id: 'preview', label: 'ກວດສອບ', icon: BarChart3 },
-            { id: 'result', label: 'ຜົນລາຍງານ', icon: CheckCircle },
+            { id: 'result', label: 'ສຳເລັດ', icon: CheckCircle },
           ].map((s, idx, arr) => (
-            <div key={s.id} className="flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-xs font-black ${
+            <div key={s.id} className="flex items-center">
+              <div className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all text-xs font-black ${
                 step === s.id
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20 scale-105'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
                   : ['result', 'preview', 'config'].includes(step) && idx < ['upload', 'config', 'preview', 'result'].indexOf(step)
-                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+                    ? 'text-emerald-500'
+                    : 'text-slate-400'
               }`}>
-                <s.icon size={13} />
+                <s.icon size={14} strokeWidth={3} />
                 <span>{s.label}</span>
               </div>
-              {idx < arr.length - 1 && <ChevronDown size={13} className="text-slate-300 -rotate-90" />}
+              {idx < arr.length - 1 && <div className="w-4 h-px bg-slate-200 dark:bg-slate-700 mx-1 opacity-50"></div>}
             </div>
           ))}
         </div>
-
-        <div className="w-24" />
       </header>
 
-      {/* ─── Main ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto p-8">
-
-        {/* STEP 1: UPLOAD */}
+      <main className="flex-1 overflow-hidden relative bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/50 via-transparent to-transparent dark:from-indigo-950/20">
+        
         {step === 'upload' && (
-          <div className="max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div
-              onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-[2.5rem] p-16 flex flex-col items-center gap-6 cursor-pointer transition-all duration-300 ${
-                isDragging
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 scale-[1.02]'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10'
-              }`}
-            >
-              <div className="w-24 h-24 rounded-[2rem] bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-500">
-                <FileSpreadsheet size={48} strokeWidth={1.5} />
+          <div 
+            className={`h-full flex flex-col items-center justify-center p-8 transition-all duration-500 ${isDragging ? 'scale-105' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
+            <div className="max-w-xl w-full text-center space-y-10 animate-in slide-in-from-bottom-8 duration-700">
+              <div className="space-y-3">
+                <h2 className="text-4xl font-black text-slate-800 dark:text-white leading-tight">ອັບໂຫລດໄຟລ໌ Excel</h2>
+                <p className="text-slate-500 dark:text-slate-400 font-medium">ລາກໄຟລ໌ມາເພື່ອນຳເຂົ້າ ຫຼື ກົດປຸ່ມດ້ານລຸ່ມເພື່ອເລືອກໄຟລ໌ສະຕ໋ອກ DC</p>
               </div>
-              <div className="text-center">
-                <p className="text-xl font-black text-slate-700 dark:text-white">ລາກ ຫຼື ຄລິກເພື່ອເລືອກໄຟລ໌</p>
-                <p className="text-sm font-bold text-slate-400 mt-2">ຮອງຮັບ Excel (.xlsx) ແລະ CSV (.csv) ຈາກ Odoo</p>
+
+              <div className={`relative p-16 border-2 border-dashed rounded-[48px] bg-white dark:bg-slate-900 shadow-2xl transition-all group overflow-hidden ${isDragging ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10' : 'border-slate-200 dark:border-slate-800 shadow-slate-200/50 dark:shadow-none hover:border-indigo-400'}`}>
+                <div className="absolute top-0 right-0 p-8 opacity-5">
+                  <FileSpreadsheet size={200} />
+                </div>
+                
+                <div className="relative flex flex-col items-center gap-8">
+                  <div className="w-24 h-24 rounded-[32px] bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40 group-hover:scale-110 transition-transform duration-500">
+                    <Upload size={40} strokeWidth={2.5} />
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-12 py-5 bg-slate-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white rounded-[24px] font-black shadow-xl shadow-slate-900/20 dark:shadow-indigo-500/20 transition-all active:scale-95"
+                  >
+                    ເລືອກໄຟລ໌ຈາກເຄື່ອງ
+                  </button>
+                  <input type="file" ref={fileInputRef} onChange={(e) => parseFile(e.target.files[0])} className="hidden" accept=".xlsx,.xls,.csv" />
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
-                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800">.xlsx</span>
-                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800">.csv</span>
-                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800">.xls</span>
+
+              <div className="flex items-center justify-center gap-10">
+                <div className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500"></div>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Support .XLSX</span>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500"></div>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Support .CSV</span>
+                </div>
               </div>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(e) => e.target.files[0] && parseFile(e.target.files[0])}
-            />
-
-            {/* Branch Selector */}
-            <div className="mt-6 p-5 glass-card rounded-[2rem] border-2 border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/10">
-              <label className="text-xs font-black text-indigo-600 uppercase tracking-widest block mb-3 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">!</span>
-                ກະລຸນາເລືອກສາຂາທີ່ຈະ Import ກ່ອນ
-              </label>
-              <div className="relative">
-                <select
-                  value={importBranch}
-                  onChange={e => setImportBranch(e.target.value)}
-                  className={`w-full h-12 pl-4 pr-10 rounded-xl bg-white dark:bg-slate-800 border-2 font-black text-sm outline-none transition-all appearance-none cursor-pointer ${
-                    importBranch
-                      ? 'border-emerald-400 dark:border-emerald-600 text-slate-700 dark:text-white'
-                      : 'border-red-300 dark:border-red-700 text-red-400'
-                  }`}
-                >
-                  <option value="" disabled>-- ເລືອກສາຂາ --</option>
-                  <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
-                  <option value="ສີວິໄລ">ສີວິໄລ</option>
-                  <option value="ວັງຊາຍ">ວັງຊາຍ</option>
-                  <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
-                </select>
-                <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none ${importBranch ? 'text-emerald-500' : 'text-red-400'}`} size={16} />
-              </div>
-              {!importBranch && (
-                <p className="text-xs font-bold text-red-400 mt-2">⚠️ ຕ້ອງເລືອກສາຂາກ່ອນຖືນຈະອັບໂຫລດໄດ້</p>
-              )}
-            </div>
-
-            {/* Clear all button */}
-            <button
-              onClick={handleClearAll}
-              className="mt-4 w-full h-12 rounded-2xl border-2 border-red-200 dark:border-red-900 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-black text-sm transition-all flex items-center justify-center gap-2"
-            >
-              <Trash2 size={16} />
-              ລົບ DC Stock ສາຂານີ້ (Clear Branch)
-            </button>
           </div>
         )}
 
-        {/* STEP 2: CONFIG */}
         {step === 'config' && (
-          <div className="max-w-lg mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="glass-card rounded-[2.5rem] p-10 border-white/50 shadow-2xl">
-              <div className="mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 text-xs font-black mb-4">
-                  <CheckCircle size={14} />
-                  ໄຟລ໌: {file?.name}  ({rawRows.length.toLocaleString()} rows)
-                </div>
-                <h2 className="text-2xl font-black text-slate-800 dark:text-white">ເລືອກ Column ທີ່ຕ້ອງການ</h2>
-                <p className="text-sm text-slate-400 font-bold mt-1">ລະບຸ Column ຂອງ Barcode ແລະ Quantity</p>
-              </div>
-
-              <div className="space-y-6">
-                {/* Barcode */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-[10px]">1</span>
-                    Column ຂອງ Barcode
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={barcodeCol}
-                      onChange={(e) => setBarcodeCol(e.target.value)}
-                      className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
-                    >
-                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+          <div className="h-full flex flex-col items-center p-12 overflow-y-auto animate-in fade-in zoom-in-95 duration-500">
+            <div className="max-w-2xl w-full space-y-10 pb-16">
+              <div className="bg-white dark:bg-slate-900 p-10 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                
+                <div className="flex items-center gap-5 border-b border-slate-100 dark:border-slate-800 pb-8">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
+                    <Database size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">ຕັ້ງຄ່າການນຳເຂົ້າ</h3>
+                    <p className="text-sm font-medium text-slate-500">ຈັບຄູ່ຄໍລຳຈາກໄຟລ໌ເພື່ອຄວາມຖືກຕ້ອງ</p>
                   </div>
                 </div>
 
-                {/* Qty */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-[10px]">2</span>
-                    Column ຂອງ Quantity (ຈຳນວນ)
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={qtyCol}
-                      onChange={(e) => setQtyCol(e.target.value)}
-                      className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
-                    >
-                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                  </div>
-                </div>
-
-                {/* Branch Selector moved to Config Step */}
-                <div className="space-y-2 mt-4">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center text-[10px]">3</span>
-                    ເລືອກສາຂາທີ່ຈະ Import
-                  </label>
-                  <div className="relative">
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <ShieldCheck size={12} className="text-emerald-500" /> ເລືອກສາຂາປາຍທາງ
+                    </label>
                     <select
                       value={importBranch}
-                      onChange={e => setImportBranch(e.target.value)}
-                      className={`w-full h-14 pl-5 pr-12 rounded-2xl border-2 font-black text-sm outline-none transition-all appearance-none cursor-pointer ${
-                        importBranch
-                          ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-400 dark:border-emerald-600 text-slate-700 dark:text-white'
-                          : 'bg-slate-50 dark:bg-slate-800 border-red-300 dark:border-red-700 text-red-400'
-                      }`}
+                      onChange={(e) => setImportBranch(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-5 text-sm font-black text-slate-800 dark:text-white transition-all outline-none appearance-none cursor-pointer"
                     >
-                      <option value="" disabled>-- ເລືອກສາຂາ --</option>
-                      <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
-                      <option value="ສີວິໄລ">ສີວິໄລ</option>
-                      <option value="ວັງຊາຍ">ວັງຊາຍ</option>
-                      <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                      <option value="">-- ເລືອກສາຂາ --</option>
+                      {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ'].map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
                     </select>
-                    <ChevronDown className={`absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none ${importBranch ? 'text-emerald-500' : 'text-red-400'}`} size={18} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">ຄໍລຳ Barcode</label>
+                      <select
+                        value={barcodeCol}
+                        onChange={(e) => setBarcodeCol(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-5 text-sm font-bold text-slate-800 dark:text-white transition-all outline-none appearance-none cursor-pointer"
+                      >
+                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">ຄໍລຳ ຈຳນວນ (Qty)</label>
+                      <select
+                        value={qtyCol}
+                        onChange={(e) => setQtyCol(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-5 text-sm font-bold text-slate-800 dark:text-white transition-all outline-none appearance-none cursor-pointer"
+                      >
+                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-4">
-                  <button
-                    onClick={buildPreview}
-                    className="w-full h-16 rounded-[1.5rem] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg shadow-xl shadow-indigo-500/30 hover:-translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    <BarChart3 size={22} />
-                    ກວດສອບຂໍ້ມູນ
-                  </button>
+                <div className="flex gap-6 pt-6">
                   <button
                     onClick={() => setStep('upload')}
-                    className="w-full mt-4 h-12 text-slate-400 hover:text-slate-600 font-bold text-sm transition-colors"
+                    className="flex-1 px-8 py-5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-[24px] font-black transition-all hover:bg-slate-200 active:scale-95"
                   >
-                    ຍົກເລີກ ແລະ ເລືອກໄຟລ໌ໃໝ່
+                    ຍ້ອນກັບ
+                  </button>
+                  <button
+                    onClick={buildPreview}
+                    className="flex-[2] px-8 py-5 bg-indigo-600 text-white rounded-[24px] font-black shadow-xl shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 active:scale-95"
+                  >
+                    ກວດສອບລາຍການ
                   </button>
                 </div>
               </div>
@@ -476,85 +403,60 @@ export default function DcStockImporter({ onBack }) {
           </div>
         )}
 
-        {/* STEP 3: PREVIEW */}
         {step === 'preview' && (
-          <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
-            {/* Summary cards */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
-              <div className="glass-card rounded-[2rem] p-8 border-indigo-500/20 shadow-xl">
-                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-3">Total SKUs</p>
-                <p className="text-5xl font-black text-slate-800 dark:text-white">{previewData.length.toLocaleString()}</p>
-                <p className="text-sm font-bold text-slate-400 mt-2">ລາຍການ Barcode</p>
+          <div className="h-full flex flex-col p-10 animate-in slide-in-from-right-10 duration-500">
+            <div className="flex-1 bg-white dark:bg-slate-900 rounded-[48px] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-800/20">
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-600">
+                    <BarChart3 size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white">ກວດສອບຄວາມຖືກຕ້ອງກ່ອນນຳເຂົ້າ</h3>
+                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mt-0.5">
+                      <Package size={12} /> ສາຂາ: {importBranch} | ທັງໝົດ {previewData.length} ລາຍການ
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setStep('config')}
+                    className="px-6 py-3.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95"
+                  >
+                    ແກ້ໄຂການຕັ້ງຄ່າ
+                  </button>
+                  <button
+                    onClick={handleImport}
+                    disabled={isImporting}
+                    className="px-10 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-500/20 transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50 flex items-center gap-3"
+                  >
+                    {isImporting ? <Loader2 size={18} className="animate-spin" /> : <TrendingDown size={18} />}
+                    {isImporting ? 'ກຳລັງນຳເຂົ້າ...' : 'ຢືນຢັນການນຳເຂົ້າ'}
+                  </button>
+                </div>
               </div>
-              <div className="glass-card rounded-[2rem] p-8 border-emerald-500/20 shadow-xl">
-                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-3">Total Qty (DC)</p>
-                <p className="text-5xl font-black text-slate-800 dark:text-white">
-                  {previewData.reduce((s, r) => s + r.qty, 0).toLocaleString()}
-                </p>
-                <p className="text-sm font-bold text-slate-400 mt-2">ຈຳນວນທັງໝົດໃນຄັງ</p>
-              </div>
-              <div className="glass-card rounded-[2rem] p-8 border-amber-500/20 shadow-xl">
-                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-3">ສາຂາ</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-white mt-3">{importBranch}</p>
-                <p className="text-sm font-bold text-slate-400 mt-2">ທີ່ຈະ Import</p>
-              </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-4 mb-6">
-              <button
-                onClick={handleImport}
-                disabled={isImporting}
-                className="flex-1 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-base shadow-xl shadow-indigo-500/30 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-3"
-              >
-                {isImporting ? <Loader2 size={20} className="animate-spin" /> : <Database size={20} />}
-                {isImporting ? 'ກຳລັງນຳເຂົ້າ...' : 'ນຳເຂົ້າ DC Stock'}
-              </button>
-              <button
-                onClick={() => setStep('config')}
-                className="h-14 px-6 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-500 font-black text-sm hover:border-slate-400 transition-all"
-              >
-                ຍ້ອນກັບ
-              </button>
-            </div>
-
-            {/* Preview table */}
-            <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl overflow-hidden">
-              <div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <p className="text-sm font-black text-slate-600 dark:text-slate-300">
-                  ຕົວຢ່າງຂໍ້ມູນ (ສະແດງ 20 ລາຍການທຳອິດ)
-                </p>
-              </div>
-              <div className="overflow-x-auto custom-scrollbar max-h-[55vh]">
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
+              <div className="flex-1 overflow-auto p-8 custom-scrollbar">
+                <table className="w-full">
+                  <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900">
                     <tr>
-                      <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">#</th>
-                      <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Barcode</th>
-                      <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest text-right">QTY (DC)</th>
+                      <th className="text-left p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b-2 border-slate-50 dark:border-slate-800">No.</th>
+                      <th className="text-left p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b-2 border-slate-50 dark:border-slate-800">Barcode</th>
+                      <th className="text-right p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b-2 border-slate-50 dark:border-slate-800">ຈຳນວນທີ່ຈະເພີ່ມ (+)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                    {previewData.slice(0, 20).map((r, i) => (
-                      <tr key={i} className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
-                        <td className="px-8 py-4 text-sm text-slate-400 font-bold">{i + 1}</td>
-                        <td className="px-8 py-4">
-                          <span className="font-mono font-black text-slate-700 dark:text-slate-200">{r.barcode}</span>
-                        </td>
-                        <td className="px-8 py-4 text-right">
-                          <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
-                            {r.qty.toLocaleString()}
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                    {previewData.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                        <td className="p-5 text-xs font-bold text-slate-400">{idx + 1}</td>
+                        <td className="p-5 text-sm font-black text-slate-700 dark:text-slate-200 font-mono tracking-tight">{row.barcode}</td>
+                        <td className="p-5 text-right">
+                          <span className="px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-sm font-black inline-flex items-center gap-1 group-hover:scale-105 transition-transform">
+                            +{row.qty.toLocaleString()}
                           </span>
                         </td>
                       </tr>
                     ))}
-                    {previewData.length > 20 && (
-                      <tr>
-                        <td colSpan="3" className="px-8 py-4 text-center text-sm font-bold text-slate-400">
-                          ... ແລະ {(previewData.length - 20).toLocaleString()} ລາຍການເພີ່ມເຕີມ
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
@@ -562,59 +464,101 @@ export default function DcStockImporter({ onBack }) {
           </div>
         )}
 
-        {/* STEP 4: RESULT */}
-        {step === 'result' && importResult && (
-          <div className="max-w-lg mx-auto animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center gap-8 pt-10">
-            <div className="w-24 h-24 rounded-[2rem] bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-500 shadow-lg shadow-emerald-500/20">
-              <CheckCircle size={52} strokeWidth={1.5} />
-            </div>
-            <div className="text-center">
-              <h2 className="text-3xl font-black text-slate-800 dark:text-white">ນຳເຂົ້າສຳເລັດ!</h2>
-              <p className="text-slate-400 font-bold mt-2">DC Stock ສາຂາ <span className="text-indigo-500 font-black">{importResult.branch}</span> ຖືກອັບເດດແລ້ວ</p>
-            </div>
-
-            <div className="w-full grid grid-cols-2 gap-4">
-              <div className="glass-card rounded-[2rem] p-6 text-center border-emerald-500/20">
-                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">ສຳເລັດ</p>
-                <p className="text-4xl font-black text-slate-800 dark:text-white">{importResult.success.toLocaleString()}</p>
-                <p className="text-xs font-bold text-slate-400 mt-1">ລາຍການ</p>
+        {step === 'result' && (
+          <div className="h-full flex flex-col items-center justify-center p-12 animate-in zoom-in duration-700">
+            <div className="max-w-md w-full bg-white dark:bg-slate-900 p-12 rounded-[56px] border border-slate-200 dark:border-slate-800 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] text-center space-y-10 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+              
+              <div className="w-28 h-28 rounded-[40px] bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-500 mx-auto animate-bounce-subtle">
+                <CheckCircle size={64} strokeWidth={2.5} />
               </div>
-              <div className="glass-card rounded-[2rem] p-6 text-center border-indigo-500/20">
-                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">ທັງໝົດ</p>
-                <p className="text-4xl font-black text-slate-800 dark:text-white">{importResult.total.toLocaleString()}</p>
-                <p className="text-xs font-bold text-slate-400 mt-1">SKUs</p>
-              </div>
-            </div>
 
-            <div className="flex flex-col gap-3 w-full">
-              {lastImportPayload && (
+              <div className="space-y-3">
+                <h2 className="text-4xl font-black text-slate-800 dark:text-white">ນຳເຂົ້າສຳເລັດ!</h2>
+                <p className="text-slate-500 font-medium">ຂໍ້ມູນ DC Stock ແລະ ຍອດ Master (Q) ໄດ້ຮັບການອັບເດດແລ້ວ</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="p-7 rounded-[32px] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 shadow-inner">
+                  <div className="text-3xl font-black text-emerald-600">{importResult?.success.toLocaleString()}</div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">ສຳເລັດແລ້ວ</div>
+                </div>
+                <div className="p-7 rounded-[32px] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 shadow-inner">
+                  <div className="text-3xl font-black text-slate-800 dark:text-white">{importResult?.total.toLocaleString()}</div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">ທັງໝົດ</div>
+                </div>
+              </div>
+
+              <div className="pt-4 space-y-5">
                 <button
-                  onClick={handleRollback}
-                  disabled={isImporting}
-                  className="w-full h-14 rounded-2xl border-2 border-rose-500 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black text-sm transition-all flex items-center justify-center gap-2"
+                  onClick={() => setStep('upload')}
+                  className="w-full px-8 py-5 bg-slate-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white rounded-[24px] font-black shadow-2xl transition-all active:scale-95"
                 >
-                  {isImporting ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
-                  ຍົກເລີກການນຳເຂົ້າລ່າສຸດ (Rollback)
+                  ຕົກລົງ
                 </button>
-              )}
-              <button
-                onClick={() => { setStep('upload'); setFile(null); setRawRows([]); setPreviewData([]); setImportResult(null); }}
-                className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
-              >
-                <Upload size={18} />
-                Import ໄຟລ໌ໃໝ່
-              </button>
-              <button
-                onClick={onBack}
-                className="w-full h-12 rounded-2xl border-2 border-slate-200 dark:border-slate-700 text-slate-500 font-bold text-sm hover:border-slate-400 transition-all"
-              >
-                ກັບໄປໜ້າຫຼັກ
-              </button>
+                {lastImportPayload && (
+                  <button
+                    onClick={handleRollback}
+                    disabled={isImporting}
+                    className="w-full px-8 py-5 bg-white dark:bg-slate-800 text-rose-500 dark:text-rose-400 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-all border border-rose-100 dark:border-rose-900/30 shadow-sm"
+                  >
+                    {isImporting ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
+                    <span>Rollback (ຫັກຍອດຄືນ)</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
-
       </main>
+
+      {/* Modern Footer */}
+      <footer className="h-20 bg-white/50 dark:bg-slate-950/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-10 shrink-0 backdrop-blur-md">
+        <div className="flex items-center gap-6">
+          <div className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500"></div>
+            System Active
+          </div>
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-800"></div>
+          <div className="flex items-center gap-2 text-slate-400">
+             <ShieldCheck size={14} className="text-indigo-500" />
+             <span className="text-[10px] font-black uppercase tracking-widest">GM Formula Secured</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+           <button
+            onClick={handleClearAll}
+            className="flex items-center gap-3 px-6 py-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-2xl transition-all text-[11px] font-black uppercase tracking-widest border border-transparent hover:border-rose-100 dark:hover:border-rose-900/30"
+          >
+            <Trash2 size={16} />
+            ລ້າງຂໍ້ມູນທັງໝົດ (Danger Zone)
+          </button>
+        </div>
+      </footer>
+
+      {/* Global CSS for Animations */}
+      <style>{`
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .animate-bounce-subtle {
+          animation: bounce-subtle 3s ease-in-out infinite;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #1e293b;
+        }
+      `}</style>
     </div>
   );
 }

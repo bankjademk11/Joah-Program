@@ -42,6 +42,7 @@ const EditPanel = ({
     const [scanLog, setScanLog] = useState([]);
     const [scanInput, setScanInput] = useState('');
     const scanInputRef = useRef(null);
+    const [latestDcQty, setLatestDcQty] = useState(null);
 
     // --- Helpers ---
     // Use branch-specific rules
@@ -101,6 +102,8 @@ const EditPanel = ({
     const [selectedReasonOption, setSelectedReasonOption] = useState('');
     const [otherReasonText, setOtherReasonText] = useState('');
 
+    const isNewStockReason = selectedReasonOption === t('reasons.newStock');
+
     // Sync reason to form
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
@@ -152,32 +155,79 @@ const EditPanel = ({
         }
     }, [dropdownOpen]);
 
+    // Fetch latest DC Qty specifically for the hint when New Stock In is selected
+    useEffect(() => {
+        if (isNewStockReason && selectedRow?.barcode && currentBranch) {
+            supabase.from('table_dc_stock').select('qty').eq('barcode', selectedRow.barcode).eq('branch_id', currentBranch).maybeSingle()
+                .then(({ data }) => {
+                    setLatestDcQty(data?.qty ?? 0);
+                });
+        }
+    }, [isNewStockReason, selectedRow?.barcode, currentBranch]);
+
     if (!selectedRow) return null;
 
-    // ---- DC Transfer Logic ----
-    const isNewStockReason = selectedReasonOption === t('reasons.newStock');
     // mergeAmount (Add Amount) = qty transferred from DC when reason is New Stock In
     const isDcTransferValid = !isNewStockReason || (mergeAmount !== '' && parseInt(mergeAmount) > 0);
 
     const handleSave = async () => {
-        // 1. Standard update
-        if (isSplitMode) {
-            handleSplit(mergeAmount, editLocation, editReason);
-        } else if (isCloneMode) {
-            handleClone(mergeAmount, editLocation, editReason);
+        // 1. Auto-deduct DC stock if New Stock In
+        const cleanBarcode = selectedRow?.barcode ? String(selectedRow.barcode).trim() : null;
+        const deductAmt = parseInt(mergeAmount);
+        
+        console.log('🚀 [EditPanel] Starting handleSave...', { isNewStockReason, mergeAmount, cleanBarcode, currentBranch });
+
+        if (isNewStockReason && deductAmt > 0 && cleanBarcode && currentBranch) {
+            try {
+                console.log(`📡 [EditPanel] Attempting to deduct ${deductAmt} from DC for ${cleanBarcode} (${currentBranch})...`);
+                
+                // Fetch latest DC stock from DB
+                const { data: dcData, error: dcFetchError } = await supabase
+                    .from('table_dc_stock')
+                    .select('qty')
+                    .eq('barcode', cleanBarcode)
+                    .eq('branch_id', currentBranch)
+                    .maybeSingle();
+
+                if (dcFetchError) throw dcFetchError;
+
+                const currentDc = dcData?.qty || 0;
+                const newDcQty = Math.max(0, currentDc - deductAmt);
+
+                console.log(`📊 [EditPanel] DC Stock Found: ${currentDc}, New Value: ${newDcQty}`);
+
+                const { error: updateError } = await supabase
+                    .from('table_dc_stock')
+                    .update({ 
+                        qty: newDcQty, 
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('barcode', cleanBarcode)
+                    .eq('branch_id', currentBranch);
+
+                if (updateError) throw updateError;
+                
+                console.log(`✅ [EditPanel] DC Stock updated successfully: ${cleanBarcode} (${currentDc} -> ${newDcQty})`);
+            } catch (err) {
+                console.error('❌ [EditPanel] Failed to deduct DC stock:', err);
+                alert('ເກີດຂໍ້ຜິດພາດໃນການຫັກລົບ QTY DC: ' + err.message);
+            }
         } else {
-            handleUpdate();
+            console.log('⏭️ [EditPanel] Skipping DC deduction (Reason is not New Stock or amount is 0)');
         }
-        // 2. Auto-deduct DC stock if New Stock In
-        if (isNewStockReason && mergeAmount && parseInt(mergeAmount) > 0 && selectedRow?.barcode && currentBranch) {
-            const deductAmt = parseInt(mergeAmount);
-            const currentDc = selectedRow.dcQty || 0;
-            const newDcQty = Math.max(0, currentDc - deductAmt);
-            await supabase
-                .from('table_dc_stock')
-                .update({ qty: newDcQty, updated_at: new Date().toISOString() })
-                .eq('barcode', selectedRow.barcode)
-                .eq('branch_id', currentBranch);
+
+        // 2. Standard update (Awaited to ensure completion before potential unmount)
+        try {
+            if (isSplitMode) {
+                await handleSplit(mergeAmount, editLocation, editReason);
+            } else if (isCloneMode) {
+                await handleClone(mergeAmount, editLocation, editReason);
+            } else {
+                await handleUpdate();
+            }
+        } catch (err) {
+            console.error('❌ [EditPanel] Standard update failed:', err);
+            // Error handling usually managed by the prop functions themselves
         }
     };
 
@@ -301,26 +351,26 @@ const EditPanel = ({
 
                             {/* Mode Toggle */}
                             <div className="px-4 pt-3">
-                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg gap-0.5">
-                                <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode && !isCloneMode ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsSplitMode(false); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
-                                >
-                                    {isTechnoHubMode ? '📦 ຮັບຂອງ' : 'ແກ້ໄຂ'}
-                                </button>
-                                <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
-                                >
-                                    ແບ່ງໄປ
-                                </button>
-                                <button
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                                    onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); setScanLog([]); setScanInput(''); }}
-                                >
-                                    ໂຄນສິນຄ້າ
-                                </button>
-                            </div>
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg gap-0.5">
+                                    <button
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode && !isCloneMode ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                        onClick={() => { setIsSplitMode(false); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
+                                    >
+                                        {isTechnoHubMode ? '📦 ຮັບຂອງ' : 'ແກ້ໄຂ'}
+                                    </button>
+                                    <button
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                        onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(isTechnoHubMode ? 0 : ''); setScanLog([]); setScanInput(''); }}
+                                    >
+                                        ແບ່ງໄປ
+                                    </button>
+                                    <button
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                        onClick={() => { setIsCloneMode(true); setIsSplitMode(false); setMergeAmount(''); setScanLog([]); setScanInput(''); }}
+                                    >
+                                        ໂຄນສິນຄ້າ
+                                    </button>
+                                </div>
                             </div>
 
                             {/* TECHNOHUB Scan Mode (Add or Deduct) */}
@@ -395,11 +445,10 @@ const EditPanel = ({
                                             }}
                                             placeholder={isSplitMode ? 'ສະແກນ Barcode ເພື່ອຕັດ (-1 ຕໍ່ຄັ້ງ)...' : 'ສະແກນ Barcode ຊ້ຳ (+1 ຕໍ່ຄັ້ງ)...'}
                                             autoFocus
-                                            className={`w-full pl-9 pr-3 py-2.5 text-sm font-mono font-bold bg-white dark:bg-slate-800 border-2 rounded-lg outline-none focus:ring-2 transition-all placeholder:text-slate-300 placeholder:font-normal shadow-sm ${
-                                                isSplitMode
+                                            className={`w-full pl-9 pr-3 py-2.5 text-sm font-mono font-bold bg-white dark:bg-slate-800 border-2 rounded-lg outline-none focus:ring-2 transition-all placeholder:text-slate-300 placeholder:font-normal shadow-sm ${isSplitMode
                                                     ? 'border-rose-200 dark:border-rose-800 focus:border-rose-500 focus:ring-rose-500/20'
                                                     : 'border-sky-200 dark:border-sky-800 focus:border-[#3899c8] focus:ring-sky-500/20'
-                                            }`}
+                                                }`}
                                         />
                                     </div>
 
@@ -437,65 +486,65 @@ const EditPanel = ({
                                     )}
                                 </div>
                             ) : (
-                            /* Normal Qty input area — Clone shows full-width only; others show Current + Icon + Input */
-                            <div className="p-4">
-                            {isCloneMode ? (
-                                <div>
-                                    <input
-                                        type="number"
-                                        placeholder="0"
-                                        className="w-full p-4 bg-white dark:bg-slate-950 border-2 border-emerald-200 dark:border-emerald-900/40 rounded-xl text-4xl font-bold text-center text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
-                                        value={mergeAmount}
-                                        onChange={(e) => setMergeAmount(e.target.value)}
-                                        autoFocus
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-2 text-center">ຈຳນວນສິນຄ້າທີ່ຕ້ອງການໂຄນໄປ Rack ໃໝ່</p>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-3">
-                                    {/* Current Qty Display */}
-                                    <div className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center border border-transparent">
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{t('editPanel.current')}</p>
-                                        <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
-                                    </div>
+                                /* Normal Qty input area — Clone shows full-width only; others show Current + Icon + Input */
+                                <div className="p-4">
+                                    {isCloneMode ? (
+                                        <div>
+                                            <input
+                                                type="number"
+                                                placeholder="0"
+                                                className="w-full p-4 bg-white dark:bg-slate-950 border-2 border-emerald-200 dark:border-emerald-900/40 rounded-xl text-4xl font-bold text-center text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
+                                                value={mergeAmount}
+                                                onChange={(e) => setMergeAmount(e.target.value)}
+                                                autoFocus
+                                            />
+                                            <p className="text-[10px] text-slate-400 mt-2 text-center">ຈຳນວນສິນຄ້າທີ່ຕ້ອງການໂຄນໄປ Rack ໃໝ່</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            {/* Current Qty Display */}
+                                            <div className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center border border-transparent">
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{t('editPanel.current')}</p>
+                                                <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">{editQty || 0}</span>
+                                            </div>
 
-                                    {/* Icon based on mode */}
-                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
-                                        {isSplitMode ? <CornerDownRight size={16} strokeWidth={3} className="text-rose-400" /> : <Plus size={16} strokeWidth={3} />}
-                                    </div>
+                                            {/* Icon based on mode */}
+                                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                                {isSplitMode ? <CornerDownRight size={16} strokeWidth={3} className="text-rose-400" /> : <Plus size={16} strokeWidth={3} />}
+                                            </div>
 
-                                    {/* Additional Input */}
-                                    <div className="flex-1 relative">
-                                        <input
-                                            type="number"
-                                            placeholder="0"
-                                            className={`w-full p-3 bg-white dark:bg-slate-950 border-2 rounded-xl text-3xl font-bold text-center outline-none transition-all placeholder:text-slate-300 number-input-no-arrows ${isSplitMode
-                                                    ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
-                                                    : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
-                                                }`}
-                                            value={mergeAmount}
-                                            onChange={(e) => {
-                                                if (isSplitMode && Number(e.target.value) > editQty) {
-                                                    setMergeAmount(editQty);
-                                                } else {
-                                                    setMergeAmount(e.target.value);
-                                                }
-                                            }}
-                                            autoFocus
-                                        />
-                                        <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">
-                                            {isSplitMode ? 'ແບ່ງຈຳນວນອອກ' : t('editPanel.addAmount')}
-                                        </p>
-                                        {/* DC hint — only when New Stock In */}
-                                        {isNewStockReason && (
-                                            <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
-                                                ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {selectedRow.dcQty ?? 0})
-                                            </p>
-                                        )}
-                                    </div>
+                                            {/* Additional Input */}
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className={`w-full p-3 bg-white dark:bg-slate-950 border-2 rounded-xl text-3xl font-bold text-center outline-none transition-all placeholder:text-slate-300 number-input-no-arrows ${isSplitMode
+                                                        ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                                        : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
+                                                        }`}
+                                                    value={mergeAmount}
+                                                    onChange={(e) => {
+                                                        if (isSplitMode && Number(e.target.value) > editQty) {
+                                                            setMergeAmount(editQty);
+                                                        } else {
+                                                            setMergeAmount(e.target.value);
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                                <p className="text-[10px] text-slate-400 mt-2 text-center text-xs">
+                                                    {isSplitMode ? 'ແບ່ງຈຳນວນອອກ' : t('editPanel.addAmount')}
+                                                </p>
+                                                {/* DC hint — only when New Stock In */}
+                                                {isNewStockReason && (
+                                                    <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
+                                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {latestDcQty ?? selectedRow.dcQty ?? '...'})
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                            </div>
                             )}
                         </div>
 
@@ -764,8 +813,8 @@ const EditPanel = ({
                             disabled={isUpdating || !isDcTransferValid || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
                             title={isCloneMode && editLocation === selectedRow?.rackLocation ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' : ''}
                             className={`px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isCloneMode
-                                    ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
-                                    : 'bg-indigo-500 hover:bg-indigo-600'
+                                ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
+                                : 'bg-indigo-500 hover:bg-indigo-600'
                                 }`}
                         >
                             {isUpdating ? (
