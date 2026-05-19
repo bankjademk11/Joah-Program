@@ -57,7 +57,7 @@ import {
 } from './components/ui/AnimatedIcons';
 
 
-import AIChatBot from './components/ui/AIChatBot';
+import AIChatBotFull from './components/ui/AIChatBotFull';
 import JoiWidget from './components/ui/JoiWidget';
 
 function AppContent() {
@@ -1138,6 +1138,32 @@ function AppContent() {
                     </div>
                   )}
 
+                  {/* Admin only: Joi AI Chat Full-page (Restored) */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-500 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      {/* Orange Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600 relative flex items-center justify-center">
+                        <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div>
+                        <div className="p-6 rounded-[2rem] bg-white/20 text-white group-hover:scale-110 transition-all duration-700 shadow-xl border border-white/20">
+                          <Bot size={64} strokeWidth={2} />
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Joi AI Chat</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Smart Assistant Full-Page</p>
+                        </div>
+                        <button onClick={() => setStep('ai-chat')}
+                          className="w-full btn-primary mt-1 group py-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-500/30 text-white border-none">
+                          <Sparkles size={18} />
+                          <span>Open AI Chat</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
 
 
                   {/* Admin only: Product Management (Unlocked) */}
@@ -1371,6 +1397,15 @@ function AppContent() {
               activeBranch={isAdmin ? (adminViewBranch || user?.branch_id) : user?.branch_id}
               isAdmin={isAdmin}
             />
+          )}
+
+          {step === 'ai-chat' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col animate-fade-in">
+              <AIChatBotFull
+                onBack={() => setStep('upload')}
+                currentUser={user}
+              />
+            </div>
           )}
 
 
