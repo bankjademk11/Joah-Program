@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -27,9 +27,9 @@ const mdComponents = {
   ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
   blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 my-2 text-slate-500 dark:text-slate-400 italic">{children}</blockquote>,
-  code: ({ inline, children }) => inline
-    ? <code className="bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md text-sm font-mono">{children}</code>
-    : <pre className="bg-slate-900 dark:bg-slate-950 text-green-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-700"><code>{children}</code></pre>,
+  code: ({ inline, children, ...props }) => inline
+    ? <code className="bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md text-sm font-mono" {...props}>{children}</code>
+    : <code className="block bg-slate-900 dark:bg-slate-950 text-green-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-700" {...props}>{children}</code>,
   table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-sm border-collapse rounded-xl overflow-hidden">{children}</table></div>,
   thead: ({ children }) => <thead className="bg-blue-600 text-white">{children}</thead>,
   th: ({ children }) => <th className="px-4 py-2 text-left font-black text-xs uppercase tracking-wider">{children}</th>,
@@ -76,7 +76,7 @@ const AttachmentBadge = ({ file, imagePreview, onRemove }) => (
   </div>
 );
 
-const AIChatBot = ({ onBack, currentUser }) => {
+const AIChatBot = ({ onBack, currentUser, isWidget, onClose }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -232,6 +232,31 @@ const AIChatBot = ({ onBack, currentUser }) => {
         return res;
       };
 
+      const searchProductByName = async (keyword) => {
+        const { data: storeData } = await supabase.from('store_inventory')
+          .select('barcode_no, item_name')
+          .ilike('item_name', `%${keyword}%`)
+          .limit(10);
+        
+        if (!storeData || storeData.length === 0) return `No products found matching '${keyword}'.`;
+        
+        const uniqueProducts = [];
+        const seen = new Set();
+        storeData.forEach(p => {
+          if (!seen.has(p.barcode_no)) {
+            seen.add(p.barcode_no);
+            uniqueProducts.push(p);
+          }
+        });
+
+        let res = `Found ${uniqueProducts.length} products matching '${keyword}':\n`;
+        uniqueProducts.forEach((p, i) => {
+          res += `${i + 1}. Barcode: ${p.barcode_no} | Name: ${p.item_name}\n`;
+        });
+        res += `\nIMPORTANT: Use one of these barcodes to call check_stock_by_barcode or get_request_history_by_barcode.`;
+        return res;
+      };
+
       const fetchDailyRequests = async () => {
         const d = new Date();
         const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -282,6 +307,14 @@ const AIChatBot = ({ onBack, currentUser }) => {
       };
 
       const tools = [
+        {
+          type: "function",
+          function: {
+            name: "search_product_by_name",
+            description: "Search for a product's barcode by its name. Use this FIRST when the user asks about a product by name but doesn't provide a barcode. You can then use the returned barcode in other tools.",
+            parameters: { type: "object", properties: { keyword: { type: "string", description: "The product name or keyword to search for" } }, required: ["keyword"] }
+          }
+        },
         {
           type: "function",
           function: {
@@ -356,7 +389,7 @@ Never mention DeepSeek.${techSpecExtra}`;
           iters++;
           const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
-            body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, tools: tools, temperature: 0.7 })
+            body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, tools: tools, temperature: 0.1 })
           });
           const data = await res.json();
           if (!data.choices?.[0]) throw new Error(data.error?.message || 'DeepSeek error');
@@ -368,7 +401,8 @@ Never mention DeepSeek.${techSpecExtra}`;
               const fn = toolCall.function.name;
               const args = JSON.parse(toolCall.function.arguments || '{}');
               let content;
-              if (fn === "check_stock_by_barcode") content = await fetchStockData(args.barcode);
+              if (fn === "search_product_by_name") content = await searchProductByName(args.keyword);
+              else if (fn === "check_stock_by_barcode") content = await fetchStockData(args.barcode);
               else if (fn === "get_daily_requests") content = await fetchDailyRequests();
               else if (fn === "get_request_history_by_barcode") content = await fetchRequestHistoryByBarcode(args.barcode, args.from_date, args.to_date);
               else content = `Unknown function: ${fn}`;
@@ -393,7 +427,7 @@ Never mention DeepSeek.${techSpecExtra}`;
   };
 
   return (
-    <div className="w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300">
+    <div className={isWidget ? "flex flex-col h-full bg-transparent w-full" : "w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300"}>
       <style>{`
         @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }
         @keyframes eye-blink { 0%,90%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
@@ -402,106 +436,172 @@ Never mention DeepSeek.${techSpecExtra}`;
       `}</style>
 
       {/* Sidebar */}
-      <div className={`transition-all duration-500 overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5 mr-4 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
-        <div className="flex items-center justify-between mb-6 whitespace-nowrap">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
-          <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
-            <Plus size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
-          {chatHistory.map(chat => (
-            <div key={chat.id} onClick={() => loadChat(chat)}
-              className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-white/80 dark:bg-blue-600/20 border-blue-200 dark:border-blue-700/50 shadow-md' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-800/50 hover:border-slate-200 dark:hover:border-slate-700'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                    <MessageSquare size={14} />
+      {!isWidget && (
+        <div className={`transition-all duration-500 overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5 mr-4 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
+          <div className="flex items-center justify-between mb-6 whitespace-nowrap">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
+            <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
+              <Plus size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
+            {chatHistory.map(chat => (
+              <div key={chat.id} onClick={() => loadChat(chat)}
+                className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-white/80 dark:bg-blue-600/20 border-blue-200 dark:border-blue-700/50 shadow-md' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-800/50 hover:border-slate-200 dark:hover:border-slate-700'}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                      <MessageSquare size={14} />
+                    </div>
+                    <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{chat.title}</span>
                   </div>
-                  <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>{chat.title}</span>
+                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
+                    <X size={14} />
+                  </button>
                 </div>
-                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
-                  <X size={14} />
-                </button>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-indigo-500/5 relative">
-
+      <div 
+        className={`flex-1 flex flex-col min-w-0 overflow-hidden relative ${isWidget ? 'rounded-none border-transparent bg-transparent shadow-none' : 'bg-white dark:bg-slate-900 border border-orange-100 dark:border-slate-800 rounded-[2.5rem] shadow-2xl'}`}
+        style={{
+          fontFamily: "'Noto Sans Lao', 'IBM Plex Sans', sans-serif"
+        }}
+      >
         {/* Animated Background Blobs */}
-        <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-400/10 blur-[100px] rounded-full pointer-events-none animate-pulse" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-purple-400/10 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-amber-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100/50 dark:border-slate-800/50 shrink-0 relative z-10">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(p => !p)} className="p-2.5 rounded-2xl hover:bg-white/80 dark:hover:bg-slate-800/80 text-slate-400 hover:text-blue-500 transition-all shadow-sm">
-              <LayoutDashboard size={20} />
-            </button>
-            <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+        {/* Premium Orange Header with iOS Notch Support */}
+        <div 
+          className="px-[18px] pb-[14px] flex items-center justify-between shrink-0 relative overflow-hidden z-10"
+          style={{
+            background: 'linear-gradient(135deg, #fb923c 0%, #f97316 55%, #ea580c 100%)',
+            paddingTop: 'calc(env(safe-area-inset-top, 20px) + 14px)', // iPhone Notch / Status Bar Safe Zone
+          }}
+        >
+          {/* Decorative blobs */}
+          <div className="absolute -top-6 -right-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute -bottom-3 right-[50px] w-[50px] h-[50px] rounded-full bg-white/7% pointer-events-none" />
 
-            {/* Pet Personality Mascot */}
-            <div className="flex items-center gap-4 group">
-              <div className="relative">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-violet-400 p-[3px] shadow-xl shadow-blue-500/20 transition-all duration-500 ${isLoading ? 'scale-110 rotate-6' : 'hover:scale-105 hover:-rotate-3'}`}>
-                  <div className="w-full h-full rounded-[0.8rem] bg-white dark:bg-slate-950 flex items-center justify-center overflow-hidden relative">
-                    {/* JOI PET FACE (SVG) */}
-                    <svg viewBox="0 0 100 100" className={`w-10 h-10 transition-all duration-300 ${isLoading ? 'animate-bounce' : ''}`}>
-                      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500/20" />
-                      <g className="fill-blue-500 dark:fill-blue-400">
-                        <circle cx="35" cy="45" r="5" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                        <circle cx="65" cy="45" r="5" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                      </g>
-                      <path d={isLoading ? "M 40 65 Q 50 75 60 65" : "M 40 65 Q 50 70 60 65"} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-blue-600" />
-                    </svg>
-                    {isLoading && <div className="absolute inset-0 bg-blue-500/10 animate-pulse" />}
-                  </div>
-                </div>
-                <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-950 shadow-sm ${isLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
-              </div>
-              <div className="hidden sm:block">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">{BOT_NAME}</h2>
-                  <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-600 text-[10px] font-black uppercase tracking-wider">Active</span>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Your Inventory Companion</p>
+          <div className="flex items-center gap-3">
+            {!isWidget && (
+              <button 
+                onClick={() => setIsSidebarOpen(p => !p)} 
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all shadow-sm shrink-0"
+              >
+                <LayoutDashboard size={18} />
+              </button>
+            )}
+
+            {/* Avatar block */}
+            <div 
+              className="w-[42px] h-[42px] rounded-full bg-white/20 border-2 border-white/45 flex items-center justify-center text-xl shrink-0 shadow-lg relative overflow-hidden"
+            >
+              {/* JOI PET FACE inside avatar */}
+              <svg viewBox="0 0 100 100" className={`w-8 h-8 text-white ${isLoading ? 'animate-bounce' : ''}`}>
+                <g className="fill-white">
+                  <circle cx="35" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
+                  <circle cx="65" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
+                </g>
+                <path d={isLoading ? "M 35 65 Q 50 75 65 65" : "M 35 65 Q 50 70 65 65"} fill="none" stroke="white" strokeWidth="4.5" strokeLinecap="round" />
+              </svg>
+            </div>
+
+            {/* Info details */}
+            <div className="text-left">
+              <div className="text-white font-bold text-[15px] tracking-wide leading-none">{BOT_NAME} AI</div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-[7px] h-[7px] rounded-full bg-[#4ade80] shadow-[0_0_0_2px_rgba(74,222,128,0.35)] shrink-0 animate-pulse" />
+                <span className="text-white/85 text-[11px] font-medium leading-none">
+                  Online · ຜູ້ຊ່ວຍສິນຄ້າຄົງຄັງ
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsTechToSpec(p => !p)} className={`hidden md:flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all ${isTechToSpec ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
-              <Settings size={14} className={isTechToSpec ? 'animate-spin-slow' : ''} />
-              <span>Tech Mode</span>
+          <div className="flex items-center gap-2 relative z-20">
+            <button 
+              onClick={isWidget ? onClose : onBack} 
+              style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.18)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, lineHeight: 1,
+                transition: 'background 0.2s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.32)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+            >
+              ✕
             </button>
-            <button onClick={toggleTTS} className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all ${isTTSEnabled ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-              {isTTSEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              <span className="hidden lg:inline">{isTTSEnabled ? 'Audio ON' : 'Audio OFF'}</span>
-            </button>
-            <button onClick={onBack} className="p-2.5 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-all">
-              <X size={20} />
-            </button>
+          </div>
+        </div>
+
+        {/* Dynamic Status / Mode Chips Bar */}
+        <div className="bg-[#fff7ed] dark:bg-orange-950/10 border-b border-[#fed7aa] dark:border-orange-900/30 px-[14px] py-[7px] flex gap-2 items-center shrink-0 overflow-x-auto scrollbar-hide">
+          <button 
+            onClick={() => setIsTechToSpec(p => !p)} 
+            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTechToSpec ? 'bg-[#f97316] text-white border-transparent' : 'bg-orange-500/10 dark:bg-orange-500/5 text-[#ea580c] border-[#fed7aa] dark:border-orange-900/30'}`}
+          >
+            Tech Mode
+          </button>
+          <button 
+            onClick={toggleTTS} 
+            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTTSEnabled ? 'bg-[#ea580c] text-white border-transparent' : 'bg-orange-500/10 dark:bg-orange-500/5 text-[#ea580c] border-[#fed7aa] dark:border-orange-900/30'}`}
+          >
+            {isTTSEnabled ? 'Audio ON' : 'Audio OFF'}
+          </button>
+          <div className="ml-auto text-[11px] text-[#9ca3af] dark:text-[#9ca3af]/60 font-semibold shrink-0">
+            Active
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide relative z-10">
+        <div 
+          className={`flex-1 overflow-y-auto space-y-4 scrollbar-hide relative z-10 px-4 py-3 sm:px-6 sm:py-4`}
+          style={{
+            background: 'linear-gradient(180deg, #fff9f5 0%, #fff 60%)',
+          }}
+        >
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-blue-500 border border-slate-100 dark:border-slate-700'}`}>
-                  {m.role === 'user' ? <User size={18} /> : <Sparkles size={18} />}
-                </div>
-                <div className={`flex flex-col gap-2 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`px-6 py-4 rounded-[2rem] shadow-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'}`}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
-                    {m.hasFile && <div className="mt-3 p-3 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20"><FileText size={14} /> <span className="text-xs font-bold">{m.fileName}</span></div>}
+              <div className={`flex gap-2 sm:gap-3 w-full max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                
+                {/* Robot Avatar for Assistant messages */}
+                {m.role !== 'user' && (
+                  <div className="w-[28px] h-[28px] rounded-full shrink-0 flex items-center justify-center text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #f97316, #c2410c)' }}>
+                    🤖
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">{m.role === 'user' ? 'You' : BOT_NAME}</span>
+                )}
+
+                <div className={`flex flex-col gap-1 flex-1 min-w-0 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div 
+                    className={`px-[13px] py-[9px] text-[13px] leading-[1.6] shadow-sm max-w-full overflow-x-auto transition-all ${m.role === 'user' 
+                      ? 'text-white rounded-[18px] rounded-br-[4px]' 
+                      : 'bg-white dark:bg-slate-800 text-slate-850 dark:text-slate-100 rounded-[18px] rounded-bl-[4px] border border-[#fed7aa] dark:border-slate-700/50'
+                    }`}
+                    style={{
+                      background: m.role === 'user' ? 'linear-gradient(135deg, #f97316, #ea580c)' : undefined,
+                      boxShadow: m.role === 'user' ? '0 4px 14px rgba(249,115,22,0.28)' : '0 2px 8px rgba(0,0,0,0.07)',
+                    }}
+                  >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+                    {m.hasFile && (
+                      <div className="mt-3 p-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20 max-w-full overflow-hidden">
+                        <FileText size={14} className="shrink-0" /> 
+                        <span className="text-[10px] font-bold truncate">{m.fileName}</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-2">{m.role === 'user' ? 'You' : BOT_NAME}</span>
                 </div>
               </div>
             </div>
@@ -511,23 +611,43 @@ Never mention DeepSeek.${techSpecExtra}`;
         </div>
 
         {/* Input Area */}
-        <div className="p-8 border-t border-slate-100/50 dark:border-slate-800/50 bg-white/20 dark:bg-slate-900/20 backdrop-blur-md relative z-10">
-          <div className="max-w-4xl mx-auto relative">
+        <div className="border-t border-[#fed7aa] dark:border-slate-800 bg-white relative z-10 w-full px-4 py-3">
+          <div className="max-w-4xl mx-auto relative w-full">
             {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} />}
-            <div className="flex items-end gap-4 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[2.5rem] shadow-xl focus-within:ring-2 ring-blue-500/20 transition-all">
-              <div className="flex gap-1 pl-2 mb-1">
-                <button onClick={() => document.getElementById('ai-file-input').click()} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-all">
-                  <Paperclip size={20} />
-                </button>
-                <input id="ai-file-input" type="file" className="hidden" onChange={handleFileChange} />
-                <button onClick={() => document.getElementById('ai-img-input').click()} className="p-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-all">
-                  <Image size={20} />
-                </button>
-                <input id="ai-img-input" type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            <div className="flex items-center gap-2 w-full">
+              <div className="flex items-center bg-[#fff7ed] dark:bg-slate-800 border-[1.5px] border-[#fed7aa] dark:border-orange-900/30 rounded-[20px] px-3.5 py-1.5 flex-1 min-w-0">
+                <input 
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                  placeholder="ຖາມ Joi ສິ່ງໃດກໍໄດ້..."
+                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-[13px] color-[#374151] dark:text-white placeholder-slate-400 min-w-0"
+                />
+                
+                {/* File Attachment Buttons inside input area */}
+                <div className="flex items-center gap-1.5 ml-2">
+                  <button onClick={() => document.getElementById('ai-file-input').click()} className="p-1 text-slate-400 hover:text-orange-500 transition-colors shrink-0">
+                    <Paperclip size={16} />
+                  </button>
+                  <input id="ai-file-input" type="file" className="hidden" onChange={handleFileChange} />
+                  <button onClick={() => document.getElementById('ai-img-input').click()} className="p-1 text-slate-400 hover:text-orange-500 transition-colors shrink-0">
+                    <Image size={16} />
+                  </button>
+                </div>
               </div>
-              <textarea ref={textareaRef} rows={1} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder="Ask Joi anything..." className="flex-1 bg-transparent border-none focus:ring-0 py-3.5 text-sm resize-none scrollbar-hide dark:text-white placeholder:text-slate-400" />
-              <button onClick={handleSend} disabled={isLoading || (!input.trim() && !attachedFile)} className="p-4 rounded-[1.5rem] bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:grayscale transition-all mr-1 mb-1">
-                <Send size={20} />
+
+              <button 
+                onClick={handleSend} 
+                disabled={isLoading || (!input.trim() && !attachedFile)} 
+                className="w-10 h-10 rounded-full border-none flex items-center justify-center transition-all shrink-0"
+                style={{
+                  background: (input.trim() || attachedFile) ? 'linear-gradient(135deg, #f97316, #ea580c)' : '#f3f4f6',
+                  cursor: (input.trim() || attachedFile) ? 'pointer' : 'default',
+                  boxShadow: (input.trim() || attachedFile) ? '0 4px 12px rgba(249,115,22,0.4)' : 'none',
+                }}
+              >
+                <Send size={16} className={(input.trim() || attachedFile) ? 'text-white' : 'text-[#9ca3af]'} />
               </button>
             </div>
           </div>

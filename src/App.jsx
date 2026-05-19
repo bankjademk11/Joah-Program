@@ -58,6 +58,7 @@ import {
 
 
 import AIChatBot from './components/ui/AIChatBot';
+import JoiWidget from './components/ui/JoiWidget';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -1137,28 +1138,7 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* AI Assistant Card (Admin Only) */}
-                  {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-violet-500 hover:shadow-violet-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      <div className="w-full h-44 overflow-hidden bg-violet-50 dark:bg-slate-800 relative flex items-center justify-center">
-                        <div className="p-8 rounded-[2rem] bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
-                          <Bot size={64} strokeWidth={2.5} />
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
-                      </div>
-                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
-                        <div className="space-y-1.5 text-center">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">AI Assistant</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Smart Warehouse Support</p>
-                        </div>
-                        <button onClick={() => setStep('ai-chat')}
-                          className="w-full btn-primary mt-1 group py-4 bg-violet-600 hover:bg-violet-700 shadow-violet-500/30 text-white border-none">
-                          <Sparkles size={18} />
-                          <span>ເຂົ້າໃຊ້ງານ AI</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* Admin only: Product Management (Unlocked) */}
                   {showAdminMenu && (
@@ -1393,9 +1373,7 @@ function AppContent() {
             />
           )}
 
-          {step === 'ai-chat' && (
-            <AIChatBot onBack={() => setStep('upload')} currentUser={user} />
-          )}
+
 
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">
@@ -1675,6 +1653,7 @@ function AppContent() {
           }}
         />
       </div>
+      {user && <JoiWidget currentUser={user} />}
     </ToastProvider>
   );
 }
