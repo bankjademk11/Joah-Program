@@ -28,6 +28,7 @@ const QuickAddPanel = ({
     const [customMode, setCustomMode] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('');
     const [viewingCategories, setViewingCategories] = useState(false); // New state to toggle Category Selection View
+    const [dcQty, setDcQty] = useState(0); // 🆕 DC Qty state
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null); // Local inspector state
     const dropdownRef = useRef(null);
     const [locationSearch, setLocationSearch] = useState('');
@@ -78,6 +79,16 @@ const QuickAddPanel = ({
         if (!isOpen || !quickAddForm.barcode_no) return;
 
         const barcode = String(quickAddForm.barcode_no).trim();
+        
+        // 🆕 Fetch DC Qty whenever barcode changes
+        supabase.from('table_dc_stock')
+            .select('qty')
+            .eq('barcode', barcode)
+            .eq('branch_id', currentBranch || localStorage.getItem('joah_branch_id') || 'ຕະຫຼາດລາວ')
+            .maybeSingle()
+            .then(({ data }) => setDcQty(data?.qty || 0))
+            .catch(err => console.error("Error fetching DC qty:", err));
+            
         const masterItem = masterData.find(m =>
             String(m.barcode || m.Barcode || m['Barcode No.'] || '').trim() === barcode
         );
@@ -409,6 +420,13 @@ const QuickAddPanel = ({
                                             <Trash2 size={11} /> ຍົກເລີກການສະແກນຄັ້ງລ່າສຸດ
                                         </button>
                                     )}
+                                    
+                                    {/* 🆕 DC hint — only when New Stock In */}
+                                    {selectedReasonOption === t('reasons.newStock') && (
+                                        <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200 bg-violet-50 dark:bg-violet-900/20 py-1.5 rounded-lg border border-violet-100 dark:border-violet-900">
+                                            ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -430,6 +448,13 @@ const QuickAddPanel = ({
                                     className="w-full p-3 bg-slate-50 dark:bg-slate-800 border-2 border-emerald-100 dark:border-emerald-900/50 rounded-xl text-3xl font-bold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
+                                
+                                {/* 🆕 DC hint — only when New Stock In */}
+                                {selectedReasonOption === t('reasons.newStock') && (
+                                    <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200">
+                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
+                                    </p>
+                                )}
                             </div>
                         </div>
                         )}
@@ -731,7 +756,7 @@ const QuickAddPanel = ({
                         </button>
                         <button
                             onClick={onSave}
-                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0}
+                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)}
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}

@@ -186,6 +186,29 @@ const ResultTable = ({
         }
     }, [refreshTrigger]);
 
+    // ── 🆕 Realtime Listener for Massive Imports ──
+    useEffect(() => {
+        console.log('📡 [SYNC] Setting up Realtime listener on app_sync_signals...');
+        const channel = supabase.channel('app_sync_signals_inv')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_sync_signals' }, (payload) => {
+                console.log('📡 [SYNC] Signal received:', payload);
+                if (payload.new && payload.new.signal_name === 'massive_import_done') {
+                    console.log('📡 [SYNC] Auto-refresh triggered!');
+                    success('มีการนำเข้าข้อมูลขนาดใหญ่ ระบบกำลังรีเฟรชข้อมูลล่าสุด...');
+                    setIsRefreshing(true);
+                    if (onRefresh) onRefresh({ silent: false, delta: true });
+                    setTimeout(() => setIsRefreshing(false), 1500); // Visual feedback
+                }
+            })
+            .subscribe((status, err) => {
+                console.log('📡 [SYNC] Channel status:', status, err || '');
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [onRefresh]);
+
     const itemsPerPage = 50;
     const rowRefs = useRef({}); // Store refs for each barcode row
 
@@ -756,6 +779,30 @@ const ResultTable = ({
                 if (logError) console.error("Failed to log added item:", logError);
                 // --------------------------------------------------------------------------
 
+                // ── 🆕 Deduct DC stock if "New Stock In" ─────────────
+                if (quickAddForm.remarks === t('reasons.newStock') && Number(quickAddForm.qty) > 0) {
+                    try {
+                        const deductAmt = Number(quickAddForm.qty);
+                        const { data: dcData } = await supabase
+                            .from('table_dc_stock')
+                            .select('qty')
+                            .eq('barcode', quickAddForm.barcode_no)
+                            .eq('branch_id', branchToSave)
+                            .maybeSingle();
+                        
+                        if (dcData) {
+                            const newDcQty = Math.max(0, (dcData.qty || 0) - deductAmt);
+                            await supabase
+                                .from('table_dc_stock')
+                                .update({ qty: newDcQty, updated_at: new Date().toISOString() })
+                                .eq('barcode', quickAddForm.barcode_no)
+                                .eq('branch_id', branchToSave);
+                        }
+                    } catch (dcErr) {
+                        console.error("Failed to deduct from DC Stock", dcErr);
+                    }
+                }
+
                 // Optimistic UI Update: Add to local state immediately
                 const newOptimisticItem = {
                     id: `temp-${Date.now()}`, // Temporary ID
@@ -1209,7 +1256,11 @@ const ResultTable = ({
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
                             <input
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                                className="input-field pl-14 pr-12 font-bold"
+                                className={`input-field pl-14 pr-12 font-bold ${
+                                    searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
+                                        ? 'border-red-500 ring-2 ring-red-500/50 animate-pulse'
+                                        : ''
+                                }`}
                                 value={searchTerm}
                                 onChange={(e) => { 
                                     setSearchTerm(e.target.value.replace(/\s+/g, '')); 
@@ -1217,23 +1268,29 @@ const ResultTable = ({
                                 }}
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
-                                    if (e.key === 'Enter' && filteredResults.length === 0 && searchTerm.length >= 5) {
-                                        if (dbSource !== 'supabase') {
-                                            alert('⚠️ Please connect to Cloud first.');
-                                            return;
-                                        }
+                                    if (e.key === 'Enter' && searchTerm.length >= 5) {
+                                        // 💡 NEW LOGIC: Check if exact barcode exists in filtered results
+                                        const exactMatch = filteredResults.find(r => r.barcode === searchTerm);
+                                        
+                                        // If no exact match is found, prompt to Quick Add
+                                        if (!exactMatch) {
+                                            if (dbSource !== 'supabase') {
+                                                alert('⚠️ Please connect to Cloud first.');
+                                                return;
+                                            }
 
-                                        if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Inventory, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
-                                            setQuickAddForm({
-                                                barcode_no: searchTerm,
-                                                item_name: '',
-                                                rack_location: '',
-                                                category_1_actual: '',
-                                                category_2_actual: '',
-                                                qty: 0,
-                                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
-                                            });
-                                            setShowQuickAdd(true);
+                                            if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Inventory ຫຼື ຍັງບໍ່ໄດ້ສະແກນໃນໂລເຄຊັ້ນນີ້, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
+                                                setQuickAddForm({
+                                                    barcode_no: searchTerm,
+                                                    item_name: '',
+                                                    rack_location: '',
+                                                    category_1_actual: '',
+                                                    category_2_actual: '',
+                                                    qty: 0,
+                                                    remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                });
+                                                setShowQuickAdd(true);
+                                            }
                                         }
                                     }
                                 }}
@@ -1513,9 +1570,50 @@ const ResultTable = ({
                                         </tr>
                                     ))
                                 ) : currentResults.length > 0 ? (
-                                    currentResults.map((row) => (
-                                        <tr
-                                            key={row.rowIndex}
+                                    <>
+                                        {/* INJECT PARTIAL MATCH WARNING ROW */}
+                                        {searchTerm.length > 0 && !filteredResults.some(r => r.barcode === searchTerm) && (
+                                            <tr className="bg-amber-50/50 dark:bg-amber-900/10 border-b-2 border-amber-200 dark:border-amber-800/50 relative z-20">
+                                                <td colSpan="12" className="px-8 py-4">
+                                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-3 text-amber-700 dark:text-amber-400">
+                                                            <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full">
+                                                                <AlertTriangle size={20} strokeWidth={2.5} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-black uppercase tracking-wider">ບໍ່ພົບບາໂຄດທີ່ກົງກັນ 100%</p>
+                                                                <p className="text-xs font-bold opacity-80 mt-0.5">ບາໂຄດ <span className="font-mono bg-amber-200 dark:bg-amber-800/50 px-1 rounded text-black dark:text-white">{searchTerm}</span> ຍັງບໍ່ມີໃນລະບົບ (ລຸ່ມນີ້ແມ່ນບາໂຄດທີ່ຄ້າຍຄືກັນ)</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (dbSource !== 'supabase') {
+                                                                    alert('⚠️ Please connect to Cloud first.');
+                                                                    return;
+                                                                }
+                                                                setQuickAddForm({
+                                                                    barcode_no: searchTerm,
+                                                                    item_name: '',
+                                                                    rack_location: '',
+                                                                    category_1_actual: '',
+                                                                    category_2_actual: '',
+                                                                    qty: 0,
+                                                                    remarks: ''
+                                                                });
+                                                                setShowQuickAdd(true);
+                                                            }}
+                                                            className="btn-primary py-2.5 px-6 rounded-xl shadow-lg shadow-joah-orange/20 whitespace-nowrap group hover:scale-105 active:scale-95 transition-all text-xs flex items-center gap-2"
+                                                        >
+                                                            <Plus size={16} className="group-hover:rotate-90 transition-transform" />
+                                                            <span className="font-black">ເພີ່ມສິນຄ້ານີ້ເລີຍ</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {currentResults.map((row) => (
+                                            <tr
+                                                key={row.rowIndex}
                                             ref={el => rowRefs.current[row.barcode] = el}
                                             className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
                                         >
@@ -1627,7 +1725,9 @@ const ResultTable = ({
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))) : (
+                                        ))}
+                                    </>
+                                ) : (
                                     <tr>
                                         <td colSpan="7" className="py-24 text-center">
                                             <div className="flex flex-col items-center gap-6 text-slate-300 dark:text-slate-700 animate-fade-in">
@@ -1637,7 +1737,19 @@ const ResultTable = ({
                                                 <div className="space-y-2">
                                                     <p className="text-lg font-black text-slate-800 dark:text-white">ບໍ່ພົບຂໍ້ມູນໃນລາຍການ</p>
                                                     {searchTerm.length > 0 ? (
-                                                        <p className="text-sm font-bold text-slate-400">ບໍ່ພົບຜົນການຄົ້ນຫາສຳລັບ: <span className="text-joah-orange font-mono underline decoration-2 underline-offset-4">{searchTerm}</span></p>
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-400">ບໍ່ພົບຜົນການຄົ້ນຫາສຳລັບ: <span className="text-joah-orange font-mono underline decoration-2 underline-offset-4">{searchTerm}</span></p>
+                                                            {filteredResults.length > 0 && (
+                                                                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-center max-w-sm">
+                                                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">
+                                                                        ⚠️ ພົບບາໂຄດທີ່ຄ້າຍຄືກັນ ແຕ່ບໍ່ກົງກັນ 100%
+                                                                    </p>
+                                                                    <p className="text-[10px] text-amber-600 dark:text-amber-500">
+                                                                        ຖ້ານີ້ແມ່ນສິນຄ້າໃໝ່ ຫຼື ສິນຄ້າທີ່ຍັງບໍ່ເຄີຍສະແກນ, ກະລຸນາເພີ່ມເຂົ້າລະບົບ.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <p className="text-sm font-bold text-slate-400 tracking-widest uppercase">ກະລຸນາລອງຄົ້ນຫາຄືນໃໝ່</p>
                                                     )}

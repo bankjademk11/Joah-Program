@@ -194,6 +194,29 @@ const StoreResultTable = ({
         }
     }, [refreshTrigger]);
 
+    // ── 🆕 Realtime Listener for Massive Imports ──
+    useEffect(() => {
+        console.log('📡 [SYNC] Setting up Realtime listener on app_sync_signals...');
+        const channel = supabase.channel('app_sync_signals_store')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_sync_signals' }, (payload) => {
+                console.log('📡 [SYNC] Signal received:', payload);
+                if (payload.new && payload.new.signal_name === 'massive_import_done') {
+                    console.log('📡 [SYNC] Auto-refresh triggered!');
+                    success('มีการนำเข้าข้อมูลขนาดใหญ่ ระบบกำลังรีเฟรชข้อมูลล่าสุด...');
+                    setIsRefreshing(true);
+                    if (onRefresh) onRefresh({ silent: false, delta: true });
+                    setTimeout(() => setIsRefreshing(false), 1500); // Visual feedback
+                }
+            })
+            .subscribe((status, err) => {
+                console.log('📡 [SYNC] Channel status:', status, err || '');
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [onRefresh]);
+
     const itemsPerPage = 50;
     const rowRefs = useRef({}); // Store refs for each barcode row
 
@@ -523,6 +546,13 @@ const StoreResultTable = ({
             setEditTag('');
             setEditMaxQty('');
             setMergeAmount('');
+            
+            // Auto-refresh table data after save with Skeleton UX
+            if (onRefresh) {
+                setIsRefreshing(true);
+                await onRefresh({ skipMaster: true, silent: true });
+                setTimeout(() => setIsRefreshing(false), 500);
+            }
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -609,6 +639,13 @@ const StoreResultTable = ({
             setSelectedRow(null);
             setEditReason('');
             setMergeAmount('');
+
+            // Auto-refresh table data after clone with Skeleton UX
+            if (onRefresh) {
+                setIsRefreshing(true);
+                await onRefresh({ skipMaster: true, silent: true });
+                setTimeout(() => setIsRefreshing(false), 500);
+            }
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -732,6 +769,13 @@ const StoreResultTable = ({
 
             success(t('results.saveSuccess'));
             setSelectedRow(null);
+            
+            // Auto-refresh table data after split with Skeleton UX
+            if (onRefresh) {
+                setIsRefreshing(true);
+                await onRefresh({ skipMaster: true, silent: true });
+                setTimeout(() => setIsRefreshing(false), 500);
+            }
 
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
@@ -802,6 +846,30 @@ const StoreResultTable = ({
                     batchEndedAt: inboxBatchId ? new Date().toISOString() : null,
                     batchTotalSeconds: null,
                 });
+
+                // ── 🆕 Deduct DC stock if "New Stock In" ─────────────
+                if (quickAddForm.remarks === t('reasons.newStock') && Number(quickAddForm.qty) > 0) {
+                    try {
+                        const deductAmt = Number(quickAddForm.qty);
+                        const { data: dcData } = await supabase
+                            .from('table_dc_stock')
+                            .select('qty')
+                            .eq('barcode', quickAddForm.barcode_no)
+                            .eq('branch_id', branchToSave)
+                            .maybeSingle();
+                        
+                        if (dcData) {
+                            const newDcQty = Math.max(0, (dcData.qty || 0) - deductAmt);
+                            await supabase
+                                .from('table_dc_stock')
+                                .update({ qty: newDcQty, updated_at: new Date().toISOString() })
+                                .eq('barcode', quickAddForm.barcode_no)
+                                .eq('branch_id', branchToSave);
+                        }
+                    } catch (dcErr) {
+                        console.error("Failed to deduct from DC Stock", dcErr);
+                    }
+                }
 
                 // ── If from Inbox: mark the request as confirmed ──────
                 if (inboxItemId) {
@@ -1268,7 +1336,11 @@ const StoreResultTable = ({
                             </div>
                             <input
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all placeholder:text-slate-400/70 shadow-inner"
+                                className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
+                                    searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
+                                        ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
+                                        : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
+                                }`}
                                 value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value.replace(/\s+/g, ''));
@@ -1276,23 +1348,29 @@ const StoreResultTable = ({
                                 }}
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
-                                    if (e.key === 'Enter' && filteredResults.length === 0 && searchTerm.length >= 5) {
-                                        if (dbSource !== 'supabase') {
-                                            alert('⚠️ Please connect to Cloud first.');
-                                            return;
-                                        }
+                                    if (e.key === 'Enter' && searchTerm.length >= 5) {
+                                        // 💡 NEW LOGIC: Check if exact barcode exists in filtered results
+                                        const exactMatch = filteredResults.find(r => r.barcode === searchTerm);
+                                        
+                                        // If no exact match is found, prompt to Quick Add
+                                        if (!exactMatch) {
+                                            if (dbSource !== 'supabase') {
+                                                alert('⚠️ Please connect to Cloud first.');
+                                                return;
+                                            }
 
-                                        if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Store_Inventory, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
-                                            setQuickAddForm({
-                                                barcode_no: searchTerm,
-                                                item_name: '',
-                                                rack_location: localStorage.getItem('joah_last_rack_location') || '',
-                                                category_1_actual: '',
-                                                category_2_actual: '',
-                                                qty: 0,
-                                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
-                                            });
-                                            setShowQuickAdd(true);
+                                            if (window.confirm(`ສິນຄ້ານີ້ບໍ່ມີໃນ Store_Inventory ຫຼື ຍັງບໍ່ໄດ້ສະແກນໃນໂລເຄຊັ້ນນີ້, ຕ້ອງການເພີ່ມໃໝ່ເລີຍບໍ່? (Barcode: ${searchTerm})`)) {
+                                                setQuickAddForm({
+                                                    barcode_no: searchTerm,
+                                                    item_name: '',
+                                                    rack_location: localStorage.getItem('joah_last_rack_location') || '',
+                                                    category_1_actual: '',
+                                                    category_2_actual: '',
+                                                    qty: 0,
+                                                    remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                });
+                                                setShowQuickAdd(true);
+                                            }
                                         }
                                     }
                                 }}
@@ -1473,11 +1551,52 @@ const StoreResultTable = ({
                                         </tr>
                                     ))
                                 ) : currentResults.length > 0 ? (
-                                    currentResults.map((row) => (
-                                        <tr
-                                            key={row.rowIndex}
-                                            className="group transition-all duration-500 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.05]"
-                                        >
+                                    <>
+                                        {/* INJECT PARTIAL MATCH WARNING ROW */}
+                                        {searchTerm.length > 0 && !filteredResults.some(r => r.barcode === searchTerm) && (
+                                            <tr className="bg-amber-50/50 dark:bg-amber-900/10 border-b-2 border-amber-200 dark:border-amber-800/50 relative z-20">
+                                                <td colSpan="12" className="px-8 py-4">
+                                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-3 text-amber-700 dark:text-amber-400">
+                                                            <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full">
+                                                                <AlertTriangle size={20} strokeWidth={2.5} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-black uppercase tracking-wider">ບໍ່ພົບບາໂຄດທີ່ກົງກັນ 100%</p>
+                                                                <p className="text-xs font-bold opacity-80 mt-0.5">ບາໂຄດ <span className="font-mono bg-amber-200 dark:bg-amber-800/50 px-1 rounded text-black dark:text-white">{searchTerm}</span> ຍັງບໍ່ມີໃນລະບົບ (ລຸ່ມນີ້ແມ່ນບາໂຄດທີ່ຄ້າຍຄືກັນ)</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (dbSource !== 'supabase') {
+                                                                    alert('⚠️ Please connect to Cloud first.');
+                                                                    return;
+                                                                }
+                                                                setQuickAddForm({
+                                                                    barcode_no: searchTerm,
+                                                                    item_name: '',
+                                                                    rack_location: localStorage.getItem('joah_last_rack_location') || '',
+                                                                    category_1_actual: '',
+                                                                    category_2_actual: '',
+                                                                    qty: 0,
+                                                                    remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                                });
+                                                                setShowQuickAdd(true);
+                                                            }}
+                                                            className="bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 px-6 rounded-xl shadow-lg shadow-emerald-500/20 whitespace-nowrap group hover:scale-105 active:scale-95 transition-all text-xs flex items-center gap-2"
+                                                        >
+                                                            <Plus size={16} className="group-hover:rotate-90 transition-transform" />
+                                                            <span className="font-black">ເພີ່ມສິນຄ້ານີ້ເລີຍ</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {currentResults.map((row) => (
+                                            <tr
+                                                key={row.rowIndex}
+                                                className="group transition-all duration-500 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.05]"
+                                            >
                                             <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col gap-2 min-w-[220px] py-1">
@@ -1607,12 +1726,59 @@ const StoreResultTable = ({
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))) : (
+                                        ))}
+                                    </>
+                                ) : (
                                     <tr>
                                         <td colSpan="12" className="py-24 text-center">
                                             <div className="flex flex-col items-center gap-6 text-slate-300 dark:text-slate-700 animate-fade-in">
-                                                <Package size={40} className="w-20 h-20 text-slate-200" strokeWidth={1.5} />
-                                                <p className="text-lg font-black text-slate-800 dark:text-white">ບໍ່ພົບຂໍ້ມູນໃນລາຍການ</p>
+                                                <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center text-slate-300 shadow-inner">
+                                                    <Package size={40} strokeWidth={1.5} />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <p className="text-lg font-black text-slate-800 dark:text-white">ບໍ່ພົບຂໍ້ມູນໃນລາຍການ</p>
+                                                    {searchTerm.length > 0 ? (
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-400">ບໍ່ພົບຜົນການຄົ້ນຫາສຳລັບ: <span className="text-emerald-500 font-mono underline decoration-2 underline-offset-4">{searchTerm}</span></p>
+                                                            {filteredResults.length > 0 && (
+                                                                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-center max-w-sm">
+                                                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">
+                                                                        ⚠️ ພົບບາໂຄດທີ່ຄ້າຍຄືກັນ ແຕ່ບໍ່ກົງກັນ 100%
+                                                                    </p>
+                                                                    <p className="text-[10px] text-amber-600 dark:text-amber-500">
+                                                                        ຖ້ານີ້ແມ່ນສິນຄ້າໃໝ່ ຫຼື ສິນຄ້າທີ່ຍັງບໍ່ເຄີຍສະແກນ, ກະລຸນາເພີ່ມເຂົ້າລະບົບ.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-400 tracking-widest uppercase">ກະລຸນາລອງຄົ້ນຫາຄືນໃໝ່</p>
+                                                    )}
+                                                </div>
+                                                {searchTerm.length >= 5 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (dbSource !== 'supabase') {
+                                                                alert('⚠️ Please connect to Cloud first.');
+                                                                return;
+                                                            }
+                                                            setQuickAddForm({
+                                                                barcode_no: searchTerm,
+                                                                item_name: '',
+                                                                rack_location: localStorage.getItem('joah_last_rack_location') || '',
+                                                                category_1_actual: '',
+                                                                category_2_actual: '',
+                                                                qty: 0,
+                                                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                            });
+                                                            setShowQuickAdd(true);
+                                                        }}
+                                                        className="bg-emerald-500 hover:bg-emerald-600 text-white py-4 px-10 rounded-2xl shadow-xl shadow-emerald-500/20 group transform hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                                    >
+                                                        <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                                                        <span className="font-black">ເພີ່ມເຂົ້າ Inventory ໂດຍກົງ</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

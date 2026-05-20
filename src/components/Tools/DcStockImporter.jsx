@@ -122,7 +122,11 @@ export default function DcStockImporter({ onBack }) {
       const addedData = [];
       const dcPayload = [];
       const storeUpdatePayload = [];
+      const dcLogPayload = [];
       const timestamp = new Date().toISOString();
+      const empName = localStorage.getItem('joah_employee_name') || 'unknown';
+      const empId = localStorage.getItem('joah_employee_id') || '';
+      const importedBy = empId ? `${empName} (${empId})` : empName;
 
       previewData.forEach(r => {
         const qtyToAdd = r.qty;
@@ -148,6 +152,14 @@ export default function DcStockImporter({ onBack }) {
             last_updated: timestamp
           });
         }
+
+        dcLogPayload.push({
+          barcode_no: r.barcode,
+          imported_qty: qtyToAdd,
+          import_date: timestamp,
+          branch_id: importBranch,
+          imported_by: importedBy
+        });
       });
 
       // 4. Batch Updates
@@ -162,6 +174,25 @@ export default function DcStockImporter({ onBack }) {
         await Promise.all(chunk.map(item => 
           supabase.from('store_inventory').update({ q_qty: item.q_qty, last_updated: item.last_updated }).eq('id', item.id)
         ));
+      }
+
+      // 4.5 Insert into History Log
+      for (let i = 0; i < dcLogPayload.length; i += CHUNK) {
+        const chunk = dcLogPayload.slice(i, i + CHUNK);
+        const { error } = await supabase.from('store_dc_log').insert(chunk);
+        if (error) throw error;
+      }
+
+      // ── 🆕 FIRE SIGNAL TO REFRESH ALL CLIENTS ──
+      try {
+        console.log('🔥 [SYNC] Attempting to fire massive_import_done signal...');
+        const { data: sigData, error: sigErr } = await supabase.from('app_sync_signals')
+          .upsert({ signal_name: 'massive_import_done', updated_at: new Date().toISOString() })
+          .select();
+        
+        console.log('🔥 [SYNC] Signal Upsert Response:', { sigData, sigErr });
+      } catch(signalErr) {
+        console.error("🔥 [SYNC] Failed to fire sync signal", signalErr);
       }
 
       setLastImportPayload({ branch_id: importBranch, addedData });

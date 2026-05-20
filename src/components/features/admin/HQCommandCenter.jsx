@@ -31,6 +31,8 @@ const TABS = [
     // { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
     { id: 'store_edits', label: 'ປະຫວັດການເຕີມເຄືອງຫຼັງ Request', icon: Store, color: 'from-blue-500 to-cyan-500' },
     { id: 'store_manual_edits', label: 'ປະຫວັດແກ້ໄຂໜ້າຮ້ານ', icon: Edit3, color: 'from-violet-500 to-purple-600' },
+    { id: 'import_dc', label: 'ປະຫວັດການນຳເຂົ້າ DC', icon: FileSpreadsheet, color: 'from-pink-500 to-rose-500' },
+    { id: 'import_sales', label: 'ປະຫວັດການນຳເຂົ້າ Sale', icon: FileSpreadsheet, color: 'from-fuchsia-500 to-pink-500' },
 ];
 
 // ===================== HELPERS =====================
@@ -77,10 +79,10 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
     workbook.creator = 'HQ Command Center';
     workbook.created = new Date();
 
-    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals', store_edits: 'Store History', store_manual_edits: 'Store Edit History' };
+    const tabNames = { requests: 'Store Requests', edits: 'Edit Activity', new: 'New Arrivals', store_edits: 'Store History', store_manual_edits: 'Store Edit History', import_dc: 'DC Import History', import_sales: 'Sales Import History' };
     const ws = workbook.addWorksheet(tabNames[activeTab] || 'Export');
 
-    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981', store_edits: 'FF06B6D4', store_manual_edits: 'FF7C3AED' };
+    const headerFill = { requests: 'FFF97316', edits: 'FF6366F1', new: 'FF10B981', store_edits: 'FF06B6D4', store_manual_edits: 'FF7C3AED', import_dc: 'FFEC4899', import_sales: 'FFD946EF' };
     const headerStyle = {
         font: { bold: true, color: { argb: 'FFFFFFFF' }, size: 12, name: 'Phetsarath OT' },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: headerFill[activeTab] } },
@@ -243,6 +245,27 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
         });
+    } else if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+        ws.columns = [
+            { header: 'ສາຂາ', key: 'branch_id', width: 18 },
+            { header: 'Barcode', key: 'barcode', width: 18 },
+            { header: 'ຈຳນວນ', key: 'qty', width: 14 },
+            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ຜູ້ນຳເຂົ້າ', key: 'updated_by_name', width: 22 },
+            { header: 'ເວລາ', key: 'updated_at', width: 24 },
+        ];
+        rows.forEach((r, i) => {
+            const { name: editName, empId: editId } = parseUser(r.updated_by);
+            const row = ws.addRow({
+                branch_id: r.branch_id,
+                barcode: r.barcode,
+                qty: r.qty,
+                updated_by_id: editId || '-',
+                updated_by_name: editName,
+                updated_at: fmtExcel(r.updated_at)
+            });
+            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFFCE7F3' : 'FFFFFFFF' } }; });
+        });
     } else {
         ws.columns = [
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
@@ -394,6 +417,11 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: activeTab === 'store_manual_edits' ? 'text-violet-500' : 'text-blue-500' };
                 subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: activeTab === 'store_manual_edits' ? 'text-purple-600' : 'text-cyan-600' };
                 subC = null;
+            } else if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+                mainVal = rows.length; mainLabel = activeTab === 'import_dc' ? 'ການນຳເຂົ້າ DC' : 'ການນຳເຂົ້າ Sale';
+                subA = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: activeTab === 'import_dc' ? 'text-pink-500' : 'text-fuchsia-500' };
+                subB = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ນຳເຂົ້າ', color: 'text-rose-500' };
+                subC = null;
             } else {
                 mainVal = rows.length; mainLabel = 'ສິນຄ້າໃໝ່';
                 subA = { val: new Set(rows.map(r => r.added_by)).size, label: 'ຜູ້ດຳເນີນ', color: 'text-teal-600' };
@@ -543,6 +571,14 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
             r.details || '',
             fmt(r.updated_at)
         ];
+        if (activeTab === 'import_dc' || activeTab === 'import_sales') return [
+            '',
+            r.barcode || '-',
+            r.updated_by || '',
+            String(r.qty ?? 0),
+            r.details || '',
+            fmt(r.updated_at)
+        ];
         return [
             '',
             (r.item_name || '') + ' ' + (r.barcode || ''),
@@ -652,6 +688,7 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                     'ເວລາເລີ່ມບິນ', 'ເວລາສຳເລັດບິນ', 'ເວລາທັງບິນ'
                 ] : ['ເວລາບັນທຶກ', 'ເວລາທັງບິນ']),
             ] :
+                (activeTab === 'import_dc' || activeTab === 'import_sales') ? ['#', 'Barcode', 'ຜູ້ນຳເຂົ້າ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'] :
                 activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
                     ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
@@ -975,6 +1012,20 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate }) =
                         </span>
                     </td>
                     <td className="px-6 py-4"><span className="text-sm text-slate-500 italic">{r.details || r.change_reason || 'ແກ້ໄຂຂໍ້ມູນ'}</span></td>
+                    <td className="px-6 py-4 text-slate-400 text-sm whitespace-nowrap">{fmt(r.updated_at)}</td>
+                </tr>
+            );
+        }
+        if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+            return (
+                <tr key={i} className={`transition-colors ${activeTab === 'import_sales' ? 'hover:bg-rose-50/30' : 'hover:bg-pink-50/30'}`}>
+                    <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
+                    <td className="px-6 py-4">
+                        <span className="font-mono text-sm font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md whitespace-nowrap">{r.barcode || '-'}</span>
+                    </td>
+                    <td className="px-6 py-4"><UserCell value={r.updated_by} iconColor={activeTab === 'import_sales' ? 'text-rose-400' : 'text-pink-400'} /></td>
+                    <td className="px-6 py-4 text-center"><span className="text-2xl font-black text-slate-700 dark:text-white">{r.qty ?? '-'}</span></td>
+                    <td className="px-6 py-4"><span className="text-sm text-slate-500 italic">{r.details || ''}</span></td>
                     <td className="px-6 py-4 text-slate-400 text-sm whitespace-nowrap">{fmt(r.updated_at)}</td>
                 </tr>
             );
@@ -1378,6 +1429,38 @@ const HQCommandCenter = ({ onBack }) => {
                     process_started_at: r.process_started_at || null,
                 }));
 
+            } else if (activeTab === 'import_dc') {
+                let qDc = supabase.from('store_dc_log').select('*').order('import_date', { ascending: false });
+                if (startDate) qDc = qDc.gte('import_date', `${startDate}T00:00:00`);
+                if (endDate) qDc = qDc.lte('import_date', `${endDate}T23:59:59`);
+                const dcData = await fetchAllChunks(qDc);
+
+                rows = (dcData || []).map(r => ({
+                    ...r,
+                    _source: 'dc',
+                    barcode: r.barcode_no,
+                    qty: r.imported_qty,
+                    updated_by: r.imported_by,
+                    updated_at: r.import_date,
+                    details: 'ນຳເຂົ້າສິນຄ້າ DC'
+                }));
+
+            } else if (activeTab === 'import_sales') {
+                let qSales = supabase.from('store_sales_log').select('*').order('import_date', { ascending: false });
+                if (startDate) qSales = qSales.gte('import_date', `${startDate}T00:00:00`);
+                if (endDate) qSales = qSales.lte('import_date', `${endDate}T23:59:59`);
+                const salesData = await fetchAllChunks(qSales);
+
+                rows = (salesData || []).map(r => ({
+                    ...r,
+                    _source: 'sales',
+                    barcode: r.barcode_no,
+                    qty: r.sales_qty,
+                    updated_by: r.imported_by,
+                    updated_at: r.import_date,
+                    details: 'ນຳເຂົ້າປະຫວັດຍອດຂາຍ'
+                }));
+
             } else {
                 let q = supabase.from('added_items_log').select('*').order('created_at', { ascending: false });
                 if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
@@ -1485,7 +1568,7 @@ const HQCommandCenter = ({ onBack }) => {
                         {/* Summary Banner */}
                         <div className={`rounded-3xl bg-gradient-to-r ${activeTabConfig?.color} p-7 text-white shadow-xl`}>
                             <p className="text-xl font-bold opacity-80 mb-1">
-                                {activeTab === 'requests' ? 'ຄຳຂໍ Store Request' : activeTab === 'edits' ? 'ການແກ້ໄຂຄລັງ' : activeTab === 'store_edits' ? 'ປະຫວັດໜ້າຮ້ານ' : 'ສິນຄ້າເຂົ້າໃໝ່'} · ທຸກສາຂາ
+                                {activeTab === 'requests' ? 'ຄຳຂໍ Store Request' : activeTab === 'edits' ? 'ການແກ້ໄຂຄລັງ' : activeTab === 'store_edits' ? 'ປະຫວັດໜ້າຮ້ານ' : activeTab === 'import_dc' ? 'ປະຫວັດການນຳເຂົ້າ DC' : activeTab === 'import_sales' ? 'ປະຫວັດການນຳເຂົ້າ Sale' : 'ສິນຄ້າເຂົ້າໃໝ່'} · ທຸກສາຂາ
                             </p>
                             <p className="text-8xl font-black leading-none">{data.length}</p>
                             <p className="text-white/70 font-bold mt-2 text-base">{dateLabel}</p>

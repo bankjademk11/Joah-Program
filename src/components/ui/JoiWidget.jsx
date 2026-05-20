@@ -339,21 +339,21 @@ const JoiWidget = ({ currentUser = { name: 'Santisouk DEV' } }) => {
 
       {/* ── Chat Panel ─────────────────────────────────── */}
       {mounted && (
-        <div style={{
-          position: 'fixed', bottom: 100, left: 28, zIndex: 9999,
-          width: 375,
-          height: Math.min(570, window.innerHeight - 130),
-          maxWidth: 'calc(100vw - 40px)',
-          borderRadius: 22,
-          overflow: 'hidden',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.16), 0 6px 18px rgba(249,115,22,0.14)',
-          border: '1px solid rgba(249,115,22,0.18)',
-          background: '#fff',
-          display: 'flex', flexDirection: 'column',
-          transformOrigin: 'bottom left',
-          animation: isOpen ? 'panel-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : 'panel-out 0.25s ease both',
-          pointerEvents: isOpen ? 'auto' : 'none',
-        }}>
+        <div 
+          className="bg-[#0f172a] border border-slate-800"
+          style={{
+            position: 'fixed', bottom: 100, left: 28, zIndex: 9999,
+            width: 375,
+            height: Math.min(570, window.innerHeight - 130),
+            maxWidth: 'calc(100vw - 40px)',
+            borderRadius: 22,
+            overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.16), 0 6px 18px rgba(249,115,22,0.14)',
+            display: 'flex', flexDirection: 'column',
+            transformOrigin: 'bottom left',
+            animation: isOpen ? 'panel-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : 'panel-out 0.25s ease both',
+            pointerEvents: isOpen ? 'auto' : 'none',
+          }}>
           {/* Render real AIChatBot to connect with DeepSeek API */}
           <AIChatBot isWidget={true} onClose={() => setIsOpen(false)} currentUser={currentUser} />
         </div>

@@ -32,6 +32,7 @@ const QuickAddPanel = ({
     const dropdownRef = useRef(null);
     const [locationSearch, setLocationSearch] = useState('');
     const [showLocationScanner, setShowLocationScanner] = useState(false); // 🆕 Scanner for locations
+    const [dcQty, setDcQty] = useState(0); // 🆕 DC Qty state
     // Reason Logic
     const [selectedReasonOption, setSelectedReasonOption] = useState('');
     const [otherReasonText, setOtherReasonText] = useState('');
@@ -128,6 +129,16 @@ const QuickAddPanel = ({
                     }));
                 }
                 console.groupEnd();
+
+                // 3. 🆕 Fetch DC Qty
+                const { data: dcData } = await supabase
+                    .from('table_dc_stock')
+                    .select('qty')
+                    .eq('barcode', barcode)
+                    .eq('branch_id', currentBranch || localStorage.getItem('joah_branch_id') || 'ຕະຫຼາດລາວ')
+                    .maybeSingle();
+                setDcQty(dcData?.qty || 0);
+
             } catch (err) {
                 console.error('Master Lookup Error:', err);
             }
@@ -311,6 +322,13 @@ const QuickAddPanel = ({
                                     className="w-full p-2 bg-white dark:bg-slate-800 border-2 border-emerald-200 dark:border-emerald-900/50 rounded-xl text-2xl font-black text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
                                 />
                                 <p className="text-[10px] text-slate-400 text-center">{t('quickAdd.identifyQty')}</p>
+                                
+                                {/* 🆕 DC hint — only when New Stock In */}
+                                {selectedReasonOption === t('reasons.newStock') && (
+                                    <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
+                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
+                                    </p>
+                                )}
                             </div>
 
                             {/* MAX QTY */}
@@ -760,7 +778,7 @@ const QuickAddPanel = ({
                         </button>
                         <button
                             onClick={onSave}
-                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0}
+                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)}
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}

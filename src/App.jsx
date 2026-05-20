@@ -497,7 +497,8 @@ function AppContent() {
       const fetchTasks = [
         fetchLocationFromSupabase(branchToLoad, isDeltaSync ? lastLocationSyncTime : null),
         fetchOdooFromSupabase(branchToLoad),
-        fetchDcFromSupabase(branchToLoad)
+        fetchDcFromSupabase(branchToLoad),
+        fetchStoreInventoryFromSupabase(branchToLoad)
       ];
 
       // Only fetch master if explicitly asked or if we don't have it yet
@@ -511,7 +512,8 @@ function AppContent() {
       const cloudLocation = results[0]; // Full data OR Delta data
       const cloudOdoo = results[1];
       const cloudDc = results[2];
-      const cloudMaster = shouldFetchMaster ? results[3] : null;
+      const cloudStore = results[3];
+      const cloudMaster = shouldFetchMaster ? results[4] : null;
 
       // Update master data state if we fetched it
       let activeMasterData = masterData;
@@ -588,7 +590,7 @@ function AppContent() {
         qty: o.qty_odoo
       }));
 
-      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad, cloudDc || []);
+      const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad, cloudDc || [], cloudStore || []);
       setValidationResults(validatedResults);
       setStats(validatedStats);
       setRefreshTrigger(Date.now());

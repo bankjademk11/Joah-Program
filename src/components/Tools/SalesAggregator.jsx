@@ -174,6 +174,7 @@ export default function SalesAggregator({ onBack }) {
         // S = ຍອດຂາຍ (Sales)        T = ຫຼັງສາງ (Backstore)  D = DC Warehouse
 
         // Step 1: Fetch all store_inventory records for this branch
+        console.log('🚀 [SalesAggregator] Step 1: Fetching store_inventory records for branch:', importBranch);
         let existingData = [];
         let rangeStart = 0;
         const RANGE_SIZE = 1000;
@@ -202,6 +203,7 @@ export default function SalesAggregator({ onBack }) {
         const barcodes = formattedData.map(d => d.barcode).filter(b => storeMap[b]);
 
         // Step 2: Bulk fetch T (location_inventory = ຫຼັງສາງ/Backstore)
+        console.log(`🚀 [SalesAggregator] Step 2: Fetching location_inventory for ${barcodes.length} barcodes...`);
         let whData = [];
         const CHUNK = 200;
         for (let i = 0; i < barcodes.length; i += CHUNK) {
@@ -220,6 +222,7 @@ export default function SalesAggregator({ onBack }) {
         });
 
         // Step 3: Bulk fetch D (table_dc_stock = DC Warehouse)
+        console.log(`🚀 [SalesAggregator] Step 3: Fetching table_dc_stock for ${barcodes.length} barcodes...`);
         let dcData = [];
         for (let i = 0; i < barcodes.length; i += CHUNK) {
           const chunk = barcodes.slice(i, i + CHUNK);
@@ -237,6 +240,7 @@ export default function SalesAggregator({ onBack }) {
         });
 
         // Step 4: Apply GM Formula for each imported item
+        console.log('🚀 [SalesAggregator] Step 4: Applying GM Formula...');
         let updatedCount = 0;
         let notFoundCount = 0;
         const updateList = [];
@@ -279,6 +283,7 @@ export default function SalesAggregator({ onBack }) {
         }
 
         // Step 5: Batch update store_inventory (store_qty + q_qty + sales_qty)
+        console.log(`🚀 [SalesAggregator] Step 5: Updating store_inventory (${updateList.length} items)...`);
         const UPDATE_CHUNK = 50;
         for (let i = 0; i < updateList.length; i += UPDATE_CHUNK) {
           const chunk = updateList.slice(i, i + UPDATE_CHUNK);
@@ -293,6 +298,7 @@ export default function SalesAggregator({ onBack }) {
         }
 
         // Step 6: Log to store_sales_log for history tracking
+        console.log(`🚀 [SalesAggregator] Step 6: Logging to store_sales_log (${logPayload.length} items)...`);
         for (let i = 0; i < logPayload.length; i += UPDATE_CHUNK) {
           const chunk = logPayload.slice(i, i + UPDATE_CHUNK);
           const { error } = await supabase.from('store_sales_log').insert(chunk);
@@ -309,6 +315,7 @@ export default function SalesAggregator({ onBack }) {
         // Mode: History Only — Update sales_qty ONLY, do NOT touch store_qty or q_qty
         
         // Step 1: Fetch all existing store_inventory records for this branch
+        console.log('🚀 [SalesAggregator/HistoryOnly] Step 1: Fetching store_inventory records...');
         let existingData = [];
         let isFetching = true;
         let rangeStart = 0;
@@ -353,6 +360,7 @@ export default function SalesAggregator({ onBack }) {
         }
 
         // Step 4: Update sales_qty in parallel chunks
+        console.log(`🚀 [SalesAggregator/HistoryOnly] Step 4: Updating sales_qty (${updateList.length} items)...`);
         const CHUNK = 50;
         for (let i = 0; i < updateList.length; i += CHUNK) {
           const chunk = updateList.slice(i, i + CHUNK);
@@ -367,6 +375,7 @@ export default function SalesAggregator({ onBack }) {
         }
 
         // Step 5: Log to store_sales_log for history tracking
+        console.log('🚀 [SalesAggregator/HistoryOnly] Step 5: Logging to store_sales_log...');
         const timestamp = new Date().toISOString();
         const logPayload = formattedData.map(item => ({
           barcode_no: item.barcode,
@@ -388,8 +397,21 @@ export default function SalesAggregator({ onBack }) {
           mode: 'history_only'
         });
       }
+
+      // ── 🆕 FIRE SIGNAL TO REFRESH ALL CLIENTS ──
+      try {
+        console.log('🔥 [SYNC] Attempting to fire massive_import_done signal...');
+        const { data: sigData, error: sigErr } = await supabase.from('app_sync_signals')
+          .upsert({ signal_name: 'massive_import_done', updated_at: new Date().toISOString() })
+          .select();
+        console.log('🔥 [SYNC] Signal Upsert Response:', { sigData, sigErr });
+      } catch(signalErr) {
+        console.error("🔥 [SYNC] Failed to fire sync signal", signalErr);
+      }
+
     } catch (err) {
-      console.error('Import error:', err);
+      console.error('🔥 [SalesAggregator] Import error:', err);
+      alert(`การนำเข้าล้มเหลว: ${err.message}`);
       setImportResult({ updated: 0, notFound: 0, errors: aggData.length, mode: importMode });
     } finally {
       setIsImporting(false);
