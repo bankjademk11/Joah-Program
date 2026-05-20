@@ -310,13 +310,14 @@ const QuickAddPanel = ({
                                 <input
                                     type="text"
                                     value={quickAddForm.barcode_no}
-                                    onChange={(e) => setQuickAddForm(prev => ({ ...prev, barcode_no: e.target.value.replace(/\s+/g, '') }))}
-                                    onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
-                                    className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white font-mono outline-none placeholder:text-slate-300"
+                                    readOnly
+                                    className="w-full bg-transparent text-lg font-bold text-slate-500 dark:text-slate-400 font-mono outline-none cursor-not-allowed select-none"
                                     placeholder="Scan Barcode..."
-                                    autoFocus
                                 />
-                                <p className="text-[10px] text-slate-400 mt-1">{t('quickAdd.barcode')}</p>
+                                <div className="flex items-center gap-1 mt-1">
+                                    <p className="text-[10px] text-slate-400">{t('quickAdd.barcode')}</p>
+                                    <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-1.5 rounded-sm font-bold tracking-wider">ອ່ານໄດ້ເທົ່ານັ້ນ (Read-only)</span>
+                                </div>
                             </div>
 
                             <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
