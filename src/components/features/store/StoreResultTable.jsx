@@ -7,6 +7,7 @@ import {
     ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, EyeOff, ClipboardList, Sparkles, ScanLine
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import JoahLogo from '../../../assets/Joah.jpeg';
 import { supabase } from '../../../utils/supabaseClient';
 import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, logInventoryHistory, logStoreInventoryHistory } from '../../../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../../../utils/excelProcessor';
@@ -933,6 +934,35 @@ const StoreResultTable = ({
             const dataToExport = template === 'audit' ? results.filter(res => res.status !== 'passed') : [...results];
 
             if (dbSource === 'supabase') {
+                let logoId = null;
+                try {
+                    const response = await fetch(JoahLogo);
+                    const buffer = await response.arrayBuffer();
+                    logoId = workbook.addImage({
+                        buffer: buffer,
+                        extension: 'jpeg',
+                    });
+                } catch (err) {
+                    console.warn("Could not load JoahLogo for export", err);
+                }
+
+                const addLogoToSheet = (sheet, title) => {
+                    if (logoId !== null) {
+                        sheet.getRow(1).height = 60;
+                        sheet.getRow(2).height = 10;
+                        sheet.addImage(logoId, {
+                            tl: { col: 0, row: 0 },
+                            ext: { width: 140, height: 60 }
+                        });
+                        sheet.mergeCells('B1:F1');
+                        const titleCell = sheet.getCell('B1');
+                        titleCell.value = title;
+                        titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FFEA580C' } };
+                        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+                        sheet.addRow([]); // Adds row 2
+                    }
+                };
+
                 // Shared History Fetch for ALL templates (Audit, Standard, etc.)
                 const reasonMap = {};
                 let histQuery = supabase
@@ -967,6 +997,7 @@ const StoreResultTable = ({
                     // Step 2: Mismatch Sheet
                     const mismatchData = results.filter(res => res.status === 'mismatch');
                     const sheetMismatch = workbook.addWorksheet('Mismatch Focus');
+                    addLogoToSheet(sheetMismatch, 'ລາຍງານ Mismatch Focus');
                     const headersAudit = ['Barcode No.', 'Item Name', 'Rack Location', 'Status', 'Status Reason', 'User Reason', 'Last Update', 'Verifier'];
 
                     const hRow1 = sheetMismatch.addRow(headersAudit);
@@ -995,6 +1026,7 @@ const StoreResultTable = ({
                     // Step 3: Missing Sheet
                     const missingData = results.filter(res => res.status === 'missing');
                     const sheetMissing = workbook.addWorksheet('Missing Items');
+                    addLogoToSheet(sheetMissing, 'ລາຍງານ Missing Items');
 
                     const hRow2 = sheetMissing.addRow(headersAudit);
                     hRow2.eachCell((cell) => {
@@ -1028,6 +1060,7 @@ const StoreResultTable = ({
                     });
 
                     const sheetAdj = workbook.addWorksheet('Odoo Adjustment');
+                    addLogoToSheet(sheetAdj, 'ລາຍງານ Odoo Adjustment');
                     const headersAdj = [
                         'Barcode', 'Product Name', 'Odoo Qty (System)', 'Actual Count', 'Diff (+/-)', 'Status', 'Note'
                     ];
@@ -1132,6 +1165,7 @@ const StoreResultTable = ({
 
                     // Sheet: All Data (Fixed)
                     const allSheet = workbook.addWorksheet('All Data (Auto-Fixed)');
+                    addLogoToSheet(allSheet, 'ລາຍງານ All Data (Auto-Fixed)');
                     addHeaderRow(allSheet);
                     results.forEach(res => {
                         const row = allSheet.addRow(fixRow(res));
@@ -1154,7 +1188,8 @@ const StoreResultTable = ({
                         ];
                     }
 
-                    const populateSheet = (sheet, dataList) => {
+                    const populateSheet = (sheet, dataList, title) => {
+                        addLogoToSheet(sheet, title || 'ລາຍງານຂໍ້ມູນສິນຄ້າ / Inventory Report');
                         const hRow = sheet.addRow(headers);
                         hRow.eachCell((cell) => {
                             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1227,7 +1262,81 @@ const StoreResultTable = ({
                     if (template === 'simple') {
                         // SIMPLE mode only has one sheet
                         const simpleSheet = workbook.addWorksheet('Inventory Summary');
-                        populateSheet(simpleSheet, dataToExport);
+                        populateSheet(simpleSheet, dataToExport, 'ລາຍງານ Inventory Summary');
+                    } else if (template === 'store') {
+                        // --- STORE INVENTORY STANDARD REPORT ---
+                        const storeSheet = workbook.addWorksheet('Store Inventory');
+                        addLogoToSheet(storeSheet, 'ລາຍງານມາດຕະຖານ Store Inventory');
+
+                        const storeHeaders = [
+                            '#',
+                            'ບາໂຄ້ດ (Barcode)',
+                            'ຊື່ສິນຄ້າ (Item Name)',
+                            'ໂລເຄຊັ້ນ (Location)',
+                            'ໝວດໝູ່ 1 (Category 1)',
+                            'ໝວດໝູ່ 2 (Category 2)',
+                            'ປະເພດ (Tag)',
+                            'ຄວາມຈຸ (Max QTY)',
+                            'QTY ໜ້າຮ້ານ (Store)',
+                            'QTY ຫຼັງສາງ (Warehouse)',
+                            'QTY DC (DC Stock)',
+                            'QTY ຍອດຂາຍ (Sales)',
+                            'ສະຖານະ (Status)'
+                        ];
+
+                        const hRow = storeSheet.addRow(storeHeaders);
+                        hRow.eachCell((cell) => {
+                            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Phetsarath OT', size: 11 };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } }; // Emerald
+                            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        });
+
+                        const statusLabel = (s) => {
+                            if (s === 'passed') return 'ຜ່ານ (Passed)';
+                            if (s === 'mismatch') return 'ບໍ່ຖືກ (Mismatch)';
+                            if (s === 'missing') return 'ຂາດ (Missing)';
+                            if (s === 'incomplete') return 'ບໍ່ຄົບ (Incomplete)';
+                            return s || '';
+                        };
+
+                        const statusBg = (s) => {
+                            if (s === 'passed') return 'FFDCFCE7';
+                            if (s === 'mismatch') return 'FFFEE2E2';
+                            if (s === 'missing') return 'FFE0F2FE';
+                            if (s === 'incomplete') return 'FFFFF7ED';
+                            return null;
+                        };
+
+                        dataToExport.forEach((res, i) => {
+                            const rowData = [
+                                i + 1,
+                                sanitize(res.barcode),
+                                sanitize(res.masterItemName || res.itemName || ''),
+                                sanitize(res.rackLocation || '—'),
+                                sanitize(res.category1 || ''),
+                                sanitize(res.category2 || ''),
+                                sanitize(res.productTag || ''),
+                                res.maxQty != null ? Number(res.maxQty) : '',
+                                isNaN(Number(res.qty)) ? 0 : Number(res.qty),
+                                isNaN(Number(res.warehouseQty)) ? 0 : Number(res.warehouseQty),
+                                isNaN(Number(res.dcQty)) ? 0 : Number(res.dcQty),
+                                res.salesQty != null ? Number(res.salesQty) : 0,
+                                statusLabel(res.status)
+                            ];
+                            const excelRow = storeSheet.addRow(rowData);
+                            const bg = statusBg(res.status);
+                            if (bg) {
+                                excelRow.getCell(13).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+                            }
+                            excelRow.getCell(1).alignment = { horizontal: 'center' };
+                        });
+
+                        storeSheet.columns = [
+                            { width: 6 }, { width: 17 }, { width: 35 }, { width: 15 },
+                            { width: 18 }, { width: 18 }, { width: 14 }, { width: 12 },
+                            { width: 14 }, { width: 16 }, { width: 14 }, { width: 14 }, { width: 18 }
+                        ];
+
                     } else if (template === 'standard') {
                         // STANDARD mode breaks data into multiple detailed sheets
                         const allSheet = workbook.addWorksheet('All Data');
@@ -1236,14 +1345,15 @@ const StoreResultTable = ({
                         const missingSheet = workbook.addWorksheet('Missing or Incomplete');
                         const zeroQtySheet = workbook.addWorksheet('Zero QTY');
 
-                        populateSheet(allSheet, dataToExport);
-                        populateSheet(correctSheet, dataToExport.filter(r => r.status === 'passed'));
-                        populateSheet(mismatchSheet, dataToExport.filter(r => r.status === 'mismatch'));
-                        populateSheet(missingSheet, dataToExport.filter(r => r.status === 'missing' || r.status === 'incomplete'));
-                        populateSheet(zeroQtySheet, dataToExport.filter(r => Number(r.qty || 0) === 0));
+                        populateSheet(allSheet, dataToExport, 'ລາຍງານ All Data');
+                        populateSheet(correctSheet, dataToExport.filter(r => r.status === 'passed'), 'ລາຍງານ Passed');
+                        populateSheet(mismatchSheet, dataToExport.filter(r => r.status === 'mismatch'), 'ລາຍງານ Mismatch');
+                        populateSheet(missingSheet, dataToExport.filter(r => r.status === 'missing' || r.status === 'incomplete'), 'ລາຍງານ Missing or Incomplete');
+                        populateSheet(zeroQtySheet, dataToExport.filter(r => Number(r.qty || 0) === 0), 'ລາຍງານ Zero QTY');
 
                         // Fetch and populate Master Data Reference sheet
                         const dataSheet = workbook.addWorksheet('Master Data Reference');
+                        addLogoToSheet(dataSheet, 'Master Data Reference');
                         const cloudMaster = await fetchMasterFromSupabase();
                         if (cloudMaster && cloudMaster.length > 0) {
                             const mhRow = dataSheet.addRow(['Barcode', 'Item Name', 'Category 1', 'Category 2', 'Qty']);
@@ -1295,17 +1405,39 @@ const StoreResultTable = ({
                 }
             }
 
-            // Set default font to Phetsarath OT for all cells
+            // Set default font + dark borders to all cells + auto column width
             workbook.eachSheet((sheet) => {
+                // Track max char widths per column for auto-fit
+                const colWidths = {};
                 sheet.eachRow((row) => {
-                    row.eachCell((cell) => {
+                    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
                         const currentFont = cell.font || {};
                         cell.font = {
                             ...currentFont,
                             name: 'Phetsarath OT',
                             size: currentFont.size || 11
                         };
+                        // Dark black border on every data cell
+                        if (cell.value !== null && cell.value !== '') {
+                            cell.border = {
+                                top:    { style: 'thin', color: { argb: 'FF000000' } },
+                                left:   { style: 'thin', color: { argb: 'FF000000' } },
+                                bottom: { style: 'thin', color: { argb: 'FF000000' } },
+                                right:  { style: 'thin', color: { argb: 'FF000000' } }
+                            };
+                        }
+                        // Track max text width for auto-fit
+                        const textLen = String(cell.value ?? '').length;
+                        if (!colWidths[colNumber] || textLen > colWidths[colNumber]) {
+                            colWidths[colNumber] = textLen;
+                        }
                     });
+                });
+                // Apply auto column widths (min 10, max 50)
+                sheet.columns.forEach((col, i) => {
+                    const measured = (colWidths[i + 1] || 0) + 4; // +4 padding
+                    const existing = col.width || 0;
+                    col.width = Math.min(50, Math.max(10, measured, existing));
                 });
             });
 
@@ -1422,6 +1554,19 @@ const StoreResultTable = ({
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('results.exportTemplate')}</p>
                                     </div>
                                     <div className="p-2">
+                                        <button
+                                            onClick={() => handleExportWithColor('store')}
+                                            className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 group-hover:scale-110 transition-transform">
+                                                <Database size={18} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-slate-800 dark:text-white uppercase">ລາຍງານໜ້າຮ້ານ (Store Report)</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">QTY ໜ້າຮ້ານ + ຫຼັງສາງ + DC + ຍອດຂາຍ</p>
+                                            </div>
+                                        </button>
+
                                         <button
                                             onClick={() => handleExportWithColor('standard')}
                                             className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"

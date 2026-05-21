@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.91.1",
     "canvas-confetti": "^1.9.4",
     "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.344.0",
     "react": "^19.2.0",
@@ -20,6 +21,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0",
     "zxing-wasm": "^3.0.1"
   },
   "devDependencies": {

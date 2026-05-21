@@ -4,8 +4,11 @@ import remarkGfm from 'remark-gfm';
 import {
   MessageSquare, X, Send, Sparkles, LayoutDashboard,
   Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User,
-  Plus, Settings
+  Plus, Settings, Download
 } from 'lucide-react';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import JoahLogo from '../../assets/Joah.jpeg';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
 import { supabase } from '../../utils/supabaseClient';
@@ -237,9 +240,9 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
           .select('barcode_no, item_name')
           .ilike('item_name', `%${keyword}%`)
           .limit(10);
-        
+
         if (!storeData || storeData.length === 0) return `No products found matching '${keyword}'.`;
-        
+
         const uniqueProducts = [];
         const seen = new Set();
         storeData.forEach(p => {
@@ -257,25 +260,25 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
         return res;
       };
 
-      const fetchDailyRequests = async (branchId = null) => {
-        const d = new Date();
-        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const fetchDailyRequests = async (branchId = null, date = null) => {
+        const d = date ? new Date(date) : new Date();
+        const targetDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         let query = supabase.from('store_requests')
           .select('*')
-          .gte('created_at', `${today}T00:00:00+07:00`)
-          .lte('created_at', `${today}T23:59:59+07:00`);
-        
+          .gte('created_at', `${targetDate}T00:00:00+07:00`)
+          .lte('created_at', `${targetDate}T23:59:59+07:00`);
+
         if (branchId) {
           query = query.eq('branch_id', branchId);
         }
 
         const { data: requests } = await query.order('created_at', { ascending: false });
 
-        if (!requests?.length) return `No requests found for today (${today})${branchId ? ` at branch ${branchId}` : ''}.`;
+        if (!requests?.length) return `No requests found for ${targetDate}${branchId ? ` at branch ${branchId}` : ''}.`;
 
-        let details = `REAL DATA ONLY - Requests for ${today}. Show this data EXACTLY as given. DO NOT rename, translate, or substitute any product names.\n`;
+        let details = `REAL DATA ONLY - Requests for ${targetDate}. Show this data EXACTLY as given. DO NOT rename, translate, or substitute any product names.\n`;
         details += `Total: ${requests.length} requests\n\n`;
-        requests.slice(0, 50).forEach((r, i) => {
+        requests.slice(0, 300).forEach((r, i) => {
           const stockBefore = r.stock_at_request ?? '-';
           const remaining = (r.stock_at_request != null && r.qty != null) ? r.stock_at_request - r.qty : '-';
           details += `${i + 1}. DocNo: ${r.doc_no || '-'} | Branch: ${r.branch_id} | Barcode: ${r.barcode || 'N/A'} | Product: ${r.product_name || r.barcode || 'N/A'} | Requested: ${r.qty} | Stock@Request: ${stockBefore} | Remaining: ${remaining} | Status: ${r.status} | RequestBy: ${r.request_by} | ApprovedBy: ${r.accepted_by || '-'}\n`;
@@ -317,11 +320,11 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
             .from('location_inventory')
             .select('barcode_no, qty, branch_id, rack_location')
             .lte('qty', threshold);
-          
+
           if (branchId) {
             query = query.eq('branch_id', branchId);
           }
-          
+
           const { data: invRows, error: invErr } = await query.order('qty', { ascending: true });
           if (invErr) throw invErr;
           if (!invRows || invRows.length === 0) {
@@ -332,7 +335,7 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
           let namesMap = {};
           if (barcodes.length > 0) {
             const { data: storeRows } = await supabase
-               .from('store_inventory')
+              .from('store_inventory')
               .select('barcode_no, item_name')
               .in('barcode_no', barcodes.slice(0, 100));
             if (storeRows) {
@@ -551,12 +554,13 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
         {
           type: "function",
           function: {
-            name: "get_daily_requests",
-            description: "Get today's store requests. Use when user asks about today's requests. If user mentions a specific branch name (e.g. ສີວິໄລ, ຕະຫຼາດລາວ, ໂພນສີນວນ, ວັງຊາຍ), pass it as branch_id to filter precisely.",
+            name: "get_store_requests_by_date",
+            description: "Get store requests for a specific date (today or any past date). Use when user asks about requests. If user mentions a branch, pass as branch_id. If user mentions a specific date (e.g. 20 May 2026, 20/05/2026), convert to YYYY-MM-DD and pass as date parameter.",
             parameters: {
               type: "object",
               properties: {
-                branch_id: { type: "string", description: "Branch name to filter (optional). Use exact Lao name: ຕະຫຼາດລາວ, ສีວິໄລ, ໂພນສີນວນ, or ວັງຊາຍ. Omit to get all branches." }
+                branch_id: { type: "string", description: "Branch name to filter (optional). Use exact Lao name: ຕະຫຼາດລາວ, ສີວິໄລ, ໂພນສີນວນ, or ວັງຊາຍ. Omit to get all branches." },
+                date: { type: "string", description: "Date in YYYY-MM-DD format (optional). Defaults to today if omitted. Use when user asks about a past date (e.g. 2026-05-20)." }
               }
             }
           }
@@ -674,7 +678,15 @@ Branches: ${VALID_BRANCHES.join(', ')}.
    - ສະຖານະ (Status)
    - ຜູ້ຮ້ອງຂໍ (Requester - from 'By' field)
    - ຜູ້ອະນຸມັດ (Approver - from 'Approved' field)
-5. Never mention DeepSeek, GPT, Gemini, or any AI model name.${techSpecExtra}`;
+5. Never mention DeepSeek, GPT, Gemini, or any AI model name.
+6. LARGE DATASET PAGINATION (CRITICAL RULES): You are displaying a large dataset. Each response can only show ~30 rows due to token limit.
+   STRICT RULES:
+   1. End EVERY response with EXACTLY one of these markers:
+      - [[MORE]] if there are more items to show
+      - [[DONE]] if this is the last batch
+   2. When you receive "continue from row X", you MUST start the NEXT batch at exactly row X. NEVER repeat rows before X.
+   3. NEVER add extra text like "type continue" or "more?" after the marker. NO summary between batches.
+   4. The system will auto-send "continue from row X" when it sees [[MORE]]. Follow strictly.${techSpecExtra}`;
 
       let finalAiMsg;
 
@@ -692,20 +704,23 @@ Branches: ${VALID_BRANCHES.join(', ')}.
         } else throw new Error('Gemini failed');
       } else {
         // --- DeepSeek (Text + Tools) ---
-        const apiHistory = messages.slice(-10).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
+        const apiHistory = messages.slice(-20).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
         let apiMessages = [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: fileContent ? `[File: ${userMsg.fileName}]\n${fileContent}\n\n${inputMsg}` : inputMsg }];
 
         let isDone = false;
         let iters = 0;
-        while (!isDone && iters < 5) {
+        const seenBatches = new Set();
+        while (!isDone && iters < 10) {
           iters++;
           const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
-            body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, tools: tools, temperature: 0.0, max_tokens: 8000 })
+            body: JSON.stringify({ model: 'deepseek-v4-flash', messages: apiMessages, tools: tools, temperature: 0.0, max_tokens: 4500 })
           });
           const data = await res.json();
           if (!data.choices?.[0]) throw new Error(data.error?.message || 'DeepSeek error');
-          const msg = data.choices[0].message;
+          const choice = data.choices[0];
+          const finishReason = choice.finish_reason; // 'stop', 'length', 'tool_calls'
+          const msg = choice.message;
           apiMessages.push(msg);
 
           if (msg.tool_calls) {
@@ -715,7 +730,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
               let content;
               if (fn === "search_product_by_name") content = await searchProductByName(args.keyword);
               else if (fn === "check_stock_by_barcode") content = await fetchStockData(args.barcode);
-              else if (fn === "get_daily_requests") content = await fetchDailyRequests(args.branch_id || null);
+              else if (fn === "get_store_requests_by_date") content = await fetchDailyRequests(args.branch_id || null, args.date || null);
               else if (fn === "get_request_history_by_barcode") content = await fetchRequestHistoryByBarcode(args.barcode, args.from_date, args.to_date);
               else if (fn === "get_low_stock_alerts") content = await fetchLowStockAlerts(args.branch_id || null, args.threshold || 5);
               else if (fn === "suggest_stock_transfers") content = await suggestStockTransfers();
@@ -725,20 +740,182 @@ Branches: ${VALID_BRANCHES.join(', ')}.
               apiMessages.push({ role: "tool", tool_call_id: toolCall.id, name: fn, content });
             }
           } else {
-            isDone = true;
-            finalAiMsg = msg;
+            const content = msg.content || '';
+
+            let cleanContent = content.replace('[[MORE]]', '').replace('[[DONE]]', '').trim();
+            cleanContent = cleanContent.replace(/ພິມ\s*['"]?ສະແດງຕໍ່['"]?\s*(ເດີ)?/g, '');
+            cleanContent = cleanContent.replace(/ຍັງເຫຼືອອີກ.*$/gm, '');
+            cleanContent = cleanContent.replace(/ມາແລ້ວ!.*?ເດີ້/g, '');
+
+            // Smart duplicate detection: fingerprint using first 3 row numbers (supports table and list formats)
+            const rowNums = cleanContent.match(/^(\d+)[\t\s|\.,]/gm)
+              ?.map(s => s.match(/\d+/)?.[0])
+              .filter(Boolean)
+              .slice(0, 3)
+              .join(',') || '';
+            const batchKey = rowNums || cleanContent.slice(0, 100);
+            if (seenBatches.has(batchKey) && batchKey.length > 0) {
+              isDone = true;
+              break;
+            }
+            seenBatches.add(batchKey);
+
+            // wantsMore: check explicit markers, Lao phrases, OR if API cut us off at token limit
+            const wasTruncated = finishReason === 'length';
+            const wantsMore = wasTruncated || content.includes('[[MORE]]') || content.includes('ສະແດງຕໍ່') || content.includes('ຍັງເຫຼືອອີກ') || content.includes('ຍັງມີລາຍການອີກ');
+
+            if (wantsMore && !content.includes('[[DONE]]')) {
+              // Track highest row number seen to tell AI exactly where to continue from
+              const allRowNums = cleanContent.match(/^(\d+)[\t\s|\.,]/gm)
+                ?.map(s => parseInt(s.match(/\d+/)?.[0] || '0', 10))
+                .filter(n => n > 0) || [];
+              const lastRowNum = allRowNums.length ? Math.max(...allRowNums) : 0;
+
+              finalAiMsg = { role: 'assistant', content: (finalAiMsg ? finalAiMsg.content + '\n' : '') + cleanContent };
+              apiMessages.push({ role: 'assistant', content: cleanContent });
+              apiMessages.push({ role: 'user', content: lastRowNum > 0 ? `continue from row ${lastRowNum + 1}` : 'continue' });
+            } else {
+              isDone = true;
+              finalAiMsg = { role: 'assistant', content: (finalAiMsg ? finalAiMsg.content + '\n' : '') + cleanContent };
+            }
           }
         }
       }
 
       if (finalAiMsg) {
-        setMessages(prev => [...prev, finalAiMsg]);
-        if (isTTSEnabled) speakText(finalAiMsg.content);
+        // Post-process: remove duplicate row sections before displaying
+        const deduped = (() => {
+          const raw = finalAiMsg.content;
+          const rowPattern = /^(\d+)\t/gm;
+          const seenRows = new Set();
+          let cutPosition = -1;
+          let match;
+          while ((match = rowPattern.exec(raw)) !== null) {
+            const rowNum = parseInt(match[1], 10);
+            if (seenRows.has(rowNum)) {
+              // Walk back to find the nearest section heading (📋 or blank line)
+              const sectionStart = raw.lastIndexOf('\n\n', match.index);
+              cutPosition = sectionStart > 0 ? sectionStart : match.index;
+              break;
+            }
+            seenRows.add(rowNum);
+          }
+          return cutPosition > 0 ? raw.substring(0, cutPosition).trim() : raw;
+        })();
+        setMessages(prev => [...prev, { ...finalAiMsg, content: deduped }]);
+        if (isTTSEnabled) speakText(deduped);
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `❌ ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ: ${err.message}` }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleExportExcel = async (content) => {
+    try {
+      const lines = content.split('\n');
+      let tableData = [];
+      let headerSignature = null;
+      
+      for (const line of lines) {
+        if (line.trim().startsWith('|')) {
+          if (line.replace(/[\s\|\-:]/g, '').length === 0) continue;
+          
+          let cols = line.split('|')
+            .map(c => c.trim())
+            .filter((_, i, arr) => i > 0 && i < arr.length - 1); 
+            
+          cols = cols.map(c => c.replace(/\*\*/g, '').replace(/`/g, ''));
+
+          if (cols.length > 0) {
+            const sig = cols.join(',');
+            if (!headerSignature) {
+              headerSignature = sig;
+              tableData.push(cols);
+            } else {
+              if (sig === headerSignature || sig.includes('Barcode,') || sig.includes('ຊື່ສິນຄ້າ,')) continue;
+              tableData.push(cols);
+            }
+          }
+        }
+      }
+
+      if (tableData.length === 0) {
+        alert('ບໍ່ພົບຕາຕະລາງໃນຂໍ້ຄວາມນີ້');
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Data');
+
+      // Add Spacer for Logo
+      worksheet.getRow(1).height = 60;
+      worksheet.getRow(2).height = 10;
+      
+      // Fetch and embed the Joah logo
+      try {
+        const response = await fetch(JoahLogo);
+        const buffer = await response.arrayBuffer();
+        const logoId = workbook.addImage({
+          buffer: buffer,
+          extension: 'jpeg',
+        });
+        
+        // Insert logo at A1
+        worksheet.addImage(logoId, {
+          tl: { col: 0, row: 0 },
+          ext: { width: 140, height: 60 }
+        });
+      } catch (err) {
+        console.error("Could not load logo", err);
+      }
+
+      // Add Title
+      worksheet.mergeCells('B1:F1');
+      const titleCell = worksheet.getCell('B1');
+      titleCell.value = 'ລາຍງານຂໍ້ມູນສິນຄ້າ / Request Report';
+      titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FFEA580C' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+      // Add Data starting at row 3
+      tableData.forEach((row, idx) => {
+        const excelRow = worksheet.addRow(row);
+        const isHeader = idx === 0;
+        
+        excelRow.eachCell((cell, colNumber) => {
+          cell.font = { name: 'Phetsarath OT', size: 11, bold: isHeader };
+          cell.alignment = { vertical: 'middle', horizontal: isHeader ? 'center' : 'left' };
+          
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
+
+          if (isHeader) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFF1F5F9' }
+            };
+          }
+        });
+      });
+
+      // Set column widths
+      worksheet.columns.forEach((column, i) => {
+        if (i === 0) column.width = 10;
+        else if (i === 2) column.width = 40;
+        else column.width = 20;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `Joi_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert('ເກີດຂໍ້ຜິດພາດໃນການສະກັດຂໍ້ມູນລົງ Excel');
     }
   };
 
@@ -753,34 +930,34 @@ Branches: ${VALID_BRANCHES.join(', ')}.
 
       {/* Sidebar */}
       <div className={`transition-all duration-500 overflow-hidden bg-[#0d131f] border-r border-slate-800 flex flex-col ${isSidebarOpen ? 'w-72 p-5 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
-          <div className="flex items-center justify-between mb-6 whitespace-nowrap">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
-            <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
-              <Plus size={18} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
-            {chatHistory.map(chat => (
-              <div key={chat.id} onClick={() => loadChat(chat)}
-                className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-slate-800/80 border-slate-700 shadow-md' : 'border-transparent hover:bg-slate-900/60 hover:border-slate-800'}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                      <MessageSquare size={14} />
-                    </div>
-                    <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-white' : 'text-slate-450'}`}>{chat.title}</span>
-                  </div>
-                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center justify-between mb-6 whitespace-nowrap">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
+          <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
+            <Plus size={18} />
+          </button>
         </div>
+        <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
+          {chatHistory.map(chat => (
+            <div key={chat.id} onClick={() => loadChat(chat)}
+              className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-slate-800/80 border-slate-700 shadow-md' : 'border-transparent hover:bg-slate-900/60 hover:border-slate-800'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    <MessageSquare size={14} />
+                  </div>
+                  <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-white' : 'text-slate-450'}`}>{chat.title}</span>
+                </div>
+                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Main Container */}
-      <div 
+      <div
         className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-[#0f172a]"
         style={{
           fontFamily: "'Noto Sans Lao', 'IBM Plex Sans', sans-serif"
@@ -791,7 +968,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
         <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-amber-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
 
         {/* Premium Orange Header */}
-        <div 
+        <div
           className="px-6 py-4 flex items-center justify-between shrink-0 relative overflow-hidden z-10"
           style={{
             background: 'linear-gradient(135deg, #fb923c 0%, #f97316 55%, #ea580c 100%)',
@@ -802,15 +979,15 @@ Branches: ${VALID_BRANCHES.join(', ')}.
           <div className="absolute -bottom-3 right-[50px] w-[50px] h-[50px] rounded-full bg-white/7% pointer-events-none" />
 
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsSidebarOpen(p => !p)} 
+            <button
+              onClick={() => setIsSidebarOpen(p => !p)}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all shadow-sm shrink-0"
             >
               <LayoutDashboard size={18} />
             </button>
 
             {/* Avatar block */}
-            <div 
+            <div
               className="w-[42px] h-[42px] rounded-full bg-white/20 border-2 border-white/45 flex items-center justify-center text-xl shrink-0 shadow-lg relative overflow-hidden"
             >
               {/* JOI PET FACE inside avatar */}
@@ -836,8 +1013,8 @@ Branches: ${VALID_BRANCHES.join(', ')}.
           </div>
 
           <div className="flex items-center gap-2 relative z-20">
-            <button 
-              onClick={onBack} 
+            <button
+              onClick={onBack}
               style={{
                 width: 32, height: 32, borderRadius: '50%',
                 background: 'rgba(255,255,255,0.18)',
@@ -859,14 +1036,14 @@ Branches: ${VALID_BRANCHES.join(', ')}.
 
         {/* Dynamic Status / Mode Chips Bar */}
         <div className="bg-[#0b0f19] border-b border-slate-800/80 px-[14px] py-[7px] flex gap-2 items-center shrink-0 overflow-x-auto scrollbar-hide">
-          <button 
-            onClick={() => setIsTechToSpec(p => !p)} 
+          <button
+            onClick={() => setIsTechToSpec(p => !p)}
             className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTechToSpec ? 'bg-[#f97316] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
           >
             Tech Mode
           </button>
-          <button 
-            onClick={toggleTTS} 
+          <button
+            onClick={toggleTTS}
             className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTTSEnabled ? 'bg-[#ea580c] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
           >
             {isTTSEnabled ? 'Audio ON' : 'Audio OFF'}
@@ -877,7 +1054,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
         </div>
 
         {/* Messages */}
-        <div 
+        <div
           className={`flex-1 overflow-y-auto space-y-4 scrollbar-hide relative z-10 px-4 py-3 sm:px-6 sm:py-4`}
           style={{
             background: 'linear-gradient(180deg, #0b0f19 0%, #0f172a 100%)',
@@ -886,7 +1063,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ animationDelay: `${i * 0.1}s` }}>
               <div className={`flex gap-2 sm:gap-3 w-full max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                
+
                 {/* Robot Avatar for Assistant messages */}
                 {m.role !== 'user' && (
                   <div className="w-[28px] h-[28px] rounded-full shrink-0 flex items-center justify-center text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #f97316, #c2410c)' }}>
@@ -895,11 +1072,11 @@ Branches: ${VALID_BRANCHES.join(', ')}.
                 )}
 
                 <div className={`flex flex-col gap-1 flex-1 min-w-0 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div 
-                    className={`px-[13px] py-[9px] text-[13px] leading-[1.6] shadow-sm max-w-full overflow-x-auto transition-all ${m.role === 'user' 
-                      ? 'text-white rounded-[18px] rounded-br-[4px]' 
+                  <div
+                    className={`px-[13px] py-[9px] text-[13px] leading-[1.6] shadow-sm max-w-full overflow-x-auto transition-all ${m.role === 'user'
+                      ? 'text-white rounded-[18px] rounded-br-[4px]'
                       : 'bg-[#1e293b] text-slate-100 rounded-[18px] rounded-bl-[4px] border border-slate-800'
-                    }`}
+                      }`}
                     style={{
                       background: m.role === 'user' ? 'linear-gradient(135deg, #f97316, #ea580c)' : undefined,
                       boxShadow: m.role === 'user' ? '0 4px 14px rgba(249,115,22,0.28)' : '0 2px 8px rgba(0,0,0,0.2)',
@@ -908,12 +1085,23 @@ Branches: ${VALID_BRANCHES.join(', ')}.
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
                     {m.hasFile && (
                       <div className="mt-3 p-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20 max-w-full overflow-hidden">
-                        <FileText size={14} className="shrink-0" /> 
+                        <FileText size={14} className="shrink-0" />
                         <span className="text-[10px] font-bold truncate">{m.fileName}</span>
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2">{m.role === 'user' ? 'You' : BOT_NAME}</span>
+                  <div className="flex items-center gap-2 px-2 mt-0.5">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{m.role === 'user' ? 'You' : BOT_NAME}</span>
+                    {m.role !== 'user' && m.content.includes('|') && m.content.includes('\n|') && (
+                      <button 
+                        onClick={() => handleExportExcel(m.content)}
+                        className="text-[9px] font-bold text-[#ea580c] hover:text-[#f97316] uppercase tracking-widest flex items-center gap-1 transition-colors"
+                        title="Download as Excel"
+                      >
+                        <Download size={10} /> Excel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -928,7 +1116,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
             {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} />}
             <div className="flex items-center gap-2 w-full">
               <div className="flex items-center bg-[#1e293b] border border-slate-750 rounded-[20px] px-3.5 py-1.5 flex-1 min-w-0">
-                <input 
+                <input
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -936,7 +1124,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
                   placeholder="ຖາມ Joi ສິ່ງໃດກໍໄດ້..."
                   className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-[13px] text-slate-100 placeholder-slate-500 min-w-0"
                 />
-                
+
                 {/* File Attachment Buttons inside input area */}
                 <div className="flex items-center gap-1.5 ml-2">
                   <button onClick={() => document.getElementById('ai-file-input').click()} className="p-1 text-slate-400 hover:text-orange-400 transition-colors shrink-0">
@@ -949,9 +1137,9 @@ Branches: ${VALID_BRANCHES.join(', ')}.
                 </div>
               </div>
 
-              <button 
-                onClick={handleSend} 
-                disabled={isLoading || (!input.trim() && !attachedFile)} 
+              <button
+                onClick={handleSend}
+                disabled={isLoading || (!input.trim() && !attachedFile)}
                 className="w-10 h-10 rounded-full border-none flex items-center justify-center transition-all shrink-0"
                 style={{
                   background: (input.trim() || attachedFile) ? 'linear-gradient(135deg, #f97316, #ea580c)' : '#1e293b',
