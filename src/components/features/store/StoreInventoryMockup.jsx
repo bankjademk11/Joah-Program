@@ -194,17 +194,43 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime updates
+  // ─── Realtime: subscribe to ALL tables that feed QTY data ───────────────
   useEffect(() => {
+    // Debounce: batch rapid changes into one re-fetch
+    let debounceTimer = null;
+    const triggerRefresh = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchData();
+      }, 800);
+    };
+
     const channel = supabase
-      .channel(`store_inventory_rt_${selectedBranch}`)
+      .channel(`store_rt_all_${selectedBranch}`)
+      // 1. Store QTY (ໜ້າຮ້ານ) – store_qty, sales_qty
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_inventory' }, (payload) => {
         const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
         if (rowBranch !== selectedBranch) return;
-        fetchData();
+        triggerRefresh();
+      })
+      // 2. Warehouse QTY (ຫຼັງສາງ) – from location_inventory
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'location_inventory' }, (payload) => {
+        const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
+        if (rowBranch && rowBranch !== selectedBranch) return;
+        triggerRefresh();
+      })
+      // 3. DC Stock QTY – from table_dc_stock
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'table_dc_stock' }, (payload) => {
+        const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
+        if (rowBranch && rowBranch !== selectedBranch) return;
+        triggerRefresh();
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
   }, [selectedBranch, fetchData]);
 
   // Update qty in local state (DB update handled by StoreResultTable)
