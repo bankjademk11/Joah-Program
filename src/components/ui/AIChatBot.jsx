@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import {
   MessageSquare, X, Send, Sparkles, LayoutDashboard,
   Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User,
-  Plus, Settings
+  Plus, Settings, Bot
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
@@ -17,26 +17,26 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // ── Markdown Components (Claude-style) ──────────────────────
 const mdComponents = {
-  h1: ({ children }) => <h1 className="text-xl font-black text-slate-100 mt-4 mb-2 border-b border-slate-800 pb-1">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-lg font-black text-slate-100 mt-3 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-base font-bold text-slate-200 mt-2 mb-1">{children}</h3>,
-  p: ({ children }) => <p className="mb-2 leading-relaxed text-slate-300">{children}</p>,
-  strong: ({ children }) => <strong className="font-black text-white">{children}</strong>,
-  em: ({ children }) => <em className="italic text-slate-200">{children}</em>,
-  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1 text-slate-300">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1 text-slate-300">{children}</ol>,
-  li: ({ children }) => <li className="leading-relaxed text-slate-350">{children}</li>,
-  blockquote: ({ children }) => <blockquote className="border-l-4 border-orange-500 pl-4 my-2 text-slate-400 italic">{children}</blockquote>,
+  h1: ({ children }) => <h1 className="text-xl font-black mt-4 mb-2 border-b border-slate-200 dark:border-slate-700 pb-1">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-lg font-black mt-3 mb-1">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-base font-bold mt-2 mb-1">{children}</h3>,
+  p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+  strong: ({ children }) => <strong className="font-black">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-4 border-orange-500 pl-4 my-2 italic opacity-80">{children}</blockquote>,
   code: ({ inline, children, ...props }) => inline
-    ? <code className="bg-slate-800 text-orange-400 px-1.5 py-0.5 rounded-md text-sm font-mono" {...props}>{children}</code>
-    : <code className="block bg-slate-950 text-emerald-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-800" {...props}>{children}</code>,
-  table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-sm border-collapse rounded-xl overflow-hidden border border-slate-800">{children}</table></div>,
-  thead: ({ children }) => <thead className="bg-gradient-to-r from-orange-600 to-amber-600 text-white">{children}</thead>,
+    ? <code className="bg-slate-200 dark:bg-slate-800 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-md text-sm font-mono" {...props}>{children}</code>
+    : <code className="block bg-slate-100 dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-200 dark:border-slate-800" {...props}>{children}</code>,
+  table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-sm border-collapse rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">{children}</table></div>,
+  thead: ({ children }) => <thead className="bg-slate-200 dark:bg-slate-800">{children}</thead>,
   th: ({ children }) => <th className="px-4 py-2 text-left font-black text-xs uppercase tracking-wider">{children}</th>,
-  td: ({ children }) => <td className="px-4 py-2 border-b border-slate-800/80 text-slate-300">{children}</td>,
-  tr: ({ children }) => <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>,
-  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-orange-400 underline hover:text-orange-300 transition-colors">{children}</a>,
-  hr: () => <hr className="my-4 border-slate-850" />,
+  td: ({ children }) => <td className="px-4 py-2 border-b border-slate-200 dark:border-slate-700/80">{children}</td>,
+  tr: ({ children }) => <tr className="hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">{children}</tr>,
+  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-orange-500 dark:text-orange-400 underline hover:opacity-80 transition-opacity">{children}</a>,
+  hr: () => <hr className="my-4 border-slate-200 dark:border-slate-700" />,
 };
 
 // ── Thinking / Loading Animation ─────────────────────────────
@@ -743,7 +743,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
   };
 
   return (
-    <div className={isWidget ? "flex flex-col h-full bg-transparent w-full" : "w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300"}>
+    <div className={isWidget ? "flex flex-col h-full bg-transparent w-full" : "w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300"} style={{ fontFamily: "'Phetsarath OT', 'Noto Sans Lao', 'IBM Plex Sans', sans-serif" }}>
       <style>{`
         @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }
         @keyframes eye-blink { 0%,90%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
@@ -753,25 +753,25 @@ Branches: ${VALID_BRANCHES.join(', ')}.
 
       {/* Sidebar */}
       {!isWidget && (
-        <div className={`transition-all duration-500 overflow-hidden bg-[#0d131f]/60 backdrop-blur-2xl border border-slate-800/80 rounded-[2.5rem] flex flex-col ${isSidebarOpen ? 'w-72 p-5 mr-4 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
-          <div className="flex items-center justify-between mb-6 whitespace-nowrap">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
-            <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
-              <Plus size={18} />
+        <div className={`transition-all duration-300 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col ${isSidebarOpen ? 'w-72 p-4 mr-4 shadow-sm' : 'w-0 p-0 border-none'}`}>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Chat History</h3>
+            <button onClick={startNewChat} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+              <Plus size={16} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
             {chatHistory.map(chat => (
               <div key={chat.id} onClick={() => loadChat(chat)}
-                className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-slate-800/80 border-slate-700 shadow-md' : 'border-transparent hover:bg-slate-900/60 hover:border-slate-800'}`}>
+                className={`group p-3 rounded-xl cursor-pointer transition-colors border ${currentChatId === chat.id ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
                       <MessageSquare size={14} />
                     </div>
-                    <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-white' : 'text-slate-450'}`}>{chat.title}</span>
+                    <span className={`font-medium text-sm truncate ${currentChatId === chat.id ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{chat.title}</span>
                   </div>
-                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
+                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500 transition-colors text-slate-400 shrink-0">
                     <X size={14} />
                   </button>
                 </div>
@@ -783,58 +783,32 @@ Branches: ${VALID_BRANCHES.join(', ')}.
 
       {/* Main Container */}
       <div 
-        className={`flex-1 flex flex-col min-w-0 overflow-hidden relative ${isWidget ? 'rounded-none border-transparent bg-transparent shadow-none' : 'bg-[#0f172a] border border-slate-800 rounded-[2.5rem] shadow-2xl'}`}
-        style={{
-          fontFamily: "'Noto Sans Lao', 'IBM Plex Sans', sans-serif"
-        }}
+        className={`flex-1 flex flex-col min-w-0 overflow-hidden relative ${isWidget ? 'rounded-none border-none bg-transparent' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm'}`}
       >
-        {/* Animated Background Blobs */}
-        <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-amber-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
-
-        {/* Premium Orange Header with iOS Notch Support */}
-        <div 
-          className="px-[18px] pb-[14px] flex items-center justify-between shrink-0 relative overflow-hidden z-10"
-          style={{
-            background: 'linear-gradient(135deg, #fb923c 0%, #f97316 55%, #ea580c 100%)',
-            paddingTop: 'calc(env(safe-area-inset-top, 20px) + 14px)', // iPhone Notch / Status Bar Safe Zone
-          }}
-        >
-          {/* Decorative blobs */}
-          <div className="absolute -top-6 -right-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -bottom-3 right-[50px] w-[50px] h-[50px] rounded-full bg-white/7% pointer-events-none" />
-
+        {/* Clean Header */}
+        <div className="px-5 py-4 flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
             {!isWidget && (
               <button 
                 onClick={() => setIsSidebarOpen(p => !p)} 
-                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all shadow-sm shrink-0"
+                className="p-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-colors shrink-0"
               >
                 <LayoutDashboard size={18} />
               </button>
             )}
 
             {/* Avatar block */}
-            <div 
-              className="w-[42px] h-[42px] rounded-full bg-white/20 border-2 border-white/45 flex items-center justify-center text-xl shrink-0 shadow-lg relative overflow-hidden"
-            >
-              {/* JOI PET FACE inside avatar */}
-              <svg viewBox="0 0 100 100" className={`w-8 h-8 text-white ${isLoading ? 'animate-bounce' : ''}`}>
-                <g className="fill-white">
-                  <circle cx="35" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                  <circle cx="65" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                </g>
-                <path d={isLoading ? "M 35 65 Q 50 75 65 65" : "M 35 65 Q 50 70 65 65"} fill="none" stroke="white" strokeWidth="4.5" strokeLinecap="round" />
-              </svg>
+            <div className="w-10 h-10 rounded-full bg-slate-900 dark:bg-slate-100 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+              <Bot size={20} className="text-white dark:text-slate-900" />
             </div>
 
             {/* Info details */}
             <div className="text-left">
-              <div className="text-white font-bold text-[15px] tracking-wide leading-none">{BOT_NAME} AI</div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="w-[7px] h-[7px] rounded-full bg-[#4ade80] shadow-[0_0_0_2px_rgba(74,222,128,0.35)] shrink-0 animate-pulse" />
-                <span className="text-white/85 text-[11px] font-medium leading-none">
-                  Online · ຜູ້ຊ່ວຍສິນຄ້າຄົງຄັງ
+              <div className="text-slate-900 dark:text-white font-bold text-sm tracking-wide leading-none">{BOT_NAME} AI</div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-none">
+                  Online · AI Assistant
                 </span>
               </div>
             </div>
@@ -843,18 +817,7 @@ Branches: ${VALID_BRANCHES.join(', ')}.
           <div className="flex items-center gap-2 relative z-20">
             <button 
               onClick={isWidget ? onClose : onBack} 
-              style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.18)',
-                border: '1px solid rgba(255,255,255,0.3)',
-                color: '#fff', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, lineHeight: 1,
-                transition: 'background 0.2s',
-                flexShrink: 0,
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.32)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
             >
               ✕
             </button>
@@ -862,62 +825,50 @@ Branches: ${VALID_BRANCHES.join(', ')}.
         </div>
 
         {/* Dynamic Status / Mode Chips Bar */}
-        <div className="bg-[#0b0f19] border-b border-slate-800/80 px-[14px] py-[7px] flex gap-2 items-center shrink-0 overflow-x-auto scrollbar-hide">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex gap-2 items-center shrink-0 overflow-x-auto scrollbar-hide">
           <button 
             onClick={() => setIsTechToSpec(p => !p)} 
-            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTechToSpec ? 'bg-[#f97316] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border shrink-0 ${isTechToSpec ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             Tech Mode
           </button>
           <button 
             onClick={toggleTTS} 
-            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTTSEnabled ? 'bg-[#ea580c] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border shrink-0 ${isTTSEnabled ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             {isTTSEnabled ? 'Audio ON' : 'Audio OFF'}
           </button>
-          <div className="ml-auto text-[11px] text-slate-500 font-semibold shrink-0">
-            Active
-          </div>
         </div>
 
         {/* Messages */}
-        <div 
-          className={`flex-1 overflow-y-auto space-y-4 scrollbar-hide relative z-10 px-4 py-3 sm:px-6 sm:py-4`}
-          style={{
-            background: 'linear-gradient(180deg, #0b0f19 0%, #0f172a 100%)',
-          }}
-        >
+        <div className="flex-1 overflow-y-auto space-y-6 scrollbar-hide relative z-10 px-4 py-6 sm:px-6 bg-white dark:bg-[#0a0f1c]">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className={`flex gap-2 sm:gap-3 w-full max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`} style={{ animationDelay: `${i * 0.05}s` }}>
+              <div className={`flex gap-3 w-full max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 
                 {/* Robot Avatar for Assistant messages */}
                 {m.role !== 'user' && (
-                  <div className="w-[28px] h-[28px] rounded-full shrink-0 flex items-center justify-center text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #f97316, #c2410c)' }}>
-                    🤖
+                  <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-slate-700">
+                    <Bot size={16} />
                   </div>
                 )}
 
-                <div className={`flex flex-col gap-1 flex-1 min-w-0 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`flex flex-col gap-1.5 flex-1 min-w-0 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div 
-                    className={`px-[13px] py-[9px] text-[13px] leading-[1.6] shadow-sm max-w-full overflow-x-auto transition-all ${m.role === 'user' 
-                      ? 'text-white rounded-[18px] rounded-br-[4px]' 
-                      : 'bg-[#1e293b] text-slate-100 rounded-[18px] rounded-bl-[4px] border border-slate-800'
+                    className={`px-4 py-3 text-sm leading-relaxed max-w-full overflow-x-auto ${m.role === 'user' 
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl rounded-tr-sm' 
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-2xl rounded-tl-sm border border-slate-100 dark:border-slate-700 shadow-sm'
                     }`}
-                    style={{
-                      background: m.role === 'user' ? 'linear-gradient(135deg, #f97316, #ea580c)' : undefined,
-                      boxShadow: m.role === 'user' ? '0 4px 14px rgba(249,115,22,0.28)' : '0 2px 8px rgba(0,0,0,0.2)',
-                    }}
                   >
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
                     {m.hasFile && (
-                      <div className="mt-3 p-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20 max-w-full overflow-hidden">
+                      <div className="mt-3 p-2.5 bg-black/5 dark:bg-white/5 rounded-lg flex items-center gap-2 max-w-full overflow-hidden">
                         <FileText size={14} className="shrink-0" /> 
-                        <span className="text-[10px] font-bold truncate">{m.fileName}</span>
+                        <span className="text-xs font-medium truncate">{m.fileName}</span>
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2">{m.role === 'user' ? 'You' : BOT_NAME}</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1">{m.role === 'user' ? 'You' : BOT_NAME}</span>
                 </div>
               </div>
             </div>
@@ -927,28 +878,28 @@ Branches: ${VALID_BRANCHES.join(', ')}.
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-slate-800 bg-[#0b0f19] relative z-10 w-full px-4 py-3">
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 relative z-10 w-full px-4 py-4">
           <div className="max-w-4xl mx-auto relative w-full">
             {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} />}
             <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center bg-[#1e293b] border border-slate-750 rounded-[20px] px-3.5 py-1.5 flex-1 min-w-0">
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 flex-1 min-w-0 focus-within:border-slate-400 dark:focus-within:border-slate-500 transition-colors">
                 <input 
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  placeholder="ຖາມ Joi ສິ່ງໃดກໍໄດ້..."
-                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-[13px] text-slate-100 placeholder-slate-500 min-w-0"
+                  placeholder="ຖາມ Joi ສິ່ງໃດກໍໄດ້..."
+                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-sm text-slate-900 dark:text-white placeholder-slate-400 min-w-0"
                 />
                 
                 {/* File Attachment Buttons inside input area */}
-                <div className="flex items-center gap-1.5 ml-2">
-                  <button onClick={() => document.getElementById('ai-file-input').click()} className="p-1 text-slate-400 hover:text-orange-400 transition-colors shrink-0">
-                    <Paperclip size={16} />
+                <div className="flex items-center gap-2 ml-2">
+                  <button onClick={() => document.getElementById('ai-file-input').click()} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0">
+                    <Paperclip size={18} />
                   </button>
                   <input id="ai-file-input" type="file" className="hidden" onChange={handleFileChange} />
-                  <button onClick={() => document.getElementById('ai-img-input').click()} className="p-1 text-slate-400 hover:text-orange-400 transition-colors shrink-0">
-                    <Image size={16} />
+                  <button onClick={() => document.getElementById('ai-img-input').click()} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0">
+                    <Image size={18} />
                   </button>
                 </div>
               </div>
@@ -956,14 +907,9 @@ Branches: ${VALID_BRANCHES.join(', ')}.
               <button 
                 onClick={handleSend} 
                 disabled={isLoading || (!input.trim() && !attachedFile)} 
-                className="w-10 h-10 rounded-full border-none flex items-center justify-center transition-all shrink-0"
-                style={{
-                  background: (input.trim() || attachedFile) ? 'linear-gradient(135deg, #f97316, #ea580c)' : '#1e293b',
-                  cursor: (input.trim() || attachedFile) ? 'pointer' : 'default',
-                  boxShadow: (input.trim() || attachedFile) ? '0 4px 12px rgba(249,115,22,0.4)' : 'none',
-                }}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100"
               >
-                <Send size={16} className={(input.trim() || attachedFile) ? 'text-white' : 'text-slate-500'} />
+                <Send size={18} />
               </button>
             </div>
           </div>

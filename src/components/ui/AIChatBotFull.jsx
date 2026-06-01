@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import {
   MessageSquare, X, Send, Sparkles, LayoutDashboard,
   Paperclip, FileText, Trash2, Volume2, VolumeX, Image, User,
-  Plus, Settings, Download
+  Plus, Settings, Download, Bot
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -18,28 +18,28 @@ const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MB
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
-// ── Markdown Components (Claude-style) ──────────────────────
+// ── Markdown Components (Premium Ambient) ──────────────────────
 const mdComponents = {
-  h1: ({ children }) => <h1 className="text-xl font-black text-slate-100 mt-4 mb-2 border-b border-slate-800 pb-1">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-lg font-black text-slate-100 mt-3 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-base font-bold text-slate-200 mt-2 mb-1">{children}</h3>,
-  p: ({ children }) => <p className="mb-2 leading-relaxed text-slate-300">{children}</p>,
-  strong: ({ children }) => <strong className="font-black text-white">{children}</strong>,
-  em: ({ children }) => <em className="italic text-slate-200">{children}</em>,
-  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1 text-slate-300">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1 text-slate-300">{children}</ol>,
-  li: ({ children }) => <li className="leading-relaxed text-slate-350">{children}</li>,
-  blockquote: ({ children }) => <blockquote className="border-l-4 border-orange-500 pl-4 my-2 text-slate-400 italic">{children}</blockquote>,
+  h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-4 bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-amber-300">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-xl font-bold mt-5 mb-3 text-slate-100">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2 text-slate-200">{children}</h3>,
+  p: ({ children }) => <p className="mb-4 leading-relaxed text-slate-300">{children}</p>,
+  strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+  em: ({ children }) => <em className="italic text-slate-400">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-2 marker:text-orange-500 text-slate-300">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-2 marker:text-orange-500 text-slate-300">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-orange-500 pl-5 my-5 italic text-slate-400 bg-orange-500/5 py-2 pr-4 rounded-r-2xl">{children}</blockquote>,
   code: ({ inline, children, ...props }) => inline
-    ? <code className="bg-slate-800 text-orange-400 px-1.5 py-0.5 rounded-md text-sm font-mono" {...props}>{children}</code>
-    : <code className="block bg-slate-950 text-emerald-400 p-4 rounded-2xl overflow-x-auto text-sm font-mono my-3 border border-slate-800" {...props}>{children}</code>,
-  table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-sm border-collapse rounded-xl overflow-hidden border border-slate-800">{children}</table></div>,
-  thead: ({ children }) => <thead className="bg-gradient-to-r from-orange-600 to-amber-600 text-white">{children}</thead>,
-  th: ({ children }) => <th className="px-4 py-2 text-left font-black text-xs uppercase tracking-wider">{children}</th>,
-  td: ({ children }) => <td className="px-4 py-2 border-b border-slate-800/80 text-slate-300">{children}</td>,
-  tr: ({ children }) => <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>,
-  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-orange-400 underline hover:text-orange-300 transition-colors">{children}</a>,
-  hr: () => <hr className="my-4 border-slate-850" />,
+    ? <code className="bg-white/10 px-1.5 py-0.5 rounded-md text-[13px] font-mono text-orange-300 border border-white/5 shadow-sm" {...props}>{children}</code>
+    : <div className="rounded-2xl overflow-hidden my-5 border border-white/10 shadow-xl"><div className="bg-black/40 backdrop-blur-md px-4 py-2.5 text-xs font-mono text-slate-400 border-b border-white/5 flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-500/80"/><div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"/><div className="w-2.5 h-2.5 rounded-full bg-green-500/80"/><span className="ml-2">Code Snippet</span></div><code className="block bg-[#0a0a0a]/80 backdrop-blur-xl text-emerald-300 p-5 overflow-x-auto text-[13px] leading-relaxed font-mono" {...props}>{children}</code></div>,
+  table: ({ children }) => <div className="overflow-x-auto my-5 rounded-2xl border border-white/10 shadow-xl"><table className="w-full text-sm border-collapse bg-white/5 backdrop-blur-sm">{children}</table></div>,
+  thead: ({ children }) => <thead className="bg-black/20 border-b border-white/10">{children}</thead>,
+  th: ({ children }) => <th className="px-5 py-3.5 text-left font-semibold text-slate-200 uppercase tracking-wider text-[11px]">{children}</th>,
+  td: ({ children }) => <td className="px-5 py-3.5 border-b border-white/5 text-slate-300">{children}</td>,
+  tr: ({ children }) => <tr className="transition-colors hover:bg-white/5">{children}</tr>,
+  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-orange-400 underline decoration-orange-400/30 underline-offset-4 hover:decoration-orange-400 transition-all">{children}</a>,
+  hr: () => <hr className="my-8 border-white/10" />,
 };
 
 // ── Thinking / Loading Animation ─────────────────────────────
@@ -920,236 +920,230 @@ Branches: ${VALID_BRANCHES.join(', ')}.
   };
 
   return (
-    <div className="w-full h-screen flex bg-[#0b0f19] animate-in fade-in duration-300">
+    <div className="w-full flex-1 flex bg-[#030712] relative overflow-hidden animate-in fade-in duration-500 text-slate-300" style={{ fontFamily: "'Phetsarath OT', 'Noto Sans Lao', 'IBM Plex Sans', sans-serif" }}>
       <style>{`
-        @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-8px)} }
-        @keyframes eye-blink { 0%,90%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
-        .animate-spin-slow { animation: spin 8s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 4s linear infinite; }
+        .glass-panel { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .glass-input { background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
+        .mesh-bg { background-image: radial-gradient(at 0% 0%, hsla(28,100%,74%,0.15) 0px, transparent 50%), radial-gradient(at 100% 0%, hsla(253,16%,7%,1) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(333,100%,53%,0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, hsla(22,100%,77%,0.1) 0px, transparent 50%); }
       `}</style>
+      
+      {/* Ambient Orbs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-orange-500/10 blur-[120px] pointer-events-none mix-blend-screen" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none mix-blend-screen" />
+      <div className="absolute top-[40%] left-[60%] w-[30%] h-[30%] rounded-full bg-purple-500/5 blur-[100px] pointer-events-none mix-blend-screen" />
+      
+      {/* Mesh Background Overlay */}
+      <div className="absolute inset-0 mesh-bg pointer-events-none opacity-50" />
 
-      {/* Sidebar */}
-      <div className={`transition-all duration-500 overflow-hidden bg-[#0d131f] border-r border-slate-800 flex flex-col ${isSidebarOpen ? 'w-72 p-5 shadow-2xl shadow-blue-500/5' : 'w-0 p-0'}`}>
-        <div className="flex items-center justify-between mb-6 whitespace-nowrap">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Memory Vault</h3>
-          <button onClick={startNewChat} className="p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all hover:scale-105 active:scale-95">
-            <Plus size={18} />
-          </button>
+      {/* Sidebar (Glassmorphic) */}
+      <div className={`transition-all duration-500 overflow-hidden glass-panel border-r border-white/5 flex flex-col z-20 ${isSidebarOpen ? 'w-[320px]' : 'w-0'}`}>
+        <div className="p-6 flex items-center justify-between">
+           <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Chats</div>
+           <div className="flex items-center gap-2">
+             <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-400 hover:text-white">
+               <LayoutDashboard size={18} />
+             </button>
+             <button onClick={startNewChat} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white border border-white/5 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                <Plus size={18} />
+             </button>
+           </div>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide px-1">
+        <div className="flex-1 overflow-y-auto space-y-1.5 px-4 pb-6 scrollbar-hide">
           {chatHistory.map(chat => (
             <div key={chat.id} onClick={() => loadChat(chat)}
-              className={`group p-4 rounded-[1.5rem] cursor-pointer transition-all border ${currentChatId === chat.id ? 'bg-slate-800/80 border-slate-700 shadow-md' : 'border-transparent hover:bg-slate-900/60 hover:border-slate-800'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${currentChatId === chat.id ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                    <MessageSquare size={14} />
-                  </div>
-                  <span className={`font-bold text-xs truncate ${currentChatId === chat.id ? 'text-white' : 'text-slate-450'}`}>{chat.title}</span>
-                </div>
-                <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-rose-500 transition-all text-slate-400 shrink-0">
-                  <X size={14} />
-                </button>
+              className={`group flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer transition-all ${currentChatId === chat.id ? 'bg-gradient-to-r from-orange-500/20 to-transparent border-l-2 border-orange-500 text-white' : 'hover:bg-white/5 text-slate-400 hover:text-slate-200 border-l-2 border-transparent'}`}>
+              <div className="flex items-center gap-3 overflow-hidden">
+                <MessageSquare size={16} className={`shrink-0 ${currentChatId === chat.id ? 'text-orange-400' : 'opacity-60'}`} />
+                <span className="font-medium text-[13px] truncate">{chat.title}</span>
               </div>
+              <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 rounded-lg hover:text-red-400 transition-all shrink-0">
+                <X size={14} />
+              </button>
             </div>
           ))}
         </div>
       </div>
 
       {/* Main Container */}
-      <div
-        className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-[#0f172a]"
-        style={{
-          fontFamily: "'Noto Sans Lao', 'IBM Plex Sans', sans-serif"
-        }}
-      >
-        {/* Animated Background Blobs */}
-        <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-amber-400/5 blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
-
-        {/* Premium Orange Header */}
-        <div
-          className="px-6 py-4 flex items-center justify-between shrink-0 relative overflow-hidden z-10"
-          style={{
-            background: 'linear-gradient(135deg, #fb923c 0%, #f97316 55%, #ea580c 100%)',
-          }}
-        >
-          {/* Decorative blobs */}
-          <div className="absolute -top-6 -right-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -bottom-3 right-[50px] w-[50px] h-[50px] rounded-full bg-white/7% pointer-events-none" />
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(p => !p)}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all shadow-sm shrink-0"
-            >
-              <LayoutDashboard size={18} />
-            </button>
-
-            {/* Avatar block */}
-            <div
-              className="w-[42px] h-[42px] rounded-full bg-white/20 border-2 border-white/45 flex items-center justify-center text-xl shrink-0 shadow-lg relative overflow-hidden"
-            >
-              {/* JOI PET FACE inside avatar */}
-              <svg viewBox="0 0 100 100" className={`w-8 h-8 text-white ${isLoading ? 'animate-bounce' : ''}`}>
-                <g className="fill-white">
-                  <circle cx="35" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                  <circle cx="65" cy="45" r="6" className={isLoading ? 'animate-pulse' : 'animate-[eye-blink_4s_infinite]'} />
-                </g>
-                <path d={isLoading ? "M 35 65 Q 50 75 65 65" : "M 35 65 Q 50 70 65 65"} fill="none" stroke="white" strokeWidth="4.5" strokeLinecap="round" />
-              </svg>
-            </div>
-
-            {/* Info details */}
-            <div className="text-left">
-              <div className="text-white font-bold text-[15px] tracking-wide leading-none">{BOT_NAME} AI</div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="w-[7px] h-[7px] rounded-full bg-[#4ade80] shadow-[0_0_0_2px_rgba(74,222,128,0.35)] shrink-0 animate-pulse" />
-                <span className="text-white/85 text-[11px] font-medium leading-none">
-                  Online · ຜູ້ຊ່ວຍສິນຄ້າຄົງຄັງ
-                </span>
-              </div>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
+        {/* Premium Header */}
+        <div className="px-6 py-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-5">
+            {!isSidebarOpen && (
+              <button 
+                onClick={() => setIsSidebarOpen(true)} 
+                className="p-2.5 hover:bg-white/10 rounded-xl transition-all text-slate-400 hover:text-white backdrop-blur-md border border-transparent hover:border-white/10"
+              >
+                <LayoutDashboard size={20} />
+              </button>
+            )}
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 p-[1px]">
+                  <div className="w-full h-full bg-slate-950 rounded-xl flex items-center justify-center">
+                     <Sparkles size={18} className="text-orange-400" />
+                  </div>
+               </div>
+               <div>
+                 <div className="text-[18px] font-bold text-white tracking-tight leading-none">{BOT_NAME}</div>
+                 <div className="text-[11px] font-medium text-orange-400 tracking-widest uppercase mt-1">Intelligence</div>
+               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 relative z-20">
-            <button
-              onClick={onBack}
-              style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.18)',
-                border: '1px solid rgba(255,255,255,0.3)',
-                color: '#fff', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, lineHeight: 1,
-                transition: 'background 0.2s',
-                flexShrink: 0,
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.32)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
-              title="Back to Admin Menu"
+          <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md border border-white/5 rounded-2xl p-1.5">
+            <button 
+              onClick={() => setIsTechToSpec(p => !p)} 
+              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${isTechToSpec ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'hover:bg-white/10 text-slate-400 hover:text-white'}`}
             >
-              ✕
+              Tech
             </button>
-          </div>
-        </div>
-
-        {/* Dynamic Status / Mode Chips Bar */}
-        <div className="bg-[#0b0f19] border-b border-slate-800/80 px-[14px] py-[7px] flex gap-2 items-center shrink-0 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={() => setIsTechToSpec(p => !p)}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTechToSpec ? 'bg-[#f97316] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
-          >
-            Tech Mode
-          </button>
-          <button
-            onClick={toggleTTS}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shrink-0 ${isTTSEnabled ? 'bg-[#ea580c] text-white border-transparent' : 'bg-slate-800 text-slate-350 border-slate-700 hover:bg-slate-750'}`}
-          >
-            {isTTSEnabled ? 'Audio ON' : 'Audio OFF'}
-          </button>
-          <div className="ml-auto text-[11px] text-slate-500 font-semibold shrink-0">
-            Active
+            <button 
+              onClick={toggleTTS} 
+              className={`p-2.5 rounded-xl transition-all ${isTTSEnabled ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              {isTTSEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+            <div className="w-px h-6 bg-white/10 mx-1" />
+            <button 
+              onClick={onBack} 
+              className="p-2.5 hover:bg-red-500/20 rounded-xl transition-all text-slate-400 hover:text-red-400"
+              title="Close Chat"
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div
-          className={`flex-1 overflow-y-auto space-y-4 scrollbar-hide relative z-10 px-4 py-3 sm:px-6 sm:py-4`}
-          style={{
-            background: 'linear-gradient(180deg, #0b0f19 0%, #0f172a 100%)',
-          }}
-        >
+        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-8 w-full max-w-[960px] mx-auto scrollbar-hide flex flex-col gap-10">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className={`flex gap-2 sm:gap-3 w-full max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-
-                {/* Robot Avatar for Assistant messages */}
-                {m.role !== 'user' && (
-                  <div className="w-[28px] h-[28px] rounded-full shrink-0 flex items-center justify-center text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #f97316, #c2410c)' }}>
-                    🤖
-                  </div>
-                )}
-
-                <div className={`flex flex-col gap-1 flex-1 min-w-0 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div
-                    className={`px-[13px] py-[9px] text-[13px] leading-[1.6] shadow-sm max-w-full overflow-x-auto transition-all ${m.role === 'user'
-                      ? 'text-white rounded-[18px] rounded-br-[4px]'
-                      : 'bg-[#1e293b] text-slate-100 rounded-[18px] rounded-bl-[4px] border border-slate-800'
-                      }`}
-                    style={{
-                      background: m.role === 'user' ? 'linear-gradient(135deg, #f97316, #ea580c)' : undefined,
-                      boxShadow: m.role === 'user' ? '0 4px 14px rgba(249,115,22,0.28)' : '0 2px 8px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-700`} style={{ animationDelay: `${i * 0.05}s` }}>
+              
+              {m.role === 'user' ? (
+                // USER MESSAGE (Glassmorphic)
+                <div className="max-w-[85%] group">
+                  <div className="glass-panel px-6 py-4 rounded-[28px] rounded-br-xl text-[15px] leading-relaxed shadow-2xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+                    <div className="relative z-10 text-slate-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+                    </div>
                     {m.hasFile && (
-                      <div className="mt-3 p-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/20 max-w-full overflow-hidden">
-                        <FileText size={14} className="shrink-0" />
-                        <span className="text-[10px] font-bold truncate">{m.fileName}</span>
+                      <div className="mt-4 p-3 bg-black/30 rounded-2xl flex items-center gap-3 max-w-full overflow-hidden border border-white/5 relative z-10">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                           <FileText size={18} className="text-orange-400" /> 
+                        </div>
+                        <span className="text-[13px] font-medium text-slate-300 truncate">{m.fileName}</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 px-2 mt-0.5">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{m.role === 'user' ? 'You' : BOT_NAME}</span>
-                    {m.role !== 'user' && m.content.includes('|') && m.content.includes('\n|') && (
-                      <button 
-                        onClick={() => handleExportExcel(m.content)}
-                        className="text-[9px] font-bold text-[#ea580c] hover:text-[#f97316] uppercase tracking-widest flex items-center gap-1 transition-colors"
-                        title="Download as Excel"
-                      >
-                        <Download size={10} /> Excel
-                      </button>
+                </div>
+              ) : (
+                // AI MESSAGE (Gemini Style but Premium)
+                <div className="flex gap-6 w-full">
+                  <div className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center bg-gradient-to-br from-orange-400 via-amber-500 to-rose-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] mt-1 relative">
+                    <div className="absolute inset-0 bg-white/20 rounded-2xl animate-pulse" />
+                    <Sparkles size={18} className="relative z-10" />
+                  </div>
+                  <div className="flex-1 min-w-0 pb-2">
+                    <div className="text-[15px] leading-[1.8] text-slate-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{m.content}</ReactMarkdown>
+                    </div>
+                    {m.content.includes('|') && m.content.includes('\n|') && (
+                      <div className="mt-6 flex">
+                        <button 
+                          onClick={() => handleExportExcel(m.content)}
+                          className="px-5 py-2.5 rounded-xl border border-white/10 hover:border-orange-500/50 hover:bg-orange-500/10 text-[13px] font-bold uppercase tracking-wider text-orange-400 flex items-center gap-2 transition-all shadow-lg backdrop-blur-md"
+                        >
+                          <Download size={14} /> Export Excel
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
-          {isLoading && <ThinkingDots />}
-          <div ref={messagesEndRef} />
+          {isLoading && (
+            <div className="flex gap-6 w-full animate-in fade-in duration-500">
+              <div className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center bg-gradient-to-br from-orange-400 to-rose-500 text-white mt-1 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                <Sparkles size={18} className="animate-spin-slow" />
+              </div>
+              <div className="flex-1 pt-2.5 flex flex-col gap-4">
+                <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded-full w-3/4 animate-pulse" />
+                <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded-full w-2/4 animate-pulse" style={{ animationDelay: '200ms' }} />
+                <div className="h-3 bg-gradient-to-r from-slate-700 to-slate-800 rounded-full w-3/5 animate-pulse" style={{ animationDelay: '400ms' }} />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} className="h-6" />
         </div>
 
-        {/* Input Area */}
-        <div className="border-t border-slate-800 bg-[#0b0f19] relative z-10 w-full px-4 py-3">
-          <div className="max-w-4xl mx-auto relative w-full">
-            {attachedFile && <AttachmentBadge file={attachedFile} imagePreview={imagePreview} onRemove={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} />}
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center bg-[#1e293b] border border-slate-750 rounded-[20px] px-3.5 py-1.5 flex-1 min-w-0">
-                <input
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  placeholder="ຖາມ Joi ສິ່ງໃດກໍໄດ້..."
-                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-[13px] text-slate-100 placeholder-slate-500 min-w-0"
-                />
-
-                {/* File Attachment Buttons inside input area */}
-                <div className="flex items-center gap-1.5 ml-2">
-                  <button onClick={() => document.getElementById('ai-file-input').click()} className="p-1 text-slate-400 hover:text-orange-400 transition-colors shrink-0">
-                    <Paperclip size={16} />
-                  </button>
-                  <input id="ai-file-input" type="file" className="hidden" onChange={handleFileChange} />
-                  <button onClick={() => document.getElementById('ai-img-input').click()} className="p-1 text-slate-400 hover:text-orange-400 transition-colors shrink-0">
-                    <Image size={16} />
-                  </button>
+        {/* Premium Input Area */}
+        <div className="px-4 pb-8 pt-4 w-full max-w-[960px] mx-auto relative z-20">
+          <div className="relative">
+            {attachedFile && (
+              <div className="absolute -top-16 left-6 flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2 shadow-2xl animate-in slide-in-from-bottom-2">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="preview" className="w-8 h-8 rounded-lg object-cover border border-white/10" />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                    <FileText size={16} className="text-orange-400" />
+                  </div>
+                )}
+                <div className="flex flex-col max-w-[150px]">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Attached</span>
+                  <span className="text-[13px] font-bold text-slate-200 truncate">{attachedFile.name}</span>
                 </div>
+                <button onClick={() => { setAttachedFile(null); setImagePreview(null); setFileContent(''); }} className="hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-lg text-slate-400 transition-all ml-1">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            
+            <div className="glass-input rounded-[32px] p-2 pl-4 flex items-end relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-transparent to-white/5 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
+              
+              <div className="flex items-center gap-1.5 pb-1.5 relative z-10">
+                <button onClick={() => document.getElementById('ai-img-input-full').click()} className="p-3 text-slate-400 hover:bg-white/10 hover:text-white rounded-2xl transition-all shrink-0">
+                  <Image size={22} />
+                </button>
+                <input id="ai-img-input-full" type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                <button onClick={() => document.getElementById('ai-file-input-full').click()} className="p-3 text-slate-400 hover:bg-white/10 hover:text-white rounded-2xl transition-all shrink-0 hidden sm:block">
+                  <Paperclip size={22} />
+                </button>
+                <input id="ai-file-input-full" type="file" className="hidden" onChange={handleFileChange} />
               </div>
 
-              <button
-                onClick={handleSend}
-                disabled={isLoading || (!input.trim() && !attachedFile)}
-                className="w-10 h-10 rounded-full border-none flex items-center justify-center transition-all shrink-0"
-                style={{
-                  background: (input.trim() || attachedFile) ? 'linear-gradient(135deg, #f97316, #ea580c)' : '#1e293b',
-                  cursor: (input.trim() || attachedFile) ? 'pointer' : 'default',
-                  boxShadow: (input.trim() || attachedFile) ? '0 4px 12px rgba(249,115,22,0.4)' : 'none',
-                }}
-              >
-                <Send size={16} className={(input.trim() || attachedFile) ? 'text-white' : 'text-slate-500'} />
-              </button>
+              <textarea 
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Message Joi..."
+                rows={1}
+                className="flex-1 bg-transparent border-none outline-none focus:ring-0 px-4 py-4 text-[15px] text-white placeholder-slate-500 resize-none max-h-40 scrollbar-hide min-w-0 relative z-10"
+              />
+              
+              <div className="px-2 pb-1.5 shrink-0 relative z-10">
+                <button 
+                  onClick={handleSend} 
+                  disabled={isLoading || (!input.trim() && !attachedFile)} 
+                  className={`w-12 h-12 rounded-[20px] flex items-center justify-center transition-all ${
+                    (input.trim() || attachedFile) && !isLoading
+                      ? 'bg-gradient-to-br from-orange-400 to-rose-500 text-white shadow-[0_4px_20px_rgba(249,115,22,0.4)] hover:scale-105 active:scale-95' 
+                      : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <Send size={20} className={(input.trim() || attachedFile) ? 'ml-1' : ''} />
+                </button>
+              </div>
             </div>
+          </div>
+          <div className="text-center mt-4 text-[11px] font-medium text-slate-500 uppercase tracking-widest flex items-center justify-center gap-2">
+            <Sparkles size={10} />
+            Powered by Gemini & DeepSeek Intelligence
           </div>
         </div>
       </div>

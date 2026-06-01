@@ -836,7 +836,7 @@ function AppContent() {
         showProgressBar={showProgressBar}
       />
 
-      <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots">
+      <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots overflow-x-hidden">
         {/* Navigation */}
         <Navbar
           step={step}
@@ -873,7 +873,7 @@ function AppContent() {
           {step === 'upload' && (
             <div className="max-w-5xl w-full animate-fade-in-up flex flex-col items-center relative">
               {/* Rubik Network Particles Background */}
-              <div className="absolute inset-0 -inset-x-[50vw] -inset-y-32 overflow-hidden" style={{ zIndex: 0 }}>
+              <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
                 <RubikNetworkParticles />
               </div>
               <div className="relative w-full" style={{ zIndex: 1 }}>
@@ -906,7 +906,7 @@ function AppContent() {
                   )}
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto transition-all duration-500">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl mx-auto transition-all duration-500">
                   {/* File Upload + Branch Selector (admin only) - DISABLED & MOVED TO BOTTOM TEMPORARILY
                   {showAdminMenu && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-400 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
@@ -1160,28 +1160,26 @@ function AppContent() {
 
                   {/* Admin only: HQ Command Center */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col items-center text-center gap-0 group hover:border-amber-500 hover:shadow-amber-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
                       {/* Image Banner */}
-                      <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-blue-100 to-sky-200 relative">
+                      <div className="w-full h-32 overflow-hidden bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
                         <img
                           src={imgHQCenter}
                           alt="HQ Command Center"
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                          className="w-full h-full object-cover object-center"
                         />
-                        {/* Overlay gradient at bottom */}
-                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
                       </div>
                       {/* Content */}
-                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
-                        <div className="space-y-1.5">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">HQ Command Center</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Analytics &amp; Monitoring</p>
+                      <div className="p-6 flex flex-col gap-4 w-full">
+                        <div className="space-y-1">
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">HQ Command Center</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Analytics &amp; Monitoring</p>
                         </div>
                         <button
                           onClick={() => setStep('hq-dashboard')}
-                          className="w-full btn-primary mt-1 group py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-orange-500/30"
+                          className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors"
                         >
-                          <BarChart3 size={18} />
+                          <BarChart3 size={16} />
                           <span>Open Dashboard</span>
                         </button>
                       </div>
@@ -1190,24 +1188,20 @@ function AppContent() {
 
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-500 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                      {/* Orange Banner */}
-                      <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600 relative flex items-center justify-center">
-                        <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div>
-                        <div className="p-6 rounded-[2rem] bg-white/20 text-white group-hover:scale-110 transition-all duration-700 shadow-xl border border-white/20">
-                          <Bot size={64} strokeWidth={2} />
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
+                      {/* Banner */}
+                      <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-400">
+                        <Bot size={40} strokeWidth={1.5} />
                       </div>
                       {/* Content */}
-                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
-                        <div className="space-y-1.5 text-center">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Joi AI Chat</h3>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Smart Assistant Full-Page</p>
+                      <div className="p-6 flex flex-col gap-4 w-full">
+                        <div className="space-y-1">
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Joi AI Chat</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Smart Assistant Full-Page</p>
                         </div>
                         <button onClick={() => setStep('ai-chat')}
-                          className="w-full btn-primary mt-1 group py-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-500/30 text-white border-none">
-                          <Sparkles size={18} />
+                          className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors">
+                          <Sparkles size={16} />
                           <span>Open AI Chat</span>
                         </button>
                       </div>
@@ -1218,33 +1212,33 @@ function AppContent() {
 
                   {/* Admin only: Product Management (Unlocked) */}
                   {showAdminMenu && (
-                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px] hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 cursor-pointer" onClick={() => setStep('product-manager')}>
-                      <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner group-hover:scale-110 transition-transform duration-500 mb-2">
-                        <ProductBoxIcon className="w-8 h-8 text-current" />
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col gap-4 w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setStep('product-manager')}>
+                      <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
+                        <ProductBoxIcon className="w-6 h-6 text-current" />
                       </div>
-                      <div className="space-y-2 mb-2">
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ຈັດການສິນຄ້າ</h3>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] group-hover:text-emerald-500 transition-colors">Product Management</p>
+                      <div className="space-y-1">
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">ຈັດການສິນຄ້າ</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Product Management</p>
                       </div>
 
                       {isAdmin && (
-                        <div className="w-full relative z-20 mt-2 mb-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="w-full relative" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={adminViewBranch || user?.branch_id || 'ຕະຫຼາດລາວ'}
                             onChange={(e) => setAdminViewBranch(e.target.value)}
-                            className="w-full h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-emerald-100 dark:border-emerald-900/50 text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-emerald-500 appearance-none shadow-sm cursor-pointer"
+                            className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-400 appearance-none"
                           >
                             <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                           </select>
-                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none" size={16} />
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                         </div>
                       )}
 
-                      <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-emerald-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('product-manager'); }}>
-                        <LayoutDashboard size={18} />
+                      <button className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors mt-auto" onClick={(e) => { e.stopPropagation(); setStep('product-manager'); }}>
+                        <LayoutDashboard size={16} />
                         <span>ກົດເຂົ້າໃຊ້ງານ</span>
                       </button>
                     </div>

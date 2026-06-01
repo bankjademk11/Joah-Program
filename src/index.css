@@ -19,8 +19,8 @@
   }
 
   body {
-    @apply bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 text-slate-900 antialiased;
-    @apply dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100;
+    @apply bg-slate-50 text-slate-900 antialiased overflow-x-hidden;
+    @apply dark:bg-[#0a0f1c] dark:text-slate-100;
     @apply selection:bg-orange-200 selection:text-orange-900 dark:selection:bg-orange-500/30 dark:selection:text-orange-300;
     font-family: 'Outfit', 'Noto Sans Lao', -apple-system, BlinkMacSystemFont, sans-serif;
     min-height: 100vh;
