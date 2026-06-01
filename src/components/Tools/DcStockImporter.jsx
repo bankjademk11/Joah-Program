@@ -120,7 +120,8 @@ export default function DcStockImporter({ onBack }) {
 
       // 3. Prepare Payloads
       const addedData = [];
-      const dcPayload = [];
+      const dcPayloadUpdate = [];
+      const dcPayloadInsert = [];
       const storeUpdatePayload = [];
       const dcLogPayload = [];
       const timestamp = new Date().toISOString();
@@ -133,13 +134,22 @@ export default function DcStockImporter({ onBack }) {
         addedData.push({ barcode: r.barcode, qtyAdded: qtyToAdd });
 
         const existingDc = dcMap[r.barcode];
-        dcPayload.push({
-          ...(existingDc ? { id: existingDc.id } : {}),
-          barcode: r.barcode,
-          qty: (existingDc?.qty || 0) + qtyToAdd,
-          branch_id: importBranch,
-          updated_at: timestamp
-        });
+        if (existingDc) {
+          dcPayloadUpdate.push({
+            id: existingDc.id,
+            barcode: r.barcode,
+            qty: (existingDc.qty || 0) + qtyToAdd,
+            branch_id: importBranch,
+            updated_at: timestamp
+          });
+        } else {
+          dcPayloadInsert.push({
+            barcode: r.barcode,
+            qty: qtyToAdd,
+            branch_id: importBranch,
+            updated_at: timestamp
+          });
+        }
 
         const existingStore = storeMap[r.barcode];
         if (existingStore) {
@@ -164,8 +174,13 @@ export default function DcStockImporter({ onBack }) {
 
       // 4. Batch Updates
       const CHUNK = 500;
-      for (let i = 0; i < dcPayload.length; i += CHUNK) {
-        const { error } = await supabase.from('table_dc_stock').upsert(dcPayload.slice(i, i + CHUNK));
+      for (let i = 0; i < dcPayloadUpdate.length; i += CHUNK) {
+        const { error } = await supabase.from('table_dc_stock').upsert(dcPayloadUpdate.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+
+      for (let i = 0; i < dcPayloadInsert.length; i += CHUNK) {
+        const { error } = await supabase.from('table_dc_stock').insert(dcPayloadInsert.slice(i, i + CHUNK));
         if (error) throw error;
       }
 

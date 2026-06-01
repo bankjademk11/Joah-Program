@@ -702,6 +702,54 @@ function AppContent() {
           }
         }
       )
+      // 🚨 SUBSCRIBE TO table_dc_stock for Realtime DC Qty updates
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'table_dc_stock' },
+        (payload) => {
+          console.log('📡 Realtime DC Stock change:', payload);
+          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+          const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
+          if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) return;
+
+          setValidationResults(prev => {
+            const targetBarcode = payload.new?.barcode || payload.old?.barcode;
+            if (!targetBarcode) return prev;
+            return prev.map(r => {
+              if (r.barcode === targetBarcode) {
+                return { ...r, dcQty: payload.eventType === 'DELETE' ? 0 : (payload.new?.qty || 0) };
+              }
+              return r;
+            });
+          });
+        }
+      )
+      // 🚨 SUBSCRIBE TO store_inventory for Realtime Shop Qty updates
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'store_inventory' },
+        (payload) => {
+          console.log('📡 Realtime Store Inventory change:', payload);
+          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+          const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
+          if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) return;
+
+          setValidationResults(prev => {
+            const targetBarcode = payload.new?.barcode_no || payload.old?.barcode_no;
+            if (!targetBarcode) return prev;
+            return prev.map(r => {
+              if (r.barcode === targetBarcode) {
+                return { 
+                  ...r, 
+                  shopQty: payload.eventType === 'DELETE' ? 0 : (payload.new?.store_qty || 0),
+                  salesQty: payload.eventType === 'DELETE' ? 0 : (payload.new?.sales_qty || 0)
+                };
+              }
+              return r;
+            });
+          });
+        }
+      )
       .subscribe((status) => {
         console.log('📡 Realtime status:', status);
         if (status === 'SUBSCRIBED') {
