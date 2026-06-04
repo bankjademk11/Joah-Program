@@ -11,12 +11,15 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import ExcelJS from 'exceljs';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ'];
 const ITEMS_PER_PAGE = 50;
+
+const MEGAMALL = 'ເມກ້າມໍ';
 
 const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
   const { t } = useLanguage();
   const toast = useToast();
+
 
   // ---- State ----
   const [inventoryData, setInventoryData] = useState([]);
@@ -243,22 +246,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
               <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} strokeWidth={2.5} />
             </div>
 
-            {/* Branch Switcher (Admin only) */}
-            {isAdmin && (
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-                  <MapPin className="text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={20} strokeWidth={2.5} />
-                </div>
-                <select
-                  className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 outline-none transition-all appearance-none cursor-pointer shadow-inner"
-                  value={selectedBranch}
-                  onChange={e => setSelectedBranch(e.target.value)}
-                >
-                  {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} strokeWidth={2.5} />
-              </div>
-            )}
+
           </div>
 
           {/* Right Buttons */}

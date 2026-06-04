@@ -356,6 +356,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode, isA
                                     <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                                     <option value="ສີວິໄລ">ສີວິໄລ</option>
                                     <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                                    <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                                 </select>
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                             </div>

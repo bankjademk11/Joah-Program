@@ -14,15 +14,17 @@ import imgTll from '../../../assets/TLLimage.png';
 import imgVx from '../../../assets/VX.png';
 import imgPsn from '../../../assets/PSNimage.png';
 import joahLogo from '../../../assets/Joah.jpeg';
+import imgMgm from '../../../assets/Joah.jpeg'; // Placeholder — replace with Megamall photo
 
 // ===================== CONSTANTS =====================
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
 
 const BC = {
     'ຕະຫຼາດລາວ': { gr: 'bg-gradient-to-br from-orange-500 to-amber-500', grR: 'bg-gradient-to-r from-orange-500 to-amber-500', card: 'bg-orange-50 dark:bg-orange-900/20', bdr: 'border-orange-200 dark:border-orange-700', txt: 'text-orange-600 dark:text-orange-400' },
     'ສີວິໄລ': { gr: 'bg-gradient-to-br from-blue-500 to-indigo-600', grR: 'bg-gradient-to-r from-blue-500 to-indigo-600', card: 'bg-blue-50 dark:bg-blue-900/20', bdr: 'border-blue-200 dark:border-blue-700', txt: 'text-blue-600 dark:text-blue-400' },
     'ໂພນສີນວນ': { gr: 'bg-gradient-to-br from-emerald-500 to-teal-600', grR: 'bg-gradient-to-r from-emerald-500 to-teal-600', card: 'bg-emerald-50 dark:bg-emerald-900/20', bdr: 'border-emerald-200 dark:border-emerald-700', txt: 'text-emerald-600 dark:text-emerald-400' },
     'ວັງຊາຍ': { gr: 'bg-gradient-to-br from-purple-500 to-violet-600', grR: 'bg-gradient-to-r from-purple-500 to-violet-600', card: 'bg-purple-50 dark:bg-purple-900/20', bdr: 'border-purple-200 dark:border-purple-700', txt: 'text-purple-600 dark:text-purple-400' },
+    'ເມກ້າມໍ': { gr: 'bg-gradient-to-br from-rose-500 to-pink-600', grR: 'bg-gradient-to-r from-rose-500 to-pink-600', card: 'bg-rose-50 dark:bg-rose-900/20', bdr: 'border-rose-200 dark:border-rose-700', txt: 'text-rose-600 dark:text-rose-400' },
 };
 
 const TABS = [
@@ -429,7 +431,7 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subC = null;
             }
 
-            const hasImg = branch === 'ສີວິໄລ' || branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch === 'ໂພນສີນວນ';
+            const hasImg = branch === 'ສີວິໄລ' || branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch === 'ໂພນສີນວນ' || branch === 'ເມກ້າມໍ';
             return (
                 <button key={branch} onClick={() => onSelectBranch(branch)}
                     className={`text-left p-7 rounded-3xl border-2 ${c.card} ${c.bdr} shadow-md hover:shadow-xl hover:scale-[1.025] active:scale-[0.99] transition-all duration-200 group focus:outline-none focus:ring-4 focus:ring-offset-1 focus:ring-orange-300 relative overflow-hidden`}>
@@ -455,6 +457,12 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                     {branch === 'ໂພນສີນວນ' && (
                         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
                             <img src={imgPsn} alt="Phon Sinuan Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
+                        </div>
+                    )}
+
+                    {branch === 'ເມກ້າມໍ' && (
+                        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                            <img src={imgMgm} alt="Megamall Branch" className="w-full h-full object-cover object-center opacity-100 group-hover:scale-110 transition-transform duration-700" />
                         </div>
                     )}
 

@@ -400,7 +400,7 @@ export default function DcStockImporter({ onBack }) {
                       className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-5 text-sm font-black text-slate-800 dark:text-white transition-all outline-none appearance-none cursor-pointer"
                     >
                       <option value="">-- ເລືອກສາຂາ --</option>
-                      {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ'].map(b => (
+                      {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ'].map(b => (
                         <option key={b} value={b}>{b}</option>
                       ))}
                     </select>

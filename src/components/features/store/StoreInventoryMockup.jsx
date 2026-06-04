@@ -7,10 +7,12 @@ import { useToast } from '../../ui/ToastProvider';
 import { getStoreRackSuggestions, validateStoreRack } from '../../../utils/storeRackUtils';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ'];
+const MEGAMALL = 'ເມກ້າມໍ';
 
 const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) => {
   const toast = useToast();
+
 
   const [filterStatus, setFilterStatus] = useState('all');
   const [hideZeroQty, setHideZeroQty] = useState(false);
@@ -351,19 +353,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
           <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Store Inventory · {selectedBranch}</p>
         </div>
 
-        {/* Branch Selector (Admin only) */}
-        {isAdmin && (
-          <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl px-3 py-2">
-            <Filter size={13} className="text-emerald-500 shrink-0" />
-            <select
-              value={selectedBranch}
-              onChange={e => setSelectedBranch(e.target.value)}
-              className="bg-transparent text-sm font-black text-slate-800 dark:text-white outline-none cursor-pointer"
-            >
-              {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-        )}
+
       </div>
 
       {/* Dashboard Stats */}

@@ -1099,7 +1099,7 @@ export default function SalesAggregator({ onBack }) {
                   onChange={(e) => setImportBranch(e.target.value)}
                   className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-emerald-500 transition-all appearance-none cursor-pointer"
                 >
-                  {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'].map(b => (
+                  {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'].map(b => (
                     <option key={b} value={b}>{b}</option>
                   ))}
                 </select>

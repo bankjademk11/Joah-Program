@@ -931,6 +931,7 @@ function AppContent() {
                             <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                           </select>
                         </div>
@@ -993,6 +994,7 @@ function AppContent() {
                               {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
                               {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
                               {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
+                              {isAdmin && <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>}
                               <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                             </select>
                           </div>
@@ -1043,23 +1045,28 @@ function AppContent() {
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Store Inventory</p>
                         </div>
 
-                        {/* Branch Selector (Admin only) */}
-                        {isAdmin && (
-                          <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                            <select
-                              value={adminViewBranch || 'ຕະຫຼາດລາວ'}
-                              onChange={(e) => setAdminViewBranch(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
-                            >
-                              <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
-                              <option value="ສີວິໄລ">ສີວິໄລ</option>
-                              <option value="ວັງຊາຍ">ວັງຊາຍ</option>
-                              <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
-                            </select>
-                          </div>
-                        )}
+                        {/* Branch Selector */}
+                        {(() => {
+                          const branches = isAdmin
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
+                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
+                          
+                          if (branches.length <= 1) return null;
+
+                          return (
+                            <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                              <select
+                                value={adminViewBranch || user?.branch_id || ''}
+                                onChange={(e) => setAdminViewBranch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                              >
+                                {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                              </select>
+                            </div>
+                          );
+                        })()}
 
                         <button
                           onClick={() => setStep('store-inventory-mockup')}
@@ -1232,6 +1239,7 @@ function AppContent() {
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                         </div>
@@ -1266,6 +1274,7 @@ function AppContent() {
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                            <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                           </select>
                           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-sky-500 pointer-events-none" size={16} />
                         </div>
@@ -1294,22 +1303,27 @@ function AppContent() {
                         </div>
 
                         {/* Branch Selector array for Store Request */}
-                        {(isAdmin || isPSNUser) && (
-                          <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                            <select
-                              value={adminViewBranch || (isPSNUser && !isAdmin ? 'ໂພນສີນວນ' : '')}
-                              onChange={(e) => setAdminViewBranch(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
-                            >
-                              {isAdmin && <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>}
-                              {isAdmin && <option value="ສີວິໄລ">ສີວິໄລ</option>}
-                              {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
-                              <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
-                            </select>
-                          </div>
-                        )}
+                        {(() => {
+                          const branches = isAdmin
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
+                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
+                          
+                          if (branches.length <= 1) return null;
+
+                          return (
+                            <div className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 shrink-0"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                              <select
+                                value={adminViewBranch || user?.branch_id || ''}
+                                onChange={(e) => setAdminViewBranch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 h-8 px-2 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-500/30 text-slate-800 dark:text-white font-black text-xs outline-none cursor-pointer"
+                              >
+                                {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                              </select>
+                            </div>
+                          );
+                        })()}
 
                         <button
                           onClick={() => setStep('store-request')}
@@ -1390,7 +1404,7 @@ function AppContent() {
               onBack={() => setStep('upload')}
               currentUser={user}
               isAdmin={isAdmin}
-              initialBranch={isAdmin ? (adminViewBranch || 'ຕະຫຼາດລາວ') : (user?.branch_id || '')}
+              initialBranch={adminViewBranch || user?.branch_id || ''}
             />
           )}
 

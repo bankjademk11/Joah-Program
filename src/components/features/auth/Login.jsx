@@ -191,6 +191,7 @@ const Login = ({ onLogin }) => {
                                         <option value="ຕະຫຼາດລາວ">ຕະຫຼາດລາວ</option>
                                         <option value="ສີວິໄລ">ສີວິໄລ</option>
                                         <option value="ວັງຊາຍ">ວັງຊາຍ</option>
+                                        <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                                         <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
                                     </select>
                                     {/* Custom Dropdown Arrow */}

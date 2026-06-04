@@ -371,7 +371,7 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
             stockByBarcode[r.barcode_no][r.branch_id] = { qty: r.qty || 0, rack: r.rack_location || '-' };
           });
 
-          const branches = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
+          const branches = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
           const suggestions = [];
 
           for (const barcode of Object.keys(stockByBarcode)) {
@@ -559,7 +559,7 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
             parameters: {
               type: "object",
               properties: {
-                branch_id: { type: "string", description: "Branch name to filter (optional). Use exact Lao name: ຕະຫຼາດລາວ, ສີວິໄລ, ໂພນສີນວນ, or ວັງຊາຍ. Omit to get all branches." },
+                branch_id: { type: "string", description: "Branch name to filter (optional). Use exact Lao name: ຕະຫຼາດລາວ, ສີວິໄລ, ໂພນສີນວນ, ວັງຊາຍ, or ເມກ້າມໍ. Omit to get all branches." },
                 date: { type: "string", description: "Date in YYYY-MM-DD format (optional). Defaults to today if omitted. Use when user asks about a past date (e.g. 2026-05-20)." }
               }
             }
@@ -632,7 +632,7 @@ const AIChatBotFull = ({ onBack, currentUser }) => {
       ];
 
       const techSpecExtra = isTechToSpec ? `\n\nTECH MODE: Respond as a technical specification.` : '';
-      const VALID_BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ'];
+      const VALID_BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
       const systemPrompt = `You are ${BOT_NAME}, an autonomous, highly-intelligent Inventory Consultant and AI Assistant for Joah Inventory System.
 Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
 Branches: ${VALID_BRANCHES.join(', ')}.
