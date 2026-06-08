@@ -42,6 +42,16 @@ const QuickAddPanel = ({
     const [selectedReasonOption, setSelectedReasonOption] = useState(t('reasons.newStock') || '');
     const [otherReasonText, setOtherReasonText] = useState('');
 
+    // Recent Racks History
+    const [recentRacks, setRecentRacks] = useState(() => {
+        try {
+            const saved = localStorage.getItem('joah_inventory_recent_racks');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
+    });
+
     // Sync reason to form
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
@@ -51,10 +61,19 @@ const QuickAddPanel = ({
         }
     }, [selectedReasonOption, otherReasonText, setQuickAddForm]);
 
-    // Persist Rack Location to localStorage whenever it changes
+    // Persist Rack Location to localStorage and History whenever it changes
     useEffect(() => {
         if (quickAddForm.rack_location) {
-            localStorage.setItem('joah_inventory_last_rack_location', quickAddForm.rack_location);
+            const loc = quickAddForm.rack_location.toUpperCase();
+            localStorage.setItem('joah_inventory_last_rack_location', loc);
+            
+            // Update Recent Racks (Keep last 5 unique)
+            setRecentRacks(prev => {
+                const filtered = prev.filter(r => r !== loc);
+                const updated = [loc, ...filtered].slice(0, 5);
+                localStorage.setItem('joah_inventory_recent_racks', JSON.stringify(updated));
+                return updated;
+            });
         }
     }, [quickAddForm.rack_location]);
 
@@ -70,6 +89,12 @@ const QuickAddPanel = ({
                 remarks: defaultReason,
                 rack_location: prev.rack_location || lastRack 
             }));
+            
+            // Refresh Recent Racks from storage
+            try {
+                const saved = localStorage.getItem('joah_inventory_recent_racks');
+                if (saved) setRecentRacks(JSON.parse(saved));
+            } catch (e) {}
         } else {
             setSelectedReasonOption('');
             setOtherReasonText('');
@@ -502,6 +527,30 @@ const QuickAddPanel = ({
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc 
                                                     ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/40 dark:border-amber-700 dark:text-amber-400' 
                                                     : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-amber-600/50 dark:hover:bg-amber-900/20'}`}
+                                            >
+                                                {loc}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Recently Used Racks (History) */}
+                            {recentRacks.length > 0 && (
+                                <div className="mb-3">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] uppercase font-bold text-slate-400">
+                                        <Zap size={10} className="text-emerald-500" /> ໂລເຄຊັ້ນທີ່ໃຊ້ຫຼ້າสุด (History)
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {recentRacks.map(loc => (
+                                            <button
+                                                key={`recent-${loc}`}
+                                                onClick={() => {
+                                                    setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc 
+                                                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-400' 
+                                                    : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600/50 dark:hover:bg-amber-900/20'}`}
                                             >
                                                 {loc}
                                             </button>
