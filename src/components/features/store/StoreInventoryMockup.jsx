@@ -308,7 +308,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         newTag: payload.product_tag,
         oldMaxQty: null,
         newMaxQty: payload.max_qty,
-        reason: formData.reason || 'New Item Add',
+        reason: formData.remarks || formData.reason || 'New Item Add',
         branchId: selectedBranch,
         updatedBy: payload.updated_by
       });

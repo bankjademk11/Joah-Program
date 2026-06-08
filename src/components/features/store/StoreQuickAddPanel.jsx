@@ -34,7 +34,7 @@ const QuickAddPanel = ({
     const [showLocationScanner, setShowLocationScanner] = useState(false); // 🆕 Scanner for locations
     const [dcQty, setDcQty] = useState(0); // 🆕 DC Qty state
     // Reason Logic
-    const [selectedReasonOption, setSelectedReasonOption] = useState('');
+    const [selectedReasonOption, setSelectedReasonOption] = useState(t('reasons.firstTimeRecord') || '');
     const [otherReasonText, setOtherReasonText] = useState('');
 
     useEffect(() => {
@@ -54,7 +54,12 @@ const QuickAddPanel = ({
 
     // Reset reason when panel opens/closes
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            // Set Default Reason when opened
+            const defaultReason = t('reasons.firstTimeRecord');
+            setSelectedReasonOption(defaultReason);
+            setQuickAddForm(prev => ({ ...prev, remarks: defaultReason }));
+        } else {
             setSelectedReasonOption('');
             setOtherReasonText('');
             setDropdownOpen(false);
@@ -65,7 +70,7 @@ const QuickAddPanel = ({
             setLocalInspectedLocation(null); // Reset Local Inspector
             setShowLocationScanner(false); // 🆕 Reset scanner
         }
-    }, [isOpen]);
+    }, [isOpen, t]);
 
     // Reset search when dropdown closes
     useEffect(() => {

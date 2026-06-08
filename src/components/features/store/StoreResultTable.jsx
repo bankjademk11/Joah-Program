@@ -169,7 +169,7 @@ const StoreResultTable = ({
         qty: 0,
         max_qty: 0,
         product_tag: '',
-        remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+        remarks: ''
     });
     // Ref to always access latest quickAddForm inside async callbacks (fixes stale closure)
     const quickAddFormRef = useRef(quickAddForm);
@@ -1499,7 +1499,7 @@ const StoreResultTable = ({
                                                     category_1_actual: '',
                                                     category_2_actual: '',
                                                     qty: 0,
-                                                    remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                    remarks: ''
                                                 });
                                                 setShowQuickAdd(true);
                                             }
@@ -1724,7 +1724,7 @@ const StoreResultTable = ({
                                                                     category_1_actual: '',
                                                                     category_2_actual: '',
                                                                     qty: 0,
-                                                                    remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                                    remarks: ''
                                                                 });
                                                                 setShowQuickAdd(true);
                                                             }}
@@ -1914,7 +1914,7 @@ const StoreResultTable = ({
                                                                 category_1_actual: '',
                                                                 category_2_actual: '',
                                                                 qty: 0,
-                                                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                                                remarks: ''
                                                             });
                                                             setShowQuickAdd(true);
                                                         }}
@@ -1952,7 +1952,7 @@ const StoreResultTable = ({
                             barcode_no: '', item_name: '', rack_location: prev.rack_location || localStorage.getItem('joah_last_rack_location') || '',
                             category_1_actual: '', category_2_actual: '',
                             qty: 0, max_qty: 0, product_tag: '',
-                            remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                            remarks: ''
                         }));
                     }}
                     quickAddForm={quickAddForm}
@@ -1972,7 +1972,7 @@ const StoreResultTable = ({
                                 barcode_no: '', item_name: '', rack_location: prev.rack_location || localStorage.getItem('joah_last_rack_location') || '',
                                 category_1_actual: '', category_2_actual: '',
                                 qty: 0, max_qty: 0, product_tag: '',
-                                remarks: 'ເພີ່ມໃໝ່ຜ່ານຫນ້າ Dashboard'
+                                remarks: ''
                             }));
                             if (onRefresh) onRefresh();
                         } catch (err) {
