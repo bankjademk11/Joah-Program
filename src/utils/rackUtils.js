@@ -305,21 +305,9 @@ const BRANCH_RACK_RULES = {
     },
 
     // ══════════════════════════════════════════════
-    // ເມກ້າມໍ — Layout Placeholder (from megamall racksalefloor.md)
-    // Needs proper mapping of Zones (A-I) to Categories
+    // ເມກ້າມໍ — Layout Disabled (By User Request)
     // ══════════════════════════════════════════════
-    'ເມກ້າມໍ': {
-        'KITCHEN': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'STATIONERY': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'STORAGE': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'INTERIOR': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'TOY': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'FASHION': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'BEAUTY': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'SPORT': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'CLEANING': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }],
-        'TOOL/DIGITAL': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0 }]
-    }
+    'ເມກ້າມໍ': {}
 };
 
 /**

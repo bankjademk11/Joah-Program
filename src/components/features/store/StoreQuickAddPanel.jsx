@@ -579,6 +579,10 @@ const QuickAddPanel = ({
                                                             const searchFilteredAll = allPossibleRacks.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
                                                             const searchFilteredRec = recommendedList.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
 
+                                                            // For MEGAMALL or when search doesn't match suggestions, allow manual creation
+                                                            const isMegaMall = currentBranch === 'ເມກ້າມໍ';
+                                                            const canAddCustom = locationSearch.trim().length > 0 && !searchFilteredAll.some(f => f.toUpperCase() === locationSearch.toUpperCase());
+
                                                             // Header Helper
                                                             const renderHeader = (title, icon) => (
                                                                 <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-b border-t first:border-t-0 dark:border-slate-700 flex items-center gap-2">
@@ -586,16 +590,25 @@ const QuickAddPanel = ({
                                                                 </div>
                                                             );
 
-                                                            if (searchFilteredAll.length === 0) {
-                                                                return (
-                                                                    <div className="px-3 py-6 text-center text-sm text-slate-400 italic">
-                                                                        {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}
-                                                                    </div>
-                                                                );
-                                                            }
-
                                                             return (
                                                                 <>
+                                                                    {canAddCustom && (
+                                                                        <div
+                                                                            className="px-3 py-3 text-sm cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-100 dark:border-emerald-800 flex items-center justify-between group"
+                                                                            onClick={() => {
+                                                                                setQuickAddForm(prev => ({ ...prev, rack_location: locationSearch.toUpperCase() }));
+                                                                                setDropdownOpen(false);
+                                                                                setLocationSearch('');
+                                                                            }}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">✨ ສ້າງໂລເຄຊັ້ນໃໝ່ (Manual)</span>
+                                                                                <span className="font-black text-emerald-700 dark:text-emerald-300">{locationSearch.toUpperCase()}</span>
+                                                                            </div>
+                                                                            <Plus size={16} className="text-emerald-500 group-hover:scale-125 transition-transform" />
+                                                                        </div>
+                                                                    )}
+
                                                                     {/* 🌟 RECOMMENDED SECTION */}
                                                                     {searchFilteredRec.length > 0 && (
                                                                         <>
@@ -629,27 +642,35 @@ const QuickAddPanel = ({
                                                                     )}
 
                                                                     {/* 📍 ALL LOCATIONS SECTION */}
-                                                                    {renderHeader("All Locations", <MapPin size={10} />)}
-                                                                    {searchFilteredAll.map(loc => {
-                                                                        const count = allResults.filter(r => r.rackLocation === loc).length;
-                                                                        return (
-                                                                            <div
-                                                                                key={`all-${loc}`}
-                                                                                className={`px-3 py-2 text-sm cursor-pointer flex items-center justify-between ${quickAddForm.rack_location === loc ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-                                                                                onClick={() => {
-                                                                                    setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
-                                                                                    setDropdownOpen(false);
-                                                                                    setLocationSearch('');
-                                                                                }}
-                                                                            >
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className={quickAddForm.rack_location === loc ? 'font-bold' : ''}>{loc}</span>
-                                                                                    {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
-                                                                                </div>
-                                                                                {quickAddForm.rack_location === loc && <CheckCircle size={14} className="text-emerald-500" />}
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                                    {searchFilteredAll.length > 0 ? (
+                                                                        <>
+                                                                            {renderHeader("All Locations", <MapPin size={10} />)}
+                                                                            {searchFilteredAll.map(loc => {
+                                                                                const count = allResults.filter(r => r.rackLocation === loc).length;
+                                                                                return (
+                                                                                    <div
+                                                                                        key={`all-${loc}`}
+                                                                                        className={`px-3 py-2 text-sm cursor-pointer flex items-center justify-between ${quickAddForm.rack_location === loc ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                                        onClick={() => {
+                                                                                            setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                                                            setDropdownOpen(false);
+                                                                                            setLocationSearch('');
+                                                                                        }}
+                                                                                    >
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className={quickAddForm.rack_location === loc ? 'font-bold' : ''}>{loc}</span>
+                                                                                            {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                                        </div>
+                                                                                        {quickAddForm.rack_location === loc && <CheckCircle size={14} className="text-emerald-500" />}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </>
+                                                                    ) : !canAddCustom && (
+                                                                        <div className="px-3 py-6 text-center text-sm text-slate-400 italic">
+                                                                            {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}
+                                                                        </div>
+                                                                    )}
                                                                 </>
                                                             );
                                                         })()}

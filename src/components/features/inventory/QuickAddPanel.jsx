@@ -39,7 +39,7 @@ const QuickAddPanel = ({
     const scanInputRef = useRef(null);
 
     // Reason Logic
-    const [selectedReasonOption, setSelectedReasonOption] = useState('');
+    const [selectedReasonOption, setSelectedReasonOption] = useState(t('reasons.newStock') || '');
     const [otherReasonText, setOtherReasonText] = useState('');
 
     // Sync reason to form
@@ -51,9 +51,26 @@ const QuickAddPanel = ({
         }
     }, [selectedReasonOption, otherReasonText, setQuickAddForm]);
 
+    // Persist Rack Location to localStorage whenever it changes
+    useEffect(() => {
+        if (quickAddForm.rack_location) {
+            localStorage.setItem('joah_inventory_last_rack_location', quickAddForm.rack_location);
+        }
+    }, [quickAddForm.rack_location]);
+
     // Reset reason when panel opens/closes
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            // Set Default Reason and Restore Last Rack when opened
+            const defaultReason = t('reasons.newStock');
+            setSelectedReasonOption(defaultReason);
+            const lastRack = localStorage.getItem('joah_inventory_last_rack_location') || '';
+            setQuickAddForm(prev => ({ 
+                ...prev, 
+                remarks: defaultReason,
+                rack_location: prev.rack_location || lastRack 
+            }));
+        } else {
             setSelectedReasonOption('');
             setOtherReasonText('');
             setDropdownOpen(false);
@@ -66,7 +83,7 @@ const QuickAddPanel = ({
             setScanLog([]);
             setScanInput('');
         }
-    }, [isOpen]);
+    }, [isOpen, t, setQuickAddForm]);
 
     // Reset search when dropdown closes
     useEffect(() => {
@@ -133,7 +150,8 @@ const QuickAddPanel = ({
                 category_1_actual: '',
                 category_2_actual: '',
                 qty: 0,
-                rack_location: ''
+                // ✅ PRESERVE Rack Location: Don't reset it to empty
+                rack_location: prev.rack_location || localStorage.getItem('joah_inventory_last_rack_location') || ''
             }));
         }
     }, [quickAddForm.barcode_no, isOpen, masterData, setIsFoundInMaster, setQuickAddForm]);
@@ -602,29 +620,55 @@ const QuickAddPanel = ({
 
                                                         {(() => {
                                                             const filtered = currentSuggestions.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
-                                                            return filtered.length > 0 ? (
-                                                                filtered.map(loc => {
-                                                                    const count = allResults.filter(r => r.rackLocation === loc).length;
-                                                                    return (
+                                                            
+                                                            // For MEGAMALL or when search doesn't match suggestions, allow manual creation
+                                                            const isMegaMall = currentBranch === 'ເມກ້າມໍ';
+                                                            const canAddCustom = locationSearch.trim().length > 0 && !filtered.some(f => f.toUpperCase() === locationSearch.toUpperCase());
+
+                                                            return (
+                                                                <>
+                                                                    {canAddCustom && (
                                                                         <div
-                                                                            key={loc}
-                                                                            className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${quickAddForm.rack_location === loc ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                            className="px-3 py-3 text-sm cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-100 dark:border-emerald-800 flex items-center justify-between group"
                                                                             onClick={() => {
-                                                                                setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                                                setQuickAddForm(prev => ({ ...prev, rack_location: locationSearch.toUpperCase() }));
                                                                                 setDropdownOpen(false);
                                                                                 setLocationSearch('');
                                                                             }}
                                                                         >
-                                                                            <span>{loc}</span>
-                                                                            {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">✨ ສ້າງໂລເຄຊັ້ນໃໝ່ (Manual)</span>
+                                                                                <span className="font-black text-emerald-700 dark:text-emerald-300">{locationSearch.toUpperCase()}</span>
+                                                                            </div>
+                                                                            <Plus size={16} className="text-emerald-500 group-hover:scale-125 transition-transform" />
                                                                         </div>
-                                                                    );
-                                                                })
-                                                            ) : (
-                                                                <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
-                                                                    {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}<br />
-                                                                    <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
-                                                                </div>
+                                                                    )}
+
+                                                                    {filtered.length > 0 ? (
+                                                                        filtered.map(loc => {
+                                                                            const count = allResults.filter(r => r.rackLocation === loc).length;
+                                                                            return (
+                                                                                <div
+                                                                                    key={loc}
+                                                                                    className={`px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between ${quickAddForm.rack_location === loc ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                                                                                    onClick={() => {
+                                                                                        setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
+                                                                                        setDropdownOpen(false);
+                                                                                        setLocationSearch('');
+                                                                                    }}
+                                                                                >
+                                                                                    <span>{loc}</span>
+                                                                                    {count > 0 && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full text-slate-500">{count} SKU</span>}
+                                                                                </div>
+                                                                            );
+                                                                        })
+                                                                    ) : !canAddCustom && (
+                                                                        <div className="px-3 py-4 text-center text-sm text-slate-400 italic">
+                                                                            {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}<br />
+                                                                            <span className="text-xs">{t('quickAdd.tryCustomMode')}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </>
                                                             );
                                                         })()}
 
