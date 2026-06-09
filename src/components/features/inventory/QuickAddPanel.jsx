@@ -216,8 +216,6 @@ const QuickAddPanel = ({
         };
     }, [isOpen, onClose, isSaving, dropdownOpen]);
 
-    if (!isOpen) return null;
-
     // Use branch-specific rules
     const branchCategories = getBranchCategories(currentBranch);
 
@@ -233,6 +231,23 @@ const QuickAddPanel = ({
     const currentSuggestions = !customMode
         ? getRackSuggestions(quickAddForm.category_1_actual || selectedCategory, currentBranch)
         : (selectedCategory ? getRackSuggestions(selectedCategory, currentBranch) : getAllLocations());
+
+    // 🆕 Auto-select Rack if search matches a suggestion (for Barcode Scanners)
+    useEffect(() => {
+        if (!locationSearch || !dropdownOpen) return;
+        
+        const searchUpper = locationSearch.trim().toUpperCase();
+        // Check if it's an exact match in current suggestions
+        const match = currentSuggestions.find(loc => loc.toUpperCase() === searchUpper);
+        
+        if (match) {
+            setQuickAddForm(prev => ({ ...prev, rack_location: match }));
+            setDropdownOpen(false);
+            setLocationSearch('');
+        }
+    }, [locationSearch, currentSuggestions, dropdownOpen, setQuickAddForm]);
+
+    if (!isOpen) return null;
 
     // Calculate Recommended Locations based on previous scans of this barcode
     const recommendedScannedLocs = quickAddForm.barcode_no

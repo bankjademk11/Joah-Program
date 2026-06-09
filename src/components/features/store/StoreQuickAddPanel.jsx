@@ -79,6 +79,21 @@ const QuickAddPanel = ({
         }
     }, [dropdownOpen]);
 
+    // 🆕 Auto-select Rack if search matches an existing location (for Barcode Scanners)
+    useEffect(() => {
+        if (!locationSearch || !dropdownOpen) return;
+        
+        const searchUpper = locationSearch.trim().toUpperCase();
+        const allPossible = getAllLocations();
+        const match = allPossible.find(loc => loc.toUpperCase() === searchUpper);
+        
+        if (match) {
+            setQuickAddForm(prev => ({ ...prev, rack_location: match }));
+            setDropdownOpen(false);
+            setLocationSearch('');
+        }
+    }, [locationSearch, dropdownOpen, setQuickAddForm]);
+
     // ⚡ OPTIMIZED: On-Demand Master Data Search
     useEffect(() => {
         const lookupBarcode = async () => {
