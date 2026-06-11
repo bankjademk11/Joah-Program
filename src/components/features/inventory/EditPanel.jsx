@@ -29,7 +29,7 @@ const EditPanel = ({
 }) => {
     // --- UI States matching QuickAddPanel ---
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [customMode, setCustomMode] = useState(false);
+    const [customMode, setCustomMode] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState('');
     const [viewingCategories, setViewingCategories] = useState(false);
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null);
@@ -120,7 +120,7 @@ const EditPanel = ({
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
-            setCustomMode(false);
+            setCustomMode(true);
             setSelectedCategory('');
             setViewingCategories(false);
             setLocalInspectedLocation(null);
@@ -164,6 +164,21 @@ const EditPanel = ({
                 });
         }
     }, [isNewStockReason, selectedRow?.barcode, currentBranch]);
+
+    // Auto-select Rack if search matches a suggestion exactly (for Barcode Scanners or typing)
+    useEffect(() => {
+        if (!locationSearch || !dropdownOpen) return;
+        
+        const searchUpper = locationSearch.trim().toUpperCase();
+        // Check if it's an exact match in current suggestions
+        const match = currentSuggestions.find(loc => loc.toUpperCase() === searchUpper);
+        
+        if (match) {
+            setEditLocation(match);
+            setDropdownOpen(false);
+            setLocationSearch('');
+        }
+    }, [locationSearch, currentSuggestions, dropdownOpen, setEditLocation]);
 
     if (!selectedRow) return null;
 
@@ -583,6 +598,28 @@ const EditPanel = ({
                                                     type="text"
                                                     value={locationSearch}
                                                     onChange={(e) => setLocationSearch(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            const searchUpper = locationSearch.trim().toUpperCase();
+                                                            const filtered = currentSuggestions.filter(loc => !searchUpper || loc.toUpperCase().includes(searchUpper));
+                                                            const exactMatch = filtered.find(loc => loc.toUpperCase() === searchUpper);
+                                                            
+                                                            if (exactMatch) {
+                                                                setEditLocation(exactMatch);
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            } else if (filtered.length > 0) {
+                                                                setEditLocation(filtered[0]);
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            } else if (searchUpper.length > 0) {
+                                                                setEditLocation(searchUpper);
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            }
+                                                        }
+                                                    }}
                                                     placeholder="🔍 ຄົ້ນຫາ Location..."
                                                     className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
                                                     autoFocus

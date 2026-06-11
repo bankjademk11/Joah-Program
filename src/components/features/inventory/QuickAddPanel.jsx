@@ -25,7 +25,7 @@ const QuickAddPanel = ({
 }) => {
     // Custom Dropdown States
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [customMode, setCustomMode] = useState(false);
+    const [customMode, setCustomMode] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState('');
     const [viewingCategories, setViewingCategories] = useState(false); // New state to toggle Category Selection View
     const [dcQty, setDcQty] = useState(0); // 🆕 DC Qty state
@@ -100,7 +100,7 @@ const QuickAddPanel = ({
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
-            setCustomMode(false);
+            setCustomMode(true);
             setSelectedCategory('');
             setViewingCategories(false);
             setLocalInspectedLocation(null);
@@ -601,6 +601,28 @@ const QuickAddPanel = ({
                                                     type="text"
                                                     value={locationSearch}
                                                     onChange={(e) => setLocationSearch(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            const searchUpper = locationSearch.trim().toUpperCase();
+                                                            const filtered = currentSuggestions.filter(loc => !searchUpper || loc.toUpperCase().includes(searchUpper));
+                                                            const exactMatch = filtered.find(loc => loc.toUpperCase() === searchUpper);
+                                                            
+                                                            if (exactMatch) {
+                                                                setQuickAddForm(prev => ({ ...prev, rack_location: exactMatch }));
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            } else if (filtered.length > 0) {
+                                                                setQuickAddForm(prev => ({ ...prev, rack_location: filtered[0] }));
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            } else if (searchUpper.length > 0) {
+                                                                setQuickAddForm(prev => ({ ...prev, rack_location: searchUpper }));
+                                                                setDropdownOpen(false);
+                                                                setLocationSearch('');
+                                                            }
+                                                        }
+                                                    }}
                                                     placeholder="🔍 ค้นหา Location..."
                                                     className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all"
                                                     autoFocus
