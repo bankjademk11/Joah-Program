@@ -247,6 +247,29 @@ const QuickAddPanel = ({
         }
     }, [locationSearch, currentSuggestions, dropdownOpen, setQuickAddForm]);
 
+    const isSaveDisabled = isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0);
+
+    const latestOnSave = useRef(onSave);
+    useEffect(() => {
+        latestOnSave.current = onSave;
+    });
+
+    // Global Enter to Save — MUST be before early return to comply with Rules of Hooks
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (e.key === 'Enter' && isOpen && !isSaveDisabled && !dropdownOpen) {
+                // Ignore if typing in the barcode scan input
+                if (e.target === scanInputRef.current) return;
+                e.preventDefault();
+                if (latestOnSave.current) {
+                    latestOnSave.current();
+                }
+            }
+        };
+        document.addEventListener('keydown', handleGlobalKeyDown);
+        return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [isOpen, isSaveDisabled, dropdownOpen]);
+
     if (!isOpen) return null;
 
     // Calculate Recommended Locations based on previous scans of this barcode
@@ -887,7 +910,7 @@ const QuickAddPanel = ({
                         </button>
                         <button
                             onClick={onSave}
-                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)}
+                            disabled={isSaveDisabled}
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}

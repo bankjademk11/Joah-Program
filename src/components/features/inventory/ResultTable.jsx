@@ -143,12 +143,12 @@ const ResultTable = ({
 
             if (data && onUpdateRowQty) {
                 onUpdateRowQty(row.rowIndex, { qty: data.qty || 0 });
-                toast.success(`ອັບເດດ ${row.barcode} ສຳເລັດ!`);
+                success(`ອັບເດດ ${row.barcode} ສຳເລັດ!`);
             } else {
-                toast.info(`ບໍ່ພົບການປ່ຽນແປງສຳລັບ ${row.barcode} ໃນฐานข้อมูล`);
+                success(`ບໍ່ພົບການປ່ຽນແປງສຳລັບ ${row.barcode} ໃນฐานข้อมูล`);
             }
         } catch (err) {
-            toast.error('ດຶງຂໍ້ມູນเฉพาะจุดผิດພາດ: ' + err.message);
+            showError('ດຶງຂໍ້ມູນเฉพาะจุดผิດພາດ: ' + err.message);
         } finally {
             setRefreshingRowId(null);
         }
@@ -407,7 +407,7 @@ const ResultTable = ({
         }
     };
 
-    const handleUpdateMasterQty = async () => {
+    const handleUpdateMasterQty = async (reasonOverride) => {
         if (!selectedRow || editQty === '') return;
         const activeUser = currentUser ? `${currentUser.name} (${currentUser.id})` : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
@@ -431,7 +431,7 @@ const ResultTable = ({
                 updatedAt: now,
                 updatedBy: activeUser,
                 uploadedBy: activeUser,
-                manualReason: editReason // Store the user's manual reason separately
+                manualReason: reasonOverride || editReason // Store the user's manual reason separately
             });
         }
 
@@ -444,7 +444,9 @@ const ResultTable = ({
                 const hasCatChangedCheck = (editCat1 !== selectedRow.category1) || (editCat2 !== selectedRow.category2);
                 const hasQtyChangedCheck = newQtyValue !== (selectedRow.qty || 0);
 
-                if ((hasRackChangedCheck || hasCatChangedCheck || hasQtyChangedCheck) && !editReason.trim()) {
+                const effectiveEditReason = reasonOverride || editReason;
+
+                if ((hasRackChangedCheck || hasCatChangedCheck || hasQtyChangedCheck) && !effectiveEditReason.trim()) {
                     showError(t('results.reasonRequired'));
                     setIsUpdating(false);
                     return;
@@ -485,8 +487,8 @@ const ResultTable = ({
                 }
 
                 // Append user manual reason
-                if (editReason.trim()) {
-                    detailedReason += `: ${editReason.trim()}`;
+                if (effectiveEditReason.trim()) {
+                    detailedReason += `: ${effectiveEditReason.trim()}`;
                 }
 
                 console.log('📝 [ResultTable] Logging history with:', {

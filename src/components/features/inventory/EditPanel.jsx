@@ -99,7 +99,7 @@ const EditPanel = ({
     }, [selectedRow, onClose, isUpdating, dropdownOpen]);
 
     // Reason Logic
-    const [selectedReasonOption, setSelectedReasonOption] = useState('');
+    const [selectedReasonOption, setSelectedReasonOption] = useState(t('reasons.newStock') || 'New Stock In');
     const [otherReasonText, setOtherReasonText] = useState('');
 
     const isNewStockReason = selectedReasonOption === t('reasons.newStock');
@@ -116,7 +116,7 @@ const EditPanel = ({
     // Reset reason when panel opens/closes
     useEffect(() => {
         if (!selectedRow) {
-            setSelectedReasonOption('');
+            setSelectedReasonOption(t('reasons.newStock') || 'New Stock In');
             setOtherReasonText('');
             setDropdownOpen(false);
             setLocationSearch('');
@@ -180,23 +180,33 @@ const EditPanel = ({
         }
     }, [locationSearch, currentSuggestions, dropdownOpen, setEditLocation]);
 
-    if (!selectedRow) return null;
-
     // mergeAmount (Add Amount) = qty transferred from DC when reason is New Stock In
-    const isDcTransferValid = !isNewStockReason || (mergeAmount !== '' && parseInt(mergeAmount) > 0);
+    // In normal edit mode, DC deduction is optional — only enforce in split/clone modes
+    const isDcTransferValid = !isNewStockReason || (!isSplitMode && !isCloneMode) || (mergeAmount !== '' && parseInt(mergeAmount) > 0);
+
+    const isSaveDisabled = 
+        isUpdating || 
+        !isDcTransferValid || 
+        !selectedReasonOption || 
+        (selectedReasonOption === 'Other' && !otherReasonText.trim()) ||
+        ((isSplitMode || isCloneMode) && (!editLocation || !mergeAmount || Number(mergeAmount) <= 0)) ||
+        (isCloneMode && editLocation === selectedRow?.rackLocation);
 
     const handleSave = async () => {
+        // Compute effective reason directly from local state (avoids async useEffect sync delay)
+        const effectiveReason = selectedReasonOption === 'Other'
+            ? (otherReasonText ? `Other: ${otherReasonText}` : 'Other')
+            : selectedReasonOption;
+        
+        // Push it to parent's state so handleUpdate reads it correctly
+        setEditReason(effectiveReason);
+
         // 1. Auto-deduct DC stock if New Stock In
         const cleanBarcode = selectedRow?.barcode ? String(selectedRow.barcode).trim() : null;
         const deductAmt = parseInt(mergeAmount);
-        
-        console.log('🚀 [EditPanel] Starting handleSave...', { isNewStockReason, mergeAmount, cleanBarcode, currentBranch });
 
         if (isNewStockReason && deductAmt > 0 && cleanBarcode && currentBranch) {
             try {
-                console.log(`📡 [EditPanel] Attempting to deduct ${deductAmt} from DC for ${cleanBarcode} (${currentBranch})...`);
-                
-                // Fetch latest DC stock from DB
                 const { data: dcData, error: dcFetchError } = await supabase
                     .from('table_dc_stock')
                     .select('qty')
@@ -209,42 +219,54 @@ const EditPanel = ({
                 const currentDc = dcData?.qty || 0;
                 const newDcQty = Math.max(0, currentDc - deductAmt);
 
-                console.log(`📊 [EditPanel] DC Stock Found: ${currentDc}, New Value: ${newDcQty}`);
-
                 const { error: updateError } = await supabase
                     .from('table_dc_stock')
-                    .update({ 
-                        qty: newDcQty, 
-                        updated_at: new Date().toISOString()
-                    })
+                    .update({ qty: newDcQty, updated_at: new Date().toISOString() })
                     .eq('barcode', cleanBarcode)
                     .eq('branch_id', currentBranch);
 
                 if (updateError) throw updateError;
-                
-                console.log(`✅ [EditPanel] DC Stock updated successfully: ${cleanBarcode} (${currentDc} -> ${newDcQty})`);
             } catch (err) {
                 console.error('❌ [EditPanel] Failed to deduct DC stock:', err);
                 alert('ເກີດຂໍ້ຜິດພາດໃນການຫັກລົບ QTY DC: ' + err.message);
             }
-        } else {
-            console.log('⏭️ [EditPanel] Skipping DC deduction (Reason is not New Stock or amount is 0)');
         }
 
-        // 2. Standard update (Awaited to ensure completion before potential unmount)
+        // 2. Standard update — pass effectiveReason to avoid stale closure issues
         try {
             if (isSplitMode) {
-                await handleSplit(mergeAmount, editLocation, editReason);
+                await handleSplit(mergeAmount, editLocation, effectiveReason);
             } else if (isCloneMode) {
-                await handleClone(mergeAmount, editLocation, editReason);
+                await handleClone(mergeAmount, editLocation, effectiveReason);
             } else {
-                await handleUpdate();
+                await handleUpdate(effectiveReason);
             }
         } catch (err) {
             console.error('❌ [EditPanel] Standard update failed:', err);
-            // Error handling usually managed by the prop functions themselves
         }
     };
+
+    // Use a ref to always access the latest handleSave without triggering re-renders
+    const latestHandleSave = useRef(handleSave);
+    useEffect(() => {
+        latestHandleSave.current = handleSave;
+    });
+
+    // Global Enter to Save — MUST be before early return to comply with Rules of Hooks
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (e.key === 'Enter' && selectedRow && !isSaveDisabled && !dropdownOpen) {
+                // Ignore if typing in the barcode scan input
+                if (e.target === scanInputRef.current) return;
+                e.preventDefault();
+                latestHandleSave.current();
+            }
+        };
+        document.addEventListener('keydown', handleGlobalKeyDown);
+        return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [selectedRow, isSaveDisabled, dropdownOpen]);
+
+    if (!selectedRow) return null;
 
     // Use allResults if available, fallback to filtered results for inspector
     const inspectorData = allResults || results || [];
@@ -847,7 +869,7 @@ const EditPanel = ({
                         </button>
                         <button
                             onClick={() => handleSave()}
-                            disabled={isUpdating || !isDcTransferValid || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
+                            disabled={isSaveDisabled}
                             title={isCloneMode && editLocation === selectedRow?.rackLocation ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' : ''}
                             className={`px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isCloneMode
                                 ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
