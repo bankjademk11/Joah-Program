@@ -216,8 +216,16 @@ const ResultTable = ({
     // Use Set to prevent duplicates if refresh happens but optimistic state is not cleared yet
     // Filter duplicates by checking barcode + rackLocation
     const combinedResults = useMemo(() => {
+        // Use both barcode+location AND real DB IDs as dedup keys
         const existingKeys = new Set(results.map(r => `${r.barcode}-${r.rackLocation}`));
-        const newItems = optimisticItems.filter(item => !existingKeys.has(`${item.barcode}-${item.rackLocation}`));
+        const existingIds = new Set(results.map(r => r.id).filter(Boolean));
+        const newItems = optimisticItems.filter(item => {
+            // Remove optimistic item if DB already has a matching real record
+            if (item.id && existingIds.has(item.id)) return false;
+            // Remove if barcode+location already exists in real results
+            if (existingKeys.has(`${item.barcode}-${item.rackLocation}`)) return false;
+            return true;
+        });
         return [...newItems, ...results];
     }, [results, optimisticItems]);
 
@@ -518,7 +526,9 @@ const ResultTable = ({
                 });
             }
             success(t('results.saveSuccess'));
-            if (onRefresh) onRefresh({ silent: true, delta: true }); // Trigger refresh to update DC stock etc.
+            // Clear optimistic items — DB refresh is source of truth now
+            setOptimisticItems([]);
+            if (onRefresh) onRefresh({ silent: true, delta: true });
             setSelectedRow(null);
             setEditReason(''); // Reset reason
             setMergeAmount(''); // Reset merge amount after save
