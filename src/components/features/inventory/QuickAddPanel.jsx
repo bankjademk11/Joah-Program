@@ -503,8 +503,8 @@ const QuickAddPanel = ({
                                         </button>
                                     )}
                                     
-                                    {/* 🆕 DC hint — only when New Stock In */}
-                                    {selectedReasonOption === t('reasons.newStock') && (
+                                    {/* 🆕 DC hint — only when New Stock In OR First-time record */}
+                                    {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                         <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200 bg-violet-50 dark:bg-violet-900/20 py-1.5 rounded-lg border border-violet-100 dark:border-violet-900">
                                             ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
                                         </p>
@@ -531,8 +531,8 @@ const QuickAddPanel = ({
                                 />
                                 <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
                                 
-                                {/* 🆕 DC hint — only when New Stock In */}
-                                {selectedReasonOption === t('reasons.newStock') && (
+                                {/* 🆕 DC hint — only when New Stock In OR First-time record */}
+                                {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                     <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200">
                                         ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
                                     </p>

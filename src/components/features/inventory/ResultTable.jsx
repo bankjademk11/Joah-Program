@@ -791,8 +791,14 @@ const ResultTable = ({
                 if (logError) console.error("Failed to log added item:", logError);
                 // --------------------------------------------------------------------------
 
-                // ── 🆕 Deduct DC stock if "New Stock In" ─────────────
-                if (quickAddForm.remarks === t('reasons.newStock') && Number(quickAddForm.qty) > 0) {
+                // ── 🆕 Deduct DC stock if "New Stock In" OR "First-time product data recording" ─────────────
+                const remarkStr = quickAddForm.remarks || '';
+                const isNewStockRemark = remarkStr.includes('New Stock In') || 
+                                         remarkStr.includes('ສິນຄ້າເຂົ້າໃໝ່') || 
+                                         remarkStr.includes('First-time product data recording') || 
+                                         remarkStr.includes('ການບັນທຶກຂໍ້ມູນສິນຄ້າໜ້າຮ້ານຄັ້ງທຳອິດ');
+
+                if (isNewStockRemark && Number(quickAddForm.qty) > 0) {
                     try {
                         const deductAmt = Number(quickAddForm.qty);
                         const { data: dcData } = await supabase
