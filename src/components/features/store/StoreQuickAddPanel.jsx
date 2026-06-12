@@ -37,6 +37,37 @@ const QuickAddPanel = ({
     const [selectedReasonOption, setSelectedReasonOption] = useState(t('reasons.firstTimeRecord') || '');
     const [otherReasonText, setOtherReasonText] = useState('');
 
+    // Ensure onSave uses latest function to prevent stale closure on Enter key submission
+    const latestOnSave = useRef(onSave);
+    useEffect(() => {
+        latestOnSave.current = onSave;
+    }, [onSave]);
+
+    // Handle Global Enter Key Submission
+    useEffect(() => {
+        const handleGlobalEnter = (e) => {
+            if (!isOpen || isSaving) return;
+            
+            // Only trigger if we are not focused on a textarea or special input
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Validate exactly like the button
+                if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)) {
+                    // Do nothing if invalid
+                    return;
+                }
+                if (latestOnSave.current) {
+                    latestOnSave.current();
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleGlobalEnter);
+        return () => document.removeEventListener('keydown', handleGlobalEnter);
+    }, [isOpen, isSaving, quickAddForm.qty, selectedReasonOption, t]);
+
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
             setQuickAddForm(prev => ({ ...prev, remarks: otherReasonText ? `Other: ${otherReasonText}` : 'Other' }));
@@ -344,8 +375,8 @@ const QuickAddPanel = ({
                                 />
                                 <p className="text-[10px] text-slate-400 text-center">{t('quickAdd.identifyQty')}</p>
                                 
-                                {/* 🆕 DC hint — only when New Stock In */}
-                                {selectedReasonOption === t('reasons.newStock') && (
+                                {/* 🆕 DC hint — only when New Stock In OR First-time record */}
+                                {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                     <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
                                         ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
                                     </p>

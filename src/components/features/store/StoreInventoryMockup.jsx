@@ -313,6 +313,42 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         updatedBy: payload.updated_by
       });
 
+      // ── 🆕 Deduct DC stock if reason is "New Stock In" OR "First-time product data recording" ──
+      const remarkStr = formData.remarks || formData.reason || '';
+      const isNewStock = remarkStr.includes('New Stock In') || remarkStr.includes('ສິນຄ້າເຂົ້າໃໝ່') || remarkStr.includes('First-time product data recording') || remarkStr.includes('ການບັນທຶກຂໍ້ມູນສິນຄ້າໜ້າຮ້ານຄັ້ງທຳອິດ');
+      if (isNewStock && Number(formData.qty) > 0) {
+        try {
+          const deductAmt = Number(formData.qty);
+          const { data: dcRow, error: dcFetchErr } = await supabase
+            .from('table_dc_stock')
+            .select('qty')
+            .eq('barcode', formData.barcode_no)
+            .eq('branch_id', selectedBranch)
+            .maybeSingle();
+
+          console.log('[DC Deduct] dcRow:', dcRow, '| deductAmt:', deductAmt, '| branch:', selectedBranch, '| barcode:', formData.barcode_no, '| fetchErr:', dcFetchErr);
+
+          if (dcRow) {
+            const newDcQty = Math.max(0, (dcRow.qty || 0) - deductAmt);
+            const { error: dcUpdateErr } = await supabase
+              .from('table_dc_stock')
+              .update({ qty: newDcQty, updated_at: new Date().toISOString() })
+              .eq('barcode', formData.barcode_no)
+              .eq('branch_id', selectedBranch);
+            if (dcUpdateErr) {
+              console.error('[DC Deduct] Update error:', dcUpdateErr);
+            } else {
+              console.log(`[DC Deduct] ✅ DC qty updated: ${dcRow.qty} → ${newDcQty}`);
+            }
+          } else {
+            console.warn('[DC Deduct] ⚠️ No DC record found for', formData.barcode_no, 'branch:', selectedBranch);
+          }
+        } catch (dcErr) {
+          console.error('[DC Deduct] Exception:', dcErr);
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       console.log('[StoreInventory.DEBUG] ✅ Success! Refreshing data...');
       await fetchData();
       toast.success('ເພີ່ມສິນຄ້າໃໝ່ສຳເລັດ!');

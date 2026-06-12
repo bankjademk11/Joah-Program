@@ -786,7 +786,8 @@ const StoreResultTable = ({
     };
 
     const handleQuickAddSave = async () => {
-        if (!quickAddForm.barcode_no || !quickAddForm.rack_location || !quickAddForm.remarks) {
+        const form = quickAddFormRef.current;
+        if (!form.barcode_no || !form.rack_location || !form.remarks) {
             alert(t('results.fillRequired'));
             return;
         }
@@ -798,22 +799,22 @@ const StoreResultTable = ({
                 : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
             const finalPayload = {
-                ...quickAddForm,
-                rack_location: quickAddForm.rack_location,
+                ...form,
+                rack_location: form.rack_location,
                 uploaded_by: activeUser
             };
 
-            const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
+            const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id') || 'ຕະຫຼາດລາວ';
 
             const payload = {
-                barcode_no: quickAddForm.barcode_no,
-                item_name: quickAddForm.item_name,
-                shelf_location: quickAddForm.rack_location,
-                category_1_actual: quickAddForm.category_1_actual || '',
-                category_2_actual: quickAddForm.category_2_actual || '',
-                store_qty: Number(quickAddForm.qty) || 0,
-                max_qty: Number(quickAddForm.max_qty) || null,
-                product_tag: quickAddForm.product_tag || null,
+                barcode_no: form.barcode_no,
+                item_name: form.item_name,
+                shelf_location: form.rack_location,
+                category_1_actual: form.category_1_actual || '',
+                category_2_actual: form.category_2_actual || '',
+                store_qty: Number(form.qty) || 0,
+                max_qty: Number(form.max_qty) || null,
+                product_tag: form.product_tag || null,
                 updated_by: activeUser,
                 branch_id: branchToSave,
             };
@@ -822,23 +823,23 @@ const StoreResultTable = ({
 
             if (!insertErr) {
                 // ── Determine if this is from Inbox flow ─────────────
-                const inboxBatchId = quickAddForm._inboxBatchId || null;
-                const inboxItemId = quickAddForm._inboxItemId || null;
+                const inboxBatchId = form._inboxBatchId || null;
+                const inboxItemId = form._inboxItemId || null;
 
                 // Log History for New Item — include billId if from Inbox
                 await logStoreInventoryHistory({
                     actionType: 'added',
-                    barcode: quickAddForm.barcode_no,
-                    itemName: quickAddForm.item_name,
+                    barcode: form.barcode_no,
+                    itemName: form.item_name,
                     oldQty: 0,
-                    newQty: Number(quickAddForm.qty),
+                    newQty: Number(form.qty),
                     oldLocation: null,
-                    newLocation: quickAddForm.rack_location,
+                    newLocation: form.rack_location,
                     oldTag: null,
-                    newTag: quickAddForm.product_tag,
+                    newTag: form.product_tag,
                     oldMaxQty: null,
-                    newMaxQty: Number(quickAddForm.max_qty) || null,
-                    reason: quickAddForm.remarks || 'Direct Addition to Store Inventory',
+                    newMaxQty: Number(form.max_qty) || null,
+                    reason: form.remarks || 'Direct Addition to Store Inventory',
                     branchId: branchToSave,
                     updatedBy: activeUser,
                     // ── Batch/Bill fields (only when from Inbox) ──
@@ -849,23 +850,46 @@ const StoreResultTable = ({
                 });
 
                 // ── 🆕 Deduct DC stock if "New Stock In" ─────────────
-                if (quickAddForm.remarks === t('reasons.newStock') && Number(quickAddForm.qty) > 0) {
+                // Use multi-language matching: covers both lo & en translations
+                const isNewStockRemark = form.remarks && (
+                    form.remarks === t('reasons.newStock') ||
+                    form.remarks.includes('New Stock In') ||
+                    form.remarks.includes('ສິນຄ້າເຂົ້າໃໝ່')
+                );
+
+                // 🔍 DEBUG — remove after fix confirmed
+                console.group('%c[DC Deduct] Debug Info', 'color: #f59e0b; font-weight: bold');
+                console.log('form.remarks:', JSON.stringify(form.remarks));
+                console.log('form.barcode_no:', form.barcode_no);
+                console.log('form.qty:', form.qty);
+                console.log('branchToSave:', branchToSave);
+                console.log('t(reasons.newStock):', t('reasons.newStock'));
+                console.log('isNewStockRemark:', isNewStockRemark);
+                console.groupEnd();
+
+                if (isNewStockRemark && Number(form.qty) > 0) {
                     try {
-                        const deductAmt = Number(quickAddForm.qty);
-                        const { data: dcData } = await supabase
+                        const deductAmt = Number(form.qty);
+                        const { data: dcData, error: dcSelectErr } = await supabase
                             .from('table_dc_stock')
                             .select('qty')
-                            .eq('barcode', quickAddForm.barcode_no)
+                            .eq('barcode', form.barcode_no)
                             .eq('branch_id', branchToSave)
                             .maybeSingle();
+
+                        // 🔍 DEBUG
+                        console.log('[DC Deduct] Query result:', { dcData, dcSelectErr, barcode: form.barcode_no, branch_id: branchToSave });
                         
                         if (dcData) {
                             const newDcQty = Math.max(0, (dcData.qty || 0) - deductAmt);
+                            console.log('[DC Deduct] Updating DC qty:', dcData.qty, '→', newDcQty);
                             await supabase
                                 .from('table_dc_stock')
                                 .update({ qty: newDcQty, updated_at: new Date().toISOString() })
-                                .eq('barcode', quickAddForm.barcode_no)
+                                .eq('barcode', form.barcode_no)
                                 .eq('branch_id', branchToSave);
+                        } else {
+                            console.warn('[DC Deduct] No DC record found for barcode:', form.barcode_no, 'branch:', branchToSave);
                         }
                     } catch (dcErr) {
                         console.error("Failed to deduct from DC Stock", dcErr);
@@ -886,24 +910,24 @@ const StoreResultTable = ({
                 // Optimistic UI Update
                 const newOptimisticItem = {
                     id: `temp-${Date.now()}`,
-                    barcode: quickAddForm.barcode_no,
-                    itemName: quickAddForm.item_name,
-                    qty: Number(quickAddForm.qty),
+                    barcode: form.barcode_no,
+                    itemName: form.item_name,
+                    qty: Number(form.qty),
                     rackLocation: finalPayload.rack_location,
-                    category1: quickAddForm.category_1_actual,
-                    category2: quickAddForm.category_2_actual,
-                    masterItemName: quickAddForm.item_name,
+                    category1: form.category_1_actual,
+                    category2: form.category_2_actual,
+                    masterItemName: form.item_name,
                     odooQty: 0,
                     status: 'passed',
                     rowIndex: results.length + optimisticItems.length + 1
                 };
 
                 setOptimisticItems(prev => [newOptimisticItem, ...prev]);
-                setSearchTerm(quickAddForm.barcode_no);
+                setSearchTerm(form.barcode_no);
 
                 // 💾 Persist last used rack so next item pre-fills it
-                if (quickAddForm.rack_location) {
-                    localStorage.setItem('joah_last_rack_location', quickAddForm.rack_location);
+                if (form.rack_location) {
+                    localStorage.setItem('joah_last_rack_location', form.rack_location);
                 }
 
                 success(t('results.saveSuccess'));
