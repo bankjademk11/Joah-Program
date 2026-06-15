@@ -740,8 +740,8 @@ function AppContent() {
             if (!targetBarcode) return prev;
             return prev.map(r => {
               if (r.barcode === targetBarcode) {
-                return { 
-                  ...r, 
+                return {
+                  ...r,
                   shopQty: payload.eventType === 'DELETE' ? 0 : (payload.new?.store_qty || 0),
                   salesQty: payload.eventType === 'DELETE' ? 0 : (payload.new?.sales_qty || 0)
                 };
@@ -878,10 +878,10 @@ function AppContent() {
                 <RubikNetworkParticles />
               </div>
               <div className="relative w-full" style={{ zIndex: 1 }}>
-                
+
                 {/* Header Layout: Clock (Left) - Title (Center) - Empty (Right) */}
                 <div className="flex flex-col lg:flex-row items-center lg:items-start justify-between w-full mb-10 gap-6 lg:gap-0">
-                  
+
                   {/* 🕒 Big Digital Clock (Desktop Only) */}
                   <div className="hidden lg:flex w-[280px] justify-start shrink-0 transform -translate-x-[10%]">
                     <BigDigitalClock />
@@ -1065,7 +1065,7 @@ function AppContent() {
                           const branches = isAdmin
                             ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
                             : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
-                          
+
                           if (branches.length <= 1) return null;
 
                           return (
@@ -1322,7 +1322,7 @@ function AppContent() {
                           const branches = isAdmin
                             ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
                             : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
-                          
+
                           if (branches.length <= 1) return null;
 
                           return (
