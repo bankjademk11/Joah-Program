@@ -66,7 +66,7 @@ const QuickAddPanel = ({
         if (quickAddForm.rack_location) {
             const loc = quickAddForm.rack_location.toUpperCase();
             localStorage.setItem('joah_inventory_last_rack_location', loc);
-            
+
             // Update Recent Racks (Keep last 5 unique)
             setRecentRacks(prev => {
                 const filtered = prev.filter(r => r !== loc);
@@ -84,17 +84,17 @@ const QuickAddPanel = ({
             const defaultReason = t('reasons.newStock');
             setSelectedReasonOption(defaultReason);
             const lastRack = localStorage.getItem('joah_inventory_last_rack_location') || '';
-            setQuickAddForm(prev => ({ 
-                ...prev, 
+            setQuickAddForm(prev => ({
+                ...prev,
                 remarks: defaultReason,
-                rack_location: prev.rack_location || lastRack 
+                rack_location: prev.rack_location || lastRack
             }));
-            
+
             // Refresh Recent Racks from storage
             try {
                 const saved = localStorage.getItem('joah_inventory_recent_racks');
                 if (saved) setRecentRacks(JSON.parse(saved));
-            } catch (e) {}
+            } catch (e) { }
         } else {
             setSelectedReasonOption('');
             setOtherReasonText('');
@@ -121,7 +121,7 @@ const QuickAddPanel = ({
         if (!isOpen || !quickAddForm.barcode_no) return;
 
         const barcode = String(quickAddForm.barcode_no).trim();
-        
+
         // 🆕 Fetch DC Qty whenever barcode changes
         supabase.from('table_dc_stock')
             .select('qty')
@@ -130,7 +130,7 @@ const QuickAddPanel = ({
             .maybeSingle()
             .then(({ data }) => setDcQty(data?.qty || 0))
             .catch(err => console.error("Error fetching DC qty:", err));
-            
+
         const masterItem = masterData.find(m =>
             String(m.barcode || m.Barcode || m['Barcode No.'] || '').trim() === barcode
         );
@@ -235,11 +235,11 @@ const QuickAddPanel = ({
     // 🆕 Auto-select Rack if search matches a suggestion (for Barcode Scanners)
     useEffect(() => {
         if (!locationSearch || !dropdownOpen) return;
-        
+
         const searchUpper = locationSearch.trim().toUpperCase();
         // Check if it's an exact match in current suggestions
         const match = currentSuggestions.find(loc => loc.toUpperCase() === searchUpper);
-        
+
         if (match) {
             setQuickAddForm(prev => ({ ...prev, rack_location: match }));
             setDropdownOpen(false);
@@ -502,7 +502,7 @@ const QuickAddPanel = ({
                                             <Trash2 size={11} /> ຍົກເລີກການສະແກນຄັ້ງລ່າສຸດ
                                         </button>
                                     )}
-                                    
+
                                     {/* 🆕 DC hint — only when New Stock In OR First-time record */}
                                     {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                         <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200 bg-violet-50 dark:bg-violet-900/20 py-1.5 rounded-lg border border-violet-100 dark:border-violet-900">
@@ -512,33 +512,33 @@ const QuickAddPanel = ({
                                 </div>
                             </div>
                         ) : (
-                        <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <Database size={16} className="text-emerald-500" />
-                                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('quickAdd.quantity')}</p>
-                            </div>
+                            <div className="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-800 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Database size={16} className="text-emerald-500" />
+                                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t('quickAdd.quantity')}</p>
+                                </div>
 
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    value={quickAddForm.qty === 0 ? '' : quickAddForm.qty}
-                                    onChange={(e) => {
-                                        const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                        setQuickAddForm(prev => ({ ...prev, qty: val }));
-                                    }}
-                                    placeholder="0"
-                                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border-2 border-emerald-100 dark:border-emerald-900/50 rounded-xl text-3xl font-bold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
-                                />
-                                <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
-                                
-                                {/* 🆕 DC hint — only when New Stock In OR First-time record */}
-                                {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
-                                    <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200">
-                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
-                                    </p>
-                                )}
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        value={quickAddForm.qty === 0 ? '' : quickAddForm.qty}
+                                        onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            setQuickAddForm(prev => ({ ...prev, qty: val }));
+                                        }}
+                                        placeholder="0"
+                                        className="w-full p-3 bg-slate-50 dark:bg-slate-800 border-2 border-emerald-100 dark:border-emerald-900/50 rounded-xl text-3xl font-bold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-2 text-center">{t('quickAdd.identifyQty')}</p>
+
+                                    {/* 🆕 DC hint — only when New Stock In OR First-time record */}
+                                    {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
+                                        <p className="text-[10px] text-violet-500 font-bold mt-2 text-center animate-in fade-in duration-200">
+                                            ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                        </div>
                         )}
 
                         {/* Location Section (CUSTOM DROPDOWN) */}
@@ -562,8 +562,8 @@ const QuickAddPanel = ({
                                                 onClick={() => {
                                                     setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
                                                 }}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc 
-                                                    ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/40 dark:border-amber-700 dark:text-amber-400' 
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc
+                                                    ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/40 dark:border-amber-700 dark:text-amber-400'
                                                     : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-amber-600/50 dark:hover:bg-amber-900/20'}`}
                                             >
                                                 {loc}
@@ -586,8 +586,8 @@ const QuickAddPanel = ({
                                                 onClick={() => {
                                                     setQuickAddForm(prev => ({ ...prev, rack_location: loc }));
                                                 }}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc 
-                                                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-400' 
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickAddForm.rack_location === loc
+                                                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-400'
                                                     : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-600/50 dark:hover:bg-amber-900/20'}`}
                                             >
                                                 {loc}
@@ -630,7 +630,7 @@ const QuickAddPanel = ({
                                                             const searchUpper = locationSearch.trim().toUpperCase();
                                                             const filtered = currentSuggestions.filter(loc => !searchUpper || loc.toUpperCase().includes(searchUpper));
                                                             const exactMatch = filtered.find(loc => loc.toUpperCase() === searchUpper);
-                                                            
+
                                                             if (exactMatch) {
                                                                 setQuickAddForm(prev => ({ ...prev, rack_location: exactMatch }));
                                                                 setDropdownOpen(false);
@@ -646,7 +646,7 @@ const QuickAddPanel = ({
                                                             }
                                                         }
                                                     }}
-                                                    placeholder="🔍 ค้นหา Location..."
+                                                    placeholder="🔍 ຄົ້ນຫາ Location..."
                                                     className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all"
                                                     autoFocus
                                                     onClick={(e) => e.stopPropagation()}
@@ -729,7 +729,7 @@ const QuickAddPanel = ({
 
                                                         {(() => {
                                                             const filtered = currentSuggestions.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
-                                                            
+
                                                             // For MEGAMALL or when search doesn't match suggestions, allow manual creation
                                                             const isMegaMall = currentBranch === 'ເມກ້າມໍ';
                                                             const canAddCustom = locationSearch.trim().length > 0 && !filtered.some(f => f.toUpperCase() === locationSearch.toUpperCase());

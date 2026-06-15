@@ -59,6 +59,7 @@ import {
 
 import AIChatBotFull from './components/ui/AIChatBotFull';
 import JoiWidget from './components/ui/JoiWidget';
+import BigDigitalClock from './components/ui/BigDigitalClock';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -871,39 +872,53 @@ function AppContent() {
         {/* Main Content */}
         <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center">
           {step === 'upload' && (
-            <div className="max-w-5xl w-full animate-fade-in-up flex flex-col items-center relative">
+            <div className="max-w-7xl w-full animate-fade-in-up flex flex-col items-center relative">
               {/* Rubik Network Particles Background */}
               <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
                 <RubikNetworkParticles />
               </div>
               <div className="relative w-full" style={{ zIndex: 1 }}>
-                <div className="text-center mb-10 max-w-2xl mx-auto">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
-                    <Sparkles size={14} className="animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
+                
+                {/* Header Layout: Clock (Left) - Title (Center) - Empty (Right) */}
+                <div className="flex flex-col lg:flex-row items-center lg:items-start justify-between w-full mb-10 gap-6 lg:gap-0">
+                  
+                  {/* 🕒 Big Digital Clock (Desktop Only) */}
+                  <div className="hidden lg:flex w-[280px] justify-start shrink-0 transform -translate-x-[10%]">
+                    <BigDigitalClock />
                   </div>
-                  <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
-                    {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
-                  </h1>
-                  <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                    {t('home.description')}
-                  </p>
 
-                  {/* Admin Toggle Button (Only for HQ role) */}
-                  {isAdmin && (
-                    <div className="mt-8">
-                      <button
-                        onClick={() => setShowAdminMenu(!showAdminMenu)}
-                        className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
-                          ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                          }`}
-                      >
-                        <ShieldCheck size={18} />
-                        <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
-                      </button>
+                  {/* 🏷️ Main Title (Centered) */}
+                  <div className="text-center max-w-2xl mx-auto shrink-0 flex flex-col items-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
+                      <Sparkles size={14} className="animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
                     </div>
-                  )}
+                    <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
+                      {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
+                    </h1>
+                    <p className="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                      {t('home.description')}
+                    </p>
+
+                    {/* Admin Toggle Button (Only for HQ role) */}
+                    {isAdmin && (
+                      <div className="mt-8">
+                        <button
+                          onClick={() => setShowAdminMenu(!showAdminMenu)}
+                          className={`inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 ${showAdminMenu
+                            ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                        >
+                          <ShieldCheck size={18} />
+                          <span>{showAdminMenu ? t('home.closeAdmin') : t('home.adminToggle')}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Empty spacer to keep the title centered */}
+                  <div className="hidden lg:block w-[280px] shrink-0"></div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl mx-auto transition-all duration-500">
