@@ -1381,7 +1381,7 @@ const HQCommandCenter = ({ onBack }) => {
 
             } else if (activeTab === 'store_edits') {
                 let q = supabase.from('store_inventory_history').select('*')
-                    .not('action_type', 'eq', 'edited')  // ທຸກ action ຍົກເວັ້ນ edited
+                    .eq('action_type', 'received')  // ສະເພາະຮັບເຄື່ອງຈາກ Request/Inbox
                     .order('updated_at', { ascending: false });
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);
@@ -1415,7 +1415,7 @@ const HQCommandCenter = ({ onBack }) => {
 
             } else if (activeTab === 'store_manual_edits') {
                 let q = supabase.from('store_inventory_history').select('*')
-                    .eq('action_type', 'edited')  // ສະເພາະ edited ຈາກ StoreEditPanel
+                    .in('action_type', ['edited', 'added'])  // ການແກ້ໄຂ ຫຼື ເພີ່ມເອງໜ້າຮ້ານ
                     .order('updated_at', { ascending: false });
                 if (startDate) q = q.gte('updated_at', `${startDate}T00:00:00`);
                 if (endDate) q = q.lte('updated_at', `${endDate}T23:59:59`);

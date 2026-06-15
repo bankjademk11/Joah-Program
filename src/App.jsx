@@ -1722,7 +1722,7 @@ function AppContent() {
               const batchTotalSecs = batchStartMs ? Math.floor((nowMs - batchStartMs) / 1000) : null;
 
               await logStoreInventoryHistory({
-                actionType: existingRow ? 'received' : 'added',
+                actionType: 'received',
                 barcode: inboxQuickAddForm.barcode_no,
                 itemName: inboxQuickAddForm.item_name,
                 oldQty,
