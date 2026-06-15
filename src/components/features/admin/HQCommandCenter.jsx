@@ -1406,6 +1406,11 @@ const HQCommandCenter = ({ onBack }) => {
                     details: r.change_reason || 'Manual Update',
                     process_time_seconds: r.process_time_seconds || 0,
                     process_started_at: r.process_started_at || null,
+                    // ✅ FIX: Batch timing fields
+                    batch_started_at: r.batch_started_at || null,
+                    batch_ended_at: r.batch_ended_at || null,
+                    batch_total_seconds: r.batch_total_seconds || 0,
+                    bill_id: r.bill_id || null,
                 }));
 
             } else if (activeTab === 'store_manual_edits') {
@@ -1435,6 +1440,11 @@ const HQCommandCenter = ({ onBack }) => {
                     details: r.change_reason || 'Manual Update',
                     process_time_seconds: r.process_time_seconds || 0,
                     process_started_at: r.process_started_at || null,
+                    // ✅ FIX: Batch timing fields
+                    batch_started_at: r.batch_started_at || null,
+                    batch_ended_at: r.batch_ended_at || null,
+                    batch_total_seconds: r.batch_total_seconds || 0,
+                    bill_id: r.bill_id || null,
                 }));
 
             } else if (activeTab === 'import_dc') {

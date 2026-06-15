@@ -232,7 +232,10 @@ export const logStoreInventoryHistory = async ({
     actionType, barcode, itemName,
     oldQty, newQty, oldLocation, newLocation,
     oldTag, newTag, oldMaxQty, newMaxQty,
-    reason, branchId, updatedBy
+    reason, branchId, updatedBy,
+    // ✅ Timing fields for HQ Command Center tracking
+    billId, processStartedAt, processTimeSeconds,
+    batchStartedAt, batchEndedAt, batchTotalSeconds
 }) => {
     try {
         const historyRecord = {
@@ -250,7 +253,14 @@ export const logStoreInventoryHistory = async ({
             change_reason: reason || '',
             branch_id: branchId || 'All Branches',
             updated_by: updatedBy || 'Unknown',
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            // ✅ Timing fields
+            bill_id: billId || null,
+            process_started_at: processStartedAt || null,
+            process_time_seconds: processTimeSeconds != null ? Number(processTimeSeconds) : null,
+            batch_started_at: batchStartedAt || null,
+            batch_ended_at: batchEndedAt || null,
+            batch_total_seconds: batchTotalSeconds != null ? Number(batchTotalSeconds) : null,
         };
 
         const { data, error } = await supabase

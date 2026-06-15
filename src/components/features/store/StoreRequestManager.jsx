@@ -3,6 +3,7 @@ import { X, CheckCircle, Clock, Package, User, Check, RefreshCw, FileSpreadsheet
 import { supabase } from '../../../utils/supabaseClient';
 import { useToast } from '../../ui/ToastProvider';
 import ExcelJS from 'exceljs';
+import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 
 const StoreRequestManager = ({ onClose, currentUser }) => {
     const [requests, setRequests] = useState([]);
@@ -220,11 +221,21 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
         try {
             setIsLoading(true);
 
+            // ⏱️ Track batch start time
+            const batchStartedAt = new Date().toISOString();
+            const batchStartMs = Date.now();
+
             // For batch, we iterate and update inventory exactly by ID
+            const historyLogs = []; // collect per-SKU logs
+
             for (const item of pendingItems) {
+                // ⏱️ Track per-SKU start time
+                const skuStartedAt = new Date().toISOString();
+                const skuStartMs = Date.now();
+
                 let invQuery = supabase
                     .from('location_inventory')
-                    .select('id, qty')
+                    .select('id, qty, item_name, rack_location')
                     .eq('barcode_no', item.barcode)
                     .order('qty', { ascending: false });
 
@@ -234,28 +245,74 @@ const StoreRequestManager = ({ onClose, currentUser }) => {
 
                 const { data: invRows } = await invQuery.limit(1);
 
+                let oldQty = 0;
+                let newQty = 0;
+
                 if (invRows && invRows.length > 0) {
                     const inv = invRows[0];
+                    oldQty = inv.qty || 0;
+                    newQty = oldQty - item.qty;
                     await supabase
                         .from('location_inventory')
-                        .update({ qty: (inv.qty || 0) - item.qty })
-                        .eq('id', inv.id); // Deduct ONLY from this specific row ID
+                        .update({ qty: newQty })
+                        .eq('id', inv.id);
                 }
+
+                // ⏱️ Per-SKU elapsed time
+                const skuElapsedSecs = Math.round((Date.now() - skuStartMs) / 1000);
+
+                // Collect log for this SKU
+                historyLogs.push({
+                    item,
+                    oldQty,
+                    newQty,
+                    skuStartedAt,
+                    skuElapsedSecs,
+                });
             }
 
+            // ⏱️ Track batch end time
+            const batchEndedAt = new Date().toISOString();
+            const batchTotalSecs = Math.round((Date.now() - batchStartMs) / 1000);
+
+            // Update all request statuses
             const itemIdsToUpdate = pendingItems.map(item => item.id);
+            const acceptedBy = currentUser?.id
+                ? `${currentUser.name} (${currentUser.id})`
+                : (currentUser?.name || 'Admin');
+
             const { error } = await supabase
                 .from('store_requests')
                 .update({
                     status: 'accepted',
-                    accepted_by: currentUser?.id
-                        ? `${currentUser.name} (${currentUser.id})`
-                        : (currentUser?.name || 'Admin'),
+                    accepted_by: acceptedBy,
                     updated_at: new Date().toISOString()
                 })
                 .in('id', itemIdsToUpdate);
 
             if (error) throw error;
+
+            // 📝 Log store_inventory_history for each SKU with timing
+            await Promise.all(historyLogs.map(({ item, oldQty, newQty, skuStartedAt, skuElapsedSecs }) =>
+                logStoreInventoryHistory({
+                    actionType: 'received',
+                    barcode: item.barcode,
+                    itemName: item.product_name || item.item_name || item.barcode,
+                    oldQty,
+                    newQty,
+                    reason: `ຮັບຈາກ Request (${batchId})`,
+                    branchId: item.branch_id,
+                    updatedBy: acceptedBy,
+                    // ✅ Timing fields
+                    billId: batchId,
+                    processStartedAt: skuStartedAt,
+                    processTimeSeconds: skuElapsedSecs,
+                    batchStartedAt,
+                    batchEndedAt,
+                    batchTotalSeconds: batchTotalSecs,
+                })
+            ));
+
             toast.success(`✅ ຮັບຊາບ ແລະ ຫັກສາງ ${pendingItems.length} ລາຍການແລ້ວ`);
             fetchRequests();
         } catch (err) {
