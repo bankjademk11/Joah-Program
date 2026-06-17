@@ -57,4 +57,16 @@ export default defineConfig({
     target: 'es2015',
   },
   assetsInclude: ['**/*.xlsx'], // บอก Vite ວ່າ .xlsx ແມ່ນ Asset file
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://lod.kokkokm.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        cookieDomainRewrite: { '*': 'localhost' },
+        cookiePathRewrite: { '*': '/' },
+      },
+    },
+  },
 })

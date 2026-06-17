@@ -47,6 +47,9 @@ import StoreClosingChecklist from './components/features/store/StoreClosingCheck
 import ExcelCompressor from './components/Tools/excel-compressor';
 import SalesAggregator from './components/Tools/SalesAggregator';
 import DcStockImporter from './components/Tools/DcStockImporter';
+import OdooSalesViewer from './components/Tools/OdooSalesViewer';
+import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
+import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -1156,6 +1159,28 @@ function AppContent() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Odoo Sales Viewer */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-orange-500 hover:shadow-orange-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-orange-50 dark:bg-slate-800 relative flex items-center justify-center">
+                          <div className="p-8 rounded-[2rem] bg-orange-100 dark:bg-orange-900/30 text-joah-orange group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                            <Sparkles size={64} strokeWidth={2.5} />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                        </div>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Sales Viewer</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Odoo Live Items Sold</p>
+                          </div>
+                          <button onClick={() => setStep('odoo-sales-viewer')}
+                            className="w-full btn-primary mt-1 group py-4 bg-joah-orange hover:bg-orange-600 shadow-orange-500/30 text-white border-none">
+                            <LayoutDashboard size={18} />
+                            <span>Open Tool</span>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* DC Stock Importer */}
                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-indigo-500 hover:shadow-indigo-500/10 transition-all duration-500 w-full sm:w-[340px]">
                         <div className="w-full h-44 overflow-hidden bg-indigo-50 dark:bg-slate-800 relative flex items-center justify-center">
@@ -1176,6 +1201,50 @@ function AppContent() {
                           </button>
                         </div>
                       </div>
+
+                       {/* Test Taladlao Importer */}
+                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                         <div className="w-full h-44 overflow-hidden bg-emerald-50 dark:bg-slate-800 relative flex items-center justify-center">
+                           <div className="p-8 rounded-[2rem] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                             <Database size={64} strokeWidth={2.5} />
+                           </div>
+                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                         </div>
+                         <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                           <div className="space-y-1.5 text-center">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">🧪 TEST MODE</span>
+                             <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Test Store Importer</h3>
+                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Sandbox — test_taladlao_store</p>
+                           </div>
+                           <button onClick={() => setStep('test-taladlao-importer')}
+                             className="w-full btn-primary mt-1 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-white border-none">
+                             <Database size={18} />
+                             <span>Open Tool</span>
+                           </button>
+                         </div>
+                       </div>
+
+                       {/* Odoo Sync Engine */}
+                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-teal-500 hover:shadow-teal-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                         <div className="w-full h-44 overflow-hidden bg-teal-50 dark:bg-slate-800 relative flex items-center justify-center">
+                           <div className="p-8 rounded-[2rem] bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                             <RefreshCw size={64} strokeWidth={2.5} />
+                           </div>
+                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                         </div>
+                         <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                           <div className="space-y-1.5 text-center">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-3 py-1 rounded-full">⚙️ AUTOMATION</span>
+                             <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Sync Engine</h3>
+                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Automated Stock Deduction</p>
+                           </div>
+                           <button onClick={() => setStep('odoo-sync-engine')}
+                             className="w-full btn-primary mt-1 group py-4 bg-teal-500 hover:bg-teal-600 shadow-teal-500/30 text-white border-none">
+                             <Play size={18} />
+                             <span>Run Sync</span>
+                           </button>
+                         </div>
+                       </div>
 
                     </>
                   )}
@@ -1435,8 +1504,20 @@ function AppContent() {
             <SalesAggregator onBack={() => setStep('upload')} />
           )}
 
+          {step === 'odoo-sales-viewer' && (
+            <OdooSalesViewer onBack={() => setStep('upload')} userBranch={user?.branch_id} isAdmin={isAdmin} />
+          )}
+
           {step === 'dc-stock-importer' && (
             <DcStockImporter onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'test-taladlao-importer' && (
+            <TestTaladlaoImporter onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'odoo-sync-engine' && (
+            <OdooSyncEngine onBack={() => setStep('upload')} userBranch={user?.branch_id} isAdmin={isAdmin} />
           )}
 
           {step === 'hq-dashboard' && isAdmin && (
@@ -1722,7 +1803,7 @@ function AppContent() {
               const batchTotalSecs = batchStartMs ? Math.floor((nowMs - batchStartMs) / 1000) : null;
 
               await logStoreInventoryHistory({
-                actionType: 'received',
+                actionType: existingRow ? 'received' : 'added',
                 barcode: inboxQuickAddForm.barcode_no,
                 itemName: inboxQuickAddForm.item_name,
                 oldQty,
