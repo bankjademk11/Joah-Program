@@ -56,6 +56,20 @@ const StoreResultTable = ({
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
+    const searchInputRef = useRef(null); // 🆕 Ref for the main search/barcode input
+
+    // 🆕 Auto-select search term when Quick Add panel closes
+    useEffect(() => {
+        if (!showQuickAdd && searchTerm) {
+            // Wait a tiny bit for the panel to transition out
+            setTimeout(() => {
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                    searchInputRef.current.select(); // ⚡ SPEEDRUN: Highlight existing barcode
+                }
+            }, 100);
+        }
+    }, [showQuickAdd, searchTerm]);
 
     // --- Helper: Extract & Filter Locations ---
     const uniqueLocations = useMemo(() => {
@@ -1491,13 +1505,14 @@ const StoreResultTable = ({
                                 <Search className="text-slate-400 group-focus-within:text-emerald-500 transition-colors drop-shadow-sm" size={20} strokeWidth={2.5} />
                             </div>
                             <input
-                                type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                                className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
-                                    searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
-                                        ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
-                                        : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
-                                }`}
-                                value={searchTerm}
+                               ref={searchInputRef}
+                               type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
+                               className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
+                                   searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
+                                       ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
+                                       : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
+                               }`}
+                               value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value.replace(/\s+/g, ''));
                                     setCurrentPage(1);

@@ -30,6 +30,10 @@ const QuickAddPanel = ({
     const [viewingCategories, setViewingCategories] = useState(false); // New state to toggle Category Selection View
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null); // Local inspector state
     const dropdownRef = useRef(null);
+    const qtyInputRef = useRef(null); // 🆕 Ref for Quantity input
+    const maxQtyInputRef = useRef(null); // 🆕 Ref for Max Qty input
+    const locationTriggerRef = useRef(null); // 🆕 Ref for Rack Location trigger
+    const [focusedStep, setFocusedStep] = useState('qty'); // 🆕 Track speedrun steps: 'qty', 'maxQty', 'tag', 'rack'
     const [locationSearch, setLocationSearch] = useState('');
     const [showLocationScanner, setShowLocationScanner] = useState(false); // 🆕 Scanner for locations
     const [dcQty, setDcQty] = useState(0); // 🆕 DC Qty state
@@ -43,30 +47,57 @@ const QuickAddPanel = ({
         latestOnSave.current = onSave;
     }, [onSave]);
 
-    // Handle Global Enter Key Submission
+    // Handle Global Keyboard Events (Enter & Arrows)
     useEffect(() => {
-        const handleGlobalEnter = (e) => {
+        const handleGlobalKeys = (e) => {
             if (!isOpen || isSaving) return;
             
-            // Only trigger if we are not focused on a textarea or special input
-            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                // Validate exactly like the button
-                if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)) {
-                    // Do nothing if invalid
-                    return;
+            // 1. ARROW KEYS (Only for Product Tag step)
+            if (focusedStep === 'tag') {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    setQuickAddForm(prev => ({ ...prev, product_tag: 'hook' }));
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    setQuickAddForm(prev => ({ ...prev, product_tag: 'shelf' }));
                 }
-                if (latestOnSave.current) {
-                    latestOnSave.current();
+            }
+
+            // 2. ENTER KEY
+            if (e.key === 'Enter') {
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                e.preventDefault();
+
+                // ⚡ SPEEDRUN FLOW
+                if (focusedStep === 'qty') {
+                    maxQtyInputRef.current?.focus();
+                    maxQtyInputRef.current?.select();
+                    setFocusedStep('maxQty');
+                } else if (focusedStep === 'maxQty') {
+                    setFocusedStep('tag');
+                    // Blur any active inputs to show tag focus
+                    document.activeElement.blur();
+                } else if (focusedStep === 'tag') {
+                    setFocusedStep('rack');
+                    // Optional: open dropdown if no location set
+                    if (!quickAddForm.rack_location) {
+                        setDropdownOpen(true);
+                    }
+                } else if (focusedStep === 'rack') {
+                    // Final Save
+                    if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)) {
+                        return;
+                    }
+                    if (latestOnSave.current) {
+                        latestOnSave.current();
+                    }
                 }
             }
         };
 
-        document.addEventListener('keydown', handleGlobalEnter);
-        return () => document.removeEventListener('keydown', handleGlobalEnter);
-    }, [isOpen, isSaving, quickAddForm.qty, selectedReasonOption, t]);
+        document.addEventListener('keydown', handleGlobalKeys);
+        return () => document.removeEventListener('keydown', handleGlobalKeys);
+    }, [isOpen, isSaving, focusedStep, quickAddForm.qty, quickAddForm.rack_location, selectedReasonOption, t, setQuickAddForm]);
 
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
@@ -76,12 +107,15 @@ const QuickAddPanel = ({
         }
     }, [selectedReasonOption, otherReasonText, setQuickAddForm]);
 
-    // Persist Rack Location to localStorage whenever it changes
+    // Persist Rack Location & Product Tag to localStorage
     useEffect(() => {
         if (quickAddForm.rack_location) {
             localStorage.setItem('joah_last_rack_location', quickAddForm.rack_location);
         }
-    }, [quickAddForm.rack_location]);
+        if (quickAddForm.product_tag) {
+            localStorage.setItem('joah_last_product_tag', quickAddForm.product_tag);
+        }
+    }, [quickAddForm.rack_location, quickAddForm.product_tag]);
 
     // Reset reason when panel opens/closes
     useEffect(() => {
@@ -89,7 +123,17 @@ const QuickAddPanel = ({
             // Set Default Reason when opened
             const defaultReason = t('reasons.firstTimeRecord');
             setSelectedReasonOption(defaultReason);
-            setQuickAddForm(prev => ({ ...prev, remarks: defaultReason }));
+            setQuickAddForm(prev => {
+                const lastTag = localStorage.getItem('joah_last_product_tag') || '';
+                return { ...prev, remarks: defaultReason, product_tag: prev.product_tag || lastTag };
+            });
+
+            // ⚡ SPEEDRUN: Reset to first step
+            setFocusedStep('qty');
+            setTimeout(() => {
+                qtyInputRef.current?.focus();
+                qtyInputRef.current?.select();
+            }, 100);
         } else {
             setSelectedReasonOption('');
             setOtherReasonText('');
@@ -364,6 +408,7 @@ const QuickAddPanel = ({
                                     <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{t('quickAdd.quantity')}</p>
                                 </div>
                                 <input
+                                    ref={qtyInputRef}
                                     type="number"
                                     value={quickAddForm.qty === 0 ? '' : quickAddForm.qty}
                                     onChange={(e) => {
@@ -378,7 +423,7 @@ const QuickAddPanel = ({
                                 {/* 🆕 DC hint — only when New Stock In OR First-time record */}
                                 {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                     <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
-                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC ອັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
+                                        ⚡ ຈຳນວນນີ້ຈະລຸດ QTY DC อັດຕະໂນມັດ (DC ເຫຼືອ: {dcQty})
                                     </p>
                                 )}
                             </div>
@@ -390,6 +435,7 @@ const QuickAddPanel = ({
                                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Max Qty</p>
                                 </div>
                                 <input
+                                    ref={maxQtyInputRef}
                                     type="number"
                                     value={quickAddForm.max_qty === 0 ? '' : quickAddForm.max_qty}
                                     onChange={(e) => {
@@ -404,19 +450,25 @@ const QuickAddPanel = ({
                         </div>
 
                         {/* Product Tag Section */}
-                        <div className="p-3.5 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/20">
-                            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2.5 flex items-center gap-1.5">
-                                <span>🏷️</span> ປະເພດການວາງສິນຄ້າ
-                            </p>
+                        <div className={`p-3.5 rounded-lg border-2 transition-all ${focusedStep === 'tag' ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-900/10 shadow-md ring-4 ring-emerald-500/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/20'}`}>
+                            <div className="flex justify-between items-center mb-2.5">
+                                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                    <span>🏷️</span> ປະເພດການວາງສິນຄ້າ
+                                </p>
+                                {focusedStep === 'tag' && <span className="text-[10px] font-black text-emerald-600 animate-pulse">← Use Arrows to Select →</span>}
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                                 {/* Hook */}
                                 <button
                                     type="button"
-                                    onClick={() => setQuickAddForm(prev => ({ ...prev, product_tag: prev.product_tag === 'hook' ? '' : 'hook' }))}
+                                    onClick={() => {
+                                        setQuickAddForm(prev => ({ ...prev, product_tag: 'hook' }));
+                                        setFocusedStep('tag');
+                                    }}
                                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'hook'
                                             ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-200 dark:shadow-violet-900/20'
                                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-900/10'
-                                        }`}
+                                        } ${focusedStep === 'tag' && quickAddForm.product_tag === 'hook' ? 'ring-2 ring-violet-400 ring-offset-2 dark:ring-offset-slate-900' : ''}`}
                                 >
                                     <span className="text-base">🪝</span>
                                     <div className="text-left">
@@ -431,11 +483,14 @@ const QuickAddPanel = ({
                                 {/* Shelf */}
                                 <button
                                     type="button"
-                                    onClick={() => setQuickAddForm(prev => ({ ...prev, product_tag: prev.product_tag === 'shelf' ? '' : 'shelf' }))}
+                                    onClick={() => {
+                                        setQuickAddForm(prev => ({ ...prev, product_tag: 'shelf' }));
+                                        setFocusedStep('tag');
+                                    }}
                                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'shelf'
                                             ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-sm shadow-sky-200 dark:shadow-sky-900/20'
                                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-sky-300 hover:bg-sky-50/50 dark:hover:bg-sky-900/10'
-                                        }`}
+                                        } ${focusedStep === 'tag' && quickAddForm.product_tag === 'shelf' ? 'ring-2 ring-sky-400 ring-offset-2 dark:ring-offset-slate-900' : ''}`}
                                 >
                                     <span className="text-base">📦</span>
                                     <div className="text-left">
@@ -450,11 +505,12 @@ const QuickAddPanel = ({
                         </div>
 
                         {/* Location Section (CUSTOM DROPDOWN) */}
-                        <div>
+                        <div className={`transition-all ${focusedStep === 'rack' ? 'p-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-900/5 ring-4 ring-emerald-500/10' : ''}`}>
                             <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
                                 <MapPin size={14} className="text-emerald-500" />
                                 {t('quickAdd.targetLocation')}
                                 {customMode && <span className="text-[10px] text-emerald-500 font-normal ml-2">{t('quickAdd.customMode')}</span>}
+                                {focusedStep === 'rack' && <span className="text-[10px] font-black text-emerald-600 ml-auto animate-pulse">Press ENTER to Save</span>}
                             </p>
 
                             {/* 🔁 Smart Rack Memory Badge */}
@@ -485,9 +541,12 @@ const QuickAddPanel = ({
                                 {/* CUSTOM SELECT TRIGGER */}
                                 <div
                                     className={`flex-1 relative cursor-pointer select-none`}
-                                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                                    onClick={() => {
+                                        setDropdownOpen(!dropdownOpen);
+                                        setFocusedStep('rack');
+                                    }}
                                 >
-                                    <div className={`w-full py-3 px-4 flex items-center justify-between text-base font-black bg-white dark:bg-slate-800 border-2 ${dropdownOpen ? 'border-emerald-500 ring-4 ring-emerald-500/10' : !isRackValid ? 'border-rose-400 bg-rose-50' : 'border-slate-200 dark:border-slate-700'} rounded-2xl transition-all shadow-sm`}>
+                                    <div className={`w-full py-3 px-4 flex items-center justify-between text-base font-black bg-white dark:bg-slate-800 border-2 ${dropdownOpen || focusedStep === 'rack' ? 'border-emerald-500 ring-4 ring-emerald-500/10' : !isRackValid ? 'border-rose-400 bg-rose-50' : 'border-slate-200 dark:border-slate-700'} rounded-2xl transition-all shadow-sm`}>
                                         <div className="flex items-center gap-3">
                                             <div className={`p-1.5 rounded-lg ${!isRackValid ? 'bg-rose-500 text-white' : (quickAddForm.rack_location && isRackValid) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                                                 {!isRackValid ? <AlertTriangle size={16} /> : (quickAddForm.rack_location && isRackValid) ? <CheckCircle size={16} /> : <MapPin size={16} />}
