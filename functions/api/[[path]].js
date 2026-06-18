@@ -1,34 +1,46 @@
 export async function onRequest(context) {
   const { request } = context;
-  const url = new URL(request.url);
-  
-  // สร้าง URL ปลายทางของ Odoo
-  const targetPath = url.pathname.replace(/^\/api/, '');
-  const targetUrl = new URL(targetPath, 'https://lod.kokkokm.com');
-  targetUrl.search = url.search;
 
-  // คัดลอก Headers และลบ Origin/Referer ทิ้ง เพื่อหลอก Odoo ว่าส่งมาจากตัวมันเอง
-  const headers = new Headers(request.headers);
-  headers.delete('Origin');
-  headers.delete('Referer');
-
-  const fetchOptions = {
-    method: request.method,
-    headers: headers,
-    redirect: 'manual'
-  };
-
-  // ถ้าเป็นการส่งข้อมูล (POST) ให้ก็อปปี้ Body ไปด้วย
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    fetchOptions.body = await request.clone().arrayBuffer();
+  // จัดการ CORS preflight (Browser จะส่ง OPTIONS มาก่อน POST เสมอ)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      },
+    });
   }
 
-  // ส่งรีเควสต์ไปหา Odoo
-  const response = await fetch(targetUrl.toString(), fetchOptions);
-  
-  // สร้าง Response ใหม่เพื่อส่งกลับไปให้หน้าเว็บเรา
-  const newResponse = new Response(response.body, response);
-  newResponse.headers.set('Access-Control-Allow-Origin', '*'); // ป้องกัน Browser บล็อค
-  
-  return newResponse;
+  const url = new URL(request.url);
+  const targetPath = url.pathname.replace(/^\/api/, '');
+  const targetUrl = `https://lod.kokkokm.com${targetPath}${url.search}`;
+
+  // อ่าน Body ออกมาเป็น text ก่อนส่งต่อ (วิธีที่เชื่อถือได้ที่สุด)
+  let body = null;
+  if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
+    body = await request.text();
+  }
+
+  // ส่งรีเควสต์ใหม่ไปหา Odoo แบบสะอาดๆ (ไม่แนบ Header เก่าที่ทำให้สับสน)
+  const odooResponse = await fetch(targetUrl, {
+    method: request.method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: body,
+  });
+
+  // อ่าน Response จาก Odoo แล้วส่งกลับหาหน้าเว็บ
+  const responseText = await odooResponse.text();
+
+  return new Response(responseText, {
+    status: odooResponse.status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
 }
