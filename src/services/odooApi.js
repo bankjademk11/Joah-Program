@@ -209,7 +209,7 @@ export async function fetchJoahProducts(offset = 0, limit = 20, search = '', onl
 export async function fetchBranchSales(dateStart, dateEnd) {
   // Joah branch company IDs based on the provided session info
   const branchIds = [247, 248, 249, 261, 273];
-  
+
   const domain = [
     ['company_id', 'in', branchIds],
     ['state', 'in', ['paid', 'done', 'invoiced']]
@@ -368,10 +368,14 @@ export async function fetchOrderLines(lineIds) {
  * @param {string} dateEnd - End date (YYYY-MM-DD HH:mm:ss in UTC)
  * @returns {Promise<Object[]>}
  */
+// All Joah branch company IDs — passed in context so Odoo unlocks multi-company data
+const ALL_JOAH_COMPANY_IDS = [8, 173, 241, 247, 248, 249, 261, 273]; // 173 = Phonsinuan, 8 = Vangxaiy
+
 export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
   const domain = [
     ['company_id', '=', branchId],
-    ['order_id.state', 'in', ['paid', 'done', 'invoiced']]
+    ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+    ['product_id.product_bu_id', '=', 9126], // 🏷️ Filter Joah brand only
   ];
 
   if (dateStart) {
@@ -390,7 +394,11 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
       method: 'read_group',
       args: [domain, ['product_id', 'qty', 'price_subtotal_incl'], ['product_id']],
       kwargs: {
-        orderby: 'qty desc'
+        orderby: 'qty desc',
+        // 🔑 THE KEY FIX: Tell Odoo to unlock all Joah branch companies
+        context: {
+          allowed_company_ids: ALL_JOAH_COMPANY_IDS
+        }
       },
     },
   };
@@ -410,8 +418,6 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
     throw new Error(json.error.data?.message || json.error.message || 'Odoo API error');
   }
 
-  // Odoo read_group returns { product_id: [id, name], qty: number, price_subtotal_incl: number, ... }
-  // We filter out null product_ids just in case
   return (json.result || []).filter(item => item.product_id);
 }
 
@@ -425,7 +431,8 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
 export async function fetchDetailedProductSales(branchId, dateStart, dateEnd) {
   const domain = [
     ['company_id', '=', branchId],
-    ['order_id.state', 'in', ['paid', 'done', 'invoiced']]
+    ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+    ['product_id.product_bu_id', '=', 9126], // 🏷️ Filter Joah brand only
   ];
 
   if (dateStart) {
@@ -446,7 +453,11 @@ export async function fetchDetailedProductSales(branchId, dateStart, dateEnd) {
       kwargs: {
         fields: ['product_id', 'qty', 'price_subtotal_incl', 'create_date', 'order_id'],
         order: 'create_date desc',
-        limit: 1000 // Limit to prevent massive payload
+        limit: 1000, // Limit to prevent massive payload
+        // 🔑 THE KEY FIX: Tell Odoo to unlock all Joah branch companies
+        context: {
+          allowed_company_ids: ALL_JOAH_COMPANY_IDS
+        }
       },
     },
   };
