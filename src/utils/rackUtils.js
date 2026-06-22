@@ -16,12 +16,12 @@ const MEGAMALL_ALL_RACKS = (() => {
             for (let l = 1; l <= 4; l++) { all.push(`MSW${String(r).padStart(2, '0')}-${s}-${l}`); }
         }
     }
-    // MSB01-20 (Level 1-3)
-    for (let r = 1; r <= 20; r++) {
+    // MSB01-30 (Level 1-3)
+    for (let r = 1; r <= 30; r++) {
         for (let l = 1; l <= 3; l++) { all.push(`MSB${String(r).padStart(2, '0')}-${l}`); }
     }
-    // MSC01-20 (Level 1-3)
-    for (let r = 1; r <= 20; r++) {
+    // MSC01-30 (Level 1-3)
+    for (let r = 1; r <= 30; r++) {
         for (let l = 1; l <= 3; l++) { all.push(`MSC${String(r).padStart(2, '0')}-${l}`); }
     }
     // MSD01-04 (Section 1-4, Level 1-4)
