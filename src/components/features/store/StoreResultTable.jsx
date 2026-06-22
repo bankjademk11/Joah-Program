@@ -60,7 +60,7 @@ const StoreResultTable = ({
 
     // 🆕 Auto-select search term when Quick Add panel closes
     useEffect(() => {
-        if (!showQuickAdd && searchTerm) {
+        if (!showQuickAdd && searchInputRef.current && searchInputRef.current.value) {
             // Wait a tiny bit for the panel to transition out
             setTimeout(() => {
                 if (searchInputRef.current) {
@@ -69,7 +69,7 @@ const StoreResultTable = ({
                 }
             }, 100);
         }
-    }, [showQuickAdd, searchTerm]);
+    }, [showQuickAdd]);
 
     // --- Helper: Extract & Filter Locations ---
     const uniqueLocations = useMemo(() => {

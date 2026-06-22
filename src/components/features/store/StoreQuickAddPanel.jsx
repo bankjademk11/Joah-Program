@@ -63,28 +63,20 @@ const QuickAddPanel = ({
                 }
             }
 
-            // 2. ENTER KEY
+            // 2. ENTER KEY (For Product Tag and Rack steps, since they have no direct text input when closed)
             if (e.key === 'Enter') {
-                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-                e.preventDefault();
-
-                // ⚡ SPEEDRUN FLOW
-                if (focusedStep === 'qty') {
-                    maxQtyInputRef.current?.focus();
-                    maxQtyInputRef.current?.select();
-                    setFocusedStep('maxQty');
-                } else if (focusedStep === 'maxQty') {
-                    setFocusedStep('tag');
-                    // Blur any active inputs to show tag focus
-                    document.activeElement.blur();
-                } else if (focusedStep === 'tag') {
+                // Ignore if user is typing in any input field (handled locally)
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                
+                if (focusedStep === 'tag') {
+                    e.preventDefault();
                     setFocusedStep('rack');
-                    // Optional: open dropdown if no location set
                     if (!quickAddForm.rack_location) {
                         setDropdownOpen(true);
                     }
-                } else if (focusedStep === 'rack') {
+                } else if (focusedStep === 'rack' && !dropdownOpen) {
                     // Final Save
+                    e.preventDefault();
                     if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)) {
                         return;
                     }
@@ -415,6 +407,15 @@ const QuickAddPanel = ({
                                         const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                         setQuickAddForm(prev => ({ ...prev, qty: val }));
                                     }}
+                                    onFocus={() => setFocusedStep('qty')}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            maxQtyInputRef.current?.focus();
+                                            maxQtyInputRef.current?.select();
+                                            setFocusedStep('maxQty');
+                                        }
+                                    }}
                                     placeholder="0"
                                     className="w-full p-2 bg-white dark:bg-slate-800 border-2 border-emerald-200 dark:border-emerald-900/50 rounded-xl text-2xl font-black text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
                                 />
@@ -441,6 +442,14 @@ const QuickAddPanel = ({
                                     onChange={(e) => {
                                         const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                         setQuickAddForm(prev => ({ ...prev, max_qty: val }));
+                                    }}
+                                    onFocus={() => setFocusedStep('maxQty')}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            setFocusedStep('tag');
+                                            e.target.blur(); // Blur to show tag focus visually
+                                        }
                                     }}
                                     placeholder="—"
                                     className="w-full p-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-2xl font-black text-slate-500 dark:text-slate-400 text-center outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-400/10 transition-all placeholder:text-slate-200 number-input-no-arrows"
@@ -580,6 +589,34 @@ const QuickAddPanel = ({
                                                         type="text"
                                                         value={locationSearch}
                                                         onChange={(e) => setLocationSearch(e.target.value)}
+                                                        onFocus={() => setFocusedStep('rack')}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                if (locationSearch) {
+                                                                    // Get all locations manually to find the first match
+                                                                    const allPossibleRacks = [];
+                                                                    Object.values(BRANCH_RACK_RULES[currentBranch] || {}).forEach(rules => {
+                                                                        rules.forEach(rule => allPossibleRacks.push(...rule.zones));
+                                                                    });
+                                                                    const searchFilteredAll = allPossibleRacks.filter(loc => loc.toUpperCase().includes(locationSearch.toUpperCase()));
+                                                                    const canAddCustom = locationSearch.trim().length > 0 && !searchFilteredAll.some(f => f.toUpperCase() === locationSearch.toUpperCase());
+                                                                    
+                                                                    let picked = '';
+                                                                    if (canAddCustom) picked = locationSearch.toUpperCase();
+                                                                    else if (searchFilteredAll.length > 0) picked = searchFilteredAll[0];
+                                                                    
+                                                                    if (picked) {
+                                                                        setQuickAddForm(prev => ({ ...prev, rack_location: picked }));
+                                                                        setDropdownOpen(false);
+                                                                        setLocationSearch('');
+                                                                    }
+                                                                } else {
+                                                                    // If empty, just close dropdown
+                                                                    setDropdownOpen(false);
+                                                                }
+                                                            }
+                                                        }}
                                                         placeholder="🔍 ຄົ້ນຫາ Location..."
                                                         className="w-full pl-3 pr-10 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all font-bold"
                                                         autoFocus
