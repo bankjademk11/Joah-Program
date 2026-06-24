@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales } from '../../services/odooApi';
-import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity } from 'lucide-react';
+import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import JoahLogo from '../../assets/Joah.jpeg';
 import dataImageBG from '../../assets/dataImageBG.png';
 import ExcelJS from 'exceljs';
@@ -16,7 +16,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('summary');
     const [joahOnly, setJoahOnly] = useState(true);
-    const [weeklySales, setWeeklySales] = useState([]);
+    const [weeklySales, setWeeklySales] = useState({});
+    const [weekOffset, setWeekOffset] = useState(0);
 
     const todayStr = new Date().toISOString().split('T')[0];
     const [dateStart, setDateStart] = useState(`${todayStr}T00:00`);
@@ -70,23 +71,42 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setAuditStates(stateData);
                 setAbnormalOrders(abnormalData);
             } else if (activeTab === 'weekly') {
-                const endObj = new Date();
-                const startObj = new Date();
-                startObj.setDate(endObj.getDate() - 13);
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
                 
-                const formatForPicker = (d) => d.toISOString().substring(0,16);
-                const startUTC = toUTC(formatForPicker(startObj), false);
-                const endUTC = toUTC(formatForPicker(endObj), true);
+                const startObj = new Date(today);
+                startObj.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
+                startObj.setHours(0, 0, 0, 0);
+                
+                const endObj = new Date(startObj);
+                endObj.setDate(startObj.getDate() + 13);
+                endObj.setHours(23, 59, 59, 999);
+                
+                const pad = (n) => n.toString().padStart(2, '0');
+                const startStr = `${startObj.getFullYear()}-${pad(startObj.getMonth()+1)}-${pad(startObj.getDate())}T00:00`;
+                const endStr = `${endObj.getFullYear()}-${pad(endObj.getMonth()+1)}-${pad(endObj.getDate())}T23:59`;
+                
+                const startUTC = toUTC(startStr, false);
+                const endUTC = toUTC(endStr, true);
 
-                const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly);
-                setWeeklySales(data);
+                if (selectedBranchId === 'ALL') {
+                    const promises = branches.map(b => fetchDailySales(b.id, startUTC, endUTC, joahOnly));
+                    const results = await Promise.all(promises);
+                    const mapped = {};
+                    branches.forEach((b, idx) => { mapped[b.id] = results[idx] || []; });
+                    setWeeklySales(mapped);
+                } else {
+                    const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly);
+                    setWeeklySales({ [selectedBranchId]: data || [] });
+                }
             }
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
-    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly]);
+    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -246,10 +266,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
     return createPortal(
         <div 
-            className="fixed inset-0 z-[100] w-screen h-screen flex flex-col p-4 md:p-6 animate-fade-in-up overflow-hidden bg-cover bg-center bg-no-repeat before:absolute before:inset-0 before:bg-black/60 before:backdrop-blur-sm"
+            className="fixed inset-0 z-[100] w-screen h-screen flex flex-col p-4 md:p-6 animate-fade-in-up overflow-y-auto md:overflow-hidden bg-cover bg-center bg-no-repeat before:absolute before:inset-0 before:bg-black/60 before:backdrop-blur-sm"
             style={{ backgroundImage: `url(${dataImageBG})` }}
         >
-            <div className="relative flex flex-col h-full w-full max-w-7xl mx-auto z-10">
+            <div className="relative flex flex-col min-h-full h-auto md:h-full w-full max-w-7xl mx-auto z-10 pb-10 md:pb-0">
 
                 {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -266,15 +286,16 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-3 py-2 shadow-sm">
-                        <MapPin size={16} className="text-white/80 mr-2" />
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div className="flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm">
+                        <MapPin size={14} className="sm:w-4 sm:h-4 text-white/80 mr-1 sm:mr-2" />
                         <select
                             value={selectedBranchId}
-                            onChange={(e) => setSelectedBranchId(Number(e.target.value))}
-                            className="bg-transparent text-sm font-bold text-white outline-none cursor-pointer [&>option]:text-slate-800"
+                            onChange={(e) => setSelectedBranchId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                            className="bg-transparent text-xs sm:text-sm font-bold text-white outline-none cursor-pointer [&>option]:text-slate-800"
                             disabled={!isAdmin && userBranch !== 'ເມກ້າມໍ'}
                         >
+                            {activeTab === 'weekly' && isAdmin && <option value="ALL">ລວມທຸກສາຂา (ALL)</option>}
                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
                     </div>
@@ -282,118 +303,168 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     <button
                         onClick={handleExport}
                         disabled={loading || activeTab === 'weekly'}
-                        className="flex items-center gap-2 bg-emerald-600/90 backdrop-blur hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:shadow-[0_0_15px_rgba(5,150,105,0.5)] border border-emerald-500/50 hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-emerald-600/90 backdrop-blur hover:bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:shadow-[0_0_15px_rgba(5,150,105,0.5)] border border-emerald-500/50 hover:-translate-y-0.5 transition-all disabled:opacity-50"
                     >
-                        <Download size={16} />
-                        Export Excel
+                        <Download size={14} className="sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">Export</span>
                     </button>
 
                     <button
                         onClick={loadSales}
-                        className="flex items-center gap-2 bg-white/10 backdrop-blur hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-bold text-sm border border-white/20 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:-translate-y-0.5 transition-all"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-white/10 backdrop-blur hover:bg-white/20 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-white/20 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:-translate-y-0.5 transition-all"
                     >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        ຣີເຟຣຊ
+                        <RefreshCw size={14} className={`sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">ຣີເຟຣຊ</span>
                     </button>
                 </div>
             </div>
 
             {/* Tabs Moved to Top */}
-            <div className="flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-xl mb-6 shadow-lg border border-white/20 overflow-x-auto">
+            <div className="grid grid-cols-2 sm:flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-xl mb-6 shadow-lg border border-white/20 gap-1.5">
                 {['summary', 'history', 'audit', 'weekly'].map(tab => (
-                    <button key={tab} onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-2.5 px-4 whitespace-nowrap text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/40 scale-[1.02]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
-                        {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={16} /> Audit</> : <><CalendarDays size={16} /> 2 ອາທິດ</>}
+                    <button key={tab} onClick={() => { 
+                        setActiveTab(tab); 
+                        setWeekOffset(0);
+                        if (tab !== 'weekly' && selectedBranchId === 'ALL') {
+                            setSelectedBranchId(branches.find(b => b.name === userBranch)?.id || 273);
+                        }
+                    }}
+                        className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${activeTab === tab ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/40 scale-[1.02]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+                        {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={14} className="sm:w-4 sm:h-4" /> Audit</> : <><CalendarDays size={14} className="sm:w-4 sm:h-4" /> 2 ອາທິດ</>}
                     </button>
                 ))}
             </div>
 
             {/* Weekly View Tab */}
             {activeTab === 'weekly' && (
-                <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl p-6 rounded-3xl border border-white/30 shadow-2xl mb-6 animate-fade-in-up">
-                    <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                        <CalendarDays className="text-joah-orange" />
-                        ຍອດຂາຍຍ້ອນຫຼັງ 14 ມື້ (ຈັນ-ອາທິດ)
-                    </h3>
+                <div className="flex-1 flex flex-col bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl p-6 rounded-3xl border border-white/30 shadow-2xl mb-6 animate-fade-in-up relative overflow-hidden min-h-[500px] md:min-h-0">
+                    {loading && (
+                        <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+                            <div className="w-12 h-12 border-4 border-slate-200 border-t-joah-orange rounded-full animate-spin"></div>
+                            <p className="mt-4 font-bold text-slate-600 dark:text-slate-300 animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Odoo...</p>
+                        </div>
+                    )}
+                    <div className="flex flex-row justify-between items-center mb-4 relative z-0 shrink-0">
+                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <CalendarDays className="text-joah-orange" />
+                            ຍອດຂາຍ 14 ມື້
+                            {weekOffset > 0 && <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-1 sm:ml-2">ຍ້ອນຫຼັງ {weekOffset} ອາທິດ</span>}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setWeekOffset(prev => prev + 1)} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <ChevronLeft size={18} />
+                            </button>
+                            <button onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))} disabled={weekOffset === 0} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 disabled:cursor-not-allowed">
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
+                    </div>
                     
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                        {Array.from({length: 14}).map((_, i) => {
-                            const d = new Date();
-                            d.setDate(d.getDate() - (13 - i));
+                    <div className="flex-1 overflow-y-auto hide-scrollbar -mx-2 px-2 relative z-0">
+                        {(() => {
+                        const branchesToRender = selectedBranchId === 'ALL' ? branches : branches.filter(b => b.id === selectedBranchId);
+                        
+                        return branchesToRender.map((branch, branchIndex) => {
+                            const currentBranchSales = weeklySales[branch.id] || [];
                             
-                            const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
-                            const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                            const enDayName = enDayNames[d.getDay()];
-                            
-                            const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
-                            const dayData = weeklySales.find(w => w['create_date:day'] === odooDateMatch);
-                            
-                            const totalAmount = dayData?.price_subtotal_incl || 0;
-                            const isToday = i === 13;
-                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
                             return (
-                                <div key={i} className={`rounded-2xl border-2 p-3 flex flex-col justify-between transition-all hover:-translate-y-1 ${
-                                    isToday 
-                                        ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md' 
-                                        : isWeekend 
-                                            ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50' 
-                                            : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800'
-                                }`}>
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                                                isWeekend ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
-                                            }`}>
-                                                {enDayName}
-                                            </span>
-                                            {isToday && <span className="text-[10px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full animate-pulse">ມື້ນີ້</span>}
-                                        </div>
-                                        <p className="text-2xl font-black text-slate-800 dark:text-white leading-none tracking-tight">
-                                            {d.getDate()}
-                                        </p>
-                                        <p className="text-[11px] font-medium text-slate-400 mt-1 uppercase">
-                                            {d.toLocaleDateString('en-GB', { month: 'short' })}
-                                        </p>
-                                    </div>
-                                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-                                        <p className="text-[10px] text-slate-500 font-bold mb-0.5">ຍອດຂາຍ (₭)</p>
-                                        <p className={`text-sm font-black truncate ${totalAmount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                            {totalAmount > 0 ? formatNumber(totalAmount) : '-'}
-                                        </p>
+                                <div key={branch.id} className={branchIndex > 0 ? "mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 relative z-0" : "relative z-0"}>
+                                    {selectedBranchId === 'ALL' && (
+                                        <h4 className="text-sm font-black text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+                                            <MapPin size={16} className="text-joah-orange" />
+                                            ສາຂາ: <span className="text-joah-orange">{branch.name}</span>
+                                        </h4>
+                                    )}
+                                    <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar">
+                                        {Array.from({length: 14}).map((_, i) => {
+                                            const today = new Date();
+                                            const dayOfWeek = today.getDay();
+                                            const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                                            
+                                            const startOfLastWeek = new Date(today);
+                                            startOfLastWeek.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
+                                            
+                                            const d = new Date(startOfLastWeek);
+                                            d.setDate(startOfLastWeek.getDate() + i);
+                                            
+                                            const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
+                                            const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                            const enDayName = enDayNames[d.getDay()];
+                                            
+                                            const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
+                                            const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
+                                            
+                                            const totalAmount = dayData?.price_subtotal_incl || 0;
+                                            const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+                                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+                                            return (
+                                                <div key={i} className={`min-w-[130px] sm:min-w-0 shrink-0 snap-center rounded-2xl border-2 p-3 flex flex-col justify-between transition-all hover:-translate-y-1 ${
+                                                    isToday 
+                                                        ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md' 
+                                                        : isWeekend 
+                                                            ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50' 
+                                                            : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800'
+                                                }`}>
+                                                    <div>
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                                                isWeekend ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                                                            }`}>
+                                                                {enDayName}
+                                                            </span>
+                                                            {isToday && <span className="text-[10px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full animate-pulse">ມື້ນີ້</span>}
+                                                        </div>
+                                                        <p className="text-2xl font-black text-slate-800 dark:text-white leading-none tracking-tight">
+                                                            {d.getDate()}
+                                                        </p>
+                                                        <p className="text-[11px] font-medium text-slate-400 mt-1 uppercase">
+                                                            {d.toLocaleDateString('en-GB', { month: 'short' })}
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                                                        <p className="text-[10px] text-slate-500 font-bold mb-0.5">ຍອດຂາຍ (₭)</p>
+                                                        <p className={`text-sm font-black truncate ${totalAmount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            {totalAmount > 0 ? formatNumber(totalAmount) : '-'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
-                        })}
+                        });
+                    })()}
                     </div>
                 </div>
             )}
 
             {/* Filters Row (Only for Summary/History) */}
             {activeTab !== 'weekly' && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> ຕັ້ງແຕ່ (From)</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
+                    <div className="flex flex-col gap-1.5 col-span-1">
+                        <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> ຕັ້ງແຕ່ (From)</label>
                         <input type="datetime-local" value={dateStart} onChange={(e) => setDateStart(e.target.value)}
-                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
+                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> ເຖິງ (To)</label>
+                    <div className="flex flex-col gap-1.5 col-span-1">
+                        <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> ເຖິງ (To)</label>
                         <input type="datetime-local" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)}
-                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
+                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Search size={12} /> ຄົ້ນຫາສິນຄ້າ</label>
+                    <div className="flex flex-col gap-1.5 col-span-2 md:col-span-1">
+                        <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Search size={12} /> ຄົ້ນຫາສິນຄ້າ</label>
                         <div className="relative">
                             <input type="text" placeholder="ພິມຊື່ສິນຄ້າ..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-2.5 pl-10 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
-                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl p-2 sm:p-2.5 pl-9 sm:pl-10 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-joah-orange transition-all" />
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 sm:w-4 sm:h-4" />
                         </div>
                     </div>
-                    <div className="flex flex-col justify-end">
-                        <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 p-2.5 rounded-xl hover:border-joah-orange transition-all">
-                            <input type="checkbox" checked={joahOnly} onChange={(e) => setJoahOnly(e.target.checked)} className="w-4 h-4 text-joah-orange rounded focus:ring-joah-orange" />
-                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-tight">ສະເພາະແບຣນ Joah<br/><span className="text-xs text-slate-400">ຕັດສິນຄ້າອື່ນອອກ</span></span>
+                    <div className="flex flex-col justify-end col-span-2 md:col-span-1">
+                        <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 p-2 sm:p-2.5 rounded-lg sm:rounded-xl hover:border-joah-orange transition-all h-[38px] sm:h-[46px]">
+                            <input type="checkbox" checked={joahOnly} onChange={(e) => setJoahOnly(e.target.checked)} className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-joah-orange rounded focus:ring-joah-orange" />
+                            <span className="text-[11px] sm:text-sm font-bold text-slate-700 dark:text-slate-200 leading-tight">ສະເພາະແບຣນ Joah<br className="hidden sm:block"/><span className="text-[9px] sm:text-xs text-slate-400 sm:block ml-1 sm:ml-0">ຕັດສິນຄ້າອື່ນອອກ</span></span>
                         </label>
                     </div>
                 </div>
@@ -452,7 +523,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
             {/* Table */}
             {activeTab !== 'weekly' && (
-                <div className="flex-1 bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-fade-in-up">
+                <div className="flex-1 bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-fade-in-up min-h-[500px] md:min-h-0">
                     {loading && (
                     <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
                         <div className="w-12 h-12 border-4 border-slate-200 border-t-joah-orange rounded-full animate-spin"></div>
@@ -460,8 +531,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     </div>
                 )}
 
-                <div className="flex-1 overflow-auto p-0">
-                    <table className="w-full text-left border-collapse">
+                <div className="flex-1 overflow-auto p-0 md:p-0">
+                    
+                    {/* --- DESKTOP TABLE VIEW --- */}
+                    <table className="hidden md:table w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/50 shadow-sm z-0">
                             {activeTab === 'summary' ? (
                                 <tr>
@@ -524,6 +597,65 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             )}
                         </tbody>
                     </table>
+
+                    {/* --- MOBILE CARD VIEW --- */}
+                    <div className="md:hidden flex flex-col p-2 space-y-2">
+                        {((activeTab === 'summary' && filteredSales.length === 0) || (activeTab === 'history' && filteredDetailedSales.length === 0)) && !loading && !error ? (
+                            <div className="p-12 text-center text-slate-400 bg-white/50 dark:bg-slate-800/50 rounded-xl">
+                                <Package size={40} className="mx-auto opacity-20 mb-3" />
+                                <p className="font-medium text-xs">ບໍ່ມີຂໍ້ມູນການຂາຍໃນຊ່ວງເວລານີ້</p>
+                            </div>
+                        ) : activeTab === 'summary' ? (
+                            filteredSales.map((item, index) => {
+                                const { barcode, name } = splitProduct(item.product_id[1]);
+                                return (
+                                    <div key={item.product_id[0]} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 shadow-sm flex flex-col gap-2">
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-slate-400 w-5">{index + 1}.</span>
+                                                <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">{barcode}</span>
+                                            </div>
+                                            <span className="inline-flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 px-2 py-0.5 rounded-lg text-sm font-black whitespace-nowrap">
+                                                {formatNumber(item.qty)} ຊິ້ນ
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-2">{name}</p>
+                                        <div className="flex justify-between items-center mt-1 border-t border-slate-100 dark:border-slate-700 pt-2">
+                                            <span className="text-[10px] font-bold text-slate-400">ຍອດຂາຍລວມ</span>
+                                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">₭ {formatNumber(item.price_subtotal_incl)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            filteredDetailedSales.map((item, index) => {
+                                const { barcode, name } = splitProduct(item.product_id[1]);
+                                const isRefund = item.qty < 0 || item.price_subtotal_incl < 0;
+                                return (
+                                    <div key={item.id || index} className={`bg-white dark:bg-slate-800 border ${isRefund ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-700'} rounded-xl p-3 shadow-sm flex flex-col gap-2`}>
+                                        <div className="flex justify-between items-center gap-2">
+                                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-full">{formatDateTime(item.create_date)}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                                                {item.order_id?.[1]}
+                                                {isRefund && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-600 dark:bg-red-900/30">REFUND</span>}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">{barcode}</span>
+                                        </div>
+                                        <p className={`text-sm font-bold ${isRefund ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'} line-clamp-2`}>{name}</p>
+                                        <div className={`flex justify-between items-center mt-1 border-t ${isRefund ? 'border-red-100 dark:border-red-900/50' : 'border-slate-100 dark:border-slate-700'} pt-2`}>
+                                            <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-sm font-black ${isRefund ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>
+                                                {formatNumber(item.qty)} ຊິ້ນ
+                                            </span>
+                                            <span className={`text-sm font-black ${isRefund ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>₭ {formatNumber(item.price_subtotal_incl)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
                 </div>
 
                 {/* Audit Tab Content */}
