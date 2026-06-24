@@ -67,39 +67,41 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
     return (
         <div className="space-y-6 sm:space-y-10 animate-fade-in-up">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6 px-1 sm:px-2">
-                <div className="flex items-center gap-3 sm:gap-5">
-                    <div className="p-3 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/40 transform -rotate-3 hover:rotate-0 transition-transform duration-500 shrink-0">
-                        <Sparkles size={22} className="sm:w-7 sm:h-7" strokeWidth={2.5} />
+            <div className="flex items-center justify-between gap-2 sm:gap-6 px-1 sm:px-2">
+                {/* Desktop/Tablet Header Content */}
+                <div className="hidden sm:flex items-center gap-5">
+                    <div className="p-4 rounded-[2rem] bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/40 transform -rotate-3 hover:rotate-0 transition-transform duration-500 shrink-0">
+                        <Sparkles className="w-7 h-7" strokeWidth={2.5} />
                     </div>
                     <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[9px] sm:text-[10px] font-black uppercase tracking-wider border border-emerald-500/20">Executive Suite</span>
-                            <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase tracking-wider border border-emerald-500/20">Executive Suite</span>
+                            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Real-time Data Sync</span>
                             </div>
                         </div>
-                        <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">ສະຖິຕິການກວດສອບ</h3>
-                        <p className="text-[9px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5 sm:mt-1 hidden sm:block">Advanced Inventory Performance Analytics</p>
+                        <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">ສະຖິຕິການກວດສອບ</h3>
+                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Advanced Inventory Performance Analytics</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                {/* Status Toggle Button (Compact on Mobile, Full on Desktop) */}
+                <div className="flex items-center gap-2 sm:gap-4 shrink-0 w-full sm:w-auto justify-end">
                     {onHideZeroQtyChange && (
                         <button
                             onClick={() => onHideZeroQtyChange(!hideZeroQty)}
-                            className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-4 rounded-[1.25rem] sm:rounded-[1.75rem] border-2 transition-all duration-300 hover:scale-105 active:scale-95 ${hideZeroQty
-                                    ? 'bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400 shadow-xl shadow-rose-500/10'
-                                    : 'bg-white border-slate-100 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm'
+                            className={`flex items-center gap-1.5 sm:gap-3 px-2.5 sm:px-6 py-1.5 sm:py-4 rounded-xl sm:rounded-[1.75rem] border transition-all duration-300 hover:scale-105 active:scale-95 ${hideZeroQty
+                                    ? 'bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400 shadow-md sm:shadow-xl sm:shadow-rose-500/10'
+                                    : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm'
                                 }`}
                         >
-                            <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${hideZeroQty ? 'bg-rose-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                                {hideZeroQty ? <EyeOff size={15} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={15} className="sm:w-[18px] sm:h-[18px]" />}
+                            <div className={`p-1 sm:p-2 rounded-md sm:rounded-xl ${hideZeroQty ? 'bg-rose-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                                {hideZeroQty ? <EyeOff size={12} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={12} className="sm:w-[18px] sm:h-[18px]" />}
                             </div>
                             <div className="text-left">
-                                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-60">Status</p>
-                                <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider whitespace-nowrap">{hideZeroQty ? 'Hiding 0 Qty' : 'Showing 0 Qty'}</p>
+                                <p className="hidden sm:block text-[10px] font-black uppercase tracking-widest opacity-60">Status</p>
+                                <p className="text-[9px] sm:text-xs font-black uppercase tracking-wider whitespace-nowrap">{hideZeroQty ? 'Hiding 0 Qty' : 'Showing 0 Qty'}</p>
                             </div>
                         </button>
                     )}

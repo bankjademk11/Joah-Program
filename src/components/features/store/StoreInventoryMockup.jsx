@@ -372,21 +372,21 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   };
 
   return (
-    <div className="w-full h-full space-y-8 animate-fade-in-up">
+    <div className="w-full h-full space-y-4 sm:space-y-8 animate-fade-in-up">
       {/* Header */}
-      <div className="flex items-center gap-4 bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-sm">
+      <div className="flex items-center gap-2 sm:gap-4 bg-white/50 dark:bg-slate-900/50 p-2 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-sm">
         <button
           onClick={onBack}
-          className="p-3 rounded-2xl bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+          className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2 truncate">
-            <Database className="text-emerald-500" size={20} />
+          <h2 className="text-base sm:text-xl font-black text-slate-800 dark:text-white flex items-center gap-2 truncate">
+            <Database className="text-emerald-500 w-4 h-4 sm:w-5 sm:h-5" />
             ຂໍ້ມູນຊັ້ນວ່າງເຄື່ອງໜ້າຮ້ານ
           </h2>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Store Inventory · {selectedBranch}</p>
+          <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">Store Inventory · {selectedBranch}</p>
         </div>
 
 

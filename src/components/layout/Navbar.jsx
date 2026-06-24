@@ -258,13 +258,13 @@ const Navbar = ({
                             </div>
                         )}
 
-                        {/* Action Buttons Container */}
+                        {/* Action Buttons Container - Hide some children on mobile to save space, but keep the container visible for Dark Mode */}
                         <div className="flex items-center gap-0.5 sm:gap-1 p-1 sm:p-2 bg-slate-50 dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
                             {/* History Button - hidden on upload and for front workers */}
                             {step !== 'upload' && currentUser?.workplace !== 'front' && (
                                 <button
                                     onClick={onShowHistory}
-                                    className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg transition-all duration-300"
+                                    className="hidden sm:flex w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg transition-all duration-300"
                                     title="ປະຫວັດການແກ້ໄຂ (Audit Log)"
                                 >
                                     <History size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" />
@@ -286,10 +286,10 @@ const Navbar = ({
                             {/* Divider */}
                             <div className="w-px h-5 sm:h-8 bg-slate-200 dark:bg-slate-700 mx-0.5 sm:mx-1"></div>
 
-                            {/* Language Toggle */}
+                            {/* Language Toggle - Hidden on mobile to save space */}
                             <button
                                 onClick={toggleLanguage}
-                                className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group"
+                                className="hidden sm:flex w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 items-center justify-center rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group"
                                 title={language === 'lo' ? 'Switch to English' : 'ປ່ຽນເປັນພາສາລາວ'}
                             >
                                 <div className="relative w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 rounded-md sm:rounded-lg overflow-hidden ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-joah-orange group-hover:scale-110 transition-all duration-300">
@@ -315,10 +315,10 @@ const Navbar = ({
                         {step !== 'upload' && (
                             <button
                                 onClick={onReset}
-                                className="h-9 sm:h-12 lg:h-14 px-3 sm:px-5 lg:px-6 flex items-center gap-1.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-xs sm:text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-lg sm:shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300 shrink-0"
+                                className="h-9 sm:h-12 lg:h-14 px-3 sm:px-5 lg:px-6 flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-[10px] sm:text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-lg sm:shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300 shrink-0"
                             >
-                                <Home size={16} className="sm:w-5 sm:h-5" />
-                                <span className="hidden sm:inline">HOME</span>
+                                <Home size={16} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                <span className="inline">HOME</span>
                             </button>
                         )}
 
