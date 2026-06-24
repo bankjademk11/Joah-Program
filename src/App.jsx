@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory, fetchDcFromSupabase, fetchStoreInventoryFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -58,6 +58,7 @@ import {
   SyncOdooIcon,
   StoreRequestIcon
 } from './components/ui/AnimatedIcons';
+import DemoPlan from './components/Sanbox/DemoPlan';
 
 
 import AIChatBotFull from './components/ui/AIChatBotFull';
@@ -1447,6 +1448,24 @@ function AppContent() {
                       </div>
                     </div>
                   )}
+
+                  {/* Sandbox: DemoPlan */}
+                  {showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px] hover:border-purple-500 hover:shadow-purple-500/10 transition-all duration-500 cursor-pointer" onClick={() => setStep('demo-plan')}>
+                      <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400 shadow-inner group-hover:scale-110 transition-transform duration-500 mb-2">
+                        <Box className="w-8 h-8 text-current" />
+                      </div>
+                      <div className="space-y-2 mb-2">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">3D Store Planner</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] group-hover:text-purple-500 transition-colors">Sandbox Demo</p>
+                      </div>
+
+                      <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:from-purple-600 hover:to-fuchsia-600 shadow-purple-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('demo-plan'); }}>
+                        <Play size={18} />
+                        <span>ທົດລອງໃຊ້ງານ</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1502,6 +1521,18 @@ function AppContent() {
 
           {step === 'sales-aggregator' && (
             <SalesAggregator onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'demo-plan' && (
+            <div className="fixed inset-0 z-[9999] bg-white">
+               <button 
+                onClick={() => setStep('upload')}
+                className="absolute top-4 left-4 z-[10000] p-3 bg-white/90 shadow-lg rounded-xl text-slate-700 hover:bg-slate-100 font-bold border border-slate-200"
+               >
+                 ← ກັບຄືນ
+               </button>
+               <DemoPlan />
+            </div>
           )}
 
           {step === 'odoo-sales-viewer' && (

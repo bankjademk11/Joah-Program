@@ -371,12 +371,15 @@ export async function fetchOrderLines(lineIds) {
 // All Joah branch company IDs — passed in context so Odoo unlocks multi-company data
 const ALL_JOAH_COMPANY_IDS = [8, 173, 241, 247, 248, 249, 261, 273]; // 173 = Phonsinuan, 8 = Vangxaiy
 
-export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
+export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true) {
   const domain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
-    ['product_id.product_bu_id', '=', 9126], // 🏷️ Filter Joah brand only
   ];
+
+  if (filterJoahOnly) {
+    domain.push(['product_id.product_bu_id', '=', 9126]); // 🏷️ Filter Joah brand only
+  }
 
   if (dateStart) {
     domain.push(['order_id.date_order', '>=', dateStart]);
@@ -428,12 +431,15 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd) {
  * @param {string} dateEnd - End date (YYYY-MM-DD HH:mm:ss in UTC)
  * @returns {Promise<Object[]>}
  */
-export async function fetchDetailedProductSales(branchId, dateStart, dateEnd) {
+export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true) {
   const domain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
-    ['product_id.product_bu_id', '=', 9126], // 🏷️ Filter Joah brand only
   ];
+
+  if (filterJoahOnly) {
+    domain.push(['product_id.product_bu_id', '=', 9126]); // 🏷️ Filter Joah brand only
+  }
 
   if (dateStart) {
     domain.push(['order_id.date_order', '>=', dateStart]);
@@ -540,6 +546,165 @@ export async function fetchSyncDeltaSales(branchId, lastProcessedId) {
  * @param {number[]} productIds - Array of product IDs
  * @returns {Promise<Object>} Map of product_id -> barcode (EAN13)
  */
+/**
+ * Audit: Fetch order count & total grouped by STATE for a branch.
+ * This reveals cancelled/draft orders that are invisible in normal reports.
+ * @param {number} branchId - The company_id of the branch
+ * @param {string} dateStart - Start date (YYYY-MM-DD HH:mm:ss in UTC)
+ * @param {string} dateEnd - End date (YYYY-MM-DD HH:mm:ss in UTC)
+ * @returns {Promise<Object[]>} array of { state, amount_total, __count }
+ */
+export async function fetchOrderStateAudit(branchId, dateStart, dateEnd) {
+  // NO state filter — we want to see ALL states including cancel, draft
+  const domain = [
+    ['company_id', '=', branchId],
+  ];
+
+  if (dateStart) {
+    domain.push(['date_order', '>=', dateStart]);
+  }
+  if (dateEnd) {
+    domain.push(['date_order', '<=', dateEnd]);
+  }
+
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'pos.order',
+      method: 'read_group',
+      args: [domain, ['amount_total', 'state'], ['state']],
+      kwargs: {
+        context: {
+          allowed_company_ids: ALL_JOAH_COMPANY_IDS
+        }
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    throw new Error(json.error.data?.message || json.error.message || 'Odoo API error');
+  }
+
+  return json.result || [];
+}
+
+/**
+ * Fetch daily sales summary for the last 14 days using read_group
+ */
+export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filterJoahOnly = true) {
+  const domain = [
+    ['company_id', '=', branchId],
+    ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+  ];
+
+  if (filterJoahOnly) {
+    domain.push(['product_id.product_bu_id', '=', 9126]);
+  }
+
+  if (dateStartStr) domain.push(['order_id.date_order', '>=', dateStartStr]);
+  if (dateEndStr) domain.push(['order_id.date_order', '<=', dateEndStr]);
+
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'pos.order.line',
+      method: 'read_group',
+      args: [domain, ['price_subtotal_incl'], ['create_date:day']],
+      kwargs: {
+        context: {
+          allowed_company_ids: ALL_JOAH_COMPANY_IDS,
+          tz: 'Asia/Vientiane' // Extremely important for correct day grouping!
+        }
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const json = await response.json();
+  if (json.error) throw new Error(json.error.data?.message || 'API error');
+
+  return json.result || [];
+}
+
+/**
+ * Audit: Fetch detailed cancelled/draft orders for a branch.
+ * @param {number} branchId - The company_id of the branch
+ * @param {string} dateStart - Start date
+ * @param {string} dateEnd - End date
+ * @returns {Promise<Object[]>}
+ */
+export async function fetchAbnormalOrders(branchId, dateStart, dateEnd) {
+  const domain = [
+    ['company_id', '=', branchId],
+    ['state', 'not in', ['paid', 'done', 'invoiced']],
+  ];
+
+  if (dateStart) {
+    domain.push(['date_order', '>=', dateStart]);
+  }
+  if (dateEnd) {
+    domain.push(['date_order', '<=', dateEnd]);
+  }
+
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'pos.order',
+      method: 'search_read',
+      args: [domain],
+      kwargs: {
+        fields: ['name', 'pos_reference', 'amount_total', 'amount_tax', 'date_order', 'state', 'user_id', 'lines'],
+        order: 'date_order desc',
+        limit: 200,
+        context: {
+          allowed_company_ids: ALL_JOAH_COMPANY_IDS
+        }
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    throw new Error(json.error.data?.message || json.error.message || 'Odoo API error');
+  }
+
+  return json.result || [];
+}
+
 export async function fetchProductBarcodes(productIds) {
   if (!productIds || productIds.length === 0) return {};
 

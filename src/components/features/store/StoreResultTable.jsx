@@ -1498,8 +1498,8 @@ const StoreResultTable = ({
         <>
             <div className="space-y-6 animate-fade-in-up">
                 {/* Action Bar */}
-                <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-[40px] rounded-[3rem] p-6 sm:p-8 flex flex-col xl:flex-row gap-8 items-center border-[1.5px] border-white/80 dark:border-slate-800 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-50">
-                    <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-[40px] rounded-2xl sm:rounded-[3rem] p-3 sm:p-6 xl:p-8 flex flex-col xl:flex-row gap-3 sm:gap-8 items-stretch xl:items-center border-[1.5px] border-white/80 dark:border-slate-800 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-50">
+                    <div className="flex-1 w-full grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
                                 <Search className="text-slate-400 group-focus-within:text-emerald-500 transition-colors drop-shadow-sm" size={20} strokeWidth={2.5} />
@@ -1507,7 +1507,7 @@ const StoreResultTable = ({
                             <input
                                ref={searchInputRef}
                                type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                               className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
+                               className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] text-xs sm:text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
                                    searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
                                        ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
                                        : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
@@ -1559,7 +1559,7 @@ const StoreResultTable = ({
                                 <Filter className="text-slate-400 group-focus-within:text-emerald-500 transition-colors drop-shadow-sm" size={20} strokeWidth={2.5} />
                             </div>
                             <select
-                                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-16 pr-14 py-4 rounded-[2rem] text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all appearance-none cursor-pointer shadow-inner"
+                                className="w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] text-xs sm:text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 border-slate-200/60 dark:border-slate-700/50 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 outline-none transition-all appearance-none cursor-pointer shadow-inner"
                                 value={filterStatus} onChange={(e) => { onFilterChange(e.target.value); setCurrentPage(1); }}
                             >
                                 <option value="all">{t('results.filterAll')}</option>
@@ -1574,12 +1574,12 @@ const StoreResultTable = ({
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-center gap-4 w-full xl:w-auto xl:border-l-2 border-slate-100 dark:border-slate-800 pt-6 xl:pt-0 xl:pl-8">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 w-full xl:w-auto xl:border-l-2 border-slate-100 dark:border-slate-800 pt-2 sm:pt-6 xl:pt-0 xl:pl-8">
                         <div className="relative">
                             <button
                                 onClick={() => setShowExportDropdown(!showExportDropdown)}
                                 disabled={isExporting}
-                                className="bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:via-teal-400 hover:to-teal-400 text-white shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)] transition-all hover:-translate-y-1 py-4 px-8 rounded-[2rem] text-xs flex items-center justify-center gap-3 font-black tracking-widest uppercase active:translate-y-0"
+                                className="bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:via-teal-400 hover:to-teal-400 text-white shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)] transition-all hover:-translate-y-1 py-3 sm:py-4 px-5 sm:px-8 rounded-2xl sm:rounded-[2rem] text-[10px] sm:text-xs flex items-center justify-center gap-2 sm:gap-3 font-black tracking-widest uppercase active:translate-y-0"
                             >
                                 {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
                                 <span>{t('results.exportExcel')}</span>
@@ -1675,7 +1675,7 @@ const StoreResultTable = ({
                             )}
                         </div>
                         {onRefresh && (
-                            <button onClick={handleManualRefresh} disabled={isRefreshing || cooldownRemaining > 0} className={`bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 text-slate-600 dark:text-slate-300 hover:text-emerald-600 py-4 px-8 rounded-[2rem] text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(16,185,129,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-3 uppercase tracking-widest active:translate-y-0 ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <button onClick={handleManualRefresh} disabled={isRefreshing || cooldownRemaining > 0} className={`bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 text-slate-600 dark:text-slate-300 hover:text-emerald-600 py-3 sm:py-4 px-5 sm:px-8 rounded-2xl sm:rounded-[2rem] text-[10px] sm:text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(16,185,129,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-2 sm:gap-3 uppercase tracking-widest active:translate-y-0 ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <RotateCw size={18} strokeWidth={2.5} className={isRefreshing ? 'animate-spin' : ''} />
                                 <span>{isRefreshing ? t('results.loading') : cooldownRemaining > 0 ? `ລໍຖ້າ ${Math.floor(cooldownRemaining / 60)}:${(cooldownRemaining % 60).toString().padStart(2, '0')}` : t('navbar.refresh')}</span>
                             </button>
@@ -1683,9 +1683,9 @@ const StoreResultTable = ({
                     </div>
                 </div>
 
-                {/* Table Area (Reverted to Classic Table for Mockup) */}
+                {/* Table Area (Desktop only — hidden on mobile) */}
                 <div className="glass-card rounded-[2.5rem] border-white/50 shadow-2xl shadow-slate-200/50 dark:shadow-black/20 overflow-hidden mt-6">
-                    <div className="overflow-x-auto custom-scrollbar">
+                    <div className="hidden md:block overflow-x-auto custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[1000px] whitespace-nowrap">
                             <thead>
                                 <tr className="bg-slate-100/80 dark:bg-slate-800/80">
@@ -1969,6 +1969,128 @@ const StoreResultTable = ({
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* ─── Mobile Card List (md:hidden) ─────────────────────── */}
+                    <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {isRefreshing ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <div key={`m-sk-${i}`} className="p-4 space-y-3 animate-pulse">
+                                    <div className="flex justify-between">
+                                        <div className="h-5 w-28 bg-slate-200 dark:bg-slate-700 rounded-lg" />
+                                        <div className="h-5 w-16 bg-slate-200 dark:bg-slate-700 rounded-full" />
+                                    </div>
+                                    <div className="h-4 w-48 bg-slate-100 dark:bg-slate-800 rounded" />
+                                    <div className="flex gap-2">
+                                        <div className="h-4 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                                        <div className="h-4 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                                    </div>
+                                </div>
+                            ))
+                        ) : currentResults.length === 0 ? (
+                            <div className="py-20 flex flex-col items-center gap-4 text-slate-400">
+                                <Package size={36} strokeWidth={1.5} />
+                                <p className="font-black text-slate-800 dark:text-white">ບໍ່ພົບຂໍ້ມູນ</p>
+                                {searchTerm.length >= 5 && (
+                                    <button
+                                        onClick={() => { setQuickAddForm({ barcode_no: searchTerm, item_name: '', rack_location: localStorage.getItem('joah_last_rack_location') || '', category_1_actual: '', category_2_actual: '', qty: 0, remarks: '' }); setShowQuickAdd(true); }}
+                                        className="bg-emerald-500 text-white font-black text-sm px-6 py-3 rounded-2xl flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
+                                    >
+                                        <Plus size={16} /> ເພີ່ມເຂົ້າ Inventory
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            currentResults.map((row) => {
+                                const totalQty = (row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0);
+                                const statusStyle = row.status === 'passed'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40'
+                                    : row.status === 'mismatch'
+                                        ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40'
+                                        : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/40';
+
+                                return (
+                                    <div key={row.rowIndex} className="px-4 py-4 space-y-3 active:bg-slate-50 dark:active:bg-slate-800/40 transition-colors">
+                                        {/* Row 1: Barcode + Status */}
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex flex-col gap-1 min-w-0">
+                                                <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-black font-mono tracking-wider w-fit">
+                                                    {row.barcode}
+                                                </span>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2">
+                                                    {row.itemName || row.masterItemName || <span className="italic opacity-40">Unnamed</span>}
+                                                </span>
+                                            </div>
+                                            <span className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wide ${statusStyle}`}>
+                                                {row.status === 'passed' ? 'OK' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
+                                            </span>
+                                        </div>
+
+                                        {/* Row 2: Location + Category */}
+                                        <div className="flex flex-wrap gap-2">
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                <MapPin size={12} className="text-emerald-500 shrink-0" />
+                                                <span className="text-xs font-black text-slate-700 dark:text-slate-200 font-mono uppercase">{row.rackLocation}</span>
+                                            </div>
+                                            {row.category1 && (
+                                                <div className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30">
+                                                    <span className="text-[10px] font-extrabold uppercase tracking-wider">{row.category1}</span>
+                                                </div>
+                                            )}
+                                            {row.category2 && (
+                                                <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider">{row.category2}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Row 3: QTY breakdown */}
+                                        <div className="grid grid-cols-4 gap-2">
+                                            <div className="flex flex-col items-center py-2 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/20">
+                                                <span className="text-lg font-black text-amber-600 dark:text-amber-400 leading-none">{totalQty}</span>
+                                                <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider mt-0.5">Total</span>
+                                            </div>
+                                            <div className="flex flex-col items-center py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                                                <span className="text-lg font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
+                                                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ໜ້າ</span>
+                                            </div>
+                                            <div className="flex flex-col items-center py-2 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/20">
+                                                <span className={`text-lg font-black leading-none ${(row.warehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.warehouseQty ?? 0}</span>
+                                                <span className="text-[9px] font-black text-sky-400 uppercase tracking-wider mt-0.5">ສາງ</span>
+                                            </div>
+                                            <div className="flex flex-col items-center py-2 rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/20">
+                                                <span className={`text-lg font-black leading-none ${(row.dcQty || 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.dcQty ?? 0}</span>
+                                                <span className="text-[9px] font-black text-violet-400 uppercase tracking-wider mt-0.5">DC</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 4: Action buttons */}
+                                        <div className="flex items-center justify-end gap-2 pt-1">
+                                            <button
+                                                onClick={() => setDiagnosticRow(row)}
+                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition-colors"
+                                            >
+                                                <Info size={14} /> Detail
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedRow(row);
+                                                    setEditQty(row.qty || 0);
+                                                    setEditLocation(row.rackLocation || '');
+                                                    setEditCat1(row.category1 || '');
+                                                    setEditCat2(row.category2 || '');
+                                                    setEditReason('');
+                                                    setMergeAmount('');
+                                                }}
+                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500 active:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/20"
+                                            >
+                                                <Edit2 size={14} /> ແກ້ໄຂ
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
 
                     {/* Pagination */}

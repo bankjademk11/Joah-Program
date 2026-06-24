@@ -106,8 +106,8 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                 </div>
             </div>
 
-            {/* Premium Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6">
+            {/* Premium Stats Grid (Desktop) */}
+            <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {cards.map((card, index) => {
                     const Icon = card.icon;
                     const isActive = activeFilter === card.id;
@@ -131,31 +131,18 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                                 </div>
                             )}
 
-                            <div className="relative p-4 sm:p-8 h-full flex flex-col justify-between">
+                            <div className="relative p-8 h-full flex flex-col justify-between">
                                 {/* Header */}
-                                <div className="flex items-start justify-between mb-4 sm:mb-8">
-                                    <div className={`p-2.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.75rem] transition-all duration-500 ${isActive ? 'bg-white/20 text-white rotate-6' : `${card.iconBg} text-white shadow-xl ${card.glow} group-hover:-rotate-12`}`}>
-                                        <Icon size={18} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
+                                <div className="flex items-start justify-between mb-8">
+                                    <div className={`p-4 rounded-[1.75rem] transition-all duration-500 ${isActive ? 'bg-white/20 text-white rotate-6' : `${card.iconBg} text-white shadow-xl ${card.glow} group-hover:-rotate-12`}`}>
+                                        <Icon size={24} strokeWidth={2.5} />
                                     </div>
-                                    {card.isToggle && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsZeroMode(!isZeroMode);
-                                                if (isActive) onFilterChange(isZeroMode ? 'hasQty' : 'zero');
-                                            }}
-                                            className={`p-3 rounded-2xl border transition-all duration-300 ${isActive ? 'bg-white/10 border-white/20 text-white hover:rotate-180' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'}`}
-                                            title="ສັບປ່ຽນ"
-                                        >
-                                            <RefreshCw size={16} className={isActive ? 'animate-spin-slow' : ''} />
-                                        </button>
-                                    )}
                                 </div>
 
                                 {/* Value & Title */}
                                 <div>
                                     <div className="flex items-baseline gap-3 mb-2">
-                                        <span className={`text-2xl sm:text-5xl font-black tracking-tighter tabular-nums ${isActive ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                                        <span className={`text-5xl font-black tracking-tighter tabular-nums ${isActive ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
                                             {card.value.toLocaleString()}
                                         </span>
                                         {card.id !== 'all' && stats.total > 0 && (
@@ -172,14 +159,14 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                                         <p className={`text-[11px] font-black uppercase tracking-[0.25em] mb-1 leading-none ${isActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
                                             {card.subtitle}
                                         </p>
-                                        <h4 className={`text-xs sm:text-base font-black ${isActive ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                                        <h4 className={`text-base font-black ${isActive ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
                                             {card.title}
                                         </h4>
                                     </div>
                                 </div>
 
                                 {/* Modern Progress Bar */}
-                                <div className="mt-4 sm:mt-8 space-y-2">
+                                <div className="mt-8 space-y-2">
                                     <div className={`h-2.5 w-full rounded-full overflow-hidden ${isActive ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-800 border-inner shadow-inner'}`}>
                                         <div
                                             className={`h-full rounded-full transition-all duration-[1.5s] ease-out-expo ${isActive ? 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.5)]' : `bg-gradient-to-r ${card.gradient}`}`}
@@ -201,6 +188,46 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                                 <div className={`absolute inset-0 border-4 border-white/20 rounded-[2.5rem] pointer-events-none`}></div>
                             )}
                         </div>
+                    );
+                })}
+            </div>
+
+            {/* Compact Horizontal Scroll (Mobile) */}
+            <div className="sm:hidden flex overflow-x-auto hide-scrollbar gap-3 pb-2 -mx-2 px-2 snap-x">
+                {cards.map((card) => {
+                    const Icon = card.icon;
+                    const isActive = activeFilter === card.id;
+
+                    return (
+                        <button
+                            key={card.id}
+                            onClick={() => onFilterChange(card.id)}
+                            className={`flex flex-col justify-between p-3.5 rounded-[1.5rem] min-w-[110px] snap-center transition-all border-2 text-left shrink-0 ${
+                                isActive 
+                                    ? `bg-gradient-to-br ${card.gradient} text-white border-transparent shadow-lg ${card.glow} scale-105` 
+                                    : 'bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-100 dark:border-slate-800'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-3">
+                                <div className={`p-2 rounded-xl ${isActive ? 'bg-white/20' : `${card.iconBg} text-white`}`}>
+                                    <Icon size={14} strokeWidth={3} />
+                                </div>
+                                {card.id !== 'all' && (
+                                    <span className={`text-[9px] font-black ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                                        {percentage(card.value)}%
+                                    </span>
+                                )}
+                            </div>
+                            
+                            <div>
+                                <span className={`block text-2xl font-black tabular-nums leading-none mb-1 ${isActive ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                                    {card.value.toLocaleString()}
+                                </span>
+                                <span className={`block text-[10px] font-black uppercase tracking-wider truncate ${isActive ? 'text-white/80' : 'text-slate-500'}`}>
+                                    {card.title}
+                                </span>
+                            </div>
+                        </button>
                     );
                 })}
             </div>
