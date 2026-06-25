@@ -83,7 +83,7 @@ const Navbar = ({
 
                 // Keep branch filter as a safety boundary
                 if (userBranch) query = query.eq('branch_id', userBranch);
-                
+
                 // IGNORE legacy bills created before 14/5/2026
                 query = query.gte('created_at', '2026-05-14T00:00:00.000Z');
             } else {

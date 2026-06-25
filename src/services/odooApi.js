@@ -605,47 +605,86 @@ export async function fetchOrderStateAudit(branchId, dateStart, dateEnd) {
  * Fetch daily sales summary for the last 14 days using read_group
  */
 export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filterJoahOnly = true) {
-  const domain = [
+  // ── Query 1: Sales lines grouped by day (for revenue) ──────────────────
+  const lineDomain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
   ];
+  if (filterJoahOnly) lineDomain.push(['product_id.product_bu_id', '=', 9126]);
+  if (dateStartStr) lineDomain.push(['order_id.date_order', '>=', dateStartStr]);
+  if (dateEndStr)   lineDomain.push(['order_id.date_order', '<=', dateEndStr]);
 
-  if (filterJoahOnly) {
-    domain.push(['product_id.product_bu_id', '=', 9126]);
-  }
-
-  if (dateStartStr) domain.push(['order_id.date_order', '>=', dateStartStr]);
-  if (dateEndStr) domain.push(['order_id.date_order', '<=', dateEndStr]);
-
-  const payload = {
-    jsonrpc: '2.0',
-    method: 'call',
-    id: Date.now(),
+  const linePayload = {
+    jsonrpc: '2.0', method: 'call', id: Date.now(),
     params: {
       model: 'pos.order.line',
       method: 'read_group',
-      args: [domain, ['price_subtotal_incl'], ['create_date:day']],
-      kwargs: {
-        context: {
-          allowed_company_ids: ALL_JOAH_COMPANY_IDS,
-          tz: 'Asia/Vientiane' // Extremely important for correct day grouping!
-        }
-      },
+      args: [lineDomain, ['price_subtotal_incl', 'product_id'], ['create_date:day']],
+      kwargs: { context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS, tz: 'Asia/Vientiane' } },
     },
   };
 
-  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(payload),
+  // ── Query 2: Orders (bills) grouped by day (for customer/bill count) ────
+  const orderDomain = [
+    ['company_id', '=', branchId],
+    ['state', 'in', ['paid', 'done', 'invoiced']],
+  ];
+  if (dateStartStr) orderDomain.push(['date_order', '>=', dateStartStr]);
+  if (dateEndStr)   orderDomain.push(['date_order', '<=', dateEndStr]);
+
+  const orderPayload = {
+    jsonrpc: '2.0', method: 'call', id: Date.now() + 1,
+    params: {
+      model: 'pos.order',
+      method: 'read_group',
+      args: [orderDomain, ['amount_total'], ['date_order:day']],
+      kwargs: { context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS, tz: 'Asia/Vientiane' } },
+    },
+  };
+
+  // ── Fire both in parallel ───────────────────────────────────────────────
+  const [lineRes, orderRes] = await Promise.all([
+    fetch(`${BASE}/web/dataset/call_kw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(linePayload),
+    }),
+    fetch(`${BASE}/web/dataset/call_kw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(orderPayload),
+    }),
+  ]);
+
+  if (!lineRes.ok)  throw new Error(`HTTP ${lineRes.status}`);
+  if (!orderRes.ok) throw new Error(`HTTP ${orderRes.status}`);
+
+  const lineJson  = await lineRes.json();
+  const orderJson = await orderRes.json();
+
+  if (lineJson.error)  throw new Error(lineJson.error.data?.message || 'API error');
+  if (orderJson.error) throw new Error(orderJson.error.data?.message || 'API error');
+
+  const salesRows  = lineJson.result  || [];
+  const orderRows  = orderJson.result || [];
+
+  // ── Build a map: "DD Mon YYYY" -> bill count ────────────────────────────
+  // Odoo returns the count as "date_order_count" (field name + "_count")
+  const orderCountMap = {};
+  orderRows.forEach(row => {
+    const dayKey = row['date_order:day'];
+    orderCountMap[dayKey] = (orderCountMap[dayKey] || 0) + (row['date_order_count'] || 0);
   });
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const json = await response.json();
-  if (json.error) throw new Error(json.error.data?.message || 'API error');
-
-  return json.result || [];
+  // ── Merge order_count + sku_count into each sales row ─────────────────────
+  // Odoo returns 'create_date_count' = total line items sold per day (= SKU lines)
+  return salesRows.map(row => ({
+    ...row,
+    order_count: orderCountMap[row['create_date:day']] || 0,
+    sku_count: row['create_date_count'] || 0,
+  }));
 }
 
 /**
