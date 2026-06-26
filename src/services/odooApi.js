@@ -605,7 +605,25 @@ export async function fetchOrderStateAudit(branchId, dateStart, dateEnd) {
  * Fetch daily sales summary for the last 14 days using read_group
  */
 export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filterJoahOnly = true) {
-  // ── Query 1: Sales lines grouped by day (for revenue) ──────────────────
+  // ── Query 1: Orders (bills) to get their true date_order ─────────────────
+  const orderDomain = [
+    ['company_id', '=', branchId],
+    ['state', 'in', ['paid', 'done', 'invoiced']],
+  ];
+  if (dateStartStr) orderDomain.push(['date_order', '>=', dateStartStr]);
+  if (dateEndStr)   orderDomain.push(['date_order', '<=', dateEndStr]);
+
+  const orderPayload = {
+    jsonrpc: '2.0', method: 'call', id: Date.now(),
+    params: {
+      model: 'pos.order',
+      method: 'search_read',
+      args: [orderDomain],
+      kwargs: { fields: ['id', 'date_order', 'amount_total'], limit: 100000 },
+    },
+  };
+
+  // ── Query 2: Sales lines (for revenue) ───────────────────────────────────
   const lineDomain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
@@ -615,75 +633,86 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
   if (dateEndStr)   lineDomain.push(['order_id.date_order', '<=', dateEndStr]);
 
   const linePayload = {
-    jsonrpc: '2.0', method: 'call', id: Date.now(),
-    params: {
-      model: 'pos.order.line',
-      method: 'read_group',
-      args: [lineDomain, ['price_subtotal_incl', 'product_id'], ['create_date:day']],
-      kwargs: { context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS, tz: 'Asia/Vientiane' } },
-    },
-  };
-
-  // ── Query 2: Orders (bills) grouped by day (for customer/bill count) ────
-  const orderDomain = [
-    ['company_id', '=', branchId],
-    ['state', 'in', ['paid', 'done', 'invoiced']],
-  ];
-  if (dateStartStr) orderDomain.push(['date_order', '>=', dateStartStr]);
-  if (dateEndStr)   orderDomain.push(['date_order', '<=', dateEndStr]);
-
-  const orderPayload = {
     jsonrpc: '2.0', method: 'call', id: Date.now() + 1,
     params: {
-      model: 'pos.order',
-      method: 'read_group',
-      args: [orderDomain, ['amount_total'], ['date_order:day']],
-      kwargs: { context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS, tz: 'Asia/Vientiane' } },
+      model: 'pos.order.line',
+      method: 'search_read',
+      args: [lineDomain],
+      kwargs: { fields: ['id', 'price_subtotal_incl', 'order_id'], limit: 100000 },
     },
   };
 
   // ── Fire both in parallel ───────────────────────────────────────────────
-  const [lineRes, orderRes] = await Promise.all([
-    fetch(`${BASE}/web/dataset/call_kw`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(linePayload),
-    }),
+  const [orderRes, lineRes] = await Promise.all([
     fetch(`${BASE}/web/dataset/call_kw`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(orderPayload),
     }),
+    fetch(`${BASE}/web/dataset/call_kw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(linePayload),
+    })
   ]);
 
-  if (!lineRes.ok)  throw new Error(`HTTP ${lineRes.status}`);
   if (!orderRes.ok) throw new Error(`HTTP ${orderRes.status}`);
+  if (!lineRes.ok)  throw new Error(`HTTP ${lineRes.status}`);
 
-  const lineJson  = await lineRes.json();
   const orderJson = await orderRes.json();
+  const lineJson  = await lineRes.json();
 
-  if (lineJson.error)  throw new Error(lineJson.error.data?.message || 'API error');
   if (orderJson.error) throw new Error(orderJson.error.data?.message || 'API error');
+  if (lineJson.error)  throw new Error(lineJson.error.data?.message || 'API error');
 
-  const salesRows  = lineJson.result  || [];
-  const orderRows  = orderJson.result || [];
+  const orders = orderJson.result || [];
+  const lines  = lineJson.result  || [];
 
-  // ── Build a map: "DD Mon YYYY" -> bill count ────────────────────────────
-  // Odoo returns the count as "date_order_count" (field name + "_count")
-  const orderCountMap = {};
-  orderRows.forEach(row => {
-    const dayKey = row['date_order:day'];
-    orderCountMap[dayKey] = (orderCountMap[dayKey] || 0) + (row['date_order_count'] || 0);
+  // ── Manual Grouping in JS ────────────────────────────────────────────────
+  // Convert UTC date_order to local Asia/Vientiane day string (e.g., "15 Jun 2026")
+  const getLocalDayStr = (utcStr) => {
+    if (!utcStr) return 'Unknown';
+    // Odoo UTC string: "2026-06-14 17:05:00" -> parsing as UTC
+    const d = new Date(utcStr.replace(' ', 'T') + 'Z'); 
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const orderMap = {}; // order_id -> dayStr
+  const dailyStats = {}; // dayStr -> { price_subtotal_incl, order_count, sku_count, _seen_orders: Set }
+
+  orders.forEach(o => {
+    const dayStr = getLocalDayStr(o.date_order);
+    orderMap[o.id] = dayStr;
+    
+    if (!dailyStats[dayStr]) {
+      dailyStats[dayStr] = { price_subtotal_incl: 0, order_count: 0, sku_count: 0, _seen_orders: new Set() };
+    }
+    dailyStats[dayStr].order_count += 1;
   });
 
-  // ── Merge order_count + sku_count into each sales row ─────────────────────
-  // Odoo returns 'create_date_count' = total line items sold per day (= SKU lines)
-  return salesRows.map(row => ({
-    ...row,
-    order_count: orderCountMap[row['create_date:day']] || 0,
-    sku_count: row['create_date_count'] || 0,
+  lines.forEach(l => {
+    const oId = l.order_id && l.order_id[0];
+    if (!oId) return;
+    
+    const dayStr = orderMap[oId];
+    if (!dayStr) return; // Line's order is outside our range (shouldn't happen but safe)
+
+    if (!dailyStats[dayStr]) {
+      dailyStats[dayStr] = { price_subtotal_incl: 0, order_count: 0, sku_count: 0, _seen_orders: new Set() };
+    }
+
+    dailyStats[dayStr].price_subtotal_incl += (l.price_subtotal_incl || 0);
+    dailyStats[dayStr].sku_count += 1;
+  });
+
+  // Convert map to array format expected by the frontend
+  return Object.entries(dailyStats).map(([dayStr, stats]) => ({
+    'create_date:day': dayStr, // Keep key name so OdooSalesViewer doesn't break
+    price_subtotal_incl: stats.price_subtotal_incl,
+    order_count: stats.order_count,
+    sku_count: stats.sku_count,
   }));
 }
 
