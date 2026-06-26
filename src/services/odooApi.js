@@ -459,7 +459,7 @@ export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, fi
       kwargs: {
         fields: ['product_id', 'qty', 'price_subtotal_incl', 'create_date', 'order_id'],
         order: 'create_date desc',
-        limit: 1000, // Limit to prevent massive payload
+        limit: 100000, // Limit removed/increased to prevent truncation on high volume days
         // 🔑 THE KEY FIX: Tell Odoo to unlock all Joah branch companies
         context: {
           allowed_company_ids: ALL_JOAH_COMPANY_IDS
@@ -689,7 +689,10 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
     if (!dailyStats[dayStr]) {
       dailyStats[dayStr] = { price_subtotal_incl: 0, order_count: 0, sku_count: 0, _seen_orders: new Set() };
     }
-    dailyStats[dayStr].order_count += 1;
+    // If NOT filtering Joah, count all orders here
+    if (!filterJoahOnly) {
+      dailyStats[dayStr].order_count += 1;
+    }
   });
 
   lines.forEach(l => {
@@ -705,6 +708,14 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
 
     dailyStats[dayStr].price_subtotal_incl += (l.price_subtotal_incl || 0);
     dailyStats[dayStr].sku_count += 1;
+
+    // If filtering Joah, count unique orders that contain Joah lines
+    if (filterJoahOnly) {
+      if (!dailyStats[dayStr]._seen_orders.has(oId)) {
+        dailyStats[dayStr]._seen_orders.add(oId);
+        dailyStats[dayStr].order_count += 1;
+      }
+    }
   });
 
   // Convert map to array format expected by the frontend

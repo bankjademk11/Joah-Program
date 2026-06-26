@@ -24,17 +24,16 @@ export default function DayDetailViewer({ dateObj, branchId, branchName, dayData
     const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
 
-    // Build UTC date range for this day (Asia/Vientiane = UTC+7)
     const { startUTC, endUTC, dayLabel, formattedDate } = useCallback(() => {
         const d = new Date(dateObj);
         // midnight Vientiane = 17:00 prev day UTC
         const start = new Date(d);
         start.setHours(0, 0, 0, 0);
-        const startUTC = new Date(start.getTime() - 7 * 60 * 60 * 1000);
+        const startUTC = new Date(start.getTime());
 
         const end = new Date(d);
         end.setHours(23, 59, 59, 999);
-        const endUTC = new Date(end.getTime() - 7 * 60 * 60 * 1000);
+        const endUTC = new Date(end.getTime());
 
         const fmt = (dt) => dt.toISOString().replace('T', ' ').slice(0, 19);
         const dayLabel = d.toLocaleDateString('en-GB', { weekday: 'long' });
