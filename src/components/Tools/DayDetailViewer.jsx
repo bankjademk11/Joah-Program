@@ -52,14 +52,14 @@ export default function DayDetailViewer({ dateObj, branchId, branchName, dayData
                 import.meta.env.VITE_ODOO_PASSWORD
             );
             const data = await fetchDetailedProductSales(branchId, startUTC, endUTC, joahOnly);
-            
+
             // Extract unique product IDs to fetch their true 13-digit barcodes
             const uniqueProductIds = [...new Set(data.map(i => i.product_id?.[0]).filter(Boolean))];
             let barcodeMap = {};
             if (uniqueProductIds.length > 0) {
                 barcodeMap = await fetchProductBarcodes(uniqueProductIds);
             }
-            
+
             setTrueBarcodes(barcodeMap);
             setItems(data);
         } catch (e) {
@@ -81,7 +81,7 @@ export default function DayDetailViewer({ dateObj, branchId, branchName, dayData
         const { name } = splitProduct(i.product_id?.[1] || '');
         const pId = i.product_id?.[0];
         const barcode = trueBarcodes[pId] || splitProduct(i.product_id?.[1] || '').barcode;
-        
+
         const q = search.toLowerCase();
         return !q || barcode.toLowerCase().includes(q) || name.toLowerCase().includes(q);
     });
@@ -108,7 +108,7 @@ export default function DayDetailViewer({ dateObj, branchId, branchName, dayData
 
     return createPortal(
         <div className="fixed inset-0 z-[200] overflow-hidden bg-slate-900 text-slate-200 font-sans animate-fade-in-up flex flex-col">
-            
+
             {/* Background pattern (subtle grid) */}
             <div className="absolute inset-0 pointer-events-none opacity-5" style={{
                 backgroundImage: 'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',

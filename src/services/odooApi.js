@@ -671,12 +671,17 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
   const lines  = lineJson.result  || [];
 
   // ── Manual Grouping in JS ────────────────────────────────────────────────
-  // Convert UTC date_order to local Asia/Vientiane day string (e.g., "15 Jun 2026")
+  // Convert UTC date_order to Asia/Vientiane day string (e.g., "15 Jun 2026")
+  // Always pin to Asia/Vientiane regardless of user's computer timezone.
   const getLocalDayStr = (utcStr) => {
     if (!utcStr) return 'Unknown';
-    // Odoo UTC string: "2026-06-14 17:05:00" -> parsing as UTC
-    const d = new Date(utcStr.replace(' ', 'T') + 'Z'); 
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Vientiane',
+    });
   };
 
   const orderMap = {}; // order_id -> dayStr

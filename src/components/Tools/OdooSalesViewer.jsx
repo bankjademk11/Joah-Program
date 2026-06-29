@@ -448,7 +448,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                     const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                                     const enDayName = enDayNames[d.getDay()];
 
-                                                    const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
+                                                    const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'Asia/Vientiane' })} ${d.getFullYear()}`;
                                                     const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
 
                                                     const totalAmount = dayData?.price_subtotal_incl || 0;

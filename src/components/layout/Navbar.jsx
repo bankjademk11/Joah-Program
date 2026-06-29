@@ -1,4 +1,4 @@
-import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut } from 'lucide-react';
+import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut, LayoutGrid } from 'lucide-react';
 import joahLogo from '../../assets/Joah.jpeg';
 import laosFlag from '../../assets/Laos.png';
 import englishFlag from '../../assets/EnglishFlang.png';
@@ -22,7 +22,8 @@ const Navbar = ({
     currentUser,
     onOpenRequests,
     onOpenStoreInbox,
-    onLogout
+    onLogout,
+    onOpenAppLauncher
 }) => {
     const [pendingCount, setPendingCount] = useState(0);
     const prevPendingCountRef = useRef(0);
@@ -311,16 +312,29 @@ const Navbar = ({
                             </button>
                         </div>
 
-                        {/* Reset/Home Button */}
-                        {step !== 'upload' && (
-                            <button
-                                onClick={onReset}
-                                className="h-9 sm:h-12 lg:h-14 px-3 sm:px-5 lg:px-6 flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-[10px] sm:text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-lg sm:shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300 shrink-0"
-                            >
-                                <Home size={16} className="w-4 h-4 sm:w-5 sm:h-5" />
-                                <span className="inline">HOME</span>
-                            </button>
-                        )}
+                        {/* App Launcher Button (Only for HQ) */}
+                        <div className="flex items-center gap-2">
+                            {currentUser?.role === 'HQ' && (
+                                <button
+                                    onClick={onOpenAppLauncher}
+                                    className="h-9 w-9 sm:h-12 sm:w-12 lg:h-14 lg:w-14 flex items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-joah-orange hover:text-white hover:border-joah-orange dark:hover:bg-joah-orange shadow-sm hover:shadow-lg hover:shadow-orange-500/30 hover:scale-105 transition-all duration-300 shrink-0 group"
+                                    title="ລວມແອັບ (App Launcher)"
+                                >
+                                    <LayoutGrid size={20} className="sm:w-6 sm:h-6 group-hover:animate-pulse" />
+                                </button>
+                            )}
+
+                            {/* Reset/Home Button */}
+                            {step !== 'upload' && (
+                                <button
+                                    onClick={onReset}
+                                    className="h-9 sm:h-12 lg:h-14 px-3 sm:px-5 lg:px-6 flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold text-[10px] sm:text-sm uppercase tracking-widest hover:from-rose-600 hover:to-rose-700 shadow-lg sm:shadow-xl shadow-rose-500/30 hover:shadow-rose-500/50 hover:scale-105 transition-all duration-300 shrink-0"
+                                >
+                                    <Home size={16} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    <span className="inline">HOME</span>
+                                </button>
+                            )}
+                        </div>
 
                         {/* Logout Button */}
                         {currentUser && (

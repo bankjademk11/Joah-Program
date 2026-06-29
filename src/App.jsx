@@ -41,6 +41,7 @@ import MasterAudit from './components/features/admin/MasterAudit';
 import ProductManager from './components/features/admin/ProductManager';
 import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
+import AppLauncher from './components/layout/AppLauncher';
 import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
@@ -98,6 +99,7 @@ function AppContent() {
   const [showHistory, setShowHistory] = useState(false);
   const [showStoreRequestManager, setShowStoreRequestManager] = useState(false);
   const [showStoreInbox, setShowStoreInbox] = useState(false);
+  const [showAppLauncher, setShowAppLauncher] = useState(false);
   const [preFilledBarcode, setPreFilledBarcode] = useState(null);
   // Inbox → QuickAdd flow (for new products received from store_requests)
   const [inboxQuickAddData, setInboxQuickAddData] = useState(null); // { barcode_no, item_name, qty, _inboxItemId, _inboxBatchId }
@@ -196,6 +198,7 @@ function AppContent() {
     setShowHistory(false);
     setShowStoreRequestManager(false);
     setShowStoreInbox(false);
+    setShowAppLauncher(false);
     setPreFilledBarcode(null);
     setShowAdminMenu(false); // <--- Bug Fix: Close admin menu
     setLocationFilter('');
@@ -871,6 +874,12 @@ function AppContent() {
           onOpenRequests={() => setShowStoreRequestManager(true)}
           onOpenStoreInbox={() => setShowStoreInbox(true)}
           onLogout={handleLogout}
+          onOpenAppLauncher={() => setShowAppLauncher(true)}
+        />
+        <AppLauncher 
+          isOpen={showAppLauncher} 
+          onClose={() => setShowAppLauncher(false)} 
+          onNavigate={(newStep) => setStep(newStep)} 
         />
 
         {/* Main Content */}
