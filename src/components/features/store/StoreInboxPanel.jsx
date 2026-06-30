@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle, Package, ChevronDown, ChevronUp, RotateCw, Mail, Clock, MapPin, ArrowRight, ScanLine, Bell, Sparkles, Inbox } from 'lucide-react';
+import { X, CheckCircle, Package, ChevronDown, ChevronUp, RotateCw, Mail, Clock, MapPin, ArrowRight, ScanLine, Bell, Sparkles, Inbox, Search } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 import { useToast } from '../../ui/ToastProvider';
@@ -185,6 +185,7 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
   const [expandedBatch, setExpandedBatch] = useState(null);
   const [locationModal, setLocationModal] = useState(null);
   const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
+  const [searchBarcode, setSearchBarcode] = useState('');
   // ⏱️ Persist batch timings across panel open/close via localStorage
   const STORAGE_KEY = 'store_inbox_batch_timings';
   const [batchTimings, setBatchTimings] = useState(() => {
@@ -495,6 +496,28 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
 
           </div>
 
+          {/* ── Barcode Search Bar ─────────────────────────── */}
+          <div className="shrink-0 px-4 sm:px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+            <div className="relative">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="ຄົ້ນຫາ Barcode ໃນບິນ..."
+                value={searchBarcode}
+                onChange={(e) => setSearchBarcode(e.target.value)}
+                className="w-full h-10 pl-9 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white placeholder-slate-400 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400 transition-all"
+              />
+              {searchBarcode && (
+                <button
+                  onClick={() => setSearchBarcode('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* ── Content ─────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 bg-slate-50 dark:bg-slate-950/20">
             {isLoading && batches.length === 0 ? (
@@ -527,9 +550,19 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
             ) : (
               <div className="space-y-4 animate-fade-in-up">
                 {batches.map(batch => {
-                  const isExpanded = expandedBatch === batch.batch_id;
-                  const pendingCount = batch.items.length;
-                  const totalQty = batch.items.reduce((sum, item) => sum + (item.qty || 0), 0);
+                  // Filter items by barcode search
+                  const filteredItems = searchBarcode.trim()
+                    ? batch.items.filter(item =>
+                        String(item.barcode || '').toLowerCase().includes(searchBarcode.trim().toLowerCase()) ||
+                        String(item.product_name || '').toLowerCase().includes(searchBarcode.trim().toLowerCase())
+                      )
+                    : batch.items;
+
+                  if (filteredItems.length === 0) return null; // Hide batch if no matching items
+
+                  const isExpanded = expandedBatch === batch.batch_id || searchBarcode.trim() !== '';
+                  const pendingCount = filteredItems.length;
+                  const totalQty = filteredItems.reduce((sum, item) => sum + (item.qty || 0), 0);
 
                   return (
                     <div
@@ -590,7 +623,7 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                       {/* Expanded: Per-SKU rows */}
                       {isExpanded && (
                         <div className="bg-slate-50/50 dark:bg-slate-900/50 p-2 sm:p-3 space-y-2">
-                          {batch.items.map(item => {
+                          {filteredItems.map(item => {
                             const isThisConfirming = confirmingItem === item.id;
                             return (
                               <div
@@ -631,10 +664,10 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                       )}
 
                       {/* Collapsed single-item quick-confirm */}
-                      {!isExpanded && batch.items.length === 1 && (
+                      {!isExpanded && !searchBarcode.trim() && filteredItems.length === 1 && (
                         <div className="px-4 pb-4">
                           <button
-                            onClick={() => handleReceiveItem(batch.items[0], batch.batch_id)}
+                            onClick={() => handleReceiveItem(filteredItems[0], batch.batch_id)}
                             disabled={!!confirmingItem}
                             className="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:shadow-emerald-500/30 disabled:opacity-50 text-white font-black rounded-2xl text-xs shadow-xl transition-all active:scale-[0.97] flex items-center justify-center gap-2"
                           >

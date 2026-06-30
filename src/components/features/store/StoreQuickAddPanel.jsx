@@ -313,7 +313,7 @@ const QuickAddPanel = ({
 
                 {/* Compact Modal (Matched EditPanel Style) */}
                 <div
-                    className="w-full h-full sm:h-auto sm:max-w-[520px] bg-white dark:bg-slate-900 rounded-none sm:rounded-xl shadow-none sm:shadow-md flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800"
+                    className="w-full h-full sm:h-auto max-h-full sm:max-h-[90vh] sm:max-w-[520px] bg-white dark:bg-slate-900 rounded-none sm:rounded-xl shadow-none sm:shadow-md flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800"
                 >
                     {/* Minimal Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
