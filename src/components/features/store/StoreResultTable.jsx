@@ -669,7 +669,25 @@ const StoreResultTable = ({
     };
 
     const handleSplitMasterQty = async (splitAmount, newRackLocation, splitReason) => {
-        if (!selectedRow || !splitAmount || !newRackLocation) return;
+        // Validate early with proper error messages instead of silent return
+        if (!selectedRow) return;
+        if (!splitAmount || Number(splitAmount) <= 0) {
+            showError('ກະລຸນາໃສ່ຈຳນວນທີ່ຕ້ອງການແບ່ງ (ຫຼາຍກວ່າ 0)');
+            return;
+        }
+        if (!newRackLocation) {
+            showError('ກະລຸນາເລືອກ Rack ປາຍທາງທີ່ຕ້ອງການແບ່ງໄປ');
+            return;
+        }
+        if (newRackLocation === selectedRow?.rackLocation) {
+            showError('ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້ — ກະລຸນາເລືອກ Rack ໃໝ່');
+            return;
+        }
+        if (!splitReason || !splitReason.trim()) {
+            showError('ກະລຸນາລະບຸເຫດຜົນ (Reason required)');
+            return;
+        }
+
         const activeUser = currentUser 
             ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
             : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
@@ -686,14 +704,8 @@ const StoreResultTable = ({
             const splitQtyNum = Number(splitAmount);
             const oldQtyNum = Number(selectedRow.qty || 0);
 
-            if (splitQtyNum <= 0 || splitQtyNum > oldQtyNum) {
-                throw new Error("ຈຳນວນແບ່ງຕ້ອງຫຼາຍກວ່າ 0 ແລະ ບໍ່ເກີນຈຳນວນທີ່ມີຢູ່. (Invalid split amount)");
-            }
-            if (!splitReason.trim()) {
-                throw new Error("ກະລຸນາລະບຸເຫດຜົນ (Reason required)");
-            }
-            if (newRackLocation === selectedRow.rackLocation) {
-                throw new Error("ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້ (Must select different Rack)");
+            if (splitQtyNum > oldQtyNum) {
+                throw new Error(`ຈຳນວນແບ່ງ (${splitQtyNum}) ຫຼາຍກວ່າສິນຄ້າທີ່ມີຢູ່ (${oldQtyNum}) — ບໍ່ສາມາດແບ່ງໄດ້`);
             }
 
             const remainingQty = oldQtyNum - splitQtyNum;

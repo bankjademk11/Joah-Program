@@ -177,6 +177,73 @@ const LocationConfirmModal = ({ item, existingRecord, onConfirm, onCancel, isLoa
   );
 };
 
+// ─── Location Select Modal (For Multiple Locations) ─────────────────────────────────
+const LocationSelectModal = ({ item, existingRecords, onSelect, onCancel }) => {
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2rem] sm:rounded-3xl shadow-2xl border border-white/20 dark:border-slate-800 overflow-hidden ring-1 ring-black/5">
+        <div className="px-5 sm:px-6 py-5 sm:py-6 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10 rotate-12">
+            <Package size={80} />
+          </div>
+          <div className="flex items-center gap-3 sm:gap-4 relative z-10">
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-white/20 backdrop-blur-md shrink-0 shadow-inner">
+              <MapPin size={20} className="sm:w-6 sm:h-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-black text-base sm:text-lg leading-tight tracking-tight">ພົບຫຼາຍໂລເຄຊັ້ນ!</p>
+              <p className="text-blue-100 text-[11px] sm:text-xs mt-1 font-medium opacity-90">ເລືອກຈຸດທີ່ຕ້ອງການວາງສິນຄ້າ</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 sm:px-6 sm:py-5 space-y-4">
+          <div className="flex items-center justify-between p-3 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="min-w-0 flex-1 pr-3">
+              <p className="text-sm sm:text-base font-black text-slate-800 dark:text-white font-mono truncate" title={item.barcode}>{item.barcode}</p>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 font-bold line-clamp-1" title={item.product_name}>{item.product_name}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">ຈຳນວນຮັບ</p>
+              <p className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 leading-none mt-1">+{item.qty}</p>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+            {existingRecords.map((rec) => (
+              <button
+                key={rec.id}
+                onClick={() => onSelect(rec)}
+                className="w-full flex items-center justify-between p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left active:scale-[0.98]"
+              >
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ໂລເຄຊັ້ນ</p>
+                  <p className="text-lg sm:text-xl font-black text-slate-800 dark:text-white font-mono">{rec.shelf_location || 'ບໍ່ລະບຸ'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ມີຢູ່ແລ້ວ</p>
+                  <p className="text-sm font-black text-slate-600 dark:text-slate-300">{rec.store_qty || 0}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+          <button
+            onClick={onCancel}
+            className="w-full py-3.5 rounded-2xl border-2 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-black text-xs sm:text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.95] flex items-center justify-center gap-2"
+          >
+            <X size={16} />
+            ຍົກເລີກ
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 // ─── Main StoreInboxPanel ─────────────────────────────────────────────────────────────
 const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd }) => {
   const [batches, setBatches] = useState([]);
@@ -184,6 +251,7 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
   const [confirmingItem, setConfirmingItem] = useState(null);
   const [expandedBatch, setExpandedBatch] = useState(null);
   const [locationModal, setLocationModal] = useState(null);
+  const [locationSelectModal, setLocationSelectModal] = useState(null);
   const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
   const [searchBarcode, setSearchBarcode] = useState('');
   // ⏱️ Persist batch timings across panel open/close via localStorage
@@ -315,13 +383,14 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
 
       if (userBranch) query = query.eq('branch_id', userBranch);
 
-      const { data: existingItems, error: lookupError } = await query.limit(1);
+      const { data: existingItems, error: lookupError } = await query;
       if (lookupError) throw lookupError;
 
-      const existing = existingItems?.[0] || null;
-
-      if (existing) {
-        setLocationModal({ item, batchId, existingRecord: existing, startTime: Date.now() });
+      if (existingItems && existingItems.length === 1) {
+        setLocationModal({ item, batchId, existingRecord: existingItems[0], startTime: Date.now() });
+        setConfirmingItem(null);
+      } else if (existingItems && existingItems.length > 1) {
+        setLocationSelectModal({ item, batchId, existingRecords: existingItems, startTime: Date.now() });
         setConfirmingItem(null);
       } else {
         setConfirmingItem(null);
@@ -706,6 +775,23 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
           onConfirm={handleLocationConfirm}
           onCancel={() => setLocationModal(null)}
           isLoading={isConfirmingLocation}
+        />
+      )}
+      {/* Location Select Modal (Multiple Locations) */}
+      {locationSelectModal && (
+        <LocationSelectModal
+          item={locationSelectModal.item}
+          existingRecords={locationSelectModal.existingRecords}
+          onSelect={(selectedRecord) => {
+            setLocationSelectModal(null);
+            setLocationModal({
+              item: locationSelectModal.item,
+              batchId: locationSelectModal.batchId,
+              existingRecord: selectedRecord,
+              startTime: locationSelectModal.startTime
+            });
+          }}
+          onCancel={() => setLocationSelectModal(null)}
         />
       )}
     </>,

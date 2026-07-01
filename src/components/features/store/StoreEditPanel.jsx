@@ -173,11 +173,11 @@ const EditPanel = ({
             />
 
             {/* Container for Side-by-Side Layout */}
-            <div className="relative z-10 flex items-start gap-4 w-full h-full sm:w-auto sm:h-auto sm:max-h-[90vh]">
+            <div className="relative z-10 flex items-start sm:items-center gap-4 w-full h-full sm:w-auto sm:h-auto sm:max-h-[90vh]">
 
                 {/* Compact Modal (Matched EditPanel Style) */}
                 <div
-                    className="w-full h-full sm:h-auto sm:max-w-[520px] bg-white dark:bg-slate-900 rounded-none sm:rounded-xl shadow-none sm:shadow-md flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800"
+                    className="w-full h-full sm:h-auto sm:max-w-[520px] sm:max-h-[90vh] bg-white dark:bg-slate-900 rounded-none sm:rounded-xl shadow-none sm:shadow-md flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800"
                 >
                     {/* Minimal Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
@@ -239,16 +239,14 @@ const EditPanel = ({
                                     ແກ້ໄຂ
                                 </button>
                                 <button
-                                    disabled
-                                    title="ຍັງไม่เปิดใช้งานในขณะนี้"
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors opacity-40 cursor-not-allowed text-slate-400`}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${isSplitMode && !isCloneMode ? 'bg-white dark:bg-slate-700 text-rose-500 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                    onClick={() => { setIsSplitMode(true); setIsCloneMode(false); setMergeAmount(''); setEditLocation(''); }}
                                 >
                                     ແບ່ງໄປ
                                 </button>
                                 <button
-                                    disabled
-                                    title="ຍังไม่เปิดใช้งานในขณะนี้"
-                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors opacity-40 cursor-not-allowed text-slate-400`}
+                                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${!isSplitMode && isCloneMode ? 'bg-white dark:bg-slate-700 text-emerald-500 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                    onClick={() => { setIsSplitMode(false); setIsCloneMode(true); setMergeAmount(''); }}
                                 >
                                     ໂຄນສິນຄ້າ
                                 </button>
@@ -286,8 +284,8 @@ const EditPanel = ({
                                             type="number"
                                             placeholder="0"
                                             className={`w-full p-3 bg-white dark:bg-slate-950 border-2 rounded-xl text-3xl font-bold text-center outline-none transition-all placeholder:text-slate-300 number-input-no-arrows ${isSplitMode
-                                                    ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
-                                                    : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
+                                                ? 'border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                                : 'border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
                                                 }`}
                                             value={mergeAmount}
                                             onChange={(e) => {
@@ -508,11 +506,10 @@ const EditPanel = ({
                                     <button
                                         type="button"
                                         onClick={() => setEditTag && setEditTag((editTag || selectedRow.productTag) === 'hook' ? '' : 'hook')}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${
-                                            (editTag || selectedRow.productTag) === 'hook'
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${(editTag || selectedRow.productTag) === 'hook'
                                                 ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300'
                                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:border-violet-300 hover:bg-violet-50/50'
-                                        }`}
+                                            }`}
                                     >
                                         <span>🪝</span>
                                         <div className="text-left">
@@ -524,11 +521,10 @@ const EditPanel = ({
                                     <button
                                         type="button"
                                         onClick={() => setEditTag && setEditTag((editTag || selectedRow.productTag) === 'shelf' ? '' : 'shelf')}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${
-                                            (editTag || selectedRow.productTag) === 'shelf'
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-sm transition-all ${(editTag || selectedRow.productTag) === 'shelf'
                                                 ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300'
                                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:border-sky-300 hover:bg-sky-50/50'
-                                        }`}
+                                            }`}
                                     >
                                         <span>📦</span>
                                         <div className="text-left">
@@ -635,11 +631,19 @@ const EditPanel = ({
                         </button>
                         <button
                             onClick={() => handleSave()}
-                            disabled={isUpdating || !isDcTransferValid || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)}
-                            title={isCloneMode && editLocation === selectedRow?.rackLocation ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' : ''}
+                            disabled={isUpdating || !isDcTransferValid
+                                || (isCloneMode && editLocation && editLocation === selectedRow?.rackLocation)
+                                || (isSplitMode && (!editLocation || !mergeAmount || editLocation === selectedRow?.rackLocation))
+                            }
+                            title={
+                                (isCloneMode && editLocation === selectedRow?.rackLocation) ? 'ບໍ່ສາມາດໂຄນໄປ Rack ເດີມໄດ້' :
+                                    (isSplitMode && editLocation === selectedRow?.rackLocation) ? 'ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້' :
+                                        (isSplitMode && !editLocation) ? 'ກະລຸນາເລືອກ Rack ປາຍທາງ' :
+                                            (isSplitMode && !mergeAmount) ? 'ກະລຸນາໃສ່ຈຳນວນທີ່ຕ້ອງການແບ່ງ' : ''
+                            }
                             className={`px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isCloneMode
-                                    ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
-                                    : 'bg-indigo-500 hover:bg-indigo-600'
+                                ? (editLocation && editLocation === selectedRow?.rackLocation ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600')
+                                : 'bg-indigo-500 hover:bg-indigo-600'
                                 }`}
                         >
                             {isUpdating ? (
