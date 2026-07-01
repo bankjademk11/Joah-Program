@@ -244,6 +244,17 @@ const StoreResultTable = ({
         return [...newItems, ...results];
     }, [results, optimisticItems]);
 
+    // 🆕 คำนวณยอดรวมหน้าร้านของแต่ละบาร์โค้ด (รวมทุก Rack ในสาขา)
+    const barcodeTotals = useMemo(() => {
+        const totals = {};
+        combinedResults.forEach(item => {
+            const bc = item.barcode;
+            if (!totals[bc]) totals[bc] = 0;
+            totals[bc] += Number(item.qty || 0);
+        });
+        return totals;
+    }, [combinedResults]);
+
     const filteredResults = combinedResults
         .filter(row => {
             const matchesSearch =
@@ -1833,22 +1844,24 @@ const StoreResultTable = ({
                                                     )}
                                                 </div>
                                             </td>
-                                            {/* ລວມທັງໝົດ = ໜ້າຮ້ານ + ຫຼັງສາງ + DC */}
+                                            {/* ລວມທັງໝົດ = ໜ້າຮ້ານ(รวมทุกชั้น) + ຫຼັງສາງ + DC */}
                                             <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
                                                 <div className="flex flex-col items-center relative">
-                                                    <span className={`text-2xl font-black leading-none ${((row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                        {(row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
+                                                    <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                        {(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
                                                     </span>
 
                                                     {/* Hover Tooltip Breakdown: Q = F + T + D */}
                                                     <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
                                                         <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
                                                             <div className="flex flex-col gap-1">
-                                                                <div className="flex justify-between gap-4"><span>ໜ້າຮ້ານ (F):</span> <span className="font-mono">{row.qty || 0}</span></div>
+                                                                <div className="flex justify-between gap-4"><span className="text-emerald-300">ຊັ້ນນີ້ (Rack Qty):</span> <span className="font-mono text-emerald-300">{row.qty || 0}</span></div>
+                                                                <div className="border-t border-white/20 my-0.5"></div>
+                                                                <div className="flex justify-between gap-4"><span>ທັງສາຂາ (All Racks F):</span> <span className="font-mono">{barcodeTotals[row.barcode] || 0}</span></div>
                                                                 <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (T):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
                                                                 <div className="flex justify-between gap-4"><span>DC (D):</span> <span className="font-mono">{row.dcQty || 0}</span></div>
                                                                 <div className="border-t border-white/20 my-0.5"></div>
-                                                                <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F+T+D:</span> <span className="font-mono">{(row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
+                                                                <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F(All)+T+D:</span> <span className="font-mono">{(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
                                                             </div>
                                                         </div>
                                                         <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
@@ -1860,9 +1873,14 @@ const StoreResultTable = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">{t('results.shopQtySub')}</div>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <div className="flex flex-col items-center px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
+                                                        <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.qty || 0}</span>
+                                                        <div className="text-[9px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-0.5">ຊັ້ນນີ້ (Rack)</div>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold text-slate-400">
+                                                        ລວມ: <span className="text-slate-700 dark:text-slate-300">{barcodeTotals[row.barcode] || 0}</span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             {/* ຈຳນວນ ຫຼັງສາງ */}
@@ -2014,7 +2032,7 @@ const StoreResultTable = ({
                             </div>
                         ) : (
                             currentResults.map((row) => {
-                                const totalQty = (row.qty || 0) + (row.warehouseQty || 0) + (row.dcQty || 0);
+                                const totalQty = (barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0);
                                 const statusStyle = row.status === 'passed'
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40'
                                     : row.status === 'mismatch'
@@ -2062,9 +2080,10 @@ const StoreResultTable = ({
                                                 <span className="text-lg font-black text-amber-600 dark:text-amber-400 leading-none">{totalQty}</span>
                                                 <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider mt-0.5">Total</span>
                                             </div>
-                                            <div className="flex flex-col items-center py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
-                                                <span className="text-lg font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ໜ້າ</span>
+                                            <div className="flex flex-col items-center py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/20">
+                                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.qty || 0}</span>
+                                                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ຊັ້ນນີ້</span>
+                                                <span className="text-[8px] font-bold text-slate-400 leading-tight">ລວມ: {barcodeTotals[row.barcode] || 0}</span>
                                             </div>
                                             <div className="flex flex-col items-center py-2 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/20">
                                                 <span className={`text-lg font-black leading-none ${(row.warehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.warehouseQty ?? 0}</span>
