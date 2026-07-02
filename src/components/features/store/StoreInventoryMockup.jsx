@@ -132,13 +132,29 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     if (!selectedBranch) return;
     setIsLoading(true);
     try {
-      // 1. Fetch store_inventory (ໜ້າຮ້ານ)
-      const { data: storeData, error: storeErr } = await supabase
-        .from('store_inventory')
-        .select('*')
-        .eq('branch_id', selectedBranch)
-        .order('item_name', { ascending: true });
-      if (storeErr) throw storeErr;
+      // 1. Fetch store_inventory (ໜ້າຮ້ານ) — paginated to bypass 1000-row Supabase default limit
+      let storeData = [];
+      let storePage = 0;
+      const storePageSize = 1000;
+      let storeHasMore = true;
+      while (storeHasMore) {
+        const { data: pageData, error: storeErr } = await supabase
+          .from('store_inventory')
+          .select('*')
+          .eq('branch_id', selectedBranch)
+          .order('item_name', { ascending: true })
+          .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
+        if (storeErr) throw storeErr;
+        if (!pageData || pageData.length === 0) {
+          storeHasMore = false;
+        } else {
+          storeData = [...storeData, ...pageData];
+          if (pageData.length < storePageSize) storeHasMore = false;
+          storePage++;
+        }
+        if (storePage > 100) break; // safety cap: 100k records max
+      }
+      console.log(`[StoreInventory] Fetched ${storeData.length} rows from store_inventory (${storePage} pages)`);
 
       // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ)
       const relevantBarcodes = [...new Set((storeData || []).map(r => r.barcode_no))].filter(Boolean);
