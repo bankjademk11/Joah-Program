@@ -132,29 +132,43 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     if (!selectedBranch) return;
     setIsLoading(true);
     try {
-      // 1. Fetch store_inventory (ໜ້າຮ້ານ) — paginated to bypass 1000-row Supabase default limit
+      // 1. Fetch store_inventory (ໜ້າຮ້ານ) — paginated with RETRY LOGIC
       let storeData = [];
       let storePage = 0;
       const storePageSize = 1000;
       let storeHasMore = true;
+      let retryCount = 0;
+      const maxRetries = 3;
+
       while (storeHasMore) {
-        const { data: pageData, error: storeErr } = await supabase
-          .from('store_inventory')
-          .select('*')
-          .eq('branch_id', selectedBranch)
-          .order('item_name', { ascending: true })
-          .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
-        if (storeErr) throw storeErr;
-        if (!pageData || pageData.length === 0) {
-          storeHasMore = false;
-        } else {
-          storeData = [...storeData, ...pageData];
-          if (pageData.length < storePageSize) storeHasMore = false;
-          storePage++;
+        try {
+          const { data: pageData, error: storeErr } = await supabase
+            .from('store_inventory')
+            .select('*')
+            .eq('branch_id', selectedBranch)
+            .order('item_name', { ascending: true })
+            .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
+          
+          if (storeErr) throw storeErr;
+          
+          if (!pageData || pageData.length === 0) {
+            storeHasMore = false;
+          } else {
+            storeData = [...storeData, ...pageData];
+            if (pageData.length < storePageSize) storeHasMore = false;
+            storePage++;
+            retryCount = 0; // reset retry on success
+          }
+          if (storePage > 100) break; // safety cap: 100k records max
+        } catch (err) {
+          if (retryCount < maxRetries) {
+            retryCount++;
+            await new Promise(r => setTimeout(r, 1000 * retryCount)); // exponential backoff
+          } else {
+            throw err;
+          }
         }
-        if (storePage > 100) break; // safety cap: 100k records max
       }
-      console.log(`[StoreInventory] Fetched ${storeData.length} rows from store_inventory (${storePage} pages)`);
 
       // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ)
       const relevantBarcodes = [...new Set((storeData || []).map(r => r.barcode_no))].filter(Boolean);
@@ -198,8 +212,6 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         if (bc) dcMap[bc] = (dcMap[bc] || 0) + Number(row.qty || 0);
       });
 
-      console.log(`[StoreInventory] warehouse: ${whData.length} rows | DC stock: ${dcData.length} rows`);
-
       setResults((storeData || []).map((row, idx) => mapRow(row, idx, warehouseMap, dcMap)));
     } catch (err) {
       console.error('[StoreInventory.DEBUG] ❌ Critical Error in fetchData:', err);
@@ -220,7 +232,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         fetchData();
-      }, 800);
+      }, 3000); // Increased debounce to 3s to reduce network load from 60 concurrent users
     };
 
     const channel = supabase
@@ -229,7 +241,56 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_inventory' }, (payload) => {
         const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
         if (rowBranch !== selectedBranch) return;
-        triggerRefresh();
+
+        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+          setResults(prev => {
+            const existingIdx = prev.findIndex(r => r.id === payload.new.id);
+            if (existingIdx >= 0) {
+              // Update existing row locally
+              const oldRow = prev[existingIdx];
+              const updatedRow = {
+                ...oldRow,
+                qty: payload.new.store_qty ?? 0,
+                rackLocation: payload.new.shelf_location || '—',
+                masterQty: payload.new.store_qty ?? 0,
+                salesQty: payload.new.sales_qty ?? null,
+                category1: payload.new.category_1_actual || oldRow.category1,
+                category2: payload.new.category_2_actual || oldRow.category2,
+                maxQty: payload.new.max_qty || null,
+                productTag: payload.new.product_tag || null,
+                status: (payload.new.store_qty ?? 0) > 0 ? 'passed' : 'missing'
+              };
+              const newArr = [...prev];
+              newArr[existingIdx] = updatedRow;
+              return newArr;
+            } else if (payload.eventType === 'INSERT') {
+              // New row added by someone else
+              const newRow = {
+                id: payload.new.id,
+                rowIndex: prev.length + 1,
+                barcode: payload.new.barcode_no,
+                itemName: payload.new.item_name || '',
+                masterItemName: payload.new.item_name || '',
+                rackLocation: payload.new.shelf_location || '—',
+                qty: payload.new.store_qty ?? 0,
+                maxQty: payload.new.max_qty || null,
+                productTag: payload.new.product_tag || null,
+                masterQty: payload.new.store_qty ?? 0,
+                warehouseQty: 0,
+                dcQty: 0,
+                salesQty: payload.new.sales_qty ?? null,
+                category1: payload.new.category_1_actual || '',
+                category2: payload.new.category_2_actual || '',
+                status: (payload.new.store_qty ?? 0) > 0 ? 'passed' : 'missing',
+                branch_id: payload.new.branch_id,
+              };
+              return [newRow, ...prev];
+            }
+            return prev;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setResults(prev => prev.filter(r => r.id !== payload.old.id));
+        }
       })
       // 2. Warehouse QTY (ຫຼັງສາງ) – from location_inventory
       .on('postgres_changes', { event: '*', schema: 'public', table: 'location_inventory' }, (payload) => {
@@ -261,31 +322,12 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   const handleAddNewProduct = async (formData) => {
     try {
       const searchBarcode = String(formData.barcode_no).trim();
-      console.group(`[StoreInventory.DEBUG] 💾 Saving New Product: "${searchBarcode}"`);
 
       // Additional check to warehouse data
-      console.log('Searching for warehouse QTY in location_inventory...');
       const { data: debugWh, error: debugWhErr } = await supabase
         .from('location_inventory')
         .select('*')
         .eq('branch_id', selectedBranch);
-
-      if (!debugWhErr && debugWh) {
-        const match = debugWh.filter(r => String(r.barcode_no || '').trim() === searchBarcode);
-        if (match.length > 0) {
-          const totalWh = match.reduce((sum, r) => sum + Number(r.qty || 0), 0);
-          console.log(`✅ MATCH FOUND in location_inventory! Total Qty: ${totalWh}`);
-          console.log('Match details (rows):', match);
-        } else {
-          console.warn(`❌ NO MATCH found for barcode "${searchBarcode}" in branch "${selectedBranch}" of location_inventory table.`);
-          const partialMatch = debugWh.filter(r => String(r.barcode_no || '').includes(searchBarcode));
-          if (partialMatch.length > 0) {
-            console.log('💡 Found items with SIMILAR barcode (partial match):', partialMatch);
-          }
-        }
-      } else if (debugWhErr) {
-        console.error('❌ Error querying location_inventory for debug:', debugWhErr);
-      }
 
       const payload = {
         barcode_no: formData.barcode_no,
@@ -300,9 +342,6 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         updated_by: currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Staff'),
         last_updated: new Date().toISOString()
       };
-
-      console.log('Final Payload for store_inventory:', payload);
-      console.groupEnd(); // End of Saving New Product debug group
 
       const { error } = await supabase.from('store_inventory').insert(payload);
 
@@ -365,8 +404,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       }
       // ────────────────────────────────────────────────────────────────────
 
-      console.log('[StoreInventory.DEBUG] ✅ Success! Refreshing data...');
-      await fetchData();
+      console.log('[StoreInventory.DEBUG] ✅ Success! UI will update via Realtime...');
       toast.success('ເພີ່ມສິນຄ້າໃໝ່ສຳເລັດ!');
     } catch (err) {
       console.error('[StoreInventory.DEBUG] ❌ Exception in handleAddNewProduct:', err);

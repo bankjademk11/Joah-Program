@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
     ChevronLeft, ChevronRight, Search, Download,
     Loader2, X, AlertTriangle, Database, MapPin,
@@ -97,24 +97,24 @@ const StoreResultTable = ({
 
     const [isRefreshing, setIsRefreshing] = useState(false); // State for skeleton loading
 
-    // Skeleton Loader Component
-    const SkeletonLoader = () => (
-        <div className="w-full space-y-4 animate-pulse px-2">
-            {[...Array(6)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                    <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
-                    <div className="flex-1 space-y-3">
-                        <div className="flex gap-4">
-                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
-                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
-                        </div>
-                        <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-1/2"></div>
+// ─── SkeletonLoader (defined outside to avoid re-mount on every render) ──────
+const SkeletonLoader = () => (
+    <div className="w-full space-y-4 animate-pulse px-2">
+        {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                <div className="flex-1 space-y-3">
+                    <div className="flex gap-4">
+                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
                     </div>
-                    <div className="w-24 h-10 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-1/2"></div>
                 </div>
-            ))}
-        </div>
-    );
+                <div className="w-24 h-10 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+            </div>
+        ))}
+    </div>
+);
 
     // --- Refresh Cooldown & Single Row Refresh Logic ---
     const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -198,7 +198,9 @@ const StoreResultTable = ({
 
 
     const currentBranchRules = BRANCH_RACK_RULES[resolveBranchId(currentBranch)] || CATEGORY_RACK_RULES;
-    const ALL_DISTINCT_ZONES = Array.from(new Set(Object.values(currentBranchRules).flatMap(group => group.flatMap(rule => rule.zones))));
+    const ALL_DISTINCT_ZONES = useMemo(() =>
+        Array.from(new Set(Object.values(currentBranchRules).flatMap(group => group.flatMap(rule => rule.zones))))
+    , [currentBranchRules]);
 
     // Auto-fill from Master Data when Barcode changes
     // Listen for external refresh trigger (Navbar Refresh)
@@ -211,21 +213,16 @@ const StoreResultTable = ({
 
     // ── 🆕 Realtime Listener for Massive Imports ──
     useEffect(() => {
-        console.log('📡 [SYNC] Setting up Realtime listener on app_sync_signals...');
         const channel = supabase.channel('app_sync_signals_store')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'app_sync_signals' }, (payload) => {
-                console.log('📡 [SYNC] Signal received:', payload);
                 if (payload.new && payload.new.signal_name === 'massive_import_done') {
-                    console.log('📡 [SYNC] Auto-refresh triggered!');
                     success('มีการนำเข้าข้อมูลขนาดใหญ่ ระบบกำลังรีเฟรชข้อมูลล่าสุด...');
                     setIsRefreshing(true);
                     if (onRefresh) onRefresh({ silent: false, delta: true });
-                    setTimeout(() => setIsRefreshing(false), 1500); // Visual feedback
+                    setTimeout(() => setIsRefreshing(false), 1500);
                 }
             })
-            .subscribe((status, err) => {
-                console.log('📡 [SYNC] Channel status:', status, err || '');
-            });
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
@@ -255,8 +252,8 @@ const StoreResultTable = ({
         return totals;
     }, [combinedResults]);
 
-    const filteredResults = combinedResults
-        .filter(row => {
+    const filteredResults = useMemo(() => {
+        const tempFiltered = combinedResults.filter(row => {
             const matchesSearch =
                 (row.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (row.rackLocation || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -270,15 +267,35 @@ const StoreResultTable = ({
                 (filterStatus === 'zero' && parseFloat(row.qty) === 0) ||
                 (filterStatus === 'hasQty' && parseFloat(row.qty) > 0);
             return matchesSearch && matchesFilter;
-        })
-        .sort((a, b) => {
+        });
+
+        const map = new Map();
+        tempFiltered.forEach(row => {
+            if (!map.has(row.barcode)) {
+                map.set(row.barcode, {
+                    ...row,
+                    racks: []
+                });
+            }
+            map.get(row.barcode).racks.push({
+                rackLocation: row.rackLocation,
+                qty: row.qty,
+                maxQty: row.maxQty,
+                id: row.id,
+                rowIndex: row.rowIndex,
+                status: row.status,
+                originalRow: row
+            });
+        });
+
+        return Array.from(map.values()).sort((a, b) => {
             if (!sortConfig.key) return 0;
             let valA = a[sortConfig.key];
             let valB = b[sortConfig.key];
 
             if (sortConfig.key === 'qty') {
-                valA = parseFloat(valA) || 0;
-                valB = parseFloat(valB) || 0;
+                valA = barcodeTotals[a.barcode] || 0;
+                valB = barcodeTotals[b.barcode] || 0;
             } else {
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
@@ -288,15 +305,15 @@ const StoreResultTable = ({
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
+    }, [combinedResults, searchTerm, filterStatus, sortConfig, barcodeTotals]);
 
-    const handleSort = (key) => {
-        let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
+    const handleSort = useCallback((key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
         setCurrentPage(1);
-    };
+    }, []);
 
     // Auto-scroll logic when searching for an exact barcode
     useEffect(() => {
@@ -315,7 +332,10 @@ const StoreResultTable = ({
     const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const currentResults = filteredResults.slice(startIndex, endIndex);
+    const currentResults = useMemo(
+        () => filteredResults.slice(startIndex, endIndex),
+        [filteredResults, startIndex, endIndex]
+    );
 
     const getStatusHint = (row) => {
         if (!row) return null;
@@ -573,12 +593,8 @@ const StoreResultTable = ({
             setEditMaxQty('');
             setMergeAmount('');
             
-            // Auto-refresh table data after save with Skeleton UX
-            if (onRefresh) {
-                setIsRefreshing(true);
-                await onRefresh({ skipMaster: true, silent: true });
-                setTimeout(() => setIsRefreshing(false), 500);
-            }
+            // UI is updated via Realtime Payload Patching or Optimistic UI
+            console.log('✅ Update finished. Skipping manual refresh.');
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -666,12 +682,8 @@ const StoreResultTable = ({
             setEditReason('');
             setMergeAmount('');
 
-            // Auto-refresh table data after clone with Skeleton UX
-            if (onRefresh) {
-                setIsRefreshing(true);
-                await onRefresh({ skipMaster: true, silent: true });
-                setTimeout(() => setIsRefreshing(false), 500);
-            }
+            // UI is updated via Realtime Payload Patching or Optimistic UI
+            console.log('✅ Clone finished. Skipping manual refresh.');
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
         } finally {
@@ -807,13 +819,7 @@ const StoreResultTable = ({
 
             success(t('results.saveSuccess'));
             setSelectedRow(null);
-            
-            // Auto-refresh table data after split with Skeleton UX
-            if (onRefresh) {
-                setIsRefreshing(true);
-                await onRefresh({ skipMaster: true, silent: true });
-                setTimeout(() => setIsRefreshing(false), 500);
-            }
+            // UI is updated via Realtime Payload Patching + Optimistic UI. No manual refetch needed.
 
         } catch (err) {
             showError(t('results.saveError') + ': ' + err.message);
@@ -1814,9 +1820,18 @@ const StoreResultTable = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
-                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-emerald-500/50 transition-all font-mono whitespace-nowrap">
-                                                    <MapPin size={13} className="text-emerald-500 shrink-0" />
-                                                    <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase whitespace-nowrap">{row.rackLocation}</span>
+                                                <div className="flex flex-wrap gap-2 max-w-[200px]">
+                                                    {row.racks.map((r, i) => (
+                                                        <div key={i} className="group/rack inline-flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm transition-all font-mono whitespace-nowrap overflow-hidden hover:border-emerald-500/50">
+                                                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                                                <MapPin size={11} className="text-emerald-500 shrink-0" />
+                                                                <span className="font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase">{r.rackLocation}</span>
+                                                            </div>
+                                                            <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pl-4 h-0 opacity-0 group-hover/rack:h-4 group-hover/rack:opacity-100 transition-all duration-300 delay-100 group-hover/rack:delay-[3000ms]">
+                                                                {r.qty} ຊິ້ນ
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-6">
@@ -1874,12 +1889,9 @@ const StoreResultTable = ({
                                             </td>
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col items-center gap-1">
-                                                    <div className="flex flex-col items-center px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
-                                                        <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.qty || 0}</span>
-                                                        <div className="text-[9px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-0.5">ຊັ້ນນີ້ (Rack)</div>
-                                                    </div>
-                                                    <div className="text-[10px] font-bold text-slate-400">
-                                                        ລວມ: <span className="text-slate-700 dark:text-slate-300">{barcodeTotals[row.barcode] || 0}</span>
+                                                    <div className="flex flex-col items-center px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
+                                                        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{barcodeTotals[row.barcode] || 0}</span>
+                                                        <div className="text-[9px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">ລວມໜ້າຮ້ານ</div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -1918,25 +1930,30 @@ const StoreResultTable = ({
                                                 </button>
                                             </td>
                                             <td className="px-8 py-6 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="View Diagnostics">
-                                                        <Info size={18} />
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    <button onClick={() => setDiagnosticRow(row)} className="p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-sky-500 transition-all self-end mb-1" title="View Diagnostics">
+                                                        <Info size={14} />
                                                     </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedRow(row);
-                                                            setEditQty(row.qty || 0);
-                                                            setEditLocation(row.rackLocation || '');
-                                                            setEditCat1(row.category1 || '');
-                                                            setEditCat2(row.category2 || '');
-                                                            setEditReason('');
-                                                            setMergeAmount('');
-                                                        }}
-                                                        className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all"
-                                                        title="Edit Quantity"
-                                                    >
-                                                        <Edit2 size={18} />
-                                                    </button>
+                                                    {row.racks.map((r, i) => (
+                                                        <div key={i} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 pr-1 pl-2.5 py-1 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">{r.rackLocation}</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedRow(r.originalRow);
+                                                                    setEditQty(r.qty || 0);
+                                                                    setEditLocation(r.rackLocation || '');
+                                                                    setEditCat1(row.category1 || '');
+                                                                    setEditCat2(row.category2 || '');
+                                                                    setEditReason('');
+                                                                    setMergeAmount('');
+                                                                }}
+                                                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 shadow-sm transition-all flex items-center gap-1"
+                                                                title="ແກ້ໄຂຈຳນວນ"
+                                                            >
+                                                                <Edit2 size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2056,12 +2073,8 @@ const StoreResultTable = ({
                                             </span>
                                         </div>
 
-                                        {/* Row 2: Location + Category */}
+                                        {/* Row 2: Category & Tags */}
                                         <div className="flex flex-wrap gap-2">
-                                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm">
-                                                <MapPin size={12} className="text-emerald-500 shrink-0" />
-                                                <span className="text-xs font-black text-slate-700 dark:text-slate-200 font-mono uppercase">{row.rackLocation}</span>
-                                            </div>
                                             {row.category1 && (
                                                 <div className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30">
                                                     <span className="text-[10px] font-extrabold uppercase tracking-wider">{row.category1}</span>
@@ -2081,9 +2094,8 @@ const StoreResultTable = ({
                                                 <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider mt-0.5">Total</span>
                                             </div>
                                             <div className="flex flex-col items-center py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/20">
-                                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.qty || 0}</span>
-                                                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ຊັ້ນນີ້</span>
-                                                <span className="text-[8px] font-bold text-slate-400 leading-tight">ລວມ: {barcodeTotals[row.barcode] || 0}</span>
+                                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{barcodeTotals[row.barcode] || 0}</span>
+                                                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ໜ້າຮ້ານລວມ</span>
                                             </div>
                                             <div className="flex flex-col items-center py-2 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/20">
                                                 <span className={`text-lg font-black leading-none ${(row.warehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.warehouseQty ?? 0}</span>
@@ -2095,28 +2107,41 @@ const StoreResultTable = ({
                                             </div>
                                         </div>
 
-                                        {/* Row 4: Action buttons */}
-                                        <div className="flex items-center justify-end gap-2 pt-1">
-                                            <button
-                                                onClick={() => setDiagnosticRow(row)}
-                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition-colors"
-                                            >
-                                                <Info size={14} /> Detail
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedRow(row);
-                                                    setEditQty(row.qty || 0);
-                                                    setEditLocation(row.rackLocation || '');
-                                                    setEditCat1(row.category1 || '');
-                                                    setEditCat2(row.category2 || '');
-                                                    setEditReason('');
-                                                    setMergeAmount('');
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500 active:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/20"
-                                            >
-                                                <Edit2 size={14} /> ແກ້ໄຂ
-                                            </button>
+                                        {/* Row 4: Multiple Racks & Edit buttons */}
+                                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                                            {row.racks.map((r, i) => (
+                                                <div key={i} className="group/rack flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/30 overflow-hidden cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                                                    <div className="flex items-center gap-2">
+                                                        <MapPin size={14} className="text-emerald-500" />
+                                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase">{r.rackLocation}</span>
+                                                        <span className="text-xs font-bold text-slate-400 opacity-0 group-hover/rack:opacity-100 group-active/rack:opacity-100 transition-opacity duration-300 delay-100 group-hover/rack:delay-[3000ms] group-active/rack:delay-[3000ms]">
+                                                            • {r.qty} ຊິ້ນ
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedRow(r.originalRow);
+                                                            setEditQty(r.qty || 0);
+                                                            setEditLocation(r.rackLocation || '');
+                                                            setEditCat1(row.category1 || '');
+                                                            setEditCat2(row.category2 || '');
+                                                            setEditReason('');
+                                                            setMergeAmount('');
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-500 active:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/20"
+                                                    >
+                                                        <Edit2 size={12} /> ແກ້ໄຂ
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-end mt-1">
+                                                <button
+                                                    onClick={() => setDiagnosticRow(row)}
+                                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition-colors"
+                                                >
+                                                    <Info size={14} /> Detail
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
