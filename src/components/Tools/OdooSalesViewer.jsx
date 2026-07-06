@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales } from '../../services/odooApi';
-import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
+import SalesChartDashboard from './SalesChartDashboard';
 import JoahLogo from '../../assets/Joah.jpeg';
 import dataImageBG from '../../assets/dataImageBG.png';
 import ExcelJS from 'exceljs';
@@ -19,6 +20,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [joahOnly, setJoahOnly] = useState(true);
     const [weeklySales, setWeeklySales] = useState({});
     const [weekOffset, setWeekOffset] = useState(0);
+    const [summaryMode, setSummaryMode] = useState('7days'); // '7days' or '14days'
     const [selectedDay, setSelectedDay] = useState(null); // { dateObj, branchId, branchName, dayData, joahOnly }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -72,7 +74,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 ]);
                 setAuditStates(stateData);
                 setAbnormalOrders(abnormalData);
-            } else if (activeTab === 'weekly') {
+            } else if (activeTab === 'weekly' || activeTab === 'dashboard') {
                 const today = new Date();
                 const dayOfWeek = today.getDay();
                 const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -336,17 +338,17 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 </div>
 
                 {/* Tabs Moved to Top */}
-                <div className="grid grid-cols-2 sm:flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-xl mb-6 shadow-lg border border-white/20 gap-1.5">
-                    {['summary', 'history', 'audit', 'weekly'].map(tab => (
+                <div className="grid grid-cols-2 sm:flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-2xl mb-6 shadow-lg border border-white/20 gap-1.5">
+                    {['summary', 'history', 'audit', 'weekly', 'dashboard'].map(tab => (
                         <button key={tab} onClick={() => {
                             setActiveTab(tab);
                             setWeekOffset(0);
-                            if (tab !== 'weekly' && selectedBranchId === 'ALL') {
+                            if ((tab === 'summary' || tab === 'history' || tab === 'audit') && selectedBranchId === 'ALL') {
                                 setSelectedBranchId(branches.find(b => b.name === userBranch)?.id || 273);
                             }
                         }}
-                            className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${activeTab === tab ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/40 scale-[1.02]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
-                            {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={14} className="sm:w-4 sm:h-4" /> Audit</> : <><CalendarDays size={14} className="sm:w-4 sm:h-4" /> 2 ອາທິດ</>}
+                            className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/40 scale-[1.02]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+                            {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={14} className="sm:w-4 sm:h-4" /> Audit</> : tab === 'weekly' ? <><CalendarDays size={14} className="sm:w-4 sm:h-4" /> 2 ອາທິດ</> : <><PieChart size={14} className="sm:w-4 sm:h-4" /> Dashboard</>}
                         </button>
                     ))}
                 </div>
@@ -360,27 +362,122 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 <p className="mt-4 font-bold text-slate-600 dark:text-slate-300 animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Odoo...</p>
                             </div>
                         )}
-                        <div className="flex flex-row justify-between items-center mb-4 relative z-0 shrink-0">
-                            <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                                <CalendarDays className="text-joah-orange" />
-                                ຍອດຂາຍ 14 ມື້
-                                {weekOffset > 0 && <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-1 sm:ml-2">ຍ້ອນຫຼັງ {weekOffset} ອາທິດ</span>}
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setWeekOffset(prev => prev + 1)} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
-                                    <ChevronLeft size={18} />
-                                </button>
-                                <button onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))} disabled={weekOffset === 0} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 disabled:cursor-not-allowed">
-                                    <ChevronRight size={18} />
-                                </button>
-                            </div>
-                        </div>
+                        {(() => {
+                            const branchesToRender = selectedBranchId === 'ALL' ? branches : branches.filter(b => b.id === selectedBranchId);
 
-                        <div className="flex-1 overflow-y-auto hide-scrollbar -mx-2 px-2 relative z-0">
-                            {(() => {
-                                const branchesToRender = selectedBranchId === 'ALL' ? branches : branches.filter(b => b.id === selectedBranchId);
+                            // --- Calculate Totals ---
+                            let currentWeekSales = 0;
+                            let currentWeekCustomers = 0;
+                            let currentWeekSKUs = 0;
+                            let previousWeekSales = 0;
+                            let previousWeekCustomers = 0;
+                            let previousWeekSKUs = 0;
 
-                                return branchesToRender.map((branch, branchIndex) => {
+                            branchesToRender.forEach(branch => {
+                                const currentBranchSales = weeklySales[branch.id] || [];
+                                for (let i = 0; i < 14; i++) {
+                                    const today = new Date();
+                                    const dayOfWeek = today.getDay();
+                                    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                                    const startOfLastWeek = new Date(today);
+                                    startOfLastWeek.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
+                                    const d = new Date(startOfLastWeek);
+                                    d.setDate(startOfLastWeek.getDate() + i);
+
+                                    const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
+                                    const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
+                                    
+                                    const amt = dayData?.price_subtotal_incl || 0;
+                                    const cust = dayData?.order_count || 0;
+                                    const sku = dayData?.sku_count || 0;
+
+                                    if (i >= 7) {
+                                        currentWeekSales += amt;
+                                        currentWeekCustomers += cust;
+                                        currentWeekSKUs += sku;
+                                    } else {
+                                        previousWeekSales += amt;
+                                        previousWeekCustomers += cust;
+                                        previousWeekSKUs += sku;
+                                    }
+                                }
+                            });
+
+                            // Resolve display values based on mode
+                            const displaySales = summaryMode === '7days' ? currentWeekSales : (currentWeekSales + previousWeekSales);
+                            const displayCustomers = summaryMode === '7days' ? currentWeekCustomers : (currentWeekCustomers + previousWeekCustomers);
+                            const displaySKUs = summaryMode === '7days' ? currentWeekSKUs : (currentWeekSKUs + previousWeekSKUs);
+
+                            const growthPercentAll = previousWeekSales === 0 ? (currentWeekSales > 0 ? 100 : 0) : ((currentWeekSales - previousWeekSales) / previousWeekSales) * 100;
+                            const isPositiveGrowthAll = growthPercentAll >= 0;
+                            const salesDifference = currentWeekSales - previousWeekSales;
+
+                            return (
+                                <>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 relative z-0 shrink-0 gap-4">
+                                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2 shrink-0">
+                                            <CalendarDays className="text-joah-orange" />
+                                            ຍອດຂາຍ 14 ມື້
+                                            {weekOffset > 0 && <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-1 sm:ml-2">ຍ້ອນຫຼັງ {weekOffset} ອາທິດ</span>}
+                                        </h3>
+                                        
+                                        {/* 📊 SUMMARY BOX with Toggle */}
+                                        <div className="flex-1 w-full sm:max-w-[650px] px-2 sm:px-4 flex gap-2 sm:gap-6 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
+                                            
+                                            {/* Toggle Button */}
+                                            <button 
+                                                onClick={() => setSummaryMode(prev => prev === '7days' ? '14days' : '7days')}
+                                                className="absolute -top-3 -right-2 sm:-right-4 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-full px-2 py-0.5 text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-300 hover:text-joah-orange hover:border-joah-orange/50 transition-colors shadow-sm"
+                                            >
+                                                ສະຫຼຸບແບບ: {summaryMode === '7days' ? '7 ມື້' : '14 ມື້'} 🔄
+                                            </button>
+
+                                            <div className="flex flex-col items-center justify-center">
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ຍອດຂາຍ {summaryMode === '7days' ? '7 ມື້' : 'ລວມ'}</p>
+                                                <p className="text-xs sm:text-base font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                                                    {new Intl.NumberFormat('lo-LA').format(displaySales)} <span className="text-[9px] sm:text-[10px] text-emerald-600/70">₭</span>
+                                                </p>
+                                            </div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8"></div>
+                                            <div className="flex flex-col items-center justify-center">
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ລູກຄ້າ {summaryMode === '7days' ? '(7 ມື້)' : 'ລວມ'}</p>
+                                                <p className="text-xs sm:text-base font-black text-sky-600 dark:text-sky-400 leading-none">
+                                                    {new Intl.NumberFormat('lo-LA').format(displayCustomers)} <span className="text-[9px] sm:text-[10px] text-sky-600/70 font-medium">ບິນ</span>
+                                                </p>
+                                            </div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8"></div>
+                                            <div className="flex flex-col items-center justify-center">
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ສິນຄ້າ {summaryMode === '7days' ? '(7 ມື້)' : 'ລວມ'}</p>
+                                                <p className="text-xs sm:text-base font-black text-violet-600 dark:text-violet-400 leading-none">
+                                                    {new Intl.NumberFormat('lo-LA').format(displaySKUs)} <span className="text-[9px] sm:text-[10px] text-violet-600/70 font-medium">ລາຍການ</span>
+                                                </p>
+                                            </div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8 hidden sm:block"></div>
+                                            <div className="flex flex-col items-center justify-center hidden sm:flex">
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ທຽບອາທິດກ່ອນ</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className={`text-xs sm:text-base font-black ${isPositiveGrowthAll ? 'text-emerald-500' : 'text-rose-500'} flex items-center gap-1 leading-none`}>
+                                                        {isPositiveGrowthAll ? '▲' : '▼'} {Math.abs(growthPercentAll).toFixed(1)}%
+                                                    </p>
+                                                    <span className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md ${isPositiveGrowthAll ? 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100/80 text-rose-700 dark:bg-rose-900/30'}`}>
+                                                        {isPositiveGrowthAll ? '+' : ''}{new Intl.NumberFormat('lo-LA').format(salesDifference)} ₭
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                                            <button onClick={() => setWeekOffset(prev => prev + 1)} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                <ChevronLeft size={18} />
+                                            </button>
+                                            <button onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))} disabled={weekOffset === 0} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 disabled:cursor-not-allowed">
+                                                <ChevronRight size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto hide-scrollbar -mx-2 px-2 relative z-0">
+                                        {branchesToRender.map((branch, branchIndex) => {
                                     const currentBranchSales = weeklySales[branch.id] || [];
 
                                     const amounts = [];
@@ -561,14 +658,27 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             </div>
                                         </div>
                                     );
-                                });
-                            })()}
-                        </div>
+                                })}
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 )}
 
-                {/* Filters Row (Only for Summary/History) */}
-                {activeTab !== 'weekly' && (
+                {/* Dashboard Tab (Recharts) */}
+                {activeTab === 'dashboard' && (
+                    <SalesChartDashboard 
+                        weeklySales={weeklySales}
+                        branches={branches}
+                        selectedBranchId={selectedBranchId}
+                        weekOffset={weekOffset}
+                        setWeekOffset={setWeekOffset}
+                    />
+                )}
+
+                {/* Filters Row (Only for Summary/History/Audit) */}
+                {(activeTab === 'summary' || activeTab === 'history' || activeTab === 'audit') && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
                         <div className="flex flex-col gap-1.5 col-span-1">
                             <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={12} /> ຕັ້ງແຕ່ (From)</label>
@@ -598,7 +708,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 )}
 
                 {/* Summary Cards */}
-                {activeTab !== 'weekly' && !loading && !error && (
+                {(activeTab === 'summary' || activeTab === 'history' || activeTab === 'audit') && !loading && !error && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                         <div className="bg-gradient-to-br from-emerald-500/90 to-emerald-600/90 backdrop-blur-md rounded-2xl p-4 text-white shadow-[0_8px_30px_rgb(5,150,105,0.2)] border border-emerald-400/30">
                             <div className="flex items-center gap-2 mb-1 opacity-80">
@@ -649,7 +759,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 )}
 
                 {/* Table */}
-                {activeTab !== 'weekly' && (
+                {(activeTab === 'summary' || activeTab === 'history' || activeTab === 'audit') && (
                     <div className="flex-1 bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-fade-in-up min-h-[500px] md:min-h-0">
                         {loading && (
                             <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
