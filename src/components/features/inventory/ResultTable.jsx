@@ -19,7 +19,9 @@ import QuickAddPanel from './QuickAddPanel';
 import LocationInspector from './LocationInspector';
 import AuditLogModal from '../../ui/AuditLogModal';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
+import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
+import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
 
 const ResultTable = ({
     results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,
@@ -48,6 +50,7 @@ const ResultTable = ({
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
+    const [showLanguageWarning, setShowLanguageWarning] = useState(false);
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
@@ -1260,6 +1263,11 @@ const ResultTable = ({
 
     return (
         <>
+            <LanguageWarningModal 
+                isOpen={showLanguageWarning} 
+                onClose={() => setShowLanguageWarning(false)} 
+            />
+
             <LocationInspector
                 inspectedLocation={inspectedLocation}
                 onClose={() => setInspectedLocation(null)}
@@ -1287,6 +1295,17 @@ const ResultTable = ({
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
                                     if (e.key === 'Enter' && searchTerm.length >= 5) {
+                                        // 💡 NEW LOGIC: Check for Thai/Lao characters or no numbers (Language forgot to switch)
+                                        const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
+                                        const hasNoNumbers = !/\d/.test(searchTerm);
+                                        
+                                        if (hasThaiLao || hasNoNumbers) {
+                                            const audio = new Audio(barcodeNotCorrectSound);
+                                            audio.play().catch(err => console.error("Error playing sound:", err));
+                                            setShowLanguageWarning(true);
+                                            return;
+                                        }
+
                                         // 💡 NEW LOGIC: Check if exact barcode exists in filtered results
                                         const exactMatch = filteredResults.find(r => r.barcode === searchTerm);
                                         
@@ -1775,6 +1794,15 @@ const ResultTable = ({
                                                 {searchTerm.length >= 5 && (
                                                     <button
                                                         onClick={() => {
+                                                            // Block if barcode has Lao/Thai chars or no numbers
+                                                            const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
+                                                            const hasNoNumbers = !/\d/.test(searchTerm);
+                                                            if (hasThaiLao || hasNoNumbers) {
+                                                                const audio = new Audio(barcodeNotCorrectSound);
+                                                                audio.play().catch(() => {});
+                                                                setShowLanguageWarning(true);
+                                                                return;
+                                                            }
                                                             if (dbSource !== 'supabase') {
                                                                 alert('⚠️ Please connect to Cloud first.');
                                                                 return;

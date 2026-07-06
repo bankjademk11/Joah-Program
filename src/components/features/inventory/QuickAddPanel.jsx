@@ -5,6 +5,7 @@ import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCa
 import LocationInspector from './LocationInspector';
 import { supabase } from '../../../utils/supabaseClient';
 import technoHubLogo from '../../../assets/technohublogo.png';
+import notCorrectSound from '../../../assets/Sound/Notcorrect.wav';
 
 const QuickAddPanel = ({
     isOpen,
@@ -254,21 +255,69 @@ const QuickAddPanel = ({
         latestOnSave.current = onSave;
     });
 
+    const playErrorSound = () => {
+        const audio = new Audio(notCorrectSound);
+        audio.play().catch(e => console.error("Error playing sound:", e));
+    };
+
+    const handleSaveClick = () => {
+        if (isSaving) return;
+
+        // Validation Checks
+        if (!quickAddForm.barcode_no) {
+            playErrorSound();
+            alert("ກະລຸນາສະແກນບາໂຄດກ່ອນ (Please scan barcode)");
+            return;
+        }
+        if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0) {
+            playErrorSound();
+            alert("ກະລຸນາໃສ່ຈຳນວນທີ່ຖືກຕ້ອງ (Please enter valid quantity)");
+            return;
+        }
+        if (!quickAddForm.rack_location) {
+            playErrorSound();
+            alert("ກະລຸນາເລືອກໂລເຄຊັ້ນ (Please select a location)");
+            return;
+        }
+        if (!selectedReasonOption) {
+            playErrorSound();
+            alert("ກະລຸນາເລືອກເຫດຜົນ (Please select a reason)");
+            return;
+        }
+        if (selectedReasonOption === 'Other' && !otherReasonText.trim()) {
+            playErrorSound();
+            alert("ກະລຸນາລະບຸເຫດຜົນອື່ນໆ (Please specify other reason)");
+            return;
+        }
+
+        // All good, trigger save
+        if (latestOnSave.current) {
+            latestOnSave.current();
+        }
+    };
+
+    // Prevent bubbled Enter key from opening the modal and immediately triggering save
+    const mountTime = useRef(Date.now());
+    useEffect(() => {
+        mountTime.current = Date.now();
+    }, [isOpen]);
+
     // Global Enter to Save — MUST be before early return to comply with Rules of Hooks
     useEffect(() => {
         const handleGlobalKeyDown = (e) => {
-            if (e.key === 'Enter' && isOpen && !isSaveDisabled && !dropdownOpen) {
+            if (e.key === 'Enter' && isOpen && !dropdownOpen) {
                 // Ignore if typing in the barcode scan input
                 if (e.target === scanInputRef.current) return;
+                // Ignore if the modal just opened (< 300ms) to prevent catching the bubbled Enter key
+                if (Date.now() - mountTime.current < 300) return;
+                
                 e.preventDefault();
-                if (latestOnSave.current) {
-                    latestOnSave.current();
-                }
+                handleSaveClick();
             }
         };
         document.addEventListener('keydown', handleGlobalKeyDown);
         return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [isOpen, isSaveDisabled, dropdownOpen]);
+    }, [isOpen, dropdownOpen, quickAddForm, selectedReasonOption, otherReasonText, isSaving]);
 
     if (!isOpen) return null;
 
@@ -909,8 +958,8 @@ const QuickAddPanel = ({
                             {t('quickAdd.cancel')}
                         </button>
                         <button
-                            onClick={onSave}
-                            disabled={isSaveDisabled}
+                            onClick={handleSaveClick}
+                            disabled={isSaving}
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}

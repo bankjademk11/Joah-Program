@@ -44,8 +44,8 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         while (hasMore) {
           const { data: pageData, error } = await supabase
             .from('master_data')
-            .select('barcode, product_name_la, item_name, category_1, category_2, branch_id', { count: 'exact' })
-            .order('barcode', { ascending: true })
+            .select('id, barcode, product_name_la, item_name, category_1, category_2, branch_id', { count: 'exact' })
+            .order('id', { ascending: true })
             .range(page * pageSize, (page + 1) * pageSize - 1);
 
           if (error) {
@@ -146,7 +146,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
             .from('store_inventory')
             .select('*')
             .eq('branch_id', selectedBranch)
-            .order('item_name', { ascending: true })
+            .order('id', { ascending: true })
             .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
           
           if (storeErr) throw storeErr;

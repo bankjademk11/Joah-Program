@@ -16,7 +16,9 @@ import { useToast } from '../../ui/ToastProvider';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import AuditLogModal from '../../ui/AuditLogModal';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
+import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
+import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
 
 // Feature Components
 import StoreEditPanel from './StoreEditPanel';
@@ -54,6 +56,7 @@ const StoreResultTable = ({
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
+    const [showLanguageWarning, setShowLanguageWarning] = useState(false);
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
@@ -98,24 +101,24 @@ const StoreResultTable = ({
 
     const [isRefreshing, setIsRefreshing] = useState(false); // State for skeleton loading
 
-// ─── SkeletonLoader (defined outside to avoid re-mount on every render) ──────
-const SkeletonLoader = () => (
-    <div className="w-full space-y-4 animate-pulse px-2">
-        {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
-                <div className="flex-1 space-y-3">
-                    <div className="flex gap-4">
-                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
-                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+    // ─── SkeletonLoader (defined outside to avoid re-mount on every render) ──────
+    const SkeletonLoader = () => (
+        <div className="w-full space-y-4 animate-pulse px-2">
+            {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="flex-1 space-y-3">
+                        <div className="flex gap-4">
+                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+                            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-md w-1/4"></div>
+                        </div>
+                        <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-1/2"></div>
                     </div>
-                    <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-md w-1/2"></div>
+                    <div className="w-24 h-10 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
                 </div>
-                <div className="w-24 h-10 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
-            </div>
-        ))}
-    </div>
-);
+            ))}
+        </div>
+    );
 
     // --- Refresh Cooldown & Single Row Refresh Logic ---
     const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -202,7 +205,7 @@ const SkeletonLoader = () => (
     const currentBranchRules = BRANCH_RACK_RULES[resolveBranchId(currentBranch)] || CATEGORY_RACK_RULES;
     const ALL_DISTINCT_ZONES = useMemo(() =>
         Array.from(new Set(Object.values(currentBranchRules).flatMap(group => group.flatMap(rule => rule.zones))))
-    , [currentBranchRules]);
+        , [currentBranchRules]);
 
     // Auto-fill from Master Data when Barcode changes
     // Listen for external refresh trigger (Navbar Refresh)
@@ -478,7 +481,7 @@ const SkeletonLoader = () => (
 
     const handleUpdateMasterQty = async () => {
         if (!selectedRow || editQty === '') return;
-        const activeUser = currentUser 
+        const activeUser = currentUser
             ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
             : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
@@ -594,7 +597,7 @@ const SkeletonLoader = () => (
             setEditTag('');
             setEditMaxQty('');
             setMergeAmount('');
-            
+
             // UI is updated via Realtime Payload Patching or Optimistic UI
             console.log('✅ Update finished. Skipping manual refresh.');
         } catch (err) {
@@ -713,7 +716,7 @@ const SkeletonLoader = () => (
             return;
         }
 
-        const activeUser = currentUser 
+        const activeUser = currentUser
             ? (currentUser.id ? `${currentUser.name} (${currentUser.id})` : currentUser.name)
             : (localStorage.getItem('joah_employee_name') || 'Unknown Staff');
 
@@ -924,7 +927,7 @@ const SkeletonLoader = () => (
 
                         // 🔍 DEBUG
                         console.log('[DC Deduct] Query result:', { dcData, dcSelectErr, barcode: form.barcode_no, branch_id: branchToSave });
-                        
+
                         if (dcData) {
                             const newDcQty = Math.max(0, (dcData.qty || 0) - deductAmt);
                             console.log('[DC Deduct] Updating DC qty:', dcData.qty, '→', newDcQty);
@@ -1489,10 +1492,10 @@ const SkeletonLoader = () => (
                         // Dark black border on every data cell
                         if (cell.value !== null && cell.value !== '') {
                             cell.border = {
-                                top:    { style: 'thin', color: { argb: 'FF000000' } },
-                                left:   { style: 'thin', color: { argb: 'FF000000' } },
+                                top: { style: 'thin', color: { argb: 'FF000000' } },
+                                left: { style: 'thin', color: { argb: 'FF000000' } },
                                 bottom: { style: 'thin', color: { argb: 'FF000000' } },
-                                right:  { style: 'thin', color: { argb: 'FF000000' } }
+                                right: { style: 'thin', color: { argb: 'FF000000' } }
                             };
                         }
                         // Track max text width for auto-fit
@@ -1527,6 +1530,11 @@ const SkeletonLoader = () => (
 
     return (
         <>
+            <LanguageWarningModal 
+                isOpen={showLanguageWarning} 
+                onClose={() => setShowLanguageWarning(false)} 
+            />
+
             <div className="space-y-6 animate-fade-in-up">
                 {/* Action Bar */}
                 <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-[40px] rounded-2xl sm:rounded-[3rem] p-3 sm:p-6 xl:p-8 flex flex-col xl:flex-row gap-3 sm:gap-8 items-stretch xl:items-center border-[1.5px] border-white/80 dark:border-slate-800 shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-50">
@@ -1536,14 +1544,13 @@ const SkeletonLoader = () => (
                                 <Search className="text-slate-400 group-focus-within:text-emerald-500 transition-colors drop-shadow-sm" size={20} strokeWidth={2.5} />
                             </div>
                             <input
-                               ref={searchInputRef}
-                               type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                               className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] text-xs sm:text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${
-                                   searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
-                                       ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
-                                       : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
-                               }`}
-                               value={searchTerm}
+                                ref={searchInputRef}
+                                type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
+                                className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] text-xs sm:text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
+                                        ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
+                                        : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
+                                    }`}
+                                value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value.replace(/\s+/g, ''));
                                     setCurrentPage(1);
@@ -1551,9 +1558,20 @@ const SkeletonLoader = () => (
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
                                     if (e.key === 'Enter' && searchTerm.length >= 5) {
+                                        // 💡 NEW LOGIC: Check for Thai/Lao characters or no numbers (Language forgot to switch)
+                                        const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
+                                        const hasNoNumbers = !/\d/.test(searchTerm);
+                                        
+                                        if (hasThaiLao || hasNoNumbers) {
+                                            const audio = new Audio(barcodeNotCorrectSound);
+                                            audio.play().catch(err => console.error("Error playing sound:", err));
+                                            setShowLanguageWarning(true);
+                                            return;
+                                        }
+
                                         // 💡 NEW LOGIC: Check if exact barcode exists in filtered results
                                         const exactMatch = filteredResults.find(r => r.barcode === searchTerm);
-                                        
+
                                         // If no exact match is found, prompt to Quick Add
                                         if (!exactMatch) {
                                             if (dbSource !== 'supabase') {
@@ -1711,8 +1729,8 @@ const SkeletonLoader = () => (
                                 <span className="hidden sm:inline">{isRefreshing ? t('results.loading') : cooldownRemaining > 0 ? `ລໍຖ້າ ${Math.floor(cooldownRemaining / 60)}:${(cooldownRemaining % 60).toString().padStart(2, '0')}` : t('navbar.refresh')}</span>
                             </button>
                         )}
-                        <button 
-                            onClick={() => setShowSalesLogModal(true)} 
+                        <button
+                            onClick={() => setShowSalesLogModal(true)}
                             className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-700 text-slate-600 dark:text-slate-300 hover:text-teal-600 py-3 sm:py-4 px-5 sm:px-8 rounded-2xl sm:rounded-[2rem] text-[10px] sm:text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(20,184,166,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-2 sm:gap-3 uppercase tracking-widest active:translate-y-0"
                             title="Sales Movement Log"
                         >
@@ -1820,153 +1838,153 @@ const SkeletonLoader = () => (
                                                 key={row.rowIndex}
                                                 className="group transition-all duration-500 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.05]"
                                             >
-                                            <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col gap-2 min-w-[220px] py-1">
-                                                    <div className="flex items-center">
-                                                        <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
+                                                <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-col gap-2 min-w-[220px] py-1">
+                                                        <div className="flex items-center">
+                                                            <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
+                                                        </div>
+                                                        <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed">{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                     </div>
-                                                    <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed">{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-wrap gap-2 max-w-[200px]">
-                                                    {row.racks.map((r, i) => (
-                                                        <div key={i} className="group/rack inline-flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm transition-all font-mono whitespace-nowrap overflow-hidden hover:border-emerald-500/50">
-                                                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                                                <MapPin size={11} className="text-emerald-500 shrink-0" />
-                                                                <span className="font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase">{r.rackLocation}</span>
+                                                </td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-wrap gap-2 max-w-[200px]">
+                                                        {row.racks.map((r, i) => (
+                                                            <div key={i} className="group/rack inline-flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm transition-all font-mono whitespace-nowrap overflow-hidden hover:border-emerald-500/50">
+                                                                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                                                    <MapPin size={11} className="text-emerald-500 shrink-0" />
+                                                                    <span className="font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase">{r.rackLocation}</span>
+                                                                </div>
+                                                                <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pl-4 h-0 opacity-0 group-hover/rack:h-4 group-hover/rack:opacity-100 transition-all duration-300 delay-100 group-hover/rack:delay-[3000ms]">
+                                                                    {r.qty} ຊິ້ນ
+                                                                </div>
                                                             </div>
-                                                            <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pl-4 h-0 opacity-0 group-hover/rack:h-4 group-hover/rack:opacity-100 transition-all duration-300 delay-100 group-hover/rack:delay-[3000ms]">
-                                                                {r.qty} ຊິ້ນ
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-col gap-2 max-w-[180px]">
+                                                        <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30 shadow-sm">
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
+                                                        </div>
+                                                        <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50 shadow-sm">
+                                                            <span className="text-[10px] font-bold uppercase tracking-widest truncate">{row.category2 || '-'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-col items-stretch gap-2 w-28">
+                                                        {row.productTag && (
+                                                            <div className={`inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
+                                                                <span>{row.productTag === 'hook' ? '🪝' : '📦'}</span>
+                                                                <span className="text-[10px] font-extrabold uppercase tracking-widest">{row.productTag}</span>
                                                             </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col gap-2 max-w-[180px]">
-                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30 shadow-sm">
-                                                        <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
+                                                        )}
+                                                        {row.maxQty && (
+                                                            <div className="inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                                <span className="text-[10px] font-bold uppercase tracking-widest">{t('results.maxQtyLabel')} {row.maxQty}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50 shadow-sm">
-                                                        <span className="text-[10px] font-bold uppercase tracking-widest truncate">{row.category2 || '-'}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col items-stretch gap-2 w-28">
-                                                    {row.productTag && (
-                                                        <div className={`inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md shadow-sm border ${row.productTag === 'hook' ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50' : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50'}`}>
-                                                            <span>{row.productTag === 'hook' ? '🪝' : '📦'}</span>
-                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest">{row.productTag}</span>
-                                                        </div>
-                                                    )}
-                                                    {row.maxQty && (
-                                                        <div className="inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
-                                                            <span className="text-[10px] font-bold uppercase tracking-widest">{t('results.maxQtyLabel')} {row.maxQty}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            {/* ລວມທັງໝົດ = ໜ້າຮ້ານ(รวมทุกชั้น) + ຫຼັງສາງ + DC */}
-                                            <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
-                                                <div className="flex flex-col items-center relative">
-                                                    <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                        {(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
-                                                    </span>
+                                                </td>
+                                                {/* ລວມທັງໝົດ = ໜ້າຮ້ານ(รวมทุกชั้น) + ຫຼັງສາງ + DC */}
+                                                <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
+                                                    <div className="flex flex-col items-center relative">
+                                                        <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            {(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
+                                                        </span>
 
-                                                    {/* Hover Tooltip Breakdown: Q = F + T + D */}
-                                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
-                                                        <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex justify-between gap-4"><span className="text-emerald-300">ຊັ້ນນີ້ (Rack Qty):</span> <span className="font-mono text-emerald-300">{row.qty || 0}</span></div>
-                                                                <div className="border-t border-white/20 my-0.5"></div>
-                                                                <div className="flex justify-between gap-4"><span>ທັງສາຂາ (All Racks F):</span> <span className="font-mono">{barcodeTotals[row.barcode] || 0}</span></div>
-                                                                <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (T):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
-                                                                <div className="flex justify-between gap-4"><span>DC (D):</span> <span className="font-mono">{row.dcQty || 0}</span></div>
-                                                                <div className="border-t border-white/20 my-0.5"></div>
-                                                                <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F(All)+T+D:</span> <span className="font-mono">{(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
+                                                        {/* Hover Tooltip Breakdown: Q = F + T + D */}
+                                                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
+                                                            <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="flex justify-between gap-4"><span className="text-emerald-300">ຊັ້ນນີ້ (Rack Qty):</span> <span className="font-mono text-emerald-300">{row.qty || 0}</span></div>
+                                                                    <div className="border-t border-white/20 my-0.5"></div>
+                                                                    <div className="flex justify-between gap-4"><span>ທັງສາຂາ (All Racks F):</span> <span className="font-mono">{barcodeTotals[row.barcode] || 0}</span></div>
+                                                                    <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (T):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
+                                                                    <div className="flex justify-between gap-4"><span>DC (D):</span> <span className="font-mono">{row.dcQty || 0}</span></div>
+                                                                    <div className="border-t border-white/20 my-0.5"></div>
+                                                                    <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F(All)+T+D:</span> <span className="font-mono">{(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
+                                                                </div>
                                                             </div>
+                                                            <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
                                                         </div>
-                                                        <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
-                                                    </div>
 
-                                                    <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mt-1">
-                                                        Q (TOTAL)
+                                                        <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mt-1">
+                                                            Q (TOTAL)
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <div className="flex flex-col items-center px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
-                                                        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{barcodeTotals[row.barcode] || 0}</span>
-                                                        <div className="text-[9px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">ລວມໜ້າຮ້ານ</div>
+                                                </td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <div className="flex flex-col items-center px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
+                                                            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{barcodeTotals[row.barcode] || 0}</span>
+                                                            <div className="text-[9px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mt-1">ລວມໜ້າຮ້ານ</div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            {/* ຈຳນວນ ຫຼັງສາງ */}
-                                            <td className="px-6 py-6 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                        {row.warehouseQty ?? 0}
-                                                    </span>
-                                                    <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
-                                                </div>
-                                            </td>
-                                            {/* QTY DC (Warehouse) */}
-                                            <td className="px-6 py-6 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <span className={`text-2xl font-black leading-none ${(row.dcQty ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                        {row.dcQty ?? 0}
-                                                    </span>
-                                                    <div className="text-[9px] font-black text-violet-400 uppercase tracking-widest mt-1">DC</div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    {row.salesQty != null ? (
-                                                        <span className="text-2xl font-black text-orange-500 dark:text-orange-400 leading-none">{Math.round(row.salesQty).toLocaleString()}</span>
-                                                    ) : (
-                                                        <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
-                                                    )}
-                                                    <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mt-1">Sales</div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
-                                            <td className="px-6 py-6 text-center">
-                                                <button className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
-                                                    {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
-                                                </button>
-                                            </td>
-                                            <td className="px-8 py-6 text-right">
-                                                <div className="flex flex-col items-end gap-1.5">
-                                                    <button onClick={() => setDiagnosticRow(row)} className="p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-sky-500 transition-all self-end mb-1" title="View Diagnostics">
-                                                        <Info size={14} />
+                                                </td>
+                                                {/* ຈຳນວນ ຫຼັງສາງ */}
+                                                <td className="px-6 py-6 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                            {row.warehouseQty ?? 0}
+                                                        </span>
+                                                        <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
+                                                    </div>
+                                                </td>
+                                                {/* QTY DC (Warehouse) */}
+                                                <td className="px-6 py-6 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-2xl font-black leading-none ${(row.dcQty ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            {row.dcQty ?? 0}
+                                                        </span>
+                                                        <div className="text-[9px] font-black text-violet-400 uppercase tracking-widest mt-1">DC</div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        {row.salesQty != null ? (
+                                                            <span className="text-2xl font-black text-orange-500 dark:text-orange-400 leading-none">{Math.round(row.salesQty).toLocaleString()}</span>
+                                                        ) : (
+                                                            <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                        )}
+                                                        <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mt-1">Sales</div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <button className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
+                                                        {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                                     </button>
-                                                    {row.racks.map((r, i) => (
-                                                        <div key={i} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 pr-1 pl-2.5 py-1 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">{r.rackLocation}</span>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedRow(r.originalRow);
-                                                                    setEditQty(r.qty || 0);
-                                                                    setEditLocation(r.rackLocation || '');
-                                                                    setEditCat1(row.category1 || '');
-                                                                    setEditCat2(row.category2 || '');
-                                                                    setEditReason('');
-                                                                    setMergeAmount('');
-                                                                }}
-                                                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 shadow-sm transition-all flex items-center gap-1"
-                                                                title="ແກ້ໄຂຈຳນວນ"
-                                                            >
-                                                                <Edit2 size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="flex flex-col items-end gap-1.5">
+                                                        <button onClick={() => setDiagnosticRow(row)} className="p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-sky-500 transition-all self-end mb-1" title="View Diagnostics">
+                                                            <Info size={14} />
+                                                        </button>
+                                                        {row.racks.map((r, i) => (
+                                                            <div key={i} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 pr-1 pl-2.5 py-1 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                                <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">{r.rackLocation}</span>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedRow(r.originalRow);
+                                                                        setEditQty(r.qty || 0);
+                                                                        setEditLocation(r.rackLocation || '');
+                                                                        setEditCat1(row.category1 || '');
+                                                                        setEditCat2(row.category2 || '');
+                                                                        setEditReason('');
+                                                                        setMergeAmount('');
+                                                                    }}
+                                                                    className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 shadow-sm transition-all flex items-center gap-1"
+                                                                    title="ແກ້ໄຂຈຳນວນ"
+                                                                >
+                                                                    <Edit2 size={12} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         ))}
                                     </>
                                 ) : (
@@ -1999,6 +2017,15 @@ const SkeletonLoader = () => (
                                                 {searchTerm.length >= 5 && (
                                                     <button
                                                         onClick={() => {
+                                                            // Block if barcode has Lao/Thai chars or no numbers
+                                                            const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
+                                                            const hasNoNumbers = !/\d/.test(searchTerm);
+                                                            if (hasThaiLao || hasNoNumbers) {
+                                                                const audio = new Audio(barcodeNotCorrectSound);
+                                                                audio.play().catch(() => {});
+                                                                setShowLanguageWarning(true);
+                                                                return;
+                                                            }
                                                             if (dbSource !== 'supabase') {
                                                                 alert('⚠️ Please connect to Cloud first.');
                                                                 return;
@@ -2240,14 +2267,14 @@ const SkeletonLoader = () => (
             </div>
 
             {/* Modals & Overlays */}
-            <StoreSalesLogModal 
-                isOpen={showSalesLogModal} 
-                onClose={() => setShowSalesLogModal(false)} 
-                branchId={currentBranch} 
+            <StoreSalesLogModal
+                isOpen={showSalesLogModal}
+                onClose={() => setShowSalesLogModal(false)}
+                branchId={currentBranch}
             />
 
 
-
+            ๆ
             {/* Scanner Modal */}
             {showScanner && (
                 <BarcodeScannerModal

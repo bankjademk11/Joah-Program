@@ -5,6 +5,7 @@ import { supabase } from '../../../utils/supabaseClient';
 import { getStoreRackSuggestions, getStoreBranchCategories, validateStoreRack } from '../../../utils/storeRackUtils';
 import LocationInspector from '../inventory/LocationInspector';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
+import notCorrectSound from '../../../assets/Sound/Notcorrect.wav';
 
 const QuickAddPanel = ({
     isOpen,
@@ -47,6 +48,57 @@ const QuickAddPanel = ({
         latestOnSave.current = onSave;
     }, [onSave]);
 
+    const playErrorSound = () => {
+        const audio = new Audio(notCorrectSound);
+        audio.play().catch(e => console.error("Error playing sound:", e));
+    };
+
+    const handleSaveClick = () => {
+        if (isSaving) return;
+
+        // Validation Checks
+        if (!quickAddForm.barcode_no) {
+            playErrorSound();
+            alert("ກະລຸນາສະແກນບາໂຄດກ່ອນ (Please scan barcode)");
+            return;
+        }
+        if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0) {
+            playErrorSound();
+            alert("ກະລຸນາໃສ່ຈຳນວນ ຈຳນວນສິນຄ້າ (QTY) ໃຫ້ຖືກຕ້ອງ");
+            return;
+        }
+        if (!quickAddForm.max_qty || parseFloat(quickAddForm.max_qty) <= 0) {
+            playErrorSound();
+            alert("ກະລຸນາໃສ່ຄວາມຈຸສູງສຸດ (Max QTY) ດ້ວຍ");
+            return;
+        }
+        if (!quickAddForm.rack_location) {
+            playErrorSound();
+            alert("ກະລຸນາເລືອກໂລເຄຊັ້ນ (Please select a location)");
+            return;
+        }
+        if (!quickAddForm.product_tag) {
+            playErrorSound();
+            alert("ກະລຸນາເລືອກ Product Tag (Please select a tag)");
+            return;
+        }
+        if (!selectedReasonOption) {
+            playErrorSound();
+            alert("ກະລຸນາເລືອກເຫດຜົນ (Please select a reason)");
+            return;
+        }
+        if (selectedReasonOption === 'Other' && !otherReasonText.trim()) {
+            playErrorSound();
+            alert("ກະລຸນາລະບຸເຫດຜົນອື່ນໆ (Please specify other reason)");
+            return;
+        }
+
+        // All good, trigger save
+        if (latestOnSave.current) {
+            latestOnSave.current();
+        }
+    };
+
     // Handle Global Keyboard Events (Enter & Arrows)
     useEffect(() => {
         const handleGlobalKeys = (e) => {
@@ -77,19 +129,14 @@ const QuickAddPanel = ({
                 } else if (focusedStep === 'rack' && !dropdownOpen) {
                     // Final Save
                     e.preventDefault();
-                    if (!quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)) {
-                        return;
-                    }
-                    if (latestOnSave.current) {
-                        latestOnSave.current();
-                    }
+                    handleSaveClick();
                 }
             }
         };
 
         document.addEventListener('keydown', handleGlobalKeys);
         return () => document.removeEventListener('keydown', handleGlobalKeys);
-    }, [isOpen, isSaving, focusedStep, quickAddForm.qty, quickAddForm.rack_location, selectedReasonOption, t, setQuickAddForm]);
+    }, [isOpen, isSaving, focusedStep, quickAddForm, selectedReasonOption, otherReasonText, dropdownOpen, setQuickAddForm]);
 
     useEffect(() => {
         if (selectedReasonOption === 'Other') {
@@ -411,6 +458,7 @@ const QuickAddPanel = ({
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
+                                            e.stopPropagation(); // 🛡️ Prevent bubbling to global save handler
                                             maxQtyInputRef.current?.focus();
                                             maxQtyInputRef.current?.select();
                                             setFocusedStep('maxQty');
@@ -447,6 +495,7 @@ const QuickAddPanel = ({
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
+                                            e.stopPropagation(); // 🛡️ Prevent bubbling to global save handler
                                             setFocusedStep('tag');
                                             e.target.blur(); // Blur to show tag focus visually
                                         }
@@ -946,8 +995,8 @@ const QuickAddPanel = ({
                             {t('quickAdd.cancel')}
                         </button>
                         <button
-                            onClick={onSave}
-                            disabled={isSaving || !quickAddForm.qty || parseFloat(quickAddForm.qty) <= 0 || (selectedReasonOption === t('reasons.newStock') && parseFloat(quickAddForm.qty) <= 0)}
+                            onClick={handleSaveClick}
+                            disabled={isSaving}
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
