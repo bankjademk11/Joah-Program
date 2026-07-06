@@ -1076,8 +1076,8 @@ function AppContent() {
                         {/* Branch Selector */}
                         {(() => {
                           const branches = isAdmin
-                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
-                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເມກ້າມໍtest']
+                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ', 'ເມກ້າມໍtest'].filter(Boolean)));
 
                           if (branches.length <= 1) return null;
 

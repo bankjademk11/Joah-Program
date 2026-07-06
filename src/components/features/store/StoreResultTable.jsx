@@ -22,6 +22,7 @@ import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCa
 import StoreEditPanel from './StoreEditPanel';
 import DiagnosticPanel from '../inventory/DiagnosticPanel';
 import StoreQuickAddPanel from './StoreQuickAddPanel';
+import StoreSalesLogModal from './StoreSalesLogModal';
 import LocationInspector from '../inventory/LocationInspector';
 
 const StoreResultTable = ({
@@ -190,6 +191,7 @@ const SkeletonLoader = () => (
     useEffect(() => { quickAddFormRef.current = quickAddForm; }, [quickAddForm]);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // New sort state
     const [optimisticItems, setOptimisticItems] = useState([]); // Optimistic UI for added items
+    const [showSalesLogModal, setShowSalesLogModal] = useState(false); // Sales Movement Log Modal
 
 
 
@@ -1706,9 +1708,17 @@ const SkeletonLoader = () => (
                         {onRefresh && (
                             <button onClick={handleManualRefresh} disabled={isRefreshing || cooldownRemaining > 0} className={`bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 text-slate-600 dark:text-slate-300 hover:text-emerald-600 py-3 sm:py-4 px-5 sm:px-8 rounded-2xl sm:rounded-[2rem] text-[10px] sm:text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(16,185,129,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-2 sm:gap-3 uppercase tracking-widest active:translate-y-0 ${cooldownRemaining > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <RotateCw size={18} strokeWidth={2.5} className={isRefreshing ? 'animate-spin' : ''} />
-                                <span>{isRefreshing ? t('results.loading') : cooldownRemaining > 0 ? `ລໍຖ້າ ${Math.floor(cooldownRemaining / 60)}:${(cooldownRemaining % 60).toString().padStart(2, '0')}` : t('navbar.refresh')}</span>
+                                <span className="hidden sm:inline">{isRefreshing ? t('results.loading') : cooldownRemaining > 0 ? `ລໍຖ້າ ${Math.floor(cooldownRemaining / 60)}:${(cooldownRemaining % 60).toString().padStart(2, '0')}` : t('navbar.refresh')}</span>
                             </button>
                         )}
+                        <button 
+                            onClick={() => setShowSalesLogModal(true)} 
+                            className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-700 text-slate-600 dark:text-slate-300 hover:text-teal-600 py-3 sm:py-4 px-5 sm:px-8 rounded-2xl sm:rounded-[2rem] text-[10px] sm:text-xs font-black shadow-sm hover:shadow-[0_10px_20px_-5px_rgba(20,184,166,0.15)] transition-all hover:-translate-y-1 flex items-center justify-center gap-2 sm:gap-3 uppercase tracking-widest active:translate-y-0"
+                            title="Sales Movement Log"
+                        >
+                            <History size={18} strokeWidth={2.5} />
+                            <span className="hidden sm:inline">Movement Log</span>
+                        </button>
                     </div>
                 </div>
 
@@ -2228,6 +2238,15 @@ const SkeletonLoader = () => (
                     currentBranch={currentBranch}
                 />
             </div>
+
+            {/* Modals & Overlays */}
+            <StoreSalesLogModal 
+                isOpen={showSalesLogModal} 
+                onClose={() => setShowSalesLogModal(false)} 
+                branchId={currentBranch} 
+            />
+
+
 
             {/* Scanner Modal */}
             {showScanner && (

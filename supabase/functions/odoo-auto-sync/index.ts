@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ODOO_URL = "https://lod.kokkokm.com";
-const BRANCH_ID = 249; // ຕະຫຼາດລາວ
+const BRANCH_ID = 249; // We will map Odoo branches later, for now we sync Megamall/Taladlao
 
 serve(async (req) => {
     try {
@@ -57,8 +57,9 @@ serve(async (req) => {
 
         console.log("2. Fetching last processed ID from Supabase...");
         const { data: logs } = await supabase
-            .from('test_pos_sync_logs')
+            .from('odoo_sync_logs')
             .select('last_processed_id, status')
+            .eq('branch_id', 'ເມກ້າມໍtest') // Filter by our test branch
             .order('sync_started_at', { ascending: false })
             .limit(1);
 
@@ -153,35 +154,78 @@ serve(async (req) => {
 
         console.log("6. Fetching Store Stock...");
         const { data: storeItems } = await supabase
-            .from('test_taladlao_store')
+            .from('store_inventory')
             .select('*')
+            .eq('branch_id', 'ເມກ້າມໍtest')
             .in('barcode_no', uniqueBarcodes);
 
         let totalQtyDeducted = 0;
         const syncDetails: any[] = [];
         const updatePromises: any[] = [];
 
-        console.log("7. Calculating Deductions...");
+        console.log("7. Calculating Cascade Deductions...");
+        const storeItemsByBarcode: Record<string, any[]> = {};
+        (storeItems || []).forEach((item: any) => {
+            if (!storeItemsByBarcode[item.barcode_no]) {
+                storeItemsByBarcode[item.barcode_no] = [];
+            }
+            storeItemsByBarcode[item.barcode_no].push(item);
+        });
+
         uniqueBarcodes.forEach(barcode => {
             const sold = salesSummary[barcode];
-            const storeItem = storeItems?.find(s => s.barcode_no === barcode);
+            let remainingToDeduct = sold.qty_sold;
+            
+            const rowsForBarcode = storeItemsByBarcode[barcode] || [];
+            rowsForBarcode.sort((a, b) => (b.store_qty || 0) - (a.store_qty || 0));
 
-            if (storeItem) {
-                const newQty = storeItem.qty - sold.qty_sold;
+            let totalOldQty = rowsForBarcode.reduce((sum, r) => sum + (r.store_qty || 0), 0);
+
+            if (rowsForBarcode.length > 0) {
+                for (let i = 0; i < rowsForBarcode.length; i++) {
+                    if (remainingToDeduct <= 0) break;
+                    
+                    const row = rowsForBarcode[i];
+                    const rowQty = row.store_qty || 0;
+                    const isLastRow = i === rowsForBarcode.length - 1;
+                    
+                    let deductFromThis = 0;
+                    if (rowQty >= remainingToDeduct || isLastRow) {
+                        deductFromThis = remainingToDeduct;
+                    } else {
+                        deductFromThis = rowQty;
+                    }
+                    
+                    remainingToDeduct -= deductFromThis;
+                    const newRowQty = rowQty - deductFromThis;
+                    
+                    updatePromises.push(
+                        supabase.from('store_inventory').update({ 
+                            store_qty: newRowQty, 
+                            sales_qty: (row.sales_qty || 0) + deductFromThis,
+                            last_updated: new Date().toISOString() 
+                        }).eq('id', row.id)
+                    );
+                }
                 totalQtyDeducted += sold.qty_sold;
 
                 syncDetails.push({
                     barcode_no: barcode,
                     item_name: sold.name,
                     qty_sold: sold.qty_sold,
-                    old_store_qty: storeItem.qty,
-                    new_store_qty: newQty,
+                    old_store_qty: totalOldQty,
+                    new_store_qty: totalOldQty - sold.qty_sold,
                     status: 'success'
                 });
-
-                updatePromises.push(
-                    supabase.from('test_taladlao_store').update({ qty: newQty, last_updated: new Date().toISOString() }).eq('id', storeItem.id)
-                );
+            } else {
+                syncDetails.push({
+                    barcode_no: barcode,
+                    item_name: sold.name,
+                    qty_sold: sold.qty_sold,
+                    old_store_qty: 0,
+                    new_store_qty: 0,
+                    status: 'not_found'
+                });
             }
         });
 
@@ -189,14 +233,14 @@ serve(async (req) => {
 
         console.log("8. Saving Logs...");
         const { data: logEntry, error: logErr } = await supabase
-            .from('test_pos_sync_logs')
+            .from('odoo_sync_logs')
             .insert([{
                 sync_started_at: new Date().toISOString(),
                 sync_completed_at: new Date().toISOString(),
                 total_items_sold: uniqueBarcodes.length,
                 total_qty_deducted: totalQtyDeducted,
                 status: 'success',
-                branch_name: 'ຕະຫຼາດລາວ (TEST) [AUTO]',
+                branch_id: 'ເມກ້າມໍtest',
                 last_processed_id: newMaxId
             }])
             .select();
@@ -205,7 +249,7 @@ serve(async (req) => {
 
         if (logEntry && logEntry[0] && syncDetails.length > 0) {
             const detailsToInsert = syncDetails.map(d => ({ ...d, log_id: logEntry[0].id }));
-            await supabase.from('test_pos_sync_details').insert(detailsToInsert);
+            await supabase.from('odoo_sync_details').insert(detailsToInsert);
         }
 
         console.log("SYNC SUCCESS! Total Deducted:", totalQtyDeducted);

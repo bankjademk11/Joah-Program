@@ -29,7 +29,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     // -----------------------------------------
     const loadLogs = async () => {
         const { data, error } = await supabase
-            .from('test_pos_sync_logs')
+            .from('odoo_sync_logs')
             .select('*')
             .order('sync_started_at', { ascending: false })
             .limit(10);
@@ -39,8 +39,8 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     const loadDetailedLogs = async () => {
         setLoading(true);
         const { data, error } = await supabase
-            .from('test_pos_sync_details')
-            .select('*, test_pos_sync_logs(sync_completed_at)')
+            .from('odoo_sync_details')
+            .select('*, odoo_sync_logs(sync_completed_at)')
             .order('id', { ascending: false })
             .limit(1000);
         if (!error && data) setDetailedLogs(data);
@@ -50,9 +50,10 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     const loadStoreStock = async () => {
         setLoading(true);
         const { data, error } = await supabase
-            .from('test_taladlao_store')
+            .from('store_inventory')
             .select('*')
-            .order('qty', { ascending: true }) // สินค้าที่เหลือน้อยสุดขึ้นก่อน
+            .eq('branch_id', 'ເມກ້າມໍtest')
+            .order('store_qty', { ascending: true }) // สินค้าที่เหลือน้อยสุดขึ้นก่อน
             .limit(1000);
         if (!error && data) setStoreStock(data);
         setLoading(false);
@@ -69,7 +70,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     };
 
     const handleRunSync = async () => {
-        if (!confirm('ຢືນຢັນການເລີ່ມດຶງຍອດຂາຍຈາກ Odoo ມາຫັກສະຕັອກໃນຕາຕະລາງຈຳລອງ (test_taladlao_store)?')) return;
+        if (!confirm('ຢືນຢັນການເລີ່ມດຶງຍອດຂາຍຈາກ Odoo ມາຫັກສະຕັອກໃນຕາຕະລາງຈິງ (store_inventory: ເມກ້າມໍtest)?')) return;
 
         setLoading(true);
         setStatus({ type: 'info', message: '1. ກຳລັງເຊື່ອມຕໍ່ Odoo...' });
@@ -140,8 +141,9 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             setStatus({ type: 'info', message: `4. ພົບຍອດຂາຍ ${uniqueBarcodes.length} SKU ກຳລັງດຶງຂໍ້ມູນຄັງ...` });
 
             const { data: storeItems, error: fetchErr } = await supabase
-                .from('test_taladlao_store')
+                .from('store_inventory')
                 .select('*')
+                .eq('branch_id', 'ເມກ້າມໍtest')
                 .in('barcode_no', uniqueBarcodes);
 
             if (fetchErr) throw fetchErr;
@@ -152,32 +154,79 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             }
             console.log('🔍 === END BARCODE DEBUG ===');
 
-            setStatus({ type: 'info', message: '5. ກຳລັງຄຳນວນແລະອັບເດດສະຕັອກ...' });
+            setStatus({ type: 'info', message: '5. ກຳລັງຄຳນວນແລະອັບເດດສະຕັອກ (Cascade Deduct)...' });
 
             let totalQtyDeducted = 0;
             const syncDetails = [];
             const updatePromises = [];
 
+            // Group store items by barcode
+            const storeItemsByBarcode = {};
+            (storeItems || []).forEach(item => {
+                if (!storeItemsByBarcode[item.barcode_no]) {
+                    storeItemsByBarcode[item.barcode_no] = [];
+                }
+                storeItemsByBarcode[item.barcode_no].push(item);
+            });
+
             uniqueBarcodes.forEach(barcode => {
                 const sold = salesSummary[barcode];
-                const storeItem = storeItems?.find(s => s.barcode_no === barcode);
+                let remainingToDeduct = sold.qty_sold;
+                
+                const rowsForBarcode = storeItemsByBarcode[barcode] || [];
+                // Sort rows by store_qty DESC (largest rack first)
+                rowsForBarcode.sort((a, b) => (b.store_qty || 0) - (a.store_qty || 0));
 
-                if (storeItem) {
-                    const newQty = storeItem.qty - sold.qty_sold;
+                let totalOldQty = rowsForBarcode.reduce((sum, r) => sum + (r.store_qty || 0), 0);
+
+                if (rowsForBarcode.length > 0) {
+                    for (let i = 0; i < rowsForBarcode.length; i++) {
+                        if (remainingToDeduct <= 0) break;
+                        
+                        const row = rowsForBarcode[i];
+                        const rowQty = row.store_qty || 0;
+                        
+                        // If it's the LAST row, and we still have to deduct, just let it go negative
+                        const isLastRow = i === rowsForBarcode.length - 1;
+                        
+                        let deductFromThis = 0;
+                        if (rowQty >= remainingToDeduct || isLastRow) {
+                            deductFromThis = remainingToDeduct;
+                        } else {
+                            deductFromThis = rowQty;
+                        }
+                        
+                        remainingToDeduct -= deductFromThis;
+                        const newRowQty = rowQty - deductFromThis;
+                        
+                        updatePromises.push(
+                            supabase.from('store_inventory').update({ 
+                                store_qty: newRowQty, 
+                                sales_qty: (row.sales_qty || 0) + deductFromThis,
+                                last_updated: new Date().toISOString() 
+                            }).eq('id', row.id)
+                        );
+                    }
                     totalQtyDeducted += sold.qty_sold;
 
                     syncDetails.push({
                         barcode_no: barcode,
-                        item_name: sold.name, // Use Odoo's raw name so we can extract the Odoo Barcode in the UI
+                        item_name: sold.name,
                         qty_sold: sold.qty_sold,
-                        old_store_qty: storeItem.qty,
-                        new_store_qty: newQty,
+                        old_store_qty: totalOldQty,
+                        new_store_qty: totalOldQty - sold.qty_sold,
                         status: 'success'
                     });
-
-                    updatePromises.push(
-                        supabase.from('test_taladlao_store').update({ qty: newQty, last_updated: new Date().toISOString() }).eq('id', storeItem.id)
-                    );
+                } else {
+                    // Item not found in store test branch
+                    syncDetails.push({
+                        barcode_no: barcode,
+                        item_name: sold.name,
+                        qty_sold: sold.qty_sold,
+                        old_store_qty: 0,
+                        new_store_qty: 0,
+                        status: 'not_found'
+                    });
                 }
             });
 
@@ -185,14 +234,14 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             setStatus({ type: 'info', message: '6. ກຳລັງບັນທຶກປະຫວັດລົງ Database...' });
 
             const { data: logEntry, error: logErr } = await supabase
-                .from('test_pos_sync_logs')
+                .from('odoo_sync_logs')
                 .insert([{
                     sync_started_at: new Date().toISOString(),
                     sync_completed_at: new Date().toISOString(),
                     total_items_sold: uniqueBarcodes.length,
                     total_qty_deducted: totalQtyDeducted,
                     status: 'success',
-                    branch_name: 'ຕະຫຼາດລາວ (TEST)',
+                    branch_id: 'ເມກ້າມໍtest',
                     last_processed_id: newMaxId
                 }])
                 .select();
@@ -201,7 +250,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
 
             if (logEntry && logEntry[0] && syncDetails.length > 0) {
                 const detailsToInsert = syncDetails.map(d => ({ ...d, log_id: logEntry[0].id }));
-                await supabase.from('test_pos_sync_details').insert(detailsToInsert);
+                await supabase.from('odoo_sync_details').insert(detailsToInsert);
             }
 
             setStatus({ type: 'success', message: `✅ ສຳເລັດ! ຫັກສະຕັອກໄປທັງໝົດ ${totalQtyDeducted} ຊິ້ນ` });
@@ -220,7 +269,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     const exportHistoryToExcel = () => {
         if (detailedLogs.length === 0) return;
         const exportData = detailedLogs.map(log => ({
-            'ວັນທີ-ເວລາ (Date)': log.test_pos_sync_logs?.sync_completed_at ? new Date(log.test_pos_sync_logs.sync_completed_at).toLocaleString('lo-LA') : '',
+            'ວັນທີ-ເວລາ (Date)': log.odoo_sync_logs?.sync_completed_at ? new Date(log.odoo_sync_logs.sync_completed_at).toLocaleString('lo-LA') : '',
             'ບາໂຄດ (Barcode)': log.barcode_no,
             'ຊື່ສິນຄ້າ (Item Name)': log.item_name,
             'ຈຳນວນທີ່ຂາຍ (Sold Qty)': log.qty_sold,
@@ -393,7 +442,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                                         const { barcode: odooBarcode, name: cleanName } = splitProduct(log.item_name);
                                         return (
                                             <tr key={log.id} className="hover:bg-slate-50">
-                                                <td className="p-4 font-semibold text-slate-600">{log.test_pos_sync_logs?.sync_completed_at ? new Date(log.test_pos_sync_logs.sync_completed_at).toLocaleString('lo-LA') : ''}</td>
+                                                <td className="p-4 font-semibold text-slate-600">{log.odoo_sync_logs?.sync_completed_at ? new Date(log.odoo_sync_logs.sync_completed_at).toLocaleString('lo-LA') : ''}</td>
                                                 <td className="p-4 font-mono text-sm text-indigo-600 font-black">{log.barcode_no}</td>
                                                 <td className="p-4 font-mono text-sm text-orange-600 font-black">{odooBarcode !== '-' ? odooBarcode : 'N/A'}</td>
                                                 <td className="p-4 font-bold text-slate-800">{cleanName}</td>
@@ -416,7 +465,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             {activeTab === 'stock' && (
                 <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700 flex flex-col flex-1 overflow-hidden">
                     <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-50">
-                        <h3 className="font-black text-xl text-slate-700 flex items-center gap-3"><Database size={24} /> ຖານຂໍ້ມູນຈຳລອງ (test_taladlao_store)</h3>
+                        <h3 className="font-black text-xl text-slate-700 flex items-center gap-3"><Database size={24} /> ຖານຂໍ້ມູນຈິງ (store_inventory: ເມກ້າມໍtest)</h3>
                         <div className="relative w-full sm:w-80">
                             <input
                                 type="text"
@@ -445,8 +494,8 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                                         <td className="p-4 font-mono text-sm font-bold">{item.barcode_no}</td>
                                         <td className="p-4 font-bold text-slate-800">{item.item_name}</td>
                                         <td className="p-4 text-right">
-                                            <span className={`px-5 py-2 rounded-xl font-black text-lg ${item.qty < 1000 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
-                                                {item.qty}
+                                            <span className={`px-5 py-2 rounded-xl font-black text-lg ${(item.store_qty || 0) < 1000 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                                                {item.store_qty || 0}
                                             </span>
                                         </td>
                                     </tr>
