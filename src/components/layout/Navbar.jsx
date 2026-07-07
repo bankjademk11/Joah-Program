@@ -1,4 +1,5 @@
 import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut, LayoutGrid } from 'lucide-react';
+import LowStockBell from '../ui/LowStockBell';
 import joahLogo from '../../assets/Joah.jpeg';
 import laosFlag from '../../assets/Laos.png';
 import englishFlag from '../../assets/EnglishFlang.png';
@@ -235,6 +236,11 @@ const Navbar = ({
                                     </div>
                                 )}
                             </div>
+                        )}
+
+                        {/* Low Stock Bell — only on store pages */}
+                        {['store-inventory-mockup'].includes(step) && (
+                            <LowStockBell />
                         )}
 
                         {/* User Profile Badge — hidden on mobile */}

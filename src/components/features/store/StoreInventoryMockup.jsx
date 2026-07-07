@@ -170,32 +170,51 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         }
       }
 
-      // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ)
+      // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ) in parallel to prevent mobile network bottleneck
       const relevantBarcodes = [...new Set((storeData || []).map(r => r.barcode_no))].filter(Boolean);
 
       let whData = [];
       let dcData = [];
       if (relevantBarcodes.length > 0) {
         const chunkSize = 200;
+        const whPromises = [];
+        const dcPromises = [];
+
         for (let i = 0; i < relevantBarcodes.length; i += chunkSize) {
           const chunk = relevantBarcodes.slice(i, i + chunkSize);
 
           // location_inventory → warehouseQty (ຫຼັງສາງ)
-          const { data: whChunk, error: whErr } = await supabase
-            .from('location_inventory')
-            .select('barcode_no, qty')
-            .eq('branch_id', selectedBranch)
-            .in('barcode_no', chunk);
-          if (!whErr && whChunk) whData = [...whData, ...whChunk];
+          whPromises.push(
+            supabase
+              .from('location_inventory')
+              .select('barcode_no, qty')
+              .eq('branch_id', selectedBranch)
+              .in('barcode_no', chunk)
+          );
 
           // table_dc_stock → dcQty (QTY DC Warehouse)
-          const { data: dcChunk, error: dcErr } = await supabase
-            .from('table_dc_stock')
-            .select('barcode, qty')
-            .eq('branch_id', selectedBranch)
-            .in('barcode', chunk);
-          if (!dcErr && dcChunk) dcData = [...dcData, ...dcChunk];
+          dcPromises.push(
+            supabase
+              .from('table_dc_stock')
+              .select('barcode, qty')
+              .eq('branch_id', selectedBranch)
+              .in('barcode', chunk)
+          );
         }
+
+        // Execute queries in parallel
+        const [whResponses, dcResponses] = await Promise.all([
+          Promise.all(whPromises),
+          Promise.all(dcPromises)
+        ]);
+
+        // Merge results
+        whResponses.forEach(res => {
+          if (!res.error && res.data) whData = [...whData, ...res.data];
+        });
+        dcResponses.forEach(res => {
+          if (!res.error && res.data) dcData = [...dcData, ...res.data];
+        });
       }
 
       // Build warehouseMap (location_inventory)
@@ -238,58 +257,47 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     const channel = supabase
       .channel(`store_rt_all_${selectedBranch}`)
       // 1. Store QTY (ໜ້າຮ້ານ) – store_qty, sales_qty
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_inventory' }, (payload) => {
-        const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
-        if (rowBranch !== selectedBranch) return;
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_inventory' }, async (payload) => {
+        const rowId = payload.new?.id || payload.old?.id;
+        if (!rowId) return;
+
+        if (payload.eventType === 'DELETE') {
+          setResults(prev => prev.filter(r => r.id !== rowId));
+          return;
+        }
 
         if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-          setResults(prev => {
-            const existingIdx = prev.findIndex(r => r.id === payload.new.id);
-            if (existingIdx >= 0) {
-              // Update existing row locally
-              const oldRow = prev[existingIdx];
-              const updatedRow = {
-                ...oldRow,
-                qty: payload.new.store_qty ?? 0,
-                rackLocation: payload.new.shelf_location || '—',
-                masterQty: payload.new.store_qty ?? 0,
-                salesQty: payload.new.sales_qty ?? null,
-                category1: payload.new.category_1_actual || oldRow.category1,
-                category2: payload.new.category_2_actual || oldRow.category2,
-                maxQty: payload.new.max_qty || null,
-                productTag: payload.new.product_tag || null,
-                status: (payload.new.store_qty ?? 0) > 0 ? 'passed' : 'missing'
-              };
-              const newArr = [...prev];
-              newArr[existingIdx] = updatedRow;
-              return newArr;
-            } else if (payload.eventType === 'INSERT') {
-              // New row added by someone else
-              const newRow = {
-                id: payload.new.id,
-                rowIndex: prev.length + 1,
-                barcode: payload.new.barcode_no,
-                itemName: payload.new.item_name || '',
-                masterItemName: payload.new.item_name || '',
-                rackLocation: payload.new.shelf_location || '—',
-                qty: payload.new.store_qty ?? 0,
-                maxQty: payload.new.max_qty || null,
-                productTag: payload.new.product_tag || null,
-                masterQty: payload.new.store_qty ?? 0,
-                warehouseQty: 0,
-                dcQty: 0,
-                salesQty: payload.new.sales_qty ?? null,
-                category1: payload.new.category_1_actual || '',
-                category2: payload.new.category_2_actual || '',
-                status: (payload.new.store_qty ?? 0) > 0 ? 'passed' : 'missing',
-                branch_id: payload.new.branch_id,
-              };
-              return [newRow, ...prev];
-            }
-            return prev;
-          });
-        } else if (payload.eventType === 'DELETE') {
-          setResults(prev => prev.filter(r => r.id !== payload.old.id));
+          try {
+            // Fetch the fully updated row from Supabase to prevent REPLICA IDENTITY (DEFAULT) bugs
+            const { data: freshRow, error } = await supabase
+              .from('store_inventory')
+              .select('*')
+              .eq('id', rowId)
+              .single();
+
+            if (error || !freshRow) return;
+            if (freshRow.branch_id !== selectedBranch) return;
+
+            setResults(prev => {
+              const existingIdx = prev.findIndex(r => r.id === rowId);
+              if (existingIdx >= 0) {
+                const oldRow = prev[existingIdx];
+                const updatedRow = {
+                  ...mapRow(freshRow, oldRow.rowIndex - 1, {}, {}),
+                  warehouseQty: oldRow.warehouseQty,
+                  dcQty: oldRow.dcQty
+                };
+                const newArr = [...prev];
+                newArr[existingIdx] = updatedRow;
+                return newArr;
+              } else {
+                const newRow = mapRow(freshRow, prev.length, {}, {});
+                return [newRow, ...prev];
+              }
+            });
+          } catch (err) {
+            console.error('[Realtime sync error]:', err);
+          }
         }
       })
       // 2. Warehouse QTY (ຫຼັງສາງ) – from location_inventory

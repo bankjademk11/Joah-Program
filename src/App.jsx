@@ -37,6 +37,7 @@ import StoreInboxPanel from './components/features/store/StoreInboxPanel';
 import StoreQuickAddPanel from './components/features/store/StoreQuickAddPanel';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import { LowStockProvider } from './contexts/LowStockContext';
 import MasterAudit from './components/features/admin/MasterAudit';
 import ProductManager from './components/features/admin/ProductManager';
 import HQCommandCenter from './components/features/admin/HQCommandCenter';
@@ -1890,7 +1891,9 @@ function AppContent() {
 function App() {
   return (
     <LanguageProvider>
-      <AppContent />
+      <LowStockProvider>
+        <AppContent />
+      </LowStockProvider>
     </LanguageProvider>
   );
 }

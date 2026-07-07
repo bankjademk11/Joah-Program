@@ -19,6 +19,7 @@ import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
+import { useLowStock } from '../../../contexts/LowStockContext';
 
 // Feature Components
 import StoreEditPanel from './StoreEditPanel';
@@ -32,7 +33,8 @@ const StoreResultTable = ({
     onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, currentBranch, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
-    const { success, error: showError } = useToast(); // Initialize Toast
+    const { success, error: showError } = useToast();
+    const { updateLowStock } = useLowStock();
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [isExporting, setIsExporting] = useState(false);
@@ -245,6 +247,11 @@ const StoreResultTable = ({
         const newItems = optimisticItems.filter(item => !existingKeys.has(`${item.barcode}-${item.rackLocation}`));
         return [...newItems, ...results];
     }, [results, optimisticItems]);
+
+    // Feed low stock data into global context whenever items change
+    useEffect(() => {
+        updateLowStock(combinedResults);
+    }, [combinedResults, updateLowStock]);
 
     // 🆕 คำนวณยอดรวมหน้าร้านของแต่ละบาร์โค้ด (รวมทุก Rack ในสาขา)
     const barcodeTotals = useMemo(() => {
@@ -1530,9 +1537,9 @@ const StoreResultTable = ({
 
     return (
         <>
-            <LanguageWarningModal 
-                isOpen={showLanguageWarning} 
-                onClose={() => setShowLanguageWarning(false)} 
+            <LanguageWarningModal
+                isOpen={showLanguageWarning}
+                onClose={() => setShowLanguageWarning(false)}
             />
 
             <div className="space-y-6 animate-fade-in-up">
@@ -1547,8 +1554,8 @@ const StoreResultTable = ({
                                 ref={searchInputRef}
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
                                 className={`w-full bg-slate-50/60 dark:bg-slate-800/60 pl-12 sm:pl-16 pr-10 sm:pr-14 py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] text-xs sm:text-sm font-black tracking-wide text-slate-700 dark:text-white border-2 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-all placeholder:text-slate-400/70 shadow-inner ${searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
-                                        ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
-                                        : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
+                                    ? 'border-red-500 ring-4 ring-red-500/20 animate-pulse'
+                                    : 'border-slate-200/60 dark:border-slate-700/50 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10'
                                     }`}
                                 value={searchTerm}
                                 onChange={(e) => {
@@ -1561,7 +1568,7 @@ const StoreResultTable = ({
                                         // 💡 NEW LOGIC: Check for Thai/Lao characters or no numbers (Language forgot to switch)
                                         const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
                                         const hasNoNumbers = !/\d/.test(searchTerm);
-                                        
+
                                         if (hasThaiLao || hasNoNumbers) {
                                             const audio = new Audio(barcodeNotCorrectSound);
                                             audio.play().catch(err => console.error("Error playing sound:", err));
@@ -2022,7 +2029,7 @@ const StoreResultTable = ({
                                                             const hasNoNumbers = !/\d/.test(searchTerm);
                                                             if (hasThaiLao || hasNoNumbers) {
                                                                 const audio = new Audio(barcodeNotCorrectSound);
-                                                                audio.play().catch(() => {});
+                                                                audio.play().catch(() => { });
                                                                 setShowLanguageWarning(true);
                                                                 return;
                                                             }
@@ -2274,7 +2281,7 @@ const StoreResultTable = ({
             />
 
 
-            ๆ
+
             {/* Scanner Modal */}
             {showScanner && (
                 <BarcodeScannerModal
