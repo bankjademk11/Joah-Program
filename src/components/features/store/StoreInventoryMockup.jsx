@@ -89,7 +89,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
 
   // Map store_inventory row → StoreResultTable row shape
-  const mapRow = (row, idx, warehouseMap = {}, dcMap = {}) => {
+  const mapRow = (row, idx, warehouseMap = {}, dcMap = {}, warehouseRackMap = {}) => {
     const qty = row.store_qty ?? 0;
     const rack = row.shelf_location || '';
 
@@ -118,6 +118,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       productTag: row.product_tag || null,
       masterQty: qty,
       warehouseQty: warehouseMap[String(row.barcode_no).trim()] ?? 0,
+      warehouseRack: warehouseRackMap[String(row.barcode_no).trim()] ? Array.from(warehouseRackMap[String(row.barcode_no).trim()]).join(', ') : '',
       dcQty: dcMap[String(row.barcode_no).trim()] ?? 0,
       salesQty: row.sales_qty ?? null,
       category1: masterCategory,
@@ -187,7 +188,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
           whPromises.push(
             supabase
               .from('location_inventory')
-              .select('barcode_no, qty')
+              .select('barcode_no, qty, rack_location')
               .eq('branch_id', selectedBranch)
               .in('barcode_no', chunk)
           );
@@ -219,9 +220,16 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
       // Build warehouseMap (location_inventory)
       const warehouseMap = {};
+      const warehouseRackMap = {};
       whData.forEach(row => {
         const bc = String(row.barcode_no || '').trim();
-        if (bc) warehouseMap[bc] = (warehouseMap[bc] || 0) + Number(row.qty || 0);
+        if (bc) {
+          warehouseMap[bc] = (warehouseMap[bc] || 0) + Number(row.qty || 0);
+          if (row.rack_location && row.rack_location !== '-' && row.rack_location !== 'N/A') {
+            if (!warehouseRackMap[bc]) warehouseRackMap[bc] = new Set();
+            warehouseRackMap[bc].add(row.rack_location);
+          }
+        }
       });
 
       // Build dcMap (table_dc_stock)
@@ -231,7 +239,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         if (bc) dcMap[bc] = (dcMap[bc] || 0) + Number(row.qty || 0);
       });
 
-      setResults((storeData || []).map((row, idx) => mapRow(row, idx, warehouseMap, dcMap)));
+      setResults((storeData || []).map((row, idx) => mapRow(row, idx, warehouseMap, dcMap, warehouseRackMap)));
     } catch (err) {
       console.error('[StoreInventory.DEBUG] ❌ Critical Error in fetchData:', err);
       toast.error('ດຶງຂໍ້ມູນຜິດພາດ: ' + err.message);
@@ -283,15 +291,16 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
               if (existingIdx >= 0) {
                 const oldRow = prev[existingIdx];
                 const updatedRow = {
-                  ...mapRow(freshRow, oldRow.rowIndex - 1, {}, {}),
+                  ...mapRow(freshRow, oldRow.rowIndex - 1, {}, {}, {}),
                   warehouseQty: oldRow.warehouseQty,
+                  warehouseRack: oldRow.warehouseRack,
                   dcQty: oldRow.dcQty
                 };
                 const newArr = [...prev];
                 newArr[existingIdx] = updatedRow;
                 return newArr;
               } else {
-                const newRow = mapRow(freshRow, prev.length, {}, {});
+                const newRow = mapRow(freshRow, prev.length, {}, {}, {});
                 return [newRow, ...prev];
               }
             });

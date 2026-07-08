@@ -246,11 +246,29 @@ export default function LowStockBell() {
                                                     </span>
                                                     <span className={`text-sm font-black ${theme.text}`}>{pct.toFixed(0)}%</span>
                                                 </div>
-                                                <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2.5">
                                                     <div
                                                         className={`h-full ${theme.bar} rounded-full`}
                                                         style={{ width: `${pct}%` }}
                                                     />
+                                                </div>
+                                                
+                                                {/* Warehouse Stock Info */}
+                                                <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border ${
+                                                    item.warehouseQty > 0 
+                                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50' 
+                                                        : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50'
+                                                }`}>
+                                                    <Package size={14} className={item.warehouseQty > 0 ? "text-emerald-500" : "text-rose-500"} />
+                                                    <span className="opacity-80">ຫຼັງສາງ:</span>
+                                                    <span className="font-black text-[13px]">{item.warehouseQty}</span>
+                                                    <span className="opacity-80">ຊິ້ນ</span>
+                                                    {item.warehouseQty > 0 && item.warehouseRack && item.warehouseRack !== '-' && (
+                                                        <span className="flex items-center gap-1 opacity-90 text-[11px] ml-auto">
+                                                            <MapPin size={10} strokeWidth={2.5} /> {item.warehouseRack}
+                                                        </span>
+                                                    )}
+                                                    {item.warehouseQty === 0 && <span className="ml-auto text-[10px] uppercase tracking-wider bg-rose-100 dark:bg-rose-900 px-1.5 rounded">Request DC</span>}
                                                 </div>
                                             </div>
                                         </div>

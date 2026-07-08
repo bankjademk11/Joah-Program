@@ -27,6 +27,8 @@ export function LowStockProvider({ children }) {
                     qty,
                     maxQty,
                     ratio,
+                    warehouseQty: Number(item.warehouseQty ?? 0),
+                    warehouseRack: item.warehouseRack || '-',
                     rackLocation: item.rackLocation || item.rack_location || '-',
                     severity: ratio <= 0 ? 'empty' : ratio <= 0.1 ? 'critical' : 'warning',
                 };
