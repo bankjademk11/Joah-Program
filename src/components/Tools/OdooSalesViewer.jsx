@@ -19,7 +19,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [activeTab, setActiveTab] = useState('summary');
     const [joahOnly, setJoahOnly] = useState(true);
     const [weeklySales, setWeeklySales] = useState({});
+    const [compareWeeklySales, setCompareWeeklySales] = useState({});
     const [weekOffset, setWeekOffset] = useState(0);
+    const [isCompareMode, setIsCompareMode] = useState(false);
+    const [compareMonthOffset, setCompareMonthOffset] = useState(1); // Default to previous month
     const [summaryMode, setSummaryMode] = useState('7days'); // '7days' or '14days'
     const [selectedDay, setSelectedDay] = useState(null); // { dateObj, branchId, branchName, dayData, joahOnly }
 
@@ -76,18 +79,121 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setAbnormalOrders(abnormalData);
             } else if (activeTab === 'weekly' || activeTab === 'dashboard') {
                 const today = new Date();
-                const dayOfWeek = today.getDay();
-                const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
-                const startObj = new Date(today);
-                startObj.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
-                startObj.setHours(0, 0, 0, 0);
-
-                const endObj = new Date(startObj);
-                endObj.setDate(startObj.getDate() + 13);
-                endObj.setHours(23, 59, 59, 999);
-
                 const pad = (n) => n.toString().padStart(2, '0');
+
+                let startObj, endObj;
+
+                if (activeTab === 'dashboard') {
+                    // Dashboard: from the 1st of the target month to the end (or today)
+                    startObj = new Date(today);
+                    startObj.setMonth(today.getMonth() - weekOffset);
+                    startObj.setDate(1); // Start on the 1st of the month
+                    startObj.setHours(0, 0, 0, 0);
+                    
+                    endObj = new Date(startObj);
+                    endObj.setMonth(startObj.getMonth() + 1);
+                    endObj.setDate(0); // Last day of the target month
+                    endObj.setHours(23, 59, 59, 999);
+                    
+                    if (weekOffset === 0) {
+                        endObj = new Date(today);
+                        endObj.setHours(23, 59, 59, 999);
+                    }
+
+                    // --- Compare Data Fetching ---
+                    if (isCompareMode) {
+                        const cStartObj = new Date(today);
+                        cStartObj.setMonth(today.getMonth() - compareMonthOffset);
+                        cStartObj.setDate(1);
+                        cStartObj.setHours(0, 0, 0, 0);
+                        
+                        const cEndObj = new Date(cStartObj);
+                        cEndObj.setMonth(cStartObj.getMonth() + 1);
+                        cEndObj.setDate(0);
+                        cEndObj.setHours(23, 59, 59, 999);
+
+                        if (compareMonthOffset === 0) {
+                            cEndObj.setHours(23, 59, 59, 999);
+                        }
+
+                        const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
+                        const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
+                        const cStartUTC = toUTC(cStartStr, false);
+                        const cEndUTC = toUTC(cEndStr, true);
+
+                        if (selectedBranchId === 'ALL') {
+                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                            const cResults = await Promise.all(cPromises);
+                            const cMapped = {};
+                            branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
+                            setCompareWeeklySales(cMapped);
+                        } else {
+                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                            setCompareWeeklySales({ [selectedBranchId]: cData || [] });
+                        }
+                    } else {
+                        setCompareWeeklySales({});
+                    }
+                    // ---------------------------
+                } else {
+                    // Weekly tab: weekOffset = months back from today
+                    // Summary = full selected month; Calendar = last 2 weeks of that month
+                    const dayOfWeek = today.getDay();
+                    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+                    // Selected month (1st to last day, or today if current month)
+                    const monthStart = new Date(today);
+                    monthStart.setMonth(today.getMonth() - weekOffset);
+                    monthStart.setDate(1);
+                    monthStart.setHours(0, 0, 0, 0);
+
+                    const monthEnd = new Date(monthStart);
+                    monthEnd.setMonth(monthStart.getMonth() + 1);
+                    monthEnd.setDate(0);
+                    monthEnd.setHours(23, 59, 59, 999);
+                    if (weekOffset === 0) {
+                        monthEnd.setTime(today.getTime());
+                        monthEnd.setHours(23, 59, 59, 999);
+                    }
+
+                    // Calendar 14-day window: last 2 weeks ending on monthEnd
+                    const calEnd = new Date(monthEnd);
+                    const calStart = new Date(calEnd);
+                    calStart.setDate(calEnd.getDate() - 13);
+                    calStart.setHours(0, 0, 0, 0);
+
+                    // Fetch covers the union: full month + calendar window
+                    startObj = calStart < monthStart ? calStart : monthStart;
+                    endObj = calEnd > monthEnd ? calEnd : monthEnd;
+
+                    // --- Compare Data: previous month full range ---
+                    const cStartObj = new Date(monthStart);
+                    cStartObj.setMonth(cStartObj.getMonth() - 1);
+                    cStartObj.setDate(1);
+                    cStartObj.setHours(0, 0, 0, 0);
+
+                    const cEndObj = new Date(cStartObj);
+                    cEndObj.setMonth(cStartObj.getMonth() + 1);
+                    cEndObj.setDate(0);
+                    cEndObj.setHours(23, 59, 59, 999);
+
+                    const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
+                    const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
+                    const cStartUTC = toUTC(cStartStr, false);
+                    const cEndUTC = toUTC(cEndStr, true);
+
+                    if (selectedBranchId === 'ALL') {
+                        const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                        const cResults = await Promise.all(cPromises);
+                        const cMapped = {};
+                        branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
+                        setCompareWeeklySales(cMapped);
+                    } else {
+                        const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                        setCompareWeeklySales({ [selectedBranchId]: cData || [] });
+                    }
+                }
+
                 const startStr = `${startObj.getFullYear()}-${pad(startObj.getMonth() + 1)}-${pad(startObj.getDate())}T00:00`;
                 const endStr = `${endObj.getFullYear()}-${pad(endObj.getMonth() + 1)}-${pad(endObj.getDate())}T23:59`;
 
@@ -110,7 +216,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         } finally {
             setLoading(false);
         }
-    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset]);
+    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -366,111 +472,114 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             const branchesToRender = selectedBranchId === 'ALL' ? branches : branches.filter(b => b.id === selectedBranchId);
 
                             // --- Calculate Totals ---
-                            let currentWeekSales = 0;
-                            let currentWeekCustomers = 0;
-                            let currentWeekSKUs = 0;
-                            let previousWeekSales = 0;
-                            let previousWeekCustomers = 0;
-                            let previousWeekSKUs = 0;
+                            let currentSales = 0;
+                            let currentCustomers = 0;
+                            let currentSKUs = 0;
+                            
+                            let compareSales = 0;
+                            let compareCustomers = 0;
+                            let compareSKUs = 0;
 
+                            // Sum all days in weeklySales (now covers the full month)
                             branchesToRender.forEach(branch => {
                                 const currentBranchSales = weeklySales[branch.id] || [];
-                                for (let i = 0; i < 14; i++) {
-                                    const today = new Date();
-                                    const dayOfWeek = today.getDay();
-                                    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                                    const startOfLastWeek = new Date(today);
-                                    startOfLastWeek.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
-                                    const d = new Date(startOfLastWeek);
-                                    d.setDate(startOfLastWeek.getDate() + i);
-
-                                    const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
-                                    const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
-                                    
-                                    const amt = dayData?.price_subtotal_incl || 0;
-                                    const cust = dayData?.order_count || 0;
-                                    const sku = dayData?.sku_count || 0;
-
-                                    if (i >= 7) {
-                                        currentWeekSales += amt;
-                                        currentWeekCustomers += cust;
-                                        currentWeekSKUs += sku;
-                                    } else {
-                                        previousWeekSales += amt;
-                                        previousWeekCustomers += cust;
-                                        previousWeekSKUs += sku;
-                                    }
-                                }
+                                const compareBranchSales = compareWeeklySales[branch.id] || [];
+                                
+                                currentBranchSales.forEach(day => {
+                                    currentSales += day?.price_subtotal_incl || 0;
+                                    currentCustomers += day?.order_count || 0;
+                                    currentSKUs += day?.sku_count || 0;
+                                });
+                                compareBranchSales.forEach(day => {
+                                    compareSales += day?.price_subtotal_incl || 0;
+                                    compareCustomers += day?.order_count || 0;
+                                    compareSKUs += day?.sku_count || 0;
+                                });
                             });
 
-                            // Resolve display values based on mode
-                            const displaySales = summaryMode === '7days' ? currentWeekSales : (currentWeekSales + previousWeekSales);
-                            const displayCustomers = summaryMode === '7days' ? currentWeekCustomers : (currentWeekCustomers + previousWeekCustomers);
-                            const displaySKUs = summaryMode === '7days' ? currentWeekSKUs : (currentWeekSKUs + previousWeekSKUs);
+                            // Derive month name for labels
+                            const _today = new Date();
+                            const _targetMonth = new Date(_today);
+                            _targetMonth.setMonth(_today.getMonth() - weekOffset);
+                            const monthLabel = _targetMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
+                            const prevMonth = new Date(_targetMonth);
+                            prevMonth.setMonth(prevMonth.getMonth() - 1);
+                            const prevMonthLabel = prevMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
 
-                            const growthPercentAll = previousWeekSales === 0 ? (currentWeekSales > 0 ? 100 : 0) : ((currentWeekSales - previousWeekSales) / previousWeekSales) * 100;
+                            const growthPercentAll = compareSales === 0 ? (currentSales > 0 ? 100 : 0) : ((currentSales - compareSales) / compareSales) * 100;
                             const isPositiveGrowthAll = growthPercentAll >= 0;
-                            const salesDifference = currentWeekSales - previousWeekSales;
+                            const salesDifference = currentSales - compareSales;
 
                             return (
                                 <>
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 relative z-0 shrink-0 gap-4">
                                         <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2 shrink-0">
                                             <CalendarDays className="text-joah-orange" />
-                                            ຍອດຂາຍ 14 ມື້
-                                            {weekOffset > 0 && <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-1 sm:ml-2">ຍ້ອນຫຼັງ {weekOffset} ອາທິດ</span>}
+                                            ຍອດຂາຍ
+                                            <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{monthLabel}</span>
                                         </h3>
                                         
-                                        {/* 📊 SUMMARY BOX with Toggle */}
-                                        <div className="flex-1 w-full sm:max-w-[650px] px-2 sm:px-4 flex gap-2 sm:gap-6 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
+                                        {/* 📊 SUMMARY BOX: Full Month vs Previous Month */}
+                                        <div className="flex-1 w-full sm:max-w-[680px] px-2 sm:px-4 flex gap-2 sm:gap-4 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
                                             
-                                            {/* Toggle Button */}
-                                            <button 
-                                                onClick={() => setSummaryMode(prev => prev === '7days' ? '14days' : '7days')}
-                                                className="absolute -top-3 -right-2 sm:-right-4 bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-full px-2 py-0.5 text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-300 hover:text-joah-orange hover:border-joah-orange/50 transition-colors shadow-sm"
-                                            >
-                                                ສະຫຼຸບແບບ: {summaryMode === '7days' ? '7 ມື້' : '14 ມື້'} 🔄
-                                            </button>
+                                            {/* Month context badge */}
+                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full px-3 py-0.5 text-[9px] font-bold text-slate-400 whitespace-nowrap shadow-sm">
+                                                ສະຫຼຸບ {monthLabel} &nbsp;▶&nbsp; ທຽບ {prevMonthLabel}
+                                            </div>
 
                                             <div className="flex flex-col items-center justify-center">
-                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ຍອດຂາຍ {summaryMode === '7days' ? '7 ມື້' : 'ລວມ'}</p>
-                                                <p className="text-xs sm:text-base font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                                                    {new Intl.NumberFormat('lo-LA').format(displaySales)} <span className="text-[9px] sm:text-[10px] text-emerald-600/70">₭</span>
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ຍອດຂາຍລວມ</p>
+                                                <p className={`text-xs sm:text-base font-black leading-none ${weekOffset > 0 && !isPositiveGrowthAll ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                    {new Intl.NumberFormat('lo-LA').format(currentSales)} <span className="text-[9px] sm:text-[10px] opacity-70">₭</span>
                                                 </p>
+                                                <p className="text-[8px] text-slate-400 mt-0.5">{prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareSales)} ₭</p>
                                             </div>
-                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8"></div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-10"></div>
                                             <div className="flex flex-col items-center justify-center">
-                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ລູກຄ້າ {summaryMode === '7days' ? '(7 ມື້)' : 'ລວມ'}</p>
-                                                <p className="text-xs sm:text-base font-black text-sky-600 dark:text-sky-400 leading-none">
-                                                    {new Intl.NumberFormat('lo-LA').format(displayCustomers)} <span className="text-[9px] sm:text-[10px] text-sky-600/70 font-medium">ບິນ</span>
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ລູກຄ້າ</p>
+                                                <p className={`text-xs sm:text-base font-black leading-none ${weekOffset > 0 && !isPositiveGrowthAll ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                                                    {new Intl.NumberFormat('lo-LA').format(currentCustomers)} <span className="text-[9px] sm:text-[10px] font-medium opacity-70">ບິນ</span>
                                                 </p>
+                                                <p className="text-[8px] text-slate-400 mt-0.5">{prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareCustomers)} ບິນ</p>
                                             </div>
-                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8"></div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-10"></div>
                                             <div className="flex flex-col items-center justify-center">
-                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ສິນຄ້າ {summaryMode === '7days' ? '(7 ມື້)' : 'ລວມ'}</p>
-                                                <p className="text-xs sm:text-base font-black text-violet-600 dark:text-violet-400 leading-none">
-                                                    {new Intl.NumberFormat('lo-LA').format(displaySKUs)} <span className="text-[9px] sm:text-[10px] text-violet-600/70 font-medium">ລາຍການ</span>
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ສິນຄ້າ</p>
+                                                <p className={`text-xs sm:text-base font-black leading-none ${weekOffset > 0 && !isPositiveGrowthAll ? 'text-rose-600 dark:text-rose-400' : 'text-violet-600 dark:text-violet-400'}`}>
+                                                    {new Intl.NumberFormat('lo-LA').format(currentSKUs)} <span className="text-[9px] sm:text-[10px] font-medium opacity-70">ລາຍການ</span>
                                                 </p>
+                                                <p className="text-[8px] text-slate-400 mt-0.5">{prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareSKUs)} ລາຍການ</p>
                                             </div>
-                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-8 hidden sm:block"></div>
+                                            <div className="w-px bg-slate-200 dark:bg-slate-700 h-10 hidden sm:block"></div>
                                             <div className="flex flex-col items-center justify-center hidden sm:flex">
-                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ທຽບອາທິດກ່ອນ</p>
-                                                <div className="flex items-center gap-1.5">
-                                                    <p className={`text-xs sm:text-base font-black ${isPositiveGrowthAll ? 'text-emerald-500' : 'text-rose-500'} flex items-center gap-1 leading-none`}>
-                                                        {isPositiveGrowthAll ? '▲' : '▼'} {Math.abs(growthPercentAll).toFixed(1)}%
-                                                    </p>
-                                                    <span className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md ${isPositiveGrowthAll ? 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100/80 text-rose-700 dark:bg-rose-900/30'}`}>
-                                                        {isPositiveGrowthAll ? '+' : ''}{new Intl.NumberFormat('lo-LA').format(salesDifference)} ₭
-                                                    </span>
-                                                </div>
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ການເຕີບໂຕ MoM</p>
+                                                {weekOffset === 0 ? (
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">⏳ ກຳລັງດຳເນີນ</span>
+                                                        <p className="text-[9px] text-slate-500 font-bold">
+                                                            {new Intl.NumberFormat('lo-LA').format(currentSales)} ₭
+                                                        </p>
+                                                        <p className="text-[8px] text-slate-400">ຈາກ {prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareSales)} ₭</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className={`text-xs sm:text-base font-black ${isPositiveGrowthAll ? 'text-emerald-500' : 'text-rose-500'} flex items-center gap-1 leading-none`}>
+                                                            {isPositiveGrowthAll ? '▲' : '▼'} {Math.abs(growthPercentAll).toFixed(1)}%
+                                                        </p>
+                                                        <span className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md ${isPositiveGrowthAll ? 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100/80 text-rose-700 dark:bg-rose-900/30'}`}>
+                                                            {isPositiveGrowthAll ? '+' : ''}{new Intl.NumberFormat('lo-LA').format(salesDifference)} ₭
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <p className="text-[8px] text-slate-400 mt-0.5">(Month-over-Month)</p>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                                            <button onClick={() => setWeekOffset(prev => prev + 1)} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                            <button onClick={() => setWeekOffset(prev => prev + 1)} title="ເດືອນກ່ອນ" className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
                                                 <ChevronLeft size={18} />
                                             </button>
-                                            <button onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))} disabled={weekOffset === 0} className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 disabled:cursor-not-allowed">
+                                            <button onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))} disabled={weekOffset === 0} title="ເດືອນຖັດໄປ" className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 disabled:cursor-not-allowed">
                                                 <ChevronRight size={18} />
                                             </button>
                                         </div>
@@ -485,16 +594,19 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     let week2Total = 0;
                                     let todayIndex = -1;
 
-                                    for (let i = 0; i < 14; i++) {
-                                        const today = new Date();
-                                        const dayOfWeek = today.getDay();
-                                        const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                                    // Anchor to 1st of the selected month (weekOffset = months back)
+                                    const _now = new Date();
+                                    const _monthAnchor = new Date(_now);
+                                    _monthAnchor.setMonth(_now.getMonth() - weekOffset);
+                                    _monthAnchor.setDate(1);
+                                    _monthAnchor.setHours(0, 0, 0, 0);
 
-                                        const startOfLastWeek = new Date(today);
-                                        startOfLastWeek.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
+                                    const _daysInMonth = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0).getDate();
+                                    const _loopDays = weekOffset === 0 ? _now.getDate() : _daysInMonth;
 
-                                        const d = new Date(startOfLastWeek);
-                                        d.setDate(startOfLastWeek.getDate() + i);
+                                    for (let i = 0; i < _loopDays; i++) {
+                                        const d = new Date(_monthAnchor);
+                                        d.setDate(1 + i);
 
                                         const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
                                         const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
@@ -502,9 +614,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                                         amounts.push(amt);
                                         if (i < 7) week1Total += amt;
-                                        else week2Total += amt;
+                                        else if (i < 14) week2Total += amt;
 
-                                        if (d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
+                                        if (d.getDate() === _now.getDate() && d.getMonth() === _now.getMonth() && d.getFullYear() === _now.getFullYear()) {
                                             todayIndex = i;
                                         }
                                     }
@@ -512,6 +624,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     const growthPercent = week1Total === 0 ? (week2Total > 0 ? 100 : 0) : ((week2Total - week1Total) / week1Total) * 100;
                                     const isPositiveGrowth = growthPercent >= 0;
 
+                                    // todayVsLastWeek: compare today vs same day last week
                                     let todayVsLastWeekPercent = 0;
                                     let isTodayPositive = true;
                                     if (todayIndex >= 7) {
@@ -521,6 +634,15 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                         isTodayPositive = todayVsLastWeekPercent >= 0;
                                     }
 
+                                    // Month anchor for grid rendering
+                                    const _now2 = new Date();
+                                    const monthAnchor = new Date(_now2);
+                                    monthAnchor.setMonth(_now2.getMonth() - weekOffset);
+                                    monthAnchor.setDate(1);
+                                    monthAnchor.setHours(0, 0, 0, 0);
+                                    const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
+                                    const loopDays = weekOffset === 0 ? _now2.getDate() : daysInMonth;
+
                                     return (
                                         <div key={branch.id} className={branchIndex > 0 ? "mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 relative z-0" : "relative z-0"}>
                                             {selectedBranchId === 'ALL' && (
@@ -529,18 +651,12 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                     ສາຂາ: <span className="text-joah-orange">{branch.name}</span>
                                                 </h4>
                                             )}
-                                            <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar">
-                                                {Array.from({ length: 14 }).map((_, i) => {
+                                            <div className="flex sm:grid sm:grid-cols-5 lg:grid-cols-10 gap-2 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar">
+                                                {Array.from({ length: loopDays }).map((_, i) => {
+                                                    const d = new Date(monthAnchor);
+                                                    d.setDate(1 + i);
+
                                                     const today = new Date();
-                                                    const dayOfWeek = today.getDay();
-                                                    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
-                                                    const startOfLastWeek = new Date(today);
-                                                    startOfLastWeek.setDate(today.getDate() - diffToMonday - 7 - (weekOffset * 7));
-
-                                                    const d = new Date(startOfLastWeek);
-                                                    d.setDate(startOfLastWeek.getDate() + i);
-
                                                     const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
                                                     const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                                     const enDayName = enDayNames[d.getDay()];
@@ -608,8 +724,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                                             <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
                                                 {Array.from({ length: 7 }).map((_, j) => {
-                                                    const wk1 = amounts[j];
-                                                    const wk2 = amounts[j + 7];
+                                                    const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
+                                                    const wk2 = amounts[j + 7] ?? 0;   // Week 2: days 8-14 of month
 
                                                     let status = 'FINISHED';
                                                     if (weekOffset === 0 && todayIndex !== -1) {
@@ -674,6 +790,11 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         selectedBranchId={selectedBranchId}
                         weekOffset={weekOffset}
                         setWeekOffset={setWeekOffset}
+                        isCompareMode={isCompareMode}
+                        setIsCompareMode={setIsCompareMode}
+                        compareMonthOffset={compareMonthOffset}
+                        setCompareMonthOffset={setCompareMonthOffset}
+                        compareWeeklySales={compareWeeklySales}
                     />
                 )}
 
