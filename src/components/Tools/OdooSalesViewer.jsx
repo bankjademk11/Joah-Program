@@ -31,11 +31,11 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [dateEnd, setDateEnd] = useState(`${todayStr}T23:59`);
 
     const branches = [
-        { id: 173, name: 'ໂພນສີນວນ' },
-        { id: 248, name: 'ສີວິໄລ' },
-        { id: 249, name: 'ຕະຫຼາດລາວ' },
-        { id: 8, name: 'ວັງຊາຍ' },
-        { id: 273, name: 'ເມກ້າມໍ' },
+        { id: 173, name: 'ໂພນສີນວນ', short: 'PSN' },
+        { id: 248, name: 'ສີວິໄລ', short: 'SVL' },
+        { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
+        { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
+        { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(
@@ -420,7 +420,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 disabled={!isAdmin && userBranch !== 'ເມກ້າມໍ'}
                             >
                                 {activeTab === 'weekly' && isAdmin && <option value="ALL">ລວມທຸກສາຂา (ALL)</option>}
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                {branches.map(b => <option key={b.id} value={b.id}>{b.name} ({b.short})</option>)}
                             </select>
                         </div>
 

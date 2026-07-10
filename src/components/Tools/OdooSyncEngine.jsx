@@ -16,13 +16,24 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     const [storeStock, setStoreStock] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const branchId = 249; // ຕະຫຼາດລາວ
+    const BRANCHES = [
+        { id: 173, name: 'ໂພນສີນວນ', short: 'PSN' },
+        { id: 248, name: 'ສີວິໄລ', short: 'SVL' },
+        { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
+        { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
+        { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
+    ];
+
+    const [selectedBranchId, setSelectedBranchId] = useState(
+        isAdmin ? 249 : (BRANCHES.find(b => b.name === userBranch)?.id || 249)
+    );
+    const selectedBranch = BRANCHES.find(b => b.id === selectedBranchId) || BRANCHES[2];
 
     useEffect(() => {
         if (activeTab === 'engine') loadLogs();
         if (activeTab === 'details') loadDetailedLogs();
         if (activeTab === 'stock') loadStoreStock();
-    }, [activeTab]);
+    }, [activeTab, selectedBranchId]);
 
     // -----------------------------------------
     // DATA FETCHING
@@ -31,6 +42,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
         const { data, error } = await supabase
             .from('odoo_sync_logs')
             .select('*')
+            .eq('branch_id', selectedBranch.name)
             .order('sync_started_at', { ascending: false })
             .limit(10);
         if (!error && data) setLogs(data);
@@ -52,7 +64,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
         const { data, error } = await supabase
             .from('store_inventory')
             .select('*')
-            .eq('branch_id', 'ເມກ້າມໍtest')
+            .eq('branch_id', selectedBranch.name)
             .order('store_qty', { ascending: true }) // สินค้าที่เหลือน้อยสุดขึ้นก่อน
             .limit(1000);
         if (!error && data) setStoreStock(data);
@@ -70,7 +82,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
     };
 
     const handleRunSync = async () => {
-        if (!confirm('ຢືນຢັນການເລີ່ມດຶງຍອດຂາຍຈາກ Odoo ມາຫັກສະຕັອກໃນຕາຕະລາງຈິງ (store_inventory: ເມກ້າມໍtest)?')) return;
+        if (!confirm(`ຢືນຢັນການເລີ່ມດຶງຍອດຂາຍຈາກ Odoo ມາຫັກສະຕັອກໃນຕາຕະລາງຈິງ (store_inventory: ${selectedBranch.name})?`)) return;
 
         setLoading(true);
         setStatus({ type: 'info', message: '1. ກຳລັງເຊື່ອມຕໍ່ Odoo...' });
@@ -87,10 +99,10 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             }
 
             console.log('🔍 === SYNC DEBUG INFO ===');
-            console.log('🔍 Branch ID:', branchId);
+            console.log('🔍 Branch ID:', selectedBranch.id);
             console.log('🔍 Last Processed ID:', lastProcessedId);
 
-            const odooSales = await fetchSyncDeltaSales(branchId, lastProcessedId);
+            const odooSales = await fetchSyncDeltaSales(selectedBranch.id, lastProcessedId);
 
             console.log('🔍 Odoo Sales Result Count:', odooSales.length);
             if (odooSales.length > 0) {
@@ -143,7 +155,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             const { data: storeItems, error: fetchErr } = await supabase
                 .from('store_inventory')
                 .select('*')
-                .eq('branch_id', 'ເມກ້າມໍtest')
+                .eq('branch_id', selectedBranch.name)
                 .in('barcode_no', uniqueBarcodes);
 
             if (fetchErr) throw fetchErr;
@@ -241,7 +253,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                     total_items_sold: uniqueBarcodes.length,
                     total_qty_deducted: totalQtyDeducted,
                     status: 'success',
-                    branch_id: 'ເມກ້າມໍtest',
+                    branch_id: selectedBranch.name,
                     last_processed_id: newMaxId
                 }])
                 .select();
@@ -338,9 +350,20 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                         </div>
                     </div>
 
-                    <button onClick={handleClearLogs} disabled={loading} className="px-6 py-3 text-red-600 hover:bg-red-50 rounded-2xl flex items-center gap-3 text-base font-black border-2 border-red-200 bg-white shadow-md transition-all hover:-translate-y-0.5">
-                        <Trash2 size={20} /> ລ້າງປະຫວັດ
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <select 
+                            value={selectedBranchId} 
+                            onChange={(e) => setSelectedBranchId(Number(e.target.value))}
+                            className="px-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-lg font-black text-teal-700 dark:text-teal-400 outline-none focus:border-teal-500 shadow-sm cursor-pointer"
+                        >
+                            {BRANCHES.map(b => (
+                                <option key={b.id} value={b.id}>{b.name} ({b.short})</option>
+                            ))}
+                        </select>
+                        <button onClick={handleClearLogs} disabled={loading} className="px-6 py-3 text-red-600 hover:bg-red-50 rounded-2xl flex items-center gap-3 text-base font-black border-2 border-red-200 bg-white shadow-md transition-all hover:-translate-y-0.5">
+                            <Trash2 size={20} /> ລ້າງປະຫວັດ
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-2xl w-full max-w-2xl shadow-inner">

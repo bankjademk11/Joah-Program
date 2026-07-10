@@ -59,7 +59,7 @@ serve(async (req) => {
         const { data: logs } = await supabase
             .from('odoo_sync_logs')
             .select('last_processed_id, status')
-            .eq('branch_id', 'ເມກ້າມໍtest') // Filter by our test branch
+            .eq('branch_id', 'ຕະຫຼາດລາວ') // Filter by our production branch
             .order('sync_started_at', { ascending: false })
             .limit(1);
 
@@ -156,7 +156,7 @@ serve(async (req) => {
         const { data: storeItems } = await supabase
             .from('store_inventory')
             .select('*')
-            .eq('branch_id', 'ເມກ້າມໍtest')
+            .eq('branch_id', 'ຕະຫຼາດລາວ')
             .in('barcode_no', uniqueBarcodes);
 
         let totalQtyDeducted = 0;
@@ -240,7 +240,7 @@ serve(async (req) => {
                 total_items_sold: uniqueBarcodes.length,
                 total_qty_deducted: totalQtyDeducted,
                 status: 'success',
-                branch_id: 'ເມກ້າມໍtest',
+                branch_id: 'ຕະຫຼາດລາວ',
                 last_processed_id: newMaxId
             }])
             .select();
