@@ -6,6 +6,7 @@ import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
 import JoahLogo from '../../assets/Joah.jpeg';
 import dataImageBG from '../../assets/dataImageBG.png';
+import JoahLoadingGif from '../../assets/joah_web_small.gif';
 import ExcelJS from 'exceljs';
 
 export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
@@ -24,6 +25,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [isCompareMode, setIsCompareMode] = useState(false);
     const [compareMonthOffset, setCompareMonthOffset] = useState(1); // Default to previous month
     const [summaryMode, setSummaryMode] = useState('7days'); // '7days' or '14days'
+    const [calendarMode, setCalendarMode] = useState('30'); // '30' = full month, '14' = last 14 days
     const [selectedDay, setSelectedDay] = useState(null); // { dateObj, branchId, branchName, dayData, joahOnly }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -89,12 +91,12 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     startObj.setMonth(today.getMonth() - weekOffset);
                     startObj.setDate(1); // Start on the 1st of the month
                     startObj.setHours(0, 0, 0, 0);
-                    
+
                     endObj = new Date(startObj);
                     endObj.setMonth(startObj.getMonth() + 1);
                     endObj.setDate(0); // Last day of the target month
                     endObj.setHours(23, 59, 59, 999);
-                    
+
                     if (weekOffset === 0) {
                         endObj = new Date(today);
                         endObj.setHours(23, 59, 59, 999);
@@ -106,7 +108,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         cStartObj.setMonth(today.getMonth() - compareMonthOffset);
                         cStartObj.setDate(1);
                         cStartObj.setHours(0, 0, 0, 0);
-                        
+
                         const cEndObj = new Date(cStartObj);
                         cEndObj.setMonth(cStartObj.getMonth() + 1);
                         cEndObj.setDate(0);
@@ -464,8 +466,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     <div className="flex-1 flex flex-col bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl p-6 rounded-3xl border border-white/30 shadow-2xl mb-6 animate-fade-in-up relative overflow-hidden min-h-[500px] md:min-h-0">
                         {loading && (
                             <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
-                                <div className="w-12 h-12 border-4 border-slate-200 border-t-joah-orange rounded-full animate-spin"></div>
-                                <p className="mt-4 font-bold text-slate-600 dark:text-slate-300 animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Odoo...</p>
+                                <img src={JoahLoadingGif} alt="Loading..." className="w-32 h-32 sm:w-48 sm:h-48 object-contain mb-4 drop-shadow-xl" />
+                                <p className="mt-2 font-bold text-slate-600 dark:text-slate-300 animate-pulse">
+                                    ກຳລັງໂຫຼດຂໍ້ມູນ {selectedBranchId === 'ALL' ? 'ທຸກສາຂາ' : `ສາຂາ ${selectedBranchName}`}...
+                                </p>
                             </div>
                         )}
                         {(() => {
@@ -475,29 +479,12 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             let currentSales = 0;
                             let currentCustomers = 0;
                             let currentSKUs = 0;
-                            
+
                             let compareSales = 0;
                             let compareCustomers = 0;
                             let compareSKUs = 0;
 
-                            // Sum all days in weeklySales (now covers the full month)
-                            branchesToRender.forEach(branch => {
-                                const currentBranchSales = weeklySales[branch.id] || [];
-                                const compareBranchSales = compareWeeklySales[branch.id] || [];
-                                
-                                currentBranchSales.forEach(day => {
-                                    currentSales += day?.price_subtotal_incl || 0;
-                                    currentCustomers += day?.order_count || 0;
-                                    currentSKUs += day?.sku_count || 0;
-                                });
-                                compareBranchSales.forEach(day => {
-                                    compareSales += day?.price_subtotal_incl || 0;
-                                    compareCustomers += day?.order_count || 0;
-                                    compareSKUs += day?.sku_count || 0;
-                                });
-                            });
-
-                            // Derive month name for labels
+                            // Derive month name for labels FIRST
                             const _today = new Date();
                             const _targetMonth = new Date(_today);
                             _targetMonth.setMonth(_today.getMonth() - weekOffset);
@@ -505,6 +492,62 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             const prevMonth = new Date(_targetMonth);
                             prevMonth.setMonth(prevMonth.getMonth() - 1);
                             const prevMonthLabel = prevMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
+
+                            // Helper: parse day-of-month from Odoo date string like "13 Jul 2026"
+                            const parseDayNum = (dayStr) => dayStr ? parseInt(dayStr.split(' ')[0], 10) : 0;
+
+                            // Calculate grid start/end days
+                            const _daysInMonthTarget = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0).getDate();
+                            const _maxDays = weekOffset === 0 ? _today.getDate() : _daysInMonthTarget;
+                            
+                            let startDay = 1;
+                            let endDay = _maxDays;
+
+                            if (calendarMode === '14') {
+                                const _refDate = weekOffset === 0 ? new Date(_today) : new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0);
+                                const _refDow = _refDate.getDay();
+                                const _week2End = new Date(_refDate);
+                                _week2End.setDate(_refDate.getDate() - _refDow);
+                                const _week1Start = new Date(_week2End);
+                                _week1Start.setDate(_week2End.getDate() - 13);
+                                
+                                if (_week1Start.getMonth() === _targetMonth.getMonth() && _week1Start.getFullYear() === _targetMonth.getFullYear()) {
+                                    startDay = _week1Start.getDate();
+                                } else {
+                                    startDay = 1;
+                                }
+                                endDay = startDay + 13;
+                                if (endDay > _maxDays) endDay = _maxDays;
+                            } else if (calendarMode === '30') {
+                                startDay = 1;
+                                endDay = _daysInMonthTarget; // For 30 days, we sum the whole month
+                                if (weekOffset === 0) endDay = _today.getDate(); // Except current month which stops at today
+                            }
+
+                            // Sum days — only sum the days visible in the grid!
+                            branchesToRender.forEach(branch => {
+                                const currentBranchSales = weeklySales[branch.id] || [];
+                                const compareBranchSales = compareWeeklySales[branch.id] || [];
+
+                                currentBranchSales.forEach(day => {
+                                    const d = parseDayNum(day['create_date:day']);
+                                    if (d >= startDay && d <= endDay) {
+                                        currentSales += day?.price_subtotal_incl || 0;
+                                        currentCustomers += day?.order_count || 0;
+                                        currentSKUs += day?.sku_count || 0;
+                                    }
+                                });
+                                compareBranchSales.forEach(day => {
+                                    const d = parseDayNum(day['create_date:day']);
+                                    if (d >= startDay && d <= endDay) {
+                                        compareSales += day?.price_subtotal_incl || 0;
+                                        compareCustomers += day?.order_count || 0;
+                                        compareSKUs += day?.sku_count || 0;
+                                    }
+                                });
+                            });
+
+                            const capSuffix = (startDay > 1 || endDay < _daysInMonthTarget) ? ` (${startDay}-${endDay})` : '';
 
                             const growthPercentAll = compareSales === 0 ? (currentSales > 0 ? 100 : 0) : ((currentSales - compareSales) / compareSales) * 100;
                             const isPositiveGrowthAll = growthPercentAll >= 0;
@@ -518,13 +561,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             ຍອດຂາຍ
                                             <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{monthLabel}</span>
                                         </h3>
-                                        
+
                                         {/* 📊 SUMMARY BOX: Full Month vs Previous Month */}
                                         <div className="flex-1 w-full sm:max-w-[680px] px-2 sm:px-4 flex gap-2 sm:gap-4 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
-                                            
+
                                             {/* Month context badge */}
-                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full px-3 py-0.5 text-[9px] font-bold text-slate-400 whitespace-nowrap shadow-sm">
-                                                ສະຫຼຸບ {monthLabel} &nbsp;▶&nbsp; ທຽບ {prevMonthLabel}
+                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 border border-joah-orange/50 rounded-full px-3 py-0.5 text-[9px] font-black text-joah-orange whitespace-nowrap shadow-[0_0_10px_rgba(249,115,22,0.5)] animate-pulse z-10">
+                                                ສະຫຼຸບ {monthLabel}{capSuffix} &nbsp;▶&nbsp; ທຽບ {prevMonthLabel}{capSuffix}
                                             </div>
 
                                             <div className="flex flex-col items-center justify-center">
@@ -576,6 +619,23 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                                            {/* 30d / 14d toggle */}
+                                            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700 shadow-inner">
+                                                <button
+                                                    onClick={() => setCalendarMode('30')}
+                                                    className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${calendarMode === '30'
+                                                        ? 'bg-joah-orange text-white shadow-md'
+                                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                                        }`}
+                                                >30 ວັນ</button>
+                                                <button
+                                                    onClick={() => setCalendarMode('14')}
+                                                    className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${calendarMode === '14'
+                                                        ? 'bg-sky-500 text-white shadow-md'
+                                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                                        }`}
+                                                >14 ວັນ</button>
+                                            </div>
                                             <button onClick={() => setWeekOffset(prev => prev + 1)} title="ເດືອນກ່ອນ" className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-joah-orange hover:text-white rounded-lg transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
                                                 <ChevronLeft size={18} />
                                             </button>
@@ -587,194 +647,240 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                                     <div className="flex-1 overflow-y-auto hide-scrollbar -mx-2 px-2 relative z-0">
                                         {branchesToRender.map((branch, branchIndex) => {
-                                    const currentBranchSales = weeklySales[branch.id] || [];
+                                            const currentBranchSales = weeklySales[branch.id] || [];
 
-                                    const amounts = [];
-                                    let week1Total = 0;
-                                    let week2Total = 0;
-                                    let todayIndex = -1;
+                                            const amounts = [];
+                                            let week1Total = 0;
+                                            let week2Total = 0;
+                                            let todayIndex = -1;
 
-                                    // Anchor to 1st of the selected month (weekOffset = months back)
-                                    const _now = new Date();
-                                    const _monthAnchor = new Date(_now);
-                                    _monthAnchor.setMonth(_now.getMonth() - weekOffset);
-                                    _monthAnchor.setDate(1);
-                                    _monthAnchor.setHours(0, 0, 0, 0);
+                                            // Anchor to 1st of the selected month (weekOffset = months back)
+                                            const _now = new Date();
+                                            const _monthAnchor = new Date(_now);
+                                            _monthAnchor.setMonth(_now.getMonth() - weekOffset);
+                                            _monthAnchor.setDate(1);
+                                            _monthAnchor.setHours(0, 0, 0, 0);
 
-                                    const _daysInMonth = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0).getDate();
-                                    const _loopDays = weekOffset === 0 ? _now.getDate() : _daysInMonth;
+                                            const _daysInMonth = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0).getDate();
+                                            const _loopDaysMax = weekOffset === 0 ? _now.getDate() : _daysInMonth;
 
-                                    for (let i = 0; i < _loopDays; i++) {
-                                        const d = new Date(_monthAnchor);
-                                        d.setDate(1 + i);
+                                            let _loopDays, _startOffset14;
+                                            if (calendarMode === '14') {
+                                                // Find the reference end date (today or last day of month)
+                                                const _refDate = weekOffset === 0 ? new Date(_now) : new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0);
+                                                // Find last Sunday on or before refDate (end of week 2)
+                                                const _refDow = _refDate.getDay(); // 0=Sun...6=Sat
+                                                const _daysToSun = _refDow; // 0 if already Sun, else days since last Sun
+                                                const _week2End = new Date(_refDate);
+                                                _week2End.setDate(_refDate.getDate() - _daysToSun);
+                                                // Week 1 starts 13 days before week2End (Mon of week 1)
+                                                const _week1Start = new Date(_week2End);
+                                                _week1Start.setDate(_week2End.getDate() - 13);
+                                                // Check if week1Start is within the current month
+                                                if (_week1Start.getMonth() === _monthAnchor.getMonth() && _week1Start.getFullYear() === _monthAnchor.getFullYear()) {
+                                                    _startOffset14 = _week1Start.getDate() - 1;
+                                                } else {
+                                                    _startOffset14 = 0;
+                                                }
+                                                _loopDays = Math.min(14, _loopDaysMax - _startOffset14);
+                                            } else {
+                                                _loopDays = _loopDaysMax;
+                                                _startOffset14 = 0;
+                                            }
 
-                                        const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
-                                        const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
-                                        const amt = dayData?.price_subtotal_incl || 0;
+                                            for (let i = 0; i < _loopDays; i++) {
+                                                const d = new Date(_monthAnchor);
+                                                d.setDate(1 + _startOffset14 + i);
 
-                                        amounts.push(amt);
-                                        if (i < 7) week1Total += amt;
-                                        else if (i < 14) week2Total += amt;
+                                                const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
+                                                const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
+                                                const amt = dayData?.price_subtotal_incl || 0;
 
-                                        if (d.getDate() === _now.getDate() && d.getMonth() === _now.getMonth() && d.getFullYear() === _now.getFullYear()) {
-                                            todayIndex = i;
-                                        }
-                                    }
+                                                amounts.push(amt);
+                                                if (i < 7) week1Total += amt;
+                                                else if (i < 14) week2Total += amt;
 
-                                    const growthPercent = week1Total === 0 ? (week2Total > 0 ? 100 : 0) : ((week2Total - week1Total) / week1Total) * 100;
-                                    const isPositiveGrowth = growthPercent >= 0;
+                                                if (d.getDate() === _now.getDate() && d.getMonth() === _now.getMonth() && d.getFullYear() === _now.getFullYear()) {
+                                                    todayIndex = i;
+                                                }
+                                            }
 
-                                    // todayVsLastWeek: compare today vs same day last week
-                                    let todayVsLastWeekPercent = 0;
-                                    let isTodayPositive = true;
-                                    if (todayIndex >= 7) {
-                                        const todayAmt = amounts[todayIndex];
-                                        const lastWeekAmt = amounts[todayIndex - 7];
-                                        todayVsLastWeekPercent = lastWeekAmt === 0 ? (todayAmt > 0 ? 100 : 0) : ((todayAmt - lastWeekAmt) / lastWeekAmt) * 100;
-                                        isTodayPositive = todayVsLastWeekPercent >= 0;
-                                    }
+                                            const growthPercent = week1Total === 0 ? (week2Total > 0 ? 100 : 0) : ((week2Total - week1Total) / week1Total) * 100;
+                                            const isPositiveGrowth = growthPercent >= 0;
 
-                                    // Month anchor for grid rendering
-                                    const _now2 = new Date();
-                                    const monthAnchor = new Date(_now2);
-                                    monthAnchor.setMonth(_now2.getMonth() - weekOffset);
-                                    monthAnchor.setDate(1);
-                                    monthAnchor.setHours(0, 0, 0, 0);
-                                    const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
-                                    const loopDays = weekOffset === 0 ? _now2.getDate() : daysInMonth;
+                                            // todayVsLastWeek: compare today vs same day last week
+                                            let todayVsLastWeekPercent = 0;
+                                            let isTodayPositive = true;
+                                            if (todayIndex >= 7) {
+                                                const todayAmt = amounts[todayIndex];
+                                                const lastWeekAmt = amounts[todayIndex - 7];
+                                                todayVsLastWeekPercent = lastWeekAmt === 0 ? (todayAmt > 0 ? 100 : 0) : ((todayAmt - lastWeekAmt) / lastWeekAmt) * 100;
+                                                isTodayPositive = todayVsLastWeekPercent >= 0;
+                                            }
 
-                                    return (
-                                        <div key={branch.id} className={branchIndex > 0 ? "mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 relative z-0" : "relative z-0"}>
-                                            {selectedBranchId === 'ALL' && (
-                                                <h4 className="text-sm font-black text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-                                                    <MapPin size={16} className="text-joah-orange" />
-                                                    ສາຂາ: <span className="text-joah-orange">{branch.name}</span>
-                                                </h4>
-                                            )}
-                                            <div className="flex sm:grid sm:grid-cols-5 lg:grid-cols-10 gap-2 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar">
-                                                {Array.from({ length: loopDays }).map((_, i) => {
-                                                    const d = new Date(monthAnchor);
-                                                    d.setDate(1 + i);
+                                            // Month anchor for grid rendering
+                                            const _now2 = new Date();
+                                            const monthAnchor = new Date(_now2);
+                                            monthAnchor.setMonth(_now2.getMonth() - weekOffset);
+                                            monthAnchor.setDate(1);
+                                            monthAnchor.setHours(0, 0, 0, 0);
+                                            const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
+                                            const loopDaysMax = weekOffset === 0 ? _now2.getDate() : daysInMonth;
 
-                                                    const today = new Date();
-                                                    const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
-                                                    const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                                                    const enDayName = enDayNames[d.getDay()];
+                                            let loopDays, startOffset14;
+                                            if (calendarMode === '14') {
+                                                const _refDate2 = weekOffset === 0 ? new Date(_now2) : new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
+                                                const _refDow2 = _refDate2.getDay();
+                                                const _week2End2 = new Date(_refDate2);
+                                                _week2End2.setDate(_refDate2.getDate() - _refDow2);
+                                                const _week1Start2 = new Date(_week2End2);
+                                                _week1Start2.setDate(_week2End2.getDate() - 13);
+                                                if (_week1Start2.getMonth() === monthAnchor.getMonth() && _week1Start2.getFullYear() === monthAnchor.getFullYear()) {
+                                                    startOffset14 = _week1Start2.getDate() - 1;
+                                                } else {
+                                                    startOffset14 = 0;
+                                                }
+                                                loopDays = Math.min(14, loopDaysMax - startOffset14);
+                                            } else {
+                                                loopDays = loopDaysMax;
+                                                startOffset14 = 0;
+                                            }
 
-                                                    const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'Asia/Vientiane' })} ${d.getFullYear()}`;
-                                                    const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
+                                            return (
+                                                <div key={branch.id} className={branchIndex > 0 ? "mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 relative z-0" : "relative z-0"}>
+                                                    {selectedBranchId === 'ALL' && (
+                                                        <h4 className="text-sm font-black text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+                                                            <MapPin size={16} className="text-joah-orange" />
+                                                            ສາຂາ: <span className="text-joah-orange">{branch.name}</span>
+                                                        </h4>
+                                                    )}
+                                                    <div className={calendarMode === '14'
+                                                        ? "grid grid-cols-7 gap-2 pb-4"
+                                                        : "flex sm:grid sm:grid-cols-5 lg:grid-cols-10 gap-2 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar"
+                                                    }>
+                                                        {Array.from({ length: loopDays }).map((_, i) => {
+                                                            const d = new Date(monthAnchor);
+                                                            d.setDate(1 + startOffset14 + i);
 
-                                                    const totalAmount = dayData?.price_subtotal_incl || 0;
-                                                    const customerCount = dayData?.order_count || 0;
-                                                    const skuCount = dayData?.sku_count || 0;
-                                                    const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-                                                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                                            const today = new Date();
+                                                            const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
+                                                            const enDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                                            const enDayName = enDayNames[d.getDay()];
 
-                                                    return (
-                                                        <div
-                                                            key={i}
-                                                            onClick={() => setSelectedDay({ dateObj: new Date(d), branchId: branch.id, branchName: branch.name, dayData })}
-                                                            className={`min-w-[100px] sm:min-w-0 shrink-0 snap-center rounded-xl border-2 p-2 flex flex-col justify-between transition-all hover:-translate-y-1 cursor-pointer ${isToday
-                                                                ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md hover:shadow-orange-300/40'
-                                                                : isWeekend
-                                                                    ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-joah-orange/50'
-                                                                    : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 hover:border-joah-orange/50'
-                                                            }`}>
-                                                            <div>
-                                                                <div className="flex justify-between items-center mb-1">
-                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${isWeekend ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                                                            const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'Asia/Vientiane' })} ${d.getFullYear()}`;
+                                                            const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
+
+                                                            const totalAmount = dayData?.price_subtotal_incl || 0;
+                                                            const customerCount = dayData?.order_count || 0;
+                                                            const skuCount = dayData?.sku_count || 0;
+                                                            const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+                                                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+                                                            return (
+                                                                <div
+                                                                    key={i}
+                                                                    onClick={() => setSelectedDay({ dateObj: new Date(d), branchId: branch.id, branchName: branch.name, dayData })}
+                                                                    className={`min-w-[100px] sm:min-w-0 shrink-0 snap-center rounded-xl border-2 p-2 flex flex-col justify-between transition-all hover:-translate-y-1 cursor-pointer ${isToday
+                                                                        ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md hover:shadow-orange-300/40'
+                                                                        : isWeekend
+                                                                            ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-joah-orange/50'
+                                                                            : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 hover:border-joah-orange/50'
                                                                         }`}>
-                                                                        {enDayName}
-                                                                    </span>
-                                                                    {isToday && <span className="text-[9px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded-full animate-pulse">NOW</span>}
-                                                                </div>
-                                                                <p className="text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">
-                                                                    {d.getDate()}
-                                                                </p>
-                                                                <p className="text-[10px] font-medium text-slate-400 uppercase">
-                                                                    {d.toLocaleDateString('en-GB', { month: 'short' })}
-                                                                </p>
-                                                            </div>
-                                                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-1">
-                                                                <div>
-                                                                    <p className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">ຍອດ (₭)</p>
-                                                                    <p className={`text-[11px] font-black truncate ${totalAmount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                                        {totalAmount > 0 ? formatNumber(totalAmount) : '-'}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-100 dark:border-slate-700/50">
                                                                     <div>
-                                                                        <p className="text-[8px] text-slate-400 font-bold uppercase">ລູກຄ້າ</p>
-                                                                        <p className={`text-[10px] font-black flex items-center gap-0.5 ${customerCount > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                                            {customerCount > 0 ? <><Users size={9} className="shrink-0" />{customerCount}</> : '-'}
+                                                                        <div className="flex justify-between items-center mb-1">
+                                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${isWeekend ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                                                                                }`}>
+                                                                                {enDayName}
+                                                                            </span>
+                                                                            {isToday && <span className="text-[9px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded-full animate-pulse">NOW</span>}
+                                                                        </div>
+                                                                        <p className="text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">
+                                                                            {d.getDate()}
+                                                                        </p>
+                                                                        <p className="text-[10px] font-medium text-slate-400 uppercase">
+                                                                            {d.toLocaleDateString('en-GB', { month: 'short' })}
                                                                         </p>
                                                                     </div>
-                                                                    <div>
-                                                                        <p className="text-[8px] text-slate-400 font-bold uppercase">SKU</p>
-                                                                        <p className={`text-[10px] font-black flex items-center gap-0.5 ${skuCount > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                                            {skuCount > 0 ? <><Package size={9} className="shrink-0" />{skuCount}</> : '-'}
-                                                                        </p>
+                                                                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-1">
+                                                                        <div>
+                                                                            <p className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">ຍອດ (₭)</p>
+                                                                            <p className={`text-[11px] font-black truncate ${totalAmount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                                                {totalAmount > 0 ? formatNumber(totalAmount) : '-'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                                                                            <div>
+                                                                                <p className="text-[8px] text-slate-400 font-bold uppercase">ລູກຄ້າ</p>
+                                                                                <p className={`text-[10px] font-black flex items-center gap-0.5 ${customerCount > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                                                    {customerCount > 0 ? <><Users size={9} className="shrink-0" />{customerCount}</> : '-'}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-[8px] text-slate-400 font-bold uppercase">SKU</p>
+                                                                                <p className={`text-[10px] font-black flex items-center gap-0.5 ${skuCount > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                                                    {skuCount > 0 ? <><Package size={9} className="shrink-0" />{skuCount}</> : '-'}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                                            );
+                                                        })}
+                                                    </div>
 
-                                            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
-                                                {Array.from({ length: 7 }).map((_, j) => {
-                                                    const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
-                                                    const wk2 = amounts[j + 7] ?? 0;   // Week 2: days 8-14 of month
+                                                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
+                                                        {Array.from({ length: 7 }).map((_, j) => {
+                                                            const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
+                                                            const wk2 = amounts[j + 7] ?? 0;   // Week 2: days 8-14 of month
 
-                                                    let status = 'FINISHED';
-                                                    if (weekOffset === 0 && todayIndex !== -1) {
-                                                        if ((j + 7) > todayIndex) {
-                                                            status = 'FUTURE';
-                                                        } else if ((j + 7) === todayIndex) {
-                                                            const currentHour = new Date().getHours();
-                                                            if (currentHour < 21) {
-                                                                status = 'SELLING';
+                                                            let status = 'FINISHED';
+                                                            if (weekOffset === 0 && todayIndex !== -1) {
+                                                                if ((j + 7) > todayIndex) {
+                                                                    status = 'FUTURE';
+                                                                } else if ((j + 7) === todayIndex) {
+                                                                    const currentHour = new Date().getHours();
+                                                                    if (currentHour < 21) {
+                                                                        status = 'SELLING';
+                                                                    }
+                                                                }
                                                             }
-                                                        }
-                                                    }
 
-                                                    let percent = 0;
-                                                    const diff = wk2 - wk1;
-                                                    if (wk1 === 0) {
-                                                        percent = wk2 > 0 ? 100 : 0;
-                                                    } else {
-                                                        percent = (diff / wk1) * 100;
-                                                    }
-                                                    const isPos = percent >= 0;
+                                                            let percent = 0;
+                                                            const diff = wk2 - wk1;
+                                                            if (wk1 === 0) {
+                                                                percent = wk2 > 0 ? 100 : 0;
+                                                            } else {
+                                                                percent = (diff / wk1) * 100;
+                                                            }
+                                                            const isPos = percent >= 0;
 
-                                                    const dayNamesLao = ['ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ', 'ອາທິດ'];
+                                                            const dayNamesLao = ['ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ', 'ອາທິດ'];
 
-                                                    return (
-                                                        <div key={j} className="min-w-[130px] sm:min-w-0 shrink-0 snap-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
-                                                            <span className="text-[9px] font-black text-slate-400 tracking-wider">ທຽບວັນ{dayNamesLao[j]}</span>
-                                                            {status === 'FINISHED' ? (
-                                                                <div className="flex flex-col items-center gap-0.5">
-                                                                    <span className={`text-[11px] font-black ${isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                                        {isPos ? '+' : ''}{formatNumber(diff)}
-                                                                    </span>
-                                                                    <div className={`px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 ${isPos ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
-                                                                        {isPos ? <TrendingUp size={10} /> : <TrendingUp size={10} className="rotate-180" />}
-                                                                        {isPos ? '+' : ''}{percent.toFixed(1)}%
-                                                                    </div>
+                                                            return (
+                                                                <div key={j} className="min-w-[130px] sm:min-w-0 shrink-0 snap-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                                                                    <span className="text-[9px] font-black text-slate-400 tracking-wider">ທຽບວັນ{dayNamesLao[j]}</span>
+                                                                    {status === 'FINISHED' ? (
+                                                                        <div className="flex flex-col items-center gap-0.5">
+                                                                            <span className={`text-[11px] font-black ${isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                                {isPos ? '+' : ''}{formatNumber(diff)}
+                                                                            </span>
+                                                                            <div className={`px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 ${isPos ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                                                                                {isPos ? <TrendingUp size={10} /> : <TrendingUp size={10} className="rotate-180" />}
+                                                                                {isPos ? '+' : ''}{percent.toFixed(1)}%
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : status === 'SELLING' ? (
+                                                                        <span className="text-[10px] font-bold text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-md animate-pulse">ກຳລັງຂາຍ...</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded-md">NULL</span>
+                                                                    )}
                                                                 </div>
-                                                            ) : status === 'SELLING' ? (
-                                                                <span className="text-[10px] font-bold text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-md animate-pulse">ກຳລັງຂາຍ...</span>
-                                                            ) : (
-                                                                <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded-md">NULL</span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </>
                             );
@@ -784,7 +890,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                 {/* Dashboard Tab (Recharts) */}
                 {activeTab === 'dashboard' && (
-                    <SalesChartDashboard 
+                    <SalesChartDashboard
                         weeklySales={weeklySales}
                         branches={branches}
                         selectedBranchId={selectedBranchId}
@@ -884,8 +990,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     <div className="flex-1 bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-fade-in-up min-h-[500px] md:min-h-0">
                         {loading && (
                             <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
-                                <div className="w-12 h-12 border-4 border-slate-200 border-t-joah-orange rounded-full animate-spin"></div>
-                                <p className="mt-4 font-bold text-slate-600 dark:text-slate-300 animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Odoo...</p>
+                                <img src={JoahLoadingGif} alt="Loading..." className="w-32 h-32 sm:w-48 sm:h-48 object-contain mb-4 drop-shadow-xl" />
+                                <p className="mt-2 font-bold text-slate-600 dark:text-slate-300 animate-pulse">
+                                    ກຳລັງໂຫຼດຂໍ້ມູນ {selectedBranchId === 'ALL' ? 'ທຸກສາຂາ' : `ສາຂາ ${selectedBranchName}`}...
+                                </p>
                             </div>
                         )}
 
