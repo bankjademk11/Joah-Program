@@ -499,29 +499,36 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             // Calculate grid start/end days
                             const _daysInMonthTarget = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0).getDate();
                             const _maxDays = weekOffset === 0 ? _today.getDate() : _daysInMonthTarget;
-                            
+
                             let startDay = 1;
                             let endDay = _maxDays;
 
                             if (calendarMode === '14') {
-                                const _refDate = weekOffset === 0 ? new Date(_today) : new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0);
-                                const _refDow = _refDate.getDay();
-                                const _week2End = new Date(_refDate);
-                                _week2End.setDate(_refDate.getDate() - _refDow);
-                                const _week1Start = new Date(_week2End);
-                                _week1Start.setDate(_week2End.getDate() - 13);
-                                
-                                if (_week1Start.getMonth() === _targetMonth.getMonth() && _week1Start.getFullYear() === _targetMonth.getFullYear()) {
-                                    startDay = _week1Start.getDate();
+                                if (weekOffset === 0) {
+                                    const _dow = _today.getDay();
+                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
+                                    const _week2End = new Date(_today);
+                                    _week2End.setDate(_today.getDate() + _daysToSun);
+                                    const _week1Start = new Date(_week2End);
+                                    _week1Start.setDate(_week2End.getDate() - 13);
+                                    
+                                    startDay = _week1Start.getMonth() === _targetMonth.getMonth() ? _week1Start.getDate() : 1;
+                                    endDay = _week2End.getMonth() === _targetMonth.getMonth() ? _week2End.getDate() : _maxDays;
                                 } else {
-                                    startDay = 1;
+                                    const _lastDay = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0);
+                                    const _dow = _lastDay.getDay();
+                                    const _week2End = new Date(_lastDay);
+                                    _week2End.setDate(_lastDay.getDate() - _dow);
+                                    const _week1Start = new Date(_week2End);
+                                    _week1Start.setDate(_week2End.getDate() - 13);
+                                    
+                                    startDay = _week1Start.getMonth() === _targetMonth.getMonth() ? _week1Start.getDate() : 1;
+                                    endDay = _week2End.getDate();
                                 }
-                                endDay = startDay + 13;
-                                if (endDay > _maxDays) endDay = _maxDays;
                             } else if (calendarMode === '30') {
                                 startDay = 1;
                                 endDay = _daysInMonthTarget; // For 30 days, we sum the whole month
-                                if (weekOffset === 0) endDay = _today.getDate(); // Except current month which stops at today
+                                if (weekOffset === 0) endDay = _today.getDate(); // Except current month which stops at today 
                             }
 
                             // Sum days — only sum the days visible in the grid!
@@ -664,33 +671,36 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             const _daysInMonth = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0).getDate();
                                             const _loopDaysMax = weekOffset === 0 ? _now.getDate() : _daysInMonth;
 
-                                            let _loopDays, _startOffset14;
+                                            let _loopDays, _startOffset14, _gridStartDate;
                                             if (calendarMode === '14') {
-                                                // Find the reference end date (today or last day of month)
-                                                const _refDate = weekOffset === 0 ? new Date(_now) : new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0);
-                                                // Find last Sunday on or before refDate (end of week 2)
-                                                const _refDow = _refDate.getDay(); // 0=Sun...6=Sat
-                                                const _daysToSun = _refDow; // 0 if already Sun, else days since last Sun
-                                                const _week2End = new Date(_refDate);
-                                                _week2End.setDate(_refDate.getDate() - _daysToSun);
-                                                // Week 1 starts 13 days before week2End (Mon of week 1)
-                                                const _week1Start = new Date(_week2End);
-                                                _week1Start.setDate(_week2End.getDate() - 13);
-                                                // Check if week1Start is within the current month
-                                                if (_week1Start.getMonth() === _monthAnchor.getMonth() && _week1Start.getFullYear() === _monthAnchor.getFullYear()) {
-                                                    _startOffset14 = _week1Start.getDate() - 1;
+                                                if (weekOffset === 0) {
+                                                    const _dow = _now.getDay();
+                                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
+                                                    const _week2End = new Date(_now);
+                                                    _week2End.setDate(_now.getDate() + _daysToSun);
+                                                    _gridStartDate = new Date(_week2End);
+                                                    _gridStartDate.setDate(_week2End.getDate() - 13);
                                                 } else {
-                                                    _startOffset14 = 0;
+                                                    const _lastDay = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0);
+                                                    const _dow = _lastDay.getDay();
+                                                    const _week2End = new Date(_lastDay);
+                                                    _week2End.setDate(_lastDay.getDate() - _dow);
+                                                    _gridStartDate = new Date(_week2End);
+                                                    _gridStartDate.setDate(_week2End.getDate() - 13);
                                                 }
-                                                _loopDays = Math.min(14, _loopDaysMax - _startOffset14);
+                                                _loopDays = 14; 
                                             } else {
                                                 _loopDays = _loopDaysMax;
                                                 _startOffset14 = 0;
                                             }
 
                                             for (let i = 0; i < _loopDays; i++) {
-                                                const d = new Date(_monthAnchor);
-                                                d.setDate(1 + _startOffset14 + i);
+                                                const d = new Date(calendarMode === '14' ? _gridStartDate : _monthAnchor);
+                                                if (calendarMode === '14') {
+                                                    d.setDate(_gridStartDate.getDate() + i);
+                                                } else {
+                                                    d.setDate(1 + _startOffset14 + i);
+                                                }
 
                                                 const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
                                                 const dayData = currentBranchSales.find(w => w['create_date:day'] === odooDateMatch);
@@ -727,20 +737,24 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
                                             const loopDaysMax = weekOffset === 0 ? _now2.getDate() : daysInMonth;
 
-                                            let loopDays, startOffset14;
+                                            let loopDays, startOffset14, gridStartDate;
                                             if (calendarMode === '14') {
-                                                const _refDate2 = weekOffset === 0 ? new Date(_now2) : new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
-                                                const _refDow2 = _refDate2.getDay();
-                                                const _week2End2 = new Date(_refDate2);
-                                                _week2End2.setDate(_refDate2.getDate() - _refDow2);
-                                                const _week1Start2 = new Date(_week2End2);
-                                                _week1Start2.setDate(_week2End2.getDate() - 13);
-                                                if (_week1Start2.getMonth() === monthAnchor.getMonth() && _week1Start2.getFullYear() === monthAnchor.getFullYear()) {
-                                                    startOffset14 = _week1Start2.getDate() - 1;
+                                                if (weekOffset === 0) {
+                                                    const _dow = _now2.getDay();
+                                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
+                                                    const _week2End = new Date(_now2);
+                                                    _week2End.setDate(_now2.getDate() + _daysToSun);
+                                                    gridStartDate = new Date(_week2End);
+                                                    gridStartDate.setDate(_week2End.getDate() - 13);
                                                 } else {
-                                                    startOffset14 = 0;
+                                                    const _lastDay = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
+                                                    const _dow = _lastDay.getDay();
+                                                    const _week2End = new Date(_lastDay);
+                                                    _week2End.setDate(_lastDay.getDate() - _dow);
+                                                    gridStartDate = new Date(_week2End);
+                                                    gridStartDate.setDate(_week2End.getDate() - 13);
                                                 }
-                                                loopDays = Math.min(14, loopDaysMax - startOffset14);
+                                                loopDays = 14; 
                                             } else {
                                                 loopDays = loopDaysMax;
                                                 startOffset14 = 0;
@@ -759,8 +773,12 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                         : "flex sm:grid sm:grid-cols-5 lg:grid-cols-10 gap-2 overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar"
                                                     }>
                                                         {Array.from({ length: loopDays }).map((_, i) => {
-                                                            const d = new Date(monthAnchor);
-                                                            d.setDate(1 + startOffset14 + i);
+                                                            const d = new Date(calendarMode === '14' ? gridStartDate : monthAnchor);
+                                                            if (calendarMode === '14') {
+                                                                d.setDate(gridStartDate.getDate() + i);
+                                                            } else {
+                                                                d.setDate(1 + startOffset14 + i);
+                                                            }
 
                                                             const today = new Date();
                                                             const dayNames = ['ອາທິດ', 'ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ'];
@@ -775,16 +793,21 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                             const skuCount = dayData?.sku_count || 0;
                                                             const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
                                                             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                                            const isFuture = calendarMode === '14' && weekOffset === 0 && d > today && !isToday;
+                                                            const isOutOfMonth = calendarMode === '14' && d.getMonth() !== monthAnchor.getMonth();
+                                                            const isPlaceholder = isFuture || isOutOfMonth;
 
                                                             return (
                                                                 <div
                                                                     key={i}
-                                                                    onClick={() => setSelectedDay({ dateObj: new Date(d), branchId: branch.id, branchName: branch.name, dayData })}
-                                                                    className={`min-w-[100px] sm:min-w-0 shrink-0 snap-center rounded-xl border-2 p-2 flex flex-col justify-between transition-all hover:-translate-y-1 cursor-pointer ${isToday
-                                                                        ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md hover:shadow-orange-300/40'
-                                                                        : isWeekend
-                                                                            ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-joah-orange/50'
-                                                                            : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 hover:border-joah-orange/50'
+                                                                    onClick={() => !isPlaceholder && setSelectedDay({ dateObj: new Date(d), branchId: branch.id, branchName: branch.name, dayData })}
+                                                                    className={`min-w-[100px] sm:min-w-0 shrink-0 snap-center rounded-xl border-2 p-2 flex flex-col justify-between transition-all ${isPlaceholder
+                                                                        ? 'border-dashed border-slate-200 dark:border-slate-700/40 bg-slate-50/30 dark:bg-slate-800/10 opacity-35 cursor-default'
+                                                                        : 'hover:-translate-y-1 cursor-pointer ' + (isToday
+                                                                            ? 'border-joah-orange bg-orange-50 dark:bg-orange-900/20 shadow-md hover:shadow-orange-300/40'
+                                                                            : isWeekend
+                                                                                ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-joah-orange/50'
+                                                                                : 'border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-800 hover:border-joah-orange/50')
                                                                         }`}>
                                                                     <div>
                                                                         <div className="flex justify-between items-center mb-1">
