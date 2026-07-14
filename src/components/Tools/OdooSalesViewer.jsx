@@ -9,6 +9,38 @@ import dataImageBG from '../../assets/dataImageBG.png';
 import JoahLoadingGif from '../../assets/joah_web_small.gif';
 import ExcelJS from 'exceljs';
 
+const parseOdooDate = (dateStr) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split(' ');
+    if (parts.length < 3) return null;
+    const day = parts[0];
+    const monthStr = parts[1];
+    const year = parts[2];
+    const months = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+    };
+    return new Date(parseInt(year, 10), months[monthStr], parseInt(day, 10));
+};
+
+const formatDateRangeLao = (start, end) => {
+    const startDay = start.getDate();
+    const startMonth = start.toLocaleDateString('lo-LA', { month: 'short' });
+    const startYear = start.getFullYear();
+
+    const endDay = end.getDate();
+    const endMonth = end.toLocaleDateString('lo-LA', { month: 'short' });
+    const endYear = end.getFullYear();
+
+    if (startYear === endYear) {
+        if (start.getMonth() === end.getMonth()) {
+            return `${startDay}-${endDay} ${startMonth} ${startYear}`;
+        }
+        return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${endYear}`;
+    }
+    return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`;
+};
+
 export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [sales, setSales] = useState([]);
     const [detailedSales, setDetailedSales] = useState([]);
@@ -25,7 +57,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [isCompareMode, setIsCompareMode] = useState(false);
     const [compareMonthOffset, setCompareMonthOffset] = useState(1); // Default to previous month
     const [summaryMode, setSummaryMode] = useState('7days'); // '7days' or '14days'
-    const [calendarMode, setCalendarMode] = useState('30'); // '30' = full month, '14' = last 14 days
+    const [calendarMode, setCalendarMode] = useState('14'); // '30' = full month, '14' = last 14 days
     const [selectedDay, setSelectedDay] = useState(null); // { dateObj, branchId, branchName, dayData, joahOnly }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -138,61 +170,87 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     }
                     // ---------------------------
                 } else {
-                    // Weekly tab: weekOffset = months back from today
-                    // Summary = full selected month; Calendar = last 2 weeks of that month
-                    const dayOfWeek = today.getDay();
-                    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                    if (calendarMode === '14') {
+                        const dayOfWeek = today.getDay();
+                        const daysToSun = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+                        const week2End = new Date(today);
+                        week2End.setDate(today.getDate() + daysToSun - (weekOffset * 14));
+                        week2End.setHours(23, 59, 59, 999);
 
-                    // Selected month (1st to last day, or today if current month)
-                    const monthStart = new Date(today);
-                    monthStart.setMonth(today.getMonth() - weekOffset);
-                    monthStart.setDate(1);
-                    monthStart.setHours(0, 0, 0, 0);
+                        const periodEnd = new Date(week2End);
+                        const periodStart = new Date(periodEnd);
+                        periodStart.setDate(periodEnd.getDate() - 13);
+                        periodStart.setHours(0, 0, 0, 0);
 
-                    const monthEnd = new Date(monthStart);
-                    monthEnd.setMonth(monthStart.getMonth() + 1);
-                    monthEnd.setDate(0);
-                    monthEnd.setHours(23, 59, 59, 999);
-                    if (weekOffset === 0) {
-                        monthEnd.setTime(today.getTime());
-                        monthEnd.setHours(23, 59, 59, 999);
-                    }
+                        startObj = periodStart;
+                        endObj = periodEnd;
 
-                    // Calendar 14-day window: last 2 weeks ending on monthEnd
-                    const calEnd = new Date(monthEnd);
-                    const calStart = new Date(calEnd);
-                    calStart.setDate(calEnd.getDate() - 13);
-                    calStart.setHours(0, 0, 0, 0);
+                        const cEndObj = new Date(periodEnd);
+                        cEndObj.setMonth(periodEnd.getMonth() - 1);
+                        cEndObj.setHours(23, 59, 59, 999);
 
-                    // Fetch covers the union: full month + calendar window
-                    startObj = calStart < monthStart ? calStart : monthStart;
-                    endObj = calEnd > monthEnd ? calEnd : monthEnd;
+                        const cStartObj = new Date(cEndObj);
+                        cStartObj.setDate(cEndObj.getDate() - 13);
+                        cStartObj.setHours(0, 0, 0, 0);
 
-                    // --- Compare Data: previous month full range ---
-                    const cStartObj = new Date(monthStart);
-                    cStartObj.setMonth(cStartObj.getMonth() - 1);
-                    cStartObj.setDate(1);
-                    cStartObj.setHours(0, 0, 0, 0);
+                        const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
+                        const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
+                        const cStartUTC = toUTC(cStartStr, false);
+                        const cEndUTC = toUTC(cEndStr, true);
 
-                    const cEndObj = new Date(cStartObj);
-                    cEndObj.setMonth(cStartObj.getMonth() + 1);
-                    cEndObj.setDate(0);
-                    cEndObj.setHours(23, 59, 59, 999);
-
-                    const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
-                    const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
-                    const cStartUTC = toUTC(cStartStr, false);
-                    const cEndUTC = toUTC(cEndStr, true);
-
-                    if (selectedBranchId === 'ALL') {
-                        const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
-                        const cResults = await Promise.all(cPromises);
-                        const cMapped = {};
-                        branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
-                        setCompareWeeklySales(cMapped);
+                        if (selectedBranchId === 'ALL') {
+                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                            const cResults = await Promise.all(cPromises);
+                            const cMapped = {};
+                            branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
+                            setCompareWeeklySales(cMapped);
+                        } else {
+                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                            setCompareWeeklySales({ [selectedBranchId]: cData || [] });
+                        }
                     } else {
-                        const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
-                        setCompareWeeklySales({ [selectedBranchId]: cData || [] });
+                        const monthStart = new Date(today);
+                        monthStart.setMonth(today.getMonth() - weekOffset);
+                        monthStart.setDate(1);
+                        monthStart.setHours(0, 0, 0, 0);
+
+                        const monthEnd = new Date(monthStart);
+                        monthEnd.setMonth(monthStart.getMonth() + 1);
+                        monthEnd.setDate(0);
+                        monthEnd.setHours(23, 59, 59, 999);
+                        if (weekOffset === 0) {
+                            monthEnd.setTime(today.getTime());
+                            monthEnd.setHours(23, 59, 59, 999);
+                        }
+
+                        startObj = monthStart;
+                        endObj = monthEnd;
+
+                        const cStartObj = new Date(monthStart);
+                        cStartObj.setMonth(cStartObj.getMonth() - 1);
+                        cStartObj.setDate(1);
+                        cStartObj.setHours(0, 0, 0, 0);
+
+                        const cEndObj = new Date(cStartObj);
+                        cEndObj.setMonth(cStartObj.getMonth() + 1);
+                        cEndObj.setDate(0);
+                        cEndObj.setHours(23, 59, 59, 999);
+
+                        const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
+                        const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
+                        const cStartUTC = toUTC(cStartStr, false);
+                        const cEndUTC = toUTC(cEndStr, true);
+
+                        if (selectedBranchId === 'ALL') {
+                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                            const cResults = await Promise.all(cPromises);
+                            const cMapped = {};
+                            branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
+                            setCompareWeeklySales(cMapped);
+                        } else {
+                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                            setCompareWeeklySales({ [selectedBranchId]: cData || [] });
+                        }
                     }
                 }
 
@@ -218,7 +276,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         } finally {
             setLoading(false);
         }
-    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset]);
+    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset, calendarMode]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -486,49 +544,67 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                             // Derive month name for labels FIRST
                             const _today = new Date();
-                            const _targetMonth = new Date(_today);
-                            _targetMonth.setMonth(_today.getMonth() - weekOffset);
-                            const monthLabel = _targetMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
-                            const prevMonth = new Date(_targetMonth);
-                            prevMonth.setMonth(prevMonth.getMonth() - 1);
-                            const prevMonthLabel = prevMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
-
-                            // Helper: parse day-of-month from Odoo date string like "13 Jul 2026"
-                            const parseDayNum = (dayStr) => dayStr ? parseInt(dayStr.split(' ')[0], 10) : 0;
-
-                            // Calculate grid start/end days
-                            const _daysInMonthTarget = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0).getDate();
-                            const _maxDays = weekOffset === 0 ? _today.getDate() : _daysInMonthTarget;
-
-                            let startDay = 1;
-                            let endDay = _maxDays;
+                            let startObj, endObj, cStartObj, cEndObj;
+                            let monthLabel, prevMonthLabel;
 
                             if (calendarMode === '14') {
-                                if (weekOffset === 0) {
-                                    const _dow = _today.getDay();
-                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
-                                    const _week2End = new Date(_today);
-                                    _week2End.setDate(_today.getDate() + _daysToSun);
-                                    const _week1Start = new Date(_week2End);
-                                    _week1Start.setDate(_week2End.getDate() - 13);
-                                    
-                                    startDay = _week1Start.getMonth() === _targetMonth.getMonth() ? _week1Start.getDate() : 1;
-                                    endDay = _week2End.getMonth() === _targetMonth.getMonth() ? _week2End.getDate() : _maxDays;
-                                } else {
-                                    const _lastDay = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0);
-                                    const _dow = _lastDay.getDay();
-                                    const _week2End = new Date(_lastDay);
-                                    _week2End.setDate(_lastDay.getDate() - _dow);
-                                    const _week1Start = new Date(_week2End);
-                                    _week1Start.setDate(_week2End.getDate() - 13);
-                                    
-                                    startDay = _week1Start.getMonth() === _targetMonth.getMonth() ? _week1Start.getDate() : 1;
-                                    endDay = _week2End.getDate();
-                                }
-                            } else if (calendarMode === '30') {
-                                startDay = 1;
-                                endDay = _daysInMonthTarget; // For 30 days, we sum the whole month
-                                if (weekOffset === 0) endDay = _today.getDate(); // Except current month which stops at today 
+                                const dayOfWeek = _today.getDay();
+                                const daysToSun = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+                                const week2End = new Date(_today);
+                                week2End.setDate(_today.getDate() + daysToSun - (weekOffset * 14));
+                                week2End.setHours(23, 59, 59, 999);
+
+                                const periodEnd = new Date(week2End);
+                                const periodStart = new Date(periodEnd);
+                                periodStart.setDate(periodEnd.getDate() - 13);
+                                periodStart.setHours(0, 0, 0, 0);
+
+                                startObj = periodStart;
+                                endObj = periodEnd;
+
+                                const cEnd = new Date(periodEnd);
+                                cEnd.setMonth(periodEnd.getMonth() - 1);
+                                cEnd.setHours(23, 59, 59, 999);
+
+                                const cStart = new Date(cEnd);
+                                cStart.setDate(cEnd.getDate() - 13);
+                                cStart.setHours(0, 0, 0, 0);
+
+                                cStartObj = cStart;
+                                cEndObj = cEnd;
+
+                                monthLabel = formatDateRangeLao(startObj, endObj);
+                                prevMonthLabel = formatDateRangeLao(cStartObj, cEndObj);
+                            } else {
+                                const _targetMonth = new Date(_today);
+                                _targetMonth.setMonth(_today.getMonth() - weekOffset);
+                                monthLabel = _targetMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
+
+                                const prevMonth = new Date(_targetMonth);
+                                prevMonth.setMonth(prevMonth.getMonth() - 1);
+                                prevMonthLabel = prevMonth.toLocaleDateString('lo-LA', { month: 'long', year: 'numeric' });
+
+                                const _daysInMonthTarget = new Date(_targetMonth.getFullYear(), _targetMonth.getMonth() + 1, 0).getDate();
+                                const _maxDays = weekOffset === 0 ? _today.getDate() : _daysInMonthTarget;
+
+                                startObj = new Date(_targetMonth);
+                                startObj.setDate(1);
+                                startObj.setHours(0, 0, 0, 0);
+
+                                endObj = new Date(_targetMonth);
+                                endObj.setDate(_maxDays);
+                                endObj.setHours(23, 59, 59, 999);
+
+                                const prevMaxDays = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
+                                const prevCompareMax = weekOffset === 0 ? Math.min(_today.getDate(), prevMaxDays) : prevMaxDays;
+
+                                cStartObj = new Date(prevMonth);
+                                cStartObj.setDate(1);
+                                cStartObj.setHours(0, 0, 0, 0);
+
+                                cEndObj = new Date(prevMonth);
+                                cEndObj.setDate(prevCompareMax);
+                                cEndObj.setHours(23, 59, 59, 999);
                             }
 
                             // Sum days — only sum the days visible in the grid!
@@ -537,16 +613,16 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const compareBranchSales = compareWeeklySales[branch.id] || [];
 
                                 currentBranchSales.forEach(day => {
-                                    const d = parseDayNum(day['create_date:day']);
-                                    if (d >= startDay && d <= endDay) {
+                                    const d = parseOdooDate(day['create_date:day']);
+                                    if (d && d >= startObj && d <= endObj) {
                                         currentSales += day?.price_subtotal_incl || 0;
                                         currentCustomers += day?.order_count || 0;
                                         currentSKUs += day?.sku_count || 0;
                                     }
                                 });
                                 compareBranchSales.forEach(day => {
-                                    const d = parseDayNum(day['create_date:day']);
-                                    if (d >= startDay && d <= endDay) {
+                                    const d = parseOdooDate(day['create_date:day']);
+                                    if (d && d >= cStartObj && d <= cEndObj) {
                                         compareSales += day?.price_subtotal_incl || 0;
                                         compareCustomers += day?.order_count || 0;
                                         compareSKUs += day?.sku_count || 0;
@@ -554,7 +630,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 });
                             });
 
-                            const capSuffix = (startDay > 1 || endDay < _daysInMonthTarget) ? ` (${startDay}-${endDay})` : '';
+                            const capSuffix = '';
+                            const prevCapSuffix = '';
 
                             const growthPercentAll = compareSales === 0 ? (currentSales > 0 ? 100 : 0) : ((currentSales - compareSales) / compareSales) * 100;
                             const isPositiveGrowthAll = growthPercentAll >= 0;
@@ -573,8 +650,11 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                         <div className="flex-1 w-full sm:max-w-[680px] px-2 sm:px-4 flex gap-2 sm:gap-4 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
 
                                             {/* Month context badge */}
-                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 border border-joah-orange/50 rounded-full px-3 py-0.5 text-[9px] font-black text-joah-orange whitespace-nowrap shadow-[0_0_10px_rgba(249,115,22,0.5)] animate-pulse z-10">
-                                                ສະຫຼຸບ {monthLabel}{capSuffix} &nbsp;▶&nbsp; ທຽບ {prevMonthLabel}{capSuffix}
+                                            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-joah-orange to-orange-500 text-white rounded-full px-4 py-1 text-xs font-black whitespace-nowrap shadow-md shadow-orange-500/30 z-10 border-2 border-white dark:border-slate-800">
+                                                {weekOffset === 0
+                                                    ? `ຍອດຂາຍພວມດຳເນີນການ ${monthLabel}`
+                                                    : `ສະຫຼຸບ ${monthLabel}  ▶  ທຽບ ${prevMonthLabel}`
+                                                }
                                             </div>
 
                                             <div className="flex flex-col items-center justify-center">
@@ -582,7 +662,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                 <p className={`text-xs sm:text-base font-black leading-none ${weekOffset > 0 && !isPositiveGrowthAll ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                                     {new Intl.NumberFormat('lo-LA').format(currentSales)} <span className="text-[9px] sm:text-[10px] opacity-70">₭</span>
                                                 </p>
-                                                <p className="text-[8px] text-slate-400 mt-0.5">{prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareSales)} ₭</p>
+                                                {weekOffset > 0 && <p className="text-[8px] text-slate-400 mt-0.5">{prevMonthLabel}: {new Intl.NumberFormat('lo-LA').format(compareSales)} ₭</p>}
                                             </div>
                                             <div className="w-px bg-slate-200 dark:bg-slate-700 h-10"></div>
                                             <div className="flex flex-col items-center justify-center">
@@ -661,45 +741,42 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             let week2Total = 0;
                                             let todayIndex = -1;
 
-                                            // Anchor to 1st of the selected month (weekOffset = months back)
+                                            // --- Compute the unified sliding window (same formula as summary & fetch) ---
                                             const _now = new Date();
-                                            const _monthAnchor = new Date(_now);
-                                            _monthAnchor.setMonth(_now.getMonth() - weekOffset);
-                                            _monthAnchor.setDate(1);
-                                            _monthAnchor.setHours(0, 0, 0, 0);
 
-                                            const _daysInMonth = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0).getDate();
-                                            const _loopDaysMax = weekOffset === 0 ? _now.getDate() : _daysInMonth;
+                                            let loopDays, gridStartDate, monthAnchor;
 
-                                            let _loopDays, _startOffset14, _gridStartDate;
                                             if (calendarMode === '14') {
-                                                if (weekOffset === 0) {
-                                                    const _dow = _now.getDay();
-                                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
-                                                    const _week2End = new Date(_now);
-                                                    _week2End.setDate(_now.getDate() + _daysToSun);
-                                                    _gridStartDate = new Date(_week2End);
-                                                    _gridStartDate.setDate(_week2End.getDate() - 13);
-                                                } else {
-                                                    const _lastDay = new Date(_monthAnchor.getFullYear(), _monthAnchor.getMonth() + 1, 0);
-                                                    const _dow = _lastDay.getDay();
-                                                    const _week2End = new Date(_lastDay);
-                                                    _week2End.setDate(_lastDay.getDate() - _dow);
-                                                    _gridStartDate = new Date(_week2End);
-                                                    _gridStartDate.setDate(_week2End.getDate() - 13);
-                                                }
-                                                _loopDays = 14; 
+                                                // True sliding window: each press of ◀ steps back 14 days
+                                                const _dow = _now.getDay();
+                                                const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
+                                                const _week2End = new Date(_now);
+                                                _week2End.setDate(_now.getDate() + _daysToSun - (weekOffset * 14));
+                                                _week2End.setHours(23, 59, 59, 999);
+
+                                                gridStartDate = new Date(_week2End);
+                                                gridStartDate.setDate(_week2End.getDate() - 13);
+                                                gridStartDate.setHours(0, 0, 0, 0);
+
+                                                loopDays = 14;
                                             } else {
-                                                _loopDays = _loopDaysMax;
-                                                _startOffset14 = 0;
+                                                monthAnchor = new Date(_now);
+                                                monthAnchor.setMonth(_now.getMonth() - weekOffset);
+                                                monthAnchor.setDate(1);
+                                                monthAnchor.setHours(0, 0, 0, 0);
+
+                                                const _daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
+                                                // Always show full month — future days will render as empty cards
+                                                loopDays = _daysInMonth;
                                             }
 
-                                            for (let i = 0; i < _loopDays; i++) {
-                                                const d = new Date(calendarMode === '14' ? _gridStartDate : _monthAnchor);
+                                            // Pre-calculate amounts for week1/week2 bar and today index
+                                            for (let i = 0; i < loopDays; i++) {
+                                                const d = new Date(calendarMode === '14' ? gridStartDate : monthAnchor);
                                                 if (calendarMode === '14') {
-                                                    d.setDate(_gridStartDate.getDate() + i);
+                                                    d.setDate(gridStartDate.getDate() + i);
                                                 } else {
-                                                    d.setDate(1 + _startOffset14 + i);
+                                                    d.setDate(1 + i);
                                                 }
 
                                                 const odooDateMatch = `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
@@ -718,7 +795,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             const growthPercent = week1Total === 0 ? (week2Total > 0 ? 100 : 0) : ((week2Total - week1Total) / week1Total) * 100;
                                             const isPositiveGrowth = growthPercent >= 0;
 
-                                            // todayVsLastWeek: compare today vs same day last week
                                             let todayVsLastWeekPercent = 0;
                                             let isTodayPositive = true;
                                             if (todayIndex >= 7) {
@@ -726,38 +802,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                 const lastWeekAmt = amounts[todayIndex - 7];
                                                 todayVsLastWeekPercent = lastWeekAmt === 0 ? (todayAmt > 0 ? 100 : 0) : ((todayAmt - lastWeekAmt) / lastWeekAmt) * 100;
                                                 isTodayPositive = todayVsLastWeekPercent >= 0;
-                                            }
-
-                                            // Month anchor for grid rendering
-                                            const _now2 = new Date();
-                                            const monthAnchor = new Date(_now2);
-                                            monthAnchor.setMonth(_now2.getMonth() - weekOffset);
-                                            monthAnchor.setDate(1);
-                                            monthAnchor.setHours(0, 0, 0, 0);
-                                            const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
-                                            const loopDaysMax = weekOffset === 0 ? _now2.getDate() : daysInMonth;
-
-                                            let loopDays, startOffset14, gridStartDate;
-                                            if (calendarMode === '14') {
-                                                if (weekOffset === 0) {
-                                                    const _dow = _now2.getDay();
-                                                    const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
-                                                    const _week2End = new Date(_now2);
-                                                    _week2End.setDate(_now2.getDate() + _daysToSun);
-                                                    gridStartDate = new Date(_week2End);
-                                                    gridStartDate.setDate(_week2End.getDate() - 13);
-                                                } else {
-                                                    const _lastDay = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
-                                                    const _dow = _lastDay.getDay();
-                                                    const _week2End = new Date(_lastDay);
-                                                    _week2End.setDate(_lastDay.getDate() - _dow);
-                                                    gridStartDate = new Date(_week2End);
-                                                    gridStartDate.setDate(_week2End.getDate() - 13);
-                                                }
-                                                loopDays = 14; 
-                                            } else {
-                                                loopDays = loopDaysMax;
-                                                startOffset14 = 0;
                                             }
 
                                             return (
@@ -777,7 +821,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                             if (calendarMode === '14') {
                                                                 d.setDate(gridStartDate.getDate() + i);
                                                             } else {
-                                                                d.setDate(1 + startOffset14 + i);
+                                                                d.setDate(1 + i);
                                                             }
 
                                                             const today = new Date();
@@ -793,9 +837,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                             const skuCount = dayData?.sku_count || 0;
                                                             const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
                                                             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                                            const isFuture = calendarMode === '14' && weekOffset === 0 && d > today && !isToday;
-                                                            const isOutOfMonth = calendarMode === '14' && d.getMonth() !== monthAnchor.getMonth();
-                                                            const isPlaceholder = isFuture || isOutOfMonth;
+                                                            const isFuture = weekOffset === 0 && d > today && !isToday;
+                                                            const isPlaceholder = isFuture;
 
                                                             return (
                                                                 <div
@@ -815,7 +858,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                                                 }`}>
                                                                                 {enDayName}
                                                                             </span>
-                                                                            {isToday && <span className="text-[9px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded-full animate-pulse">NOW</span>}
+                                                                            {isToday && <span className="text-[9px] font-black text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 rounded-full animate-pulse">ກຳລັງຂາຍ</span>}
                                                                         </div>
                                                                         <p className="text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">
                                                                             {d.getDate()}
@@ -851,6 +894,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                         })}
                                                     </div>
 
+                                                    {calendarMode === '14' && (
                                                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
                                                         {Array.from({ length: 7 }).map((_, j) => {
                                                             const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
@@ -901,6 +945,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                             );
                                                         })}
                                                     </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
