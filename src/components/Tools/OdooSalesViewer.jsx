@@ -174,7 +174,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         const dayOfWeek = today.getDay();
                         const daysToSun = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
                         const week2End = new Date(today);
-                        week2End.setDate(today.getDate() + daysToSun - (weekOffset * 14));
+                        week2End.setDate(today.getDate() + daysToSun - (weekOffset * 7));
                         week2End.setHours(23, 59, 59, 999);
 
                         const periodEnd = new Date(week2End);
@@ -185,29 +185,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         startObj = periodStart;
                         endObj = periodEnd;
 
-                        const cEndObj = new Date(periodEnd);
-                        cEndObj.setMonth(periodEnd.getMonth() - 1);
-                        cEndObj.setHours(23, 59, 59, 999);
-
-                        const cStartObj = new Date(cEndObj);
-                        cStartObj.setDate(cEndObj.getDate() - 13);
-                        cStartObj.setHours(0, 0, 0, 0);
-
-                        const cStartStr = `${cStartObj.getFullYear()}-${pad(cStartObj.getMonth() + 1)}-${pad(cStartObj.getDate())}T00:00`;
-                        const cEndStr = `${cEndObj.getFullYear()}-${pad(cEndObj.getMonth() + 1)}-${pad(cEndObj.getDate())}T23:59`;
-                        const cStartUTC = toUTC(cStartStr, false);
-                        const cEndUTC = toUTC(cEndStr, true);
-
-                        if (selectedBranchId === 'ALL') {
-                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
-                            const cResults = await Promise.all(cPromises);
-                            const cMapped = {};
-                            branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
-                            setCompareWeeklySales(cMapped);
-                        } else {
-                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
-                            setCompareWeeklySales({ [selectedBranchId]: cData || [] });
-                        }
+                        // 14-day mode: Week1 vs Week2 both come from weeklySales.
+                        // No need to fetch previous month — clear compareWeeklySales.
+                        setCompareWeeklySales({});
                     } else {
                         const monthStart = new Date(today);
                         monthStart.setMonth(today.getMonth() - weekOffset);
@@ -551,30 +531,30 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const dayOfWeek = _today.getDay();
                                 const daysToSun = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
                                 const week2End = new Date(_today);
-                                week2End.setDate(_today.getDate() + daysToSun - (weekOffset * 14));
+                                week2End.setDate(_today.getDate() + daysToSun - (weekOffset * 7));
                                 week2End.setHours(23, 59, 59, 999);
 
-                                const periodEnd = new Date(week2End);
-                                const periodStart = new Date(periodEnd);
-                                periodStart.setDate(periodEnd.getDate() - 13);
-                                periodStart.setHours(0, 0, 0, 0);
+                                // Week 2 = last 7 days of grid (current period in summary)
+                                const week2Start = new Date(week2End);
+                                week2Start.setDate(week2End.getDate() - 6);
+                                week2Start.setHours(0, 0, 0, 0);
 
-                                startObj = periodStart;
-                                endObj = periodEnd;
+                                // Week 1 = first 7 days of grid (comparison period)
+                                const week1End = new Date(week2Start);
+                                week1End.setDate(week2Start.getDate() - 1);
+                                week1End.setHours(23, 59, 59, 999);
 
-                                const cEnd = new Date(periodEnd);
-                                cEnd.setMonth(periodEnd.getMonth() - 1);
-                                cEnd.setHours(23, 59, 59, 999);
+                                const week1Start = new Date(week1End);
+                                week1Start.setDate(week1End.getDate() - 6);
+                                week1Start.setHours(0, 0, 0, 0);
 
-                                const cStart = new Date(cEnd);
-                                cStart.setDate(cEnd.getDate() - 13);
-                                cStart.setHours(0, 0, 0, 0);
+                                startObj = week2Start;
+                                endObj = week2End;
+                                cStartObj = week1Start;
+                                cEndObj = week1End;
 
-                                cStartObj = cStart;
-                                cEndObj = cEnd;
-
-                                monthLabel = formatDateRangeLao(startObj, endObj);
-                                prevMonthLabel = formatDateRangeLao(cStartObj, cEndObj);
+                                monthLabel = formatDateRangeLao(week2Start, week2End);
+                                prevMonthLabel = formatDateRangeLao(week1Start, week1End);
                             } else {
                                 const _targetMonth = new Date(_today);
                                 _targetMonth.setMonth(_today.getMonth() - weekOffset);
@@ -607,10 +587,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 cEndObj.setHours(23, 59, 59, 999);
                             }
 
-                            // Sum days — only sum the days visible in the grid!
+                            // Sum days — for 14-day mode: current = week2, compare = week1 (same fetched data)
                             branchesToRender.forEach(branch => {
                                 const currentBranchSales = weeklySales[branch.id] || [];
-                                const compareBranchSales = compareWeeklySales[branch.id] || [];
+                                // In 14-day mode, both current (week2) and compare (week1) come from weeklySales
+                                const compareBranchSales = calendarMode === '14'
+                                    ? weeklySales[branch.id] || []
+                                    : compareWeeklySales[branch.id] || [];
 
                                 currentBranchSales.forEach(day => {
                                     const d = parseOdooDate(day['create_date:day']);
@@ -651,9 +634,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
                                             {/* Month context badge */}
                                             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-joah-orange to-orange-500 text-white rounded-full px-4 py-1 text-xs font-black whitespace-nowrap shadow-md shadow-orange-500/30 z-10 border-2 border-white dark:border-slate-800">
-                                                {weekOffset === 0
-                                                    ? `ຍອດຂາຍພວມດຳເນີນການ ${monthLabel}`
-                                                    : `ສະຫຼຸບ ${monthLabel}  ▶  ທຽບ ${prevMonthLabel}`
+                                                {calendarMode === '14'
+                                                    ? (weekOffset === 0
+                                                        ? `ຍອດຂາຍ ${monthLabel} (ພວມດຳເນີນ)  ▶  ທຽບ ${prevMonthLabel}`
+                                                        : `ສະຫຼຸບ ${monthLabel}  ▶  ທຽບ ${prevMonthLabel}`)
+                                                    : (weekOffset === 0
+                                                        ? `ຍອດຂາຍພວມດຳເນີນການ ${monthLabel}`
+                                                        : `ສະຫຼຸບ ${monthLabel}  ▶  ທຽບ ${prevMonthLabel}`)
                                                 }
                                             </div>
 
@@ -682,8 +669,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             </div>
                                             <div className="w-px bg-slate-200 dark:bg-slate-700 h-10 hidden sm:block"></div>
                                             <div className="flex flex-col items-center justify-center hidden sm:flex">
-                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">ການເຕີບໂຕ MoM</p>
-                                                {weekOffset === 0 ? (
+                                                <p className="text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-wider mb-0.5">
+                                                    {calendarMode === '14' ? 'ການເຕີບໂຕ WoW' : 'ການເຕີບໂຕ MoM'}
+                                                </p>
+                                                {weekOffset === 0 && calendarMode !== '14' ? (
                                                     <div className="flex flex-col items-center gap-1">
                                                         <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">⏳ ກຳລັງດຳເນີນ</span>
                                                         <p className="text-[9px] text-slate-500 font-bold">
@@ -701,7 +690,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                         </span>
                                                     </div>
                                                 )}
-                                                <p className="text-[8px] text-slate-400 mt-0.5">(Month-over-Month)</p>
+                                                <p className="text-[8px] text-slate-400 mt-0.5">{calendarMode === '14' ? '(Week-over-Week)' : '(Month-over-Month)'}</p>
                                             </div>
                                         </div>
 
@@ -751,7 +740,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                 const _dow = _now.getDay();
                                                 const _daysToSun = _dow === 0 ? 0 : 7 - _dow;
                                                 const _week2End = new Date(_now);
-                                                _week2End.setDate(_now.getDate() + _daysToSun - (weekOffset * 14));
+                                                _week2End.setDate(_now.getDate() + _daysToSun - (weekOffset * 7));
                                                 _week2End.setHours(23, 59, 59, 999);
 
                                                 gridStartDate = new Date(_week2End);
