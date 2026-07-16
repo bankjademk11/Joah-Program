@@ -8,6 +8,7 @@ const ODOO_URL = "https://lod.kokkokm.com";
 const BRANCHES = [
     { odoo_id: 249, branch_id: 'ຕະຫຼາດລາວ' },
     { odoo_id: 248, branch_id: 'ສີວິໄລ' },
+    { odoo_id: 273, branch_id: 'ເມກ້າມໍ' },
 ];
 
 // ── Shared helpers ────────────────────────────────────────────
