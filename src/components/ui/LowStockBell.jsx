@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, MapPin, Package, AlertTriangle, Search } from 'lucide-react';
+import { Bell, X, MapPin, Package, AlertTriangle, Search, Download, FileSpreadsheet, ArrowDownRight } from 'lucide-react';
 import { useLowStock } from '../../contexts/LowStockContext';
 
 /**
@@ -75,7 +75,7 @@ function MiniBarcode({ value = '' }) {
 }
 
 export default function LowStockBell() {
-    const { lowStockItems } = useLowStock();
+    const { lowStockItems, exportLowStockToExcel } = useLowStock();
     const [isOpen, setIsOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +122,15 @@ export default function LowStockBell() {
         { key: 'warning', label: 'ໃກ້ໝົດ', count: warningCount, dot: 'bg-amber-400' },
     ];
 
+    const handleExportExcel = (itemsToExport) => {
+        if (exportLowStockToExcel) {
+            const dateStr = new Date().toISOString().slice(0, 10);
+            exportLowStockToExcel(itemsToExport, {
+                filename: `ບົດລາຍງານສິນຄ້າສະຕ໋ອກຕໍ່າ_JOAH_${dateStr}.xlsx`
+            });
+        }
+    };
+
     const modalContent = isOpen && (
         <div
             className="fixed inset-0 z-[99999] w-screen h-screen bg-[#FAF7F2] dark:bg-[#0B0F14] flex flex-col"
@@ -133,28 +142,39 @@ export default function LowStockBell() {
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <header className="bg-white dark:bg-slate-900 border-b-2 border-slate-900/5 dark:border-white/5 px-6 sm:px-10 py-6 flex items-center justify-between shrink-0">
+                <header className="bg-white dark:bg-slate-900 border-b-2 border-slate-900/5 dark:border-white/5 px-6 sm:px-10 py-5 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className={`w-14 h-14 rounded-2xl ${alertTheme.chip} flex items-center justify-center shadow-sm`}>
+                        <div className={`w-13 h-13 rounded-2xl ${alertTheme.chip} flex items-center justify-center shadow-sm p-3`}>
                             <AlertTriangle size={28} strokeWidth={2} />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                                 ສິນຄ້າສະຕ໋ອກຕໍ່າໜ້າຮ້ານ
                             </h1>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                                ສິນຄ້າເຫຼືອຕໍ່າກວ່າ 30% ຂອງຄວາມຈຸສູງສຸດ — ເຕີມສະຕ໋ອກທັນເວລາ
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                                ສິນຄ້າເຫຼືອຕໍ່າກວ່າ 30% ຂອງຄວາມຈຸສູງສຸດ — ແຈ້ງເຕືອນ ແລະ ຈັດການເບີກເຕີມສິນຄ້າ
                             </p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Export Excel Button */}
+                        <button
+                            onClick={() => handleExportExcel(filteredItems)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm shadow-md transition-all border border-emerald-500"
+                            title="ສົ່ງອອກບົດລາຍງານ Excel ສຳລັບແຈ້ງພະນັກງານເບີກເຕີມສິນຄ້າ"
+                        >
+                            <FileSpreadsheet size={18} />
+                            <span>Export Excel ({filteredItems.length})</span>
+                        </button>
+
                         <span className={`text-base font-black px-4 py-2 rounded-xl ${alertTheme.chip}`}>
                             {total} ລາຍການ
                         </span>
+
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="w-12 h-12 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white border-2 border-slate-200 dark:border-slate-700 transition-colors"
+                            className="w-11 h-11 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white border-2 border-slate-200 dark:border-slate-700 transition-colors"
                             aria-label="ປິດ"
                         >
                             <X size={22} />
@@ -216,13 +236,13 @@ export default function LowStockBell() {
                                         <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 px-5 py-4">
                                             {/* Severity + name */}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1.5">
+                                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                                     <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${theme.chip}`}>
                                                         {theme.label}
                                                     </span>
                                                     {item.rackLocation && item.rackLocation !== '-' && (
-                                                        <span className="flex items-center gap-1 text-xs font-bold text-cyan-700 dark:text-cyan-400">
-                                                            <MapPin size={12} strokeWidth={2.5} /> {item.rackLocation}
+                                                        <span className="flex items-center gap-1 text-xs font-bold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/50 px-2 py-0.5 rounded-md border border-cyan-200 dark:border-cyan-800/40">
+                                                            <MapPin size={12} strokeWidth={2.5} /> ໜ້າຮ້ານ: {item.rackLocation}
                                                         </span>
                                                     )}
                                                 </div>
@@ -235,17 +255,31 @@ export default function LowStockBell() {
                                                         {item.barcode}
                                                     </span>
                                                 </div>
+
+                                                {/* Staff Action Advice Tag */}
+                                                {item.actionInstruction && (
+                                                    <div className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                                                        <ArrowDownRight size={14} className="text-emerald-500" />
+                                                        <span>ຂໍ້ແນະນຳພະນັກງານ: <strong className="text-emerald-600 dark:text-emerald-400">{item.actionInstruction}</strong></span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Qty + progress */}
-                                            <div className="w-full sm:w-56 shrink-0">
-                                                <div className="flex items-baseline justify-between mb-1.5">
+                                            <div className="w-full sm:w-64 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 sm:pl-6 pt-3 sm:pt-0">
+                                                <div className="flex items-baseline justify-between mb-1">
                                                     <span className="text-2xl font-black text-slate-900 dark:text-white">
                                                         {item.qty}
                                                         <span className="text-sm font-bold text-slate-400"> / {item.maxQty} ຊິ້ນ</span>
                                                     </span>
                                                     <span className={`text-sm font-black ${theme.text}`}>{pct.toFixed(0)}%</span>
                                                 </div>
+
+                                                <div className="flex items-center justify-between text-xs font-bold text-rose-600 dark:text-rose-400 mb-1.5">
+                                                    <span>ຕ້ອງເຕີມເພີ່ມ:</span>
+                                                    <span className="font-black text-sm">{item.neededQty ?? (item.maxQty - item.qty)} ຊິ້ນ</span>
+                                                </div>
+
                                                 <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2.5">
                                                     <div
                                                         className={`h-full ${theme.bar} rounded-full`}
@@ -264,11 +298,11 @@ export default function LowStockBell() {
                                                     <span className="font-black text-[13px]">{item.warehouseQty}</span>
                                                     <span className="opacity-80">ຊິ້ນ</span>
                                                     {item.warehouseQty > 0 && item.warehouseRack && item.warehouseRack !== '-' && (
-                                                        <span className="flex items-center gap-1 opacity-90 text-[11px] ml-auto">
+                                                        <span className="flex items-center gap-1 opacity-90 text-[11px] ml-auto font-mono">
                                                             <MapPin size={10} strokeWidth={2.5} /> {item.warehouseRack}
                                                         </span>
                                                     )}
-                                                    {item.warehouseQty === 0 && <span className="ml-auto text-[10px] uppercase tracking-wider bg-rose-100 dark:bg-rose-900 px-1.5 rounded">Request DC</span>}
+                                                    {item.warehouseQty === 0 && <span className="ml-auto text-[10px] uppercase tracking-wider bg-rose-100 dark:bg-rose-900/80 px-1.5 py-0.5 rounded text-rose-700 dark:text-rose-300 font-bold">Request DC</span>}
                                                 </div>
                                             </div>
                                         </div>
