@@ -218,8 +218,8 @@ export default function LowStockBell() {
                                 key={f.key}
                                 onClick={() => setActiveFilter(f.key)}
                                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${activeFilter === f.key
-                                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 border-slate-900 dark:border-white'
-                                        : 'bg-transparent text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 border-slate-900 dark:border-white'
+                                    : 'bg-transparent text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                                     }`}
                             >
                                 {f.dot && <span className={`w-2.5 h-2.5 rounded-full ${f.dot}`} />}
@@ -298,7 +298,7 @@ export default function LowStockBell() {
                                                         title="ดูประวัติการเคลื่อนไหวของบาร์โค้ดนี้ 360°"
                                                     >
                                                         <Sparkles size={13} className="text-amber-300 animate-pulse" />
-                                                        <span>ประวัติ SKU</span>
+                                                        <span>ປະຫວັດ SKU</span>
                                                     </button>
                                                 </div>
 
@@ -332,13 +332,12 @@ export default function LowStockBell() {
                                                         style={{ width: `${pct}%` }}
                                                     />
                                                 </div>
-                                                
+
                                                 {/* Warehouse Stock Info */}
-                                                <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border ${
-                                                    item.warehouseQty > 0 
-                                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50' 
+                                                <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border ${item.warehouseQty > 0
+                                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50'
                                                         : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50'
-                                                }`}>
+                                                    }`}>
                                                     <Package size={14} className={item.warehouseQty > 0 ? "text-emerald-500" : "text-rose-500"} />
                                                     <span className="opacity-80">ຫຼັງສາງ:</span>
                                                     <span className="font-black text-[13px]">{item.warehouseQty}</span>
@@ -381,8 +380,8 @@ export default function LowStockBell() {
             <button
                 onClick={() => setIsOpen(true)}
                 className={`relative p-2.5 sm:p-3 rounded-xl transition-colors border-2 ${isOpen
-                        ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-950 dark:text-white'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-800 dark:hover:text-slate-200'
+                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-950 dark:text-white'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
                 title={`ສິນຄ້າໃກ້ໝົດ ${total} ລາຍການ`}
             >
