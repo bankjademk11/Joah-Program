@@ -66,6 +66,7 @@ import DemoPlan from './components/Sanbox/DemoPlan';
 import AIChatBotFull from './components/ui/AIChatBotFull';
 import JoiWidget from './components/ui/JoiWidget';
 import BigDigitalClock from './components/ui/BigDigitalClock';
+import RefillAlertModal from './components/ui/RefillAlertModal';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -1884,6 +1885,7 @@ function AppContent() {
         />
       </div>
       {user && <JoiWidget currentUser={user} />}
+      <RefillAlertModal />
     </ToastProvider>
   );
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, MapPin, Package, AlertTriangle, Search, Download, FileSpreadsheet, ArrowDownRight } from 'lucide-react';
+import { Bell, X, MapPin, Package, AlertTriangle, Search, Download, FileSpreadsheet, ArrowDownRight, History, Sparkles } from 'lucide-react';
 import { useLowStock } from '../../contexts/LowStockContext';
+import SkuTimelineModal from './SkuTimelineModal';
 
 /**
  * Severity language borrowed from real shelf-edge stock tags:
@@ -75,10 +76,26 @@ function MiniBarcode({ value = '' }) {
 }
 
 export default function LowStockBell() {
-    const { lowStockItems, exportLowStockToExcel } = useLowStock();
+    const { lowStockItems, exportLowStockToExcel, exportNegativeStockReportForGM, viewingBranch } = useLowStock();
     const [isOpen, setIsOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [timelineBarcode, setTimelineBarcode] = useState(null);
+    const [timelineItemName, setTimelineItemName] = useState('');
+    const [isExportingGM, setIsExportingGM] = useState(false);
+
+    const negativeCount = useMemo(() => lowStockItems.filter(i => Number(i.qty) < 0).length, [lowStockItems]);
+
+    const handleExportGMReport = async () => {
+        setIsExportingGM(true);
+        try {
+            await exportNegativeStockReportForGM(lowStockItems, { branch: viewingBranch });
+        } catch (e) {
+            console.error('Error exporting GM negative report:', e);
+        } finally {
+            setIsExportingGM(false);
+        }
+    };
 
     const total = lowStockItems.length;
     const emptyCount = lowStockItems.filter((i) => i.severity === 'empty').length;
@@ -157,7 +174,18 @@ export default function LowStockBell() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                        {/* 🚨 Smart GM Report Export Button */}
+                        <button
+                            onClick={handleExportGMReport}
+                            disabled={isExportingGM}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm shadow-lg shadow-rose-600/20 active:scale-95 transition-all border border-rose-500 cursor-pointer"
+                            title="ดาวน์โหลดรายงานวิเคราะห์สต็อกติดลบพร้อมหลักฐานสำหรับ GM ทั้งหมดในคลิกเดียว"
+                        >
+                            <Sparkles size={17} className="text-amber-300 animate-pulse" />
+                            <span>Export ບົດລາຍງານ GM ({negativeCount} ຕິດລົບ)</span>
+                        </button>
+
                         {/* Export Excel Button */}
                         <button
                             onClick={() => handleExportExcel(filteredItems)}
@@ -249,11 +277,29 @@ export default function LowStockBell() {
                                                 <h4 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
                                                     {item.name}
                                                 </h4>
-                                                <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                                     <MiniBarcode value={item.barcode} />
                                                     <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
                                                         {item.barcode}
                                                     </span>
+
+                                                    {/* 🔍 SKU Timeline Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            e.preventDefault();
+                                                            const bc = item.barcode && item.barcode !== '-' ? item.barcode : (item.id || item.barcode_no || '');
+                                                            console.log('🔍 Clicked SKU Timeline for:', bc, item);
+                                                            setTimelineBarcode(bc || 'UNKNOWN');
+                                                            setTimelineItemName(item.name || '');
+                                                        }}
+                                                        className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm border border-blue-500 text-xs font-bold transition-all active:scale-95 cursor-pointer z-10"
+                                                        title="ดูประวัติการเคลื่อนไหวของบาร์โค้ดนี้ 360°"
+                                                    >
+                                                        <Sparkles size={13} className="text-amber-300 animate-pulse" />
+                                                        <span>ประวัติ SKU</span>
+                                                    </button>
                                                 </div>
 
                                                 {/* Staff Action Advice Tag */}
@@ -318,6 +364,14 @@ export default function LowStockBell() {
                     <span>ແຈ້ງເຕືອນເມື່ອສະຕ໋ອກຫຼຸດຕໍ່າກວ່າ 30% ຂອງຄວາມຈຸຊັ້ນວາງ</span>
                     <span>JOAH INVENTORY • v3.1</span>
                 </footer>
+
+                {/* Sku Timeline Modal */}
+                <SkuTimelineModal
+                    barcode={timelineBarcode}
+                    itemName={timelineItemName}
+                    isOpen={!!timelineBarcode}
+                    onClose={() => setTimelineBarcode(null)}
+                />
             </div>
         </div>
     );

@@ -250,8 +250,8 @@ const StoreResultTable = ({
 
     // Feed low stock data into global context whenever items change
     useEffect(() => {
-        updateLowStock(combinedResults);
-    }, [combinedResults, updateLowStock]);
+        updateLowStock(combinedResults, currentBranch);
+    }, [combinedResults, currentBranch, updateLowStock]);
 
     // 🆕 คำนวณยอดรวมหน้าร้านของแต่ละบาร์โค้ด (รวมทุก Rack ในสาขา)
     const barcodeTotals = useMemo(() => {
