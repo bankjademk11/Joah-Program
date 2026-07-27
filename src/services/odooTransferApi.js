@@ -52,45 +52,86 @@ export async function validateOdooPickingNoBackorder(pickingId, onProgress) {
     return { success: true, hadBackorder: false };
   }
 
-  // ถ้าคืน action ที่เป็น wizard stock.backorder.confirmation
-  if (validateResult?.res_model === 'stock.backorder.confirmation') {
-    onProgress?.({ percent: 45, currentBatch: 2, totalBatches: 3, text: 'ตรวจพบสินค้าขาด/ไม่ครบ กำลังเตรียมขอยกเลิก Backorder (web_save)...' });
+  // ฟังก์ชันช่วยเหลือในการ handle action wizard แต่ละแบบที่ Odoo ส่งกลับมา
+  let currentActionResult = validateResult;
+  let hasHandledWizard = false;
 
-    // Step 2: เรียก web_save บน stock.backorder.confirmation (ตรงตาม payload network จริง Odoo 18)
-    const saveResult = await odooRpc(
-      'stock.backorder.confirmation',
-      'web_save',
-      [[], { pick_ids: [[4, id]] }, {}],
-      { context: validateResult.context || {} }
-    );
-    console.log('[validateOdooPicking] web_save result:', saveResult);
+  // วน Loop จัดการ Wizard Action (เผื่อกรณี Odoo เด้ง Wizard ซ้อนกัน เช่น Expiry -> Backorder)
+  while (currentActionResult && typeof currentActionResult === 'object' && currentActionResult.res_model) {
+    hasHandledWizard = true;
+    const resModel = currentActionResult.res_model;
+    const ctx = currentActionResult.context || {};
 
-    // ดึง wizardId จาก saveResult
-    const wizardId = Array.isArray(saveResult) && saveResult.length > 0 ? saveResult[0].id : saveResult?.id;
+    console.log(`[validateOdooPicking] Handling Wizard Action: ${resModel}`, currentActionResult);
 
-    if (!wizardId) {
-      throw new Error('ไม่สามารถบันทึก Backorder wizard ได้ (web_save failed)');
+    if (resModel === 'expiry.picking.confirmation') {
+      onProgress?.({ percent: 50, currentBatch: 2, totalBatches: 3, text: 'ตรวจพบสินค้าใกล้หมดอายุ (Expired Info) กำลังยืนยัน...' });
+
+      // ดึง Wizard ID จาก res_id ที่ Odoo คืนมาใน action หรือเรียก web_save
+      let wizardId = currentActionResult.res_id;
+
+      if (!wizardId) {
+        // ถ้าไม่มี res_id คืนมา ใช้ web_save ด้วย picking_ids
+        const saveExpiry = await odooRpc(
+          'expiry.picking.confirmation',
+          'web_save',
+          [[], { picking_ids: [[6, 0, [id]]] }, {}],
+          { context: ctx }
+        );
+        wizardId = Array.isArray(saveExpiry) && saveExpiry.length > 0 ? saveExpiry[0].id : saveExpiry?.id;
+      }
+
+      if (!wizardId) {
+        throw new Error('ไม่สามารถรับ Wizard ID สำหรับ Expiry Confirmation ได้');
+      }
+
+      onProgress?.({ percent: 75, currentBatch: 3, totalBatches: 3, text: 'กำลังกดยืนยันสินค้าหมดอายุ (process)...' });
+
+      // Step Expiry: process([wizardId]) บน expiry.picking.confirmation
+      currentActionResult = await odooRpc(
+        'expiry.picking.confirmation',
+        'process',
+        [[wizardId]],
+        { context: ctx }
+      );
+      console.log('[validateOdooPicking] expiry process result:', currentActionResult);
+
+    } else if (resModel === 'stock.backorder.confirmation') {
+      onProgress?.({ percent: 60, currentBatch: 2, totalBatches: 3, text: 'ตรวจพบสินค้าไม่ครบ กำลังขอยกเลิก Backorder (web_save)...' });
+
+      // Step Backorder 1: web_save บน stock.backorder.confirmation
+      const saveBackorder = await odooRpc(
+        'stock.backorder.confirmation',
+        'web_save',
+        [[], { pick_ids: [[4, id]] }, {}],
+        { context: ctx }
+      );
+      const wizardId = Array.isArray(saveBackorder) && saveBackorder.length > 0 ? saveBackorder[0].id : saveBackorder?.id;
+
+      if (!wizardId) {
+        throw new Error('ไม่สามารถบันทึก Backorder wizard ได้ (web_save failed)');
+      }
+
+      onProgress?.({ percent: 85, currentBatch: 3, totalBatches: 3, text: 'กำลังส่งคำสั่ง No Backorder (process_cancel_backorder)...' });
+
+      // Step Backorder 2: process_cancel_backorder([wizardId])
+      currentActionResult = await odooRpc(
+        'stock.backorder.confirmation',
+        'process_cancel_backorder',
+        [[wizardId]],
+        { context: ctx }
+      );
+      console.log('[validateOdooPicking] process_cancel_backorder result:', currentActionResult);
+
+    } else {
+      // Wizard ชนิดอื่นๆ ที่ยังไม่ได้ดักจับ
+      console.warn(`[validateOdooPicking] Unsupported Wizard model: ${resModel}`, currentActionResult);
+      break;
     }
-
-    onProgress?.({ percent: 75, currentBatch: 3, totalBatches: 3, text: 'กำลังส่งคำสั่ง No Backorder (process_cancel_backorder)...' });
-
-    // Step 3: กด "No Backorder" = process_cancel_backorder([wizardId])
-    const noBackResult = await odooRpc(
-      'stock.backorder.confirmation',
-      'process_cancel_backorder',
-      [[wizardId]],
-      { context: validateResult.context || {} }
-    );
-    console.log('[validateOdooPicking] process_cancel_backorder result:', noBackResult);
-
-    onProgress?.({ percent: 100, currentBatch: 3, totalBatches: 3, text: 'Validate & Clear Backorder สำเร็จ!' });
-    return { success: true, hadBackorder: true, wizardId };
   }
 
-  // กรณีอื่น (unexpected)
-  console.warn('[validateOdooPicking] Unexpected result:', validateResult);
-  onProgress?.({ percent: 100, currentBatch: 3, totalBatches: 3, text: 'เสร็จสิ้นกระบวนการ' });
-  return { success: true, hadBackorder: false };
+  onProgress?.({ percent: 100, currentBatch: 3, totalBatches: 3, text: 'Validate สมบูรณ์เรียบร้อย!' });
+  return { success: true, hadWizard: hasHandledWizard };
 }
 
 
