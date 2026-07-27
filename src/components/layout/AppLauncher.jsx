@@ -37,6 +37,12 @@ const apps = [
         name: 'Sales Viewer',
         icon: SaleViewIcon,
         step: 'odoo-sales-viewer'
+    },
+    {
+        id: 'odoo-transfers',
+        name: 'Odoo Transfer IN',
+        icon: RequestIcon,
+        step: 'odoo-transfers'
     }
 ];
 

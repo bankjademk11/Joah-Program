@@ -52,6 +52,7 @@ import DcStockImporter from './components/Tools/DcStockImporter';
 import OdooSalesViewer from './components/Tools/OdooSalesViewer';
 import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
 import OdooSyncEngine from './components/Tools/OdooSyncEngine';
+import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -1598,6 +1599,15 @@ function AppContent() {
           {step === 'ai-chat' && (
             <div className="fixed inset-0 z-[9999] bg-slate-50 dark:bg-slate-950 flex flex-col animate-fade-in">
               <AIChatBotFull
+                onBack={() => setStep('upload')}
+                currentUser={user}
+              />
+            </div>
+          )}
+
+          {step === 'odoo-transfers' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <OdooTransferViewer
                 onBack={() => setStep('upload')}
                 currentUser={user}
               />

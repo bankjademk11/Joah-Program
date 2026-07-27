@@ -32,53 +32,29 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     return match?.category_1 || match?.category_2 || '';
   };
 
-  // Fetch master_data ສຳລັບ QuickAdd auto-fill
+  // Fetch master_data ບາງສ່ວນສຳລັບ QuickAdd auto-fill ແລະ fallback lookup
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
-        let allMasterData = [];
-        let page = 0;
-        const pageSize = 1000;
-        let hasMore = true;
+        // 🚀 Optimization: Load max 3,000 records to prevent memory freeze
+        const { data: pageData, error } = await supabase
+          .from('master_data')
+          .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
+          .limit(3000);
 
-        while (hasMore) {
-          const { data: pageData, error } = await supabase
-            .from('master_data')
-            .select('id, barcode, product_name_la, item_name, category_1, category_2, branch_id', { count: 'exact' })
-            .order('id', { ascending: true })
-            .range(page * pageSize, (page + 1) * pageSize - 1);
-
-          if (error) {
-            console.error('[StoreInventory] Error fetching master_data page:', error);
-            break;
-          }
-
-          if (!pageData || pageData.length === 0) {
-            hasMore = false;
-          } else {
-            allMasterData = [...allMasterData, ...pageData];
-            if (pageData.length < pageSize) hasMore = false;
-            page++;
-          }
-          if (page > 50) break; // 50k Limit safety
+        if (error) {
+          console.error('[StoreInventory] Error fetching master_data page:', error);
+          return;
         }
 
-        if (allMasterData.length > 0) {
-          // Dedup: prefer ຕະຫຼາດລາວ, fallback to any branch
+        if (pageData && pageData.length > 0) {
           const dedupMap = new Map();
-          // First pass: add all (any branch)
-          allMasterData.forEach(row => {
-            if (row.barcode) {
-              if (!dedupMap.has(row.barcode)) dedupMap.set(row.barcode, row);
-            }
-          });
-          // Second pass: override with ຕະຫຼາດລາວ if exists (highest priority)
-          allMasterData.filter(r => r.branch_id === 'ຕະຫຼາດລາວ').forEach(row => {
-            if (row.barcode) dedupMap.set(row.barcode, row);
+          pageData.forEach(row => {
+            if (row.barcode && !dedupMap.has(row.barcode)) dedupMap.set(row.barcode, row);
           });
           const deduped = Array.from(dedupMap.values());
           setMasterDataList(deduped);
-          console.log('[StoreInventory] Master Data loaded:', deduped.length, 'unique SKUs from', allMasterData.length, 'total records');
+          console.log('[StoreInventory] Master Data loaded:', deduped.length, 'unique SKUs');
         }
       } catch (err) {
         console.warn('[StoreInventory] Could not load master_data:', err.message);
@@ -133,42 +109,29 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     if (!selectedBranch) return;
     setIsLoading(true);
     try {
-      // 1. Fetch store_inventory (ໜ້າຮ້ານ) — paginated with RETRY LOGIC
+      // 1. Fetch store_inventory (ໜ້າຮ້ານ) — paginated efficiently
       let storeData = [];
       let storePage = 0;
       const storePageSize = 1000;
       let storeHasMore = true;
-      let retryCount = 0;
-      const maxRetries = 3;
 
       while (storeHasMore) {
-        try {
-          const { data: pageData, error: storeErr } = await supabase
-            .from('store_inventory')
-            .select('*')
-            .eq('branch_id', selectedBranch)
-            .order('id', { ascending: true })
-            .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
-          
-          if (storeErr) throw storeErr;
-          
-          if (!pageData || pageData.length === 0) {
-            storeHasMore = false;
-          } else {
-            storeData = [...storeData, ...pageData];
-            if (pageData.length < storePageSize) storeHasMore = false;
-            storePage++;
-            retryCount = 0; // reset retry on success
-          }
-          if (storePage > 100) break; // safety cap: 100k records max
-        } catch (err) {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            await new Promise(r => setTimeout(r, 1000 * retryCount)); // exponential backoff
-          } else {
-            throw err;
-          }
+        const { data: pageData, error: storeErr } = await supabase
+          .from('store_inventory')
+          .select('id, barcode_no, item_name, store_qty, shelf_location, category_1_actual, category_2_actual, max_qty, product_tag, sales_qty, branch_id')
+          .eq('branch_id', selectedBranch)
+          .range(storePage * storePageSize, (storePage + 1) * storePageSize - 1);
+        
+        if (storeErr) throw storeErr;
+        
+        if (!pageData || pageData.length === 0) {
+          storeHasMore = false;
+        } else {
+          storeData = [...storeData, ...pageData];
+          if (pageData.length < storePageSize) storeHasMore = false;
+          storePage++;
         }
+        if (storePage > 25) break; // 25k limit max
       }
 
       // 2. Fetch location_inventory for warehouseQty (ຈຳນວນ ຫຼັງສາງ) in parallel to prevent mobile network bottleneck
