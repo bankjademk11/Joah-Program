@@ -582,102 +582,87 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           )}
         </div>
 
-        {/* 3. ITEM LIST TABLE */}
-        <div className="bg-[#b81d6d] rounded-3xl p-4 sm:p-5 shadow-lg text-white space-y-4">
+        {/* 3. ITEM LIST TABLE (HIGH CONTRAST DESIGN) */}
+        <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border-2 border-slate-200 text-slate-900 space-y-3">
           
-          <div className="flex items-center justify-between border-b border-pink-400/40 pb-3">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
-              <Barcode size={22} className="text-pink-200" />
-              <h2 className="text-lg font-black tracking-tight">
+              <Barcode size={22} className="text-[#b81d6d]" />
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
                 ລາຍການສິນຄ້າທີ່ສະແກນແລ້ວ ({items.length} ລາຍການ)
               </h2>
             </div>
 
             <button
               onClick={() => fetchLak8Stock()}
-              className="text-xs font-bold bg-white/10 hover:bg-white/20 text-pink-100 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+              className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> ໂຫຼດໃໝ່
             </button>
           </div>
 
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
             {isLoading ? (
-              <div className="py-12 text-center text-pink-200 space-y-2">
-                <RefreshCw size={36} className="mx-auto animate-spin" />
-                <p className="font-bold text-sm">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Supabase...</p>
+              <div className="py-12 text-center text-slate-500 space-y-2">
+                <RefreshCw size={36} className="mx-auto animate-spin text-[#b81d6d]" />
+                <p className="font-bold text-sm text-slate-700">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Supabase...</p>
               </div>
             ) : items.length === 0 ? (
-              <div className="py-12 text-center text-pink-200/70 space-y-2">
-                <Barcode size={48} className="mx-auto opacity-40" />
-                <p className="font-bold text-sm">ຍັງບໍ່ມີລາຍການທີ່ສະແກນ</p>
-                <p className="text-xs">ຍິງບາໂຄດເພື່ອເລີ່ມນັບສິນຄ້າສາງລັກ 8 ໄດ້ເລີຍ</p>
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <Barcode size={48} className="mx-auto opacity-30" />
+                <p className="font-bold text-sm text-slate-600">ຍັງບໍ່ມີລາຍການທີ່ສະແກນ</p>
+                <p className="text-xs text-slate-400">ຍິງບາໂຄດເພື່ອເລີ່ມນັບສິນຄ້າສາງລັກ 8 ໄດ້ເລີຍ</p>
               </div>
             ) : (
               items.slice(0, 50).map((item, index) => (
                 <div
                   key={item.id || item.barcode}
-                  className={`bg-white text-slate-800 rounded-2xl p-3 sm:p-4 shadow-md flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 transition-all hover:scale-[1.01] ${
-                    index === 0 ? 'ring-4 ring-pink-300' : ''
+                  className={`bg-slate-50 text-slate-900 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 border-2 ${
+                    index === 0 ? 'border-[#b81d6d] bg-pink-50/70 shadow-sm' : 'border-slate-200'
                   }`}
                 >
-                  <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-                    <div className="bg-slate-50 border border-slate-200 p-1.5 rounded-xl shrink-0 text-center flex flex-col items-center justify-center">
-                      <Barcode size={36} className="text-slate-800" />
-                      <span className="text-[9px] font-bold text-slate-500 max-w-[90px] truncate font-mono">
+                  {/* Left info: Barcode & Product Name */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-xs bg-slate-900 text-amber-300 px-2 py-0.5 rounded shrink-0">
                         {item.barcode}
                       </span>
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="font-black text-sm sm:text-base text-slate-800 leading-snug truncate">
+                      <p className="font-black text-xs sm:text-sm text-slate-900 truncate">
                         {item.name}
                       </p>
-                      <p className="text-xs font-bold font-mono text-amber-600 mt-0.5">
-                        ບາໂຄດ: {item.barcode}
-                      </p>
-                      <span className="inline-block text-[10px] text-slate-400 font-medium mt-1">
-                        ສະແກນລ່າສຸດ: {item.timestamp}
-                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 mt-1">
+                      <span>ເວລາ: {item.timestamp}</span>
+                      {item.createdBy && <span>ໂດຍ: {item.createdBy}</span>}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                    <div className="text-right">
-                      <span className="text-2xl sm:text-4xl font-black text-slate-900 leading-none font-mono">
-                        {item.qty}
-                      </span>
-                      <span className="text-xs sm:text-sm font-black text-[#b81d6d] ml-1">
-                        QTY
-                      </span>
-                      {item.createdBy && (
-                        <p className="text-[9px] font-bold text-cyan-600 font-mono mt-0.5">
-                          ໂດຍ: {item.createdBy}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-1 border-l border-slate-200 pl-2 sm:pl-3">
-                      <button
-                        onClick={() => updateItemQty(item.id, item.barcode, item.qty + 1)}
-                        className="p-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-600 rounded-lg transition-all active:scale-95 cursor-pointer"
-                        title="ເພີ່ມ 1"
-                      >
-                        <Plus size={14} />
-                      </button>
+                  {/* Right controls: QTY & buttons */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center bg-white rounded-lg p-0.5 border-2 border-slate-300 shadow-2xs">
                       <button
                         onClick={() => updateItemQty(item.id, item.barcode, item.qty - 1)}
-                        className="p-1.5 bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-600 rounded-lg transition-all active:scale-95 cursor-pointer"
+                        className="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-rose-100 text-slate-900 hover:text-rose-700 font-black rounded text-sm active:scale-95 cursor-pointer"
                         title="ຫຼຸດ 1"
                       >
-                        <Minus size={14} />
+                        -
+                      </button>
+                      <span className="px-2 font-mono font-black text-base text-[#b81d6d] min-w-[32px] text-center">
+                        {item.qty}
+                      </span>
+                      <button
+                        onClick={() => updateItemQty(item.id, item.barcode, item.qty + 1)}
+                        className="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-emerald-100 text-slate-900 hover:text-emerald-700 font-black rounded text-sm active:scale-95 cursor-pointer"
+                        title="ເພີ່ມ 1"
+                      >
+                        +
                       </button>
                     </div>
 
                     <button
                       onClick={() => removeItem(item.barcode)}
-                      className="p-2 text-slate-300 hover:text-rose-500 rounded-lg transition-colors cursor-pointer ml-1"
-                      title="ລຶບລາຍການນີ້"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      title="ລຶບ"
                     >
                       <Trash2 size={16} />
                     </button>
