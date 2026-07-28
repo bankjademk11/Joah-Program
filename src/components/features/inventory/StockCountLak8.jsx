@@ -14,15 +14,17 @@ import {
   RefreshCw,
   X,
   Volume2,
-  Check
+  Check,
+  ScanLine
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
-  const [scanMode, setScanMode] = useState('count'); // 'manual' | 'count'
+  const [scanMode, setScanMode] = useState('count'); // 'manual' | 'count' | 'search'
   const [manualQty, setManualQty] = useState(1);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -47,6 +49,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  // Derived filtered items for search
+  const filteredItems = searchTerm
+    ? items.filter(item => {
+        const term = searchTerm.toLowerCase();
+        return item.barcode?.toLowerCase().includes(term) || item.name?.toLowerCase().includes(term);
+      })
+    : items;
 
   // Trigger floating toast with auto dismiss
   const showToast = (toastData) => {
@@ -185,29 +195,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       return; // Reject anything that is not exactly 13 digits
                     }
 
-                    // SMART THROTTLE: Lock duplicate scans within 1.8 seconds
-                    if (
-                      lastScannedBarcodeRef.current === cleanCode && 
-                      (now - lastScanTimeRef.current) < 1800
-                    ) {
-                      return; // Throttle scan
-                    }
-
-                    lastScannedBarcodeRef.current = cleanCode;
-                    lastScanTimeRef.current = now;
-
-                    const addAmt = scanMode === 'count' ? 1 : Math.max(1, Number(manualQty) || 1);
-                    const existing = (itemsRef.current || []).find(i => String(i.barcode).trim() === cleanCode);
-                    const targetQty = (existing ? Number(existing.qty) || 0 : 0) + addAmt;
-
-                    setDebugLog({
-                      lastTrigger: new Date().toLocaleTimeString('lo-LA'),
-                      triggerType: 'CAMERA 📷',
-                      lastCode: cleanCode,
-                      status: `AUTO COUNT (13 Digits): ${cleanCode} ➔ ${targetQty} QTY`
-                    });
-
-                    // Audio Beep
+                    // Audio Beep (always beep once when valid code detected)
                     try {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
                       const osc = ctx.createOscillator();
@@ -217,6 +205,45 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       osc.start();
                       osc.stop(ctx.currentTime + 0.12);
                     } catch (e) {}
+
+                    // ─── MANUAL MODE: fill input box + close camera, user types qty then confirms ───
+                    if (scanMode === 'manual') {
+                      setBarcodeInput(cleanCode);
+                      setIsCameraActive(false);
+                      setCameraPermState('idle');
+                      showToast({ type: 'info', title: 'ສະແກນສຳເລັດ ✅', message: `ກະລຸນາຕັ້ງຈຳນວນ ແລ້ວກົດ ຕົກລົງ` });
+                      return; // DO NOT AUTO-COUNT
+                    }
+
+                    // ─── SEARCH MODE: fill search box + close camera ───
+                    if (scanMode === 'search') {
+                      setSearchTerm(cleanCode);
+                      setIsCameraActive(false);
+                      setCameraPermState('idle');
+                      setScanMode('count');
+                      return; // DO NOT AUTO-COUNT
+                    }
+
+                    // ─── COUNT MODE: Smart throttle then auto-count ───
+                    if (
+                      lastScannedBarcodeRef.current === cleanCode &&
+                      (now - lastScanTimeRef.current) < 1800
+                    ) {
+                      return; // Throttle scan
+                    }
+
+                    lastScannedBarcodeRef.current = cleanCode;
+                    lastScanTimeRef.current = now;
+
+                    const existing = (itemsRef.current || []).find(i => String(i.barcode).trim() === cleanCode);
+                    const targetQty = (existing ? Number(existing.qty) || 0 : 0) + 1;
+
+                    setDebugLog({
+                      lastTrigger: new Date().toLocaleTimeString('lo-LA'),
+                      triggerType: 'CAMERA 📷',
+                      lastCode: cleanCode,
+                      status: `AUTO COUNT: ${cleanCode} ➔ ${targetQty} QTY`
+                    });
 
                     // Process scan code without populating input field to avoid keyboard popup
                     processScanCode(cleanCode, false);
@@ -621,7 +648,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               <div className="flex items-center justify-between border-b border-slate-700 pb-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>ກ້ອງສະແກນບາໂຄດກຳລັງທຳງານ (Auto Count Active)</span>
+                  <span>ກ້ອງສະແກນບາໂຄດກຳລັງທຳງານ...</span>
                 </div>
                 <button 
                   onClick={() => setIsCameraActive(false)}
@@ -672,24 +699,46 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             </button>
           </div>
 
+          {/* SEARCH BOX */}
+          <div className="relative pt-1 pb-2">
+            <input 
+              type="text"
+              placeholder="ຄົ້ນຫາບາໂຄດ ຫຼື ຊື່ສິນຄ້າໃນລາຍການ..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border-2 border-slate-300 focus:border-[#b81d6d] focus:bg-white rounded-xl py-2.5 px-3 text-sm font-bold text-slate-800 placeholder-slate-400 pr-12 focus:outline-none transition-all"
+            />
+            <button 
+              onClick={() => {
+                setScanMode('search');
+                setCameraPermState('granted');
+                setIsCameraActive(true);
+              }}
+              className="absolute right-2 top-2 p-1.5 text-slate-400 hover:text-[#b81d6d] hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
+              title="ສະແກນເພື່ອຄົ້ນຫາ"
+            >
+              <ScanLine size={18} />
+            </button>
+          </div>
+
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
             {isLoading ? (
               <div className="py-12 text-center text-slate-500 space-y-2">
                 <RefreshCw size={36} className="mx-auto animate-spin text-[#b81d6d]" />
                 <p className="font-bold text-sm text-slate-700">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Supabase...</p>
               </div>
-            ) : items.length === 0 ? (
+            ) : filteredItems.length === 0 ? (
               <div className="py-12 text-center text-slate-400 space-y-2">
                 <Barcode size={48} className="mx-auto opacity-30" />
-                <p className="font-bold text-sm text-slate-600">ຍັງບໍ່ມີລາຍການທີ່ສະແກນ</p>
-                <p className="text-xs text-slate-400">ຍິງບາໂຄດເພື່ອເລີ່ມນັບສິນຄ້າສາງລັກ 8 ໄດ້ເລີຍ</p>
+                <p className="font-bold text-sm text-slate-600">ບໍ່ພົບລາຍການ</p>
+                <p className="text-xs text-slate-400">ລອງຄົ້ນຫາໃໝ່ ຫຼື ຍິງບາໂຄດເພື່ອເພີ່ມສິນຄ້າ</p>
               </div>
             ) : (
-              items.slice(0, 50).map((item, index) => (
+              filteredItems.slice(0, 50).map((item, index) => (
                 <div
                   key={item.id || item.barcode}
                   className={`bg-slate-50 text-slate-900 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 border-2 ${
-                    index === 0 ? 'border-[#b81d6d] bg-pink-50/70 shadow-sm' : 'border-slate-200'
+                    index === 0 && !searchTerm ? 'border-[#b81d6d] bg-pink-50/70 shadow-sm' : 'border-slate-200'
                   }`}
                 >
                   {/* Left info: Barcode & Product Name */}
