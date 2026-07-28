@@ -43,6 +43,12 @@ const apps = [
         name: 'Odoo Transfer IN',
         icon: RequestIcon,
         step: 'odoo-transfers'
+    },
+    {
+        id: 'stock-count-lak8',
+        name: 'ນັບສິນຄ້າ ສາງລັກ 8',
+        icon: InventoryIcon,
+        step: 'stock-count-lak8'
     }
 ];
 

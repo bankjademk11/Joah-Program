@@ -53,6 +53,7 @@ import OdooSalesViewer from './components/Tools/OdooSalesViewer';
 import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
 import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
+import StockCountLak8 from './components/features/inventory/StockCountLak8';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -1609,6 +1610,16 @@ function AppContent() {
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <OdooTransferViewer
                 onBack={() => setStep('upload')}
+                currentUser={user}
+              />
+            </div>
+          )}
+
+          {step === 'stock-count-lak8' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-100 flex flex-col animate-fade-in overflow-y-auto">
+              <StockCountLak8
+                onBack={() => setStep('upload')}
+                masterData={masterData}
                 currentUser={user}
               />
             </div>
