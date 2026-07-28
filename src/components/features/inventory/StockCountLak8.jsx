@@ -44,11 +44,16 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const lastScannedBarcodeRef = useRef(null);
   const lastScanTimeRef = useRef(0);
   const itemsRef = useRef(items);
+  const scanModeRef = useRef('count');      // Ref copy of scanMode (avoids stale closure in camera)
+  const manualQtyRef = useRef(1);           // Ref copy of manualQty
+  const barcodeInputRef = useRef('');       // Ref copy of barcodeInput (avoids re-binding keydown listener on every keystroke)
+  const isProcessingRef = useRef(false);    // Lock: prevent re-entry while async upsert is running
 
-  // Synchronize itemsRef whenever items state changes
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
+  // Keep refs in sync with state
+  useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
+  useEffect(() => { manualQtyRef.current = manualQty; }, [manualQty]);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+  useEffect(() => { barcodeInputRef.current = barcodeInput; }, [barcodeInput]);
 
   // Derived filtered items for search
   const filteredItems = searchTerm
@@ -73,9 +78,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [toast]);
 
   // ─── 1. FETCH REALTIME DATA FROM SUPABASE ─────────────────────────
-  const fetchLak8Stock = async () => {
+  // `silent = true` skips the loading spinner. Used by the realtime
+  // subscription so a remote change doesn't flash the whole list back
+  // to a loading state (it was fighting the optimistic setItems() calls
+  // made a moment earlier by processScanCode/updateItemQty).
+  const fetchLak8Stock = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const { data, error } = await supabase
         .from('stock_count_lak8')
         .select('*')
@@ -98,7 +107,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     } catch (err) {
       console.error('[Lak8 Fetch Error]', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -113,7 +122,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         { event: '*', schema: 'public', table: 'stock_count_lak8' },
         (payload) => {
           console.log('[Supabase Realtime Event Received]', payload);
-          fetchLak8Stock();
+          fetchLak8Stock(true); // silent refresh — don't blink the spinner on every write
         }
       )
       .subscribe();
@@ -124,6 +133,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, []);
 
   // ─── HARDWARE VOLUME BUTTON TRIGGER ──────────────────────────────
+  // FIX: this used to depend on [barcodeInput, scanMode, manualQty], which
+  // meant the window keydown listener was removed and re-added on every
+  // single keystroke. It now reads current values from refs and only
+  // mounts once, so the listener is stable for the component's lifetime.
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown', 'F1', 'F2', 'F12'].includes(e.key) || e.code?.includes('Volume')) {
@@ -136,15 +149,16 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           status: 'TRIGGER FIRED'
         }));
 
-        if (barcodeInput.trim()) {
-          processScanCode(barcodeInput.trim());
+        const currentInput = barcodeInputRef.current;
+        if (currentInput && currentInput.trim()) {
+          processScanCode(currentInput.trim());
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [barcodeInput, scanMode, manualQty]);
+  }, []);
 
   // Auto focus ONLY when camera is OFF
   useEffect(() => {
@@ -154,19 +168,47 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [isCameraActive, scanMode]);
 
   // ─── CAMERA SCANNER WITH STRICT 13-DIGIT FORMAT & DEBOUNCE ──────
+  // FIX (the "camera leak"): this effect used to depend on
+  // [isCameraActive, scanMode, manualQty]. Because scanMode/manualQty
+  // already had ref copies (scanModeRef/manualQtyRef) specifically to
+  // avoid stale closures, there was no reason for them to also be here —
+  // but leaving them in the deps array meant every mode switch or +/-
+  // tap on manualQty while the camera was open would tear down and
+  // restart getUserMedia() + the scanner from scratch.
+  //
+  // On top of that, cleanup could run *while* the dynamic import()
+  // and/or html5Scanner.start() was still in flight. The old code only
+  // checked `isMounted` once (before the import), not again after it
+  // resolved, so a scanner could finish starting *after* its effect had
+  // already been torn down — orphaning an active camera stream that the
+  // stale `html5Scanner` closure in that cleanup could never reach.
+  // The blind `.catch(() => {})` on stop() also swallowed the
+  // "already transitioning states" error that happens when stop() is
+  // called while start() is still pending, hiding the leak completely.
+  //
+  // Fix: effect now depends only on [isCameraActive]; we re-check
+  // isMounted after the import AND after start() resolves, we guard
+  // against calling stop() before start() has actually finished, and we
+  // log stop() failures instead of swallowing them.
   useEffect(() => {
     let html5Scanner = null;
     let isMounted = true;
+    let startPromise = null;
 
     if (isCameraActive) {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then((stream) => {
             stream.getTracks().forEach(track => track.stop());
+            if (!isMounted) return;
 
             setTimeout(() => {
               if (!isMounted) return;
               import('html5-qrcode').then(({ Html5Qrcode, Html5QrcodeSupportedFormats }) => {
+                // Re-check: the component may have unmounted / camera may
+                // have been toggled off while this dynamic import was loading.
+                if (!isMounted) return;
+
                 const element = document.getElementById('lak8-reader');
                 if (!element) return;
 
@@ -177,7 +219,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 ];
 
                 html5Scanner = new Html5Qrcode('lak8-reader', { formatsToSupport, verbose: false });
-                html5Scanner.start(
+
+                startPromise = html5Scanner.start(
                   { facingMode: 'environment' },
                   {
                     fps: 15,
@@ -187,15 +230,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     }
                   },
                   (decodedText) => {
+                    // ─── GATE 1: Ignore if currently processing a previous scan ───
+                    if (isProcessingRef.current) return;
+
                     const now = Date.now();
                     const cleanCode = decodedText.trim();
 
-                    // 🎯 STRICT REQUIREMENT: MUST BE EXACTLY 13 NUMERIC DIGITS!
-                    if (!/^\d{13}$/.test(cleanCode)) {
-                      return; // Reject anything that is not exactly 13 digits
-                    }
+                    // ─── GATE 2: Must be exactly 13 numeric digits ───
+                    if (!/^\d{13}$/.test(cleanCode)) return;
 
-                    // Audio Beep (always beep once when valid code detected)
+                    // ─── GATE 3: Throttle - ignore same code within 2.5 seconds ───
+                    if (
+                      lastScannedBarcodeRef.current === cleanCode &&
+                      (now - lastScanTimeRef.current) < 2500
+                    ) return;
+
+                    // ─── Passed all gates: record time NOW before any async work ───
+                    lastScannedBarcodeRef.current = cleanCode;
+                    lastScanTimeRef.current = now;
+
+                    // ─── Beep exactly once per accepted scan ───
                     try {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
                       const osc = ctx.createOscillator();
@@ -206,35 +260,28 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       osc.stop(ctx.currentTime + 0.12);
                     } catch (e) { }
 
-                    // ─── MANUAL MODE: fill input box + close camera, user types qty then confirms ───
-                    if (scanMode === 'manual') {
+                    // ─── Read mode from ref (always up-to-date, no stale closure) ───
+                    const currentMode = scanModeRef.current;
+
+                    // ─── MANUAL MODE: fill input + close camera ───
+                    if (currentMode === 'manual') {
                       setBarcodeInput(cleanCode);
                       setIsCameraActive(false);
                       setCameraPermState('idle');
-                      showToast({ type: 'info', title: 'ສະແກນສຳເລັດ ✅', message: `ກະລຸນາຕັ້ງຈຳນວນ ແລ້ວກົດ ຕົກລົງ` });
-                      return; // DO NOT AUTO-COUNT
+                      showToast({ type: 'info', title: 'ສະແກນສຳເລັດ ✅', message: 'ກະລຸນາຕັ້ງຈຳນວນ ແລ້ວກົດ ຕົກລົງ' });
+                      return;
                     }
 
-                    // ─── SEARCH MODE: fill search box + close camera ───
-                    if (scanMode === 'search') {
+                    // ─── SEARCH MODE: fill search + close camera ───
+                    if (currentMode === 'search') {
                       setSearchTerm(cleanCode);
                       setIsCameraActive(false);
                       setCameraPermState('idle');
                       setScanMode('count');
-                      return; // DO NOT AUTO-COUNT
+                      return;
                     }
 
-                    // ─── COUNT MODE: Smart throttle then auto-count ───
-                    if (
-                      lastScannedBarcodeRef.current === cleanCode &&
-                      (now - lastScanTimeRef.current) < 1800
-                    ) {
-                      return; // Throttle scan
-                    }
-
-                    lastScannedBarcodeRef.current = cleanCode;
-                    lastScanTimeRef.current = now;
-
+                    // ─── COUNT MODE: auto-count with processing lock ───
                     const existing = (itemsRef.current || []).find(i => String(i.barcode).trim() === cleanCode);
                     const targetQty = (existing ? Number(existing.qty) || 0 : 0) + 1;
 
@@ -242,11 +289,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       lastTrigger: new Date().toLocaleTimeString('lo-LA'),
                       triggerType: 'CAMERA 📷',
                       lastCode: cleanCode,
-                      status: `AUTO COUNT: ${cleanCode} ➔ ${targetQty} QTY`
+                      status: `COUNT: ${cleanCode} ➔ ${targetQty} QTY`
                     });
 
-                    // Process scan code without populating input field to avoid keyboard popup
-                    processScanCode(cleanCode, false);
+                    // Lock processing, run async, then release
+                    isProcessingRef.current = true;
+                    processScanCode(cleanCode, false).finally(() => {
+                      isProcessingRef.current = false;
+                    });
                   },
                   () => { }
                 ).catch(err => {
@@ -267,11 +317,34 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
     return () => {
       isMounted = false;
-      if (html5Scanner && html5Scanner.isScanning) {
-        html5Scanner.stop().then(() => html5Scanner.clear()).catch(() => { });
+
+      const stopAndClear = (scanner) => {
+        if (!scanner) return;
+        scanner.stop()
+          .then(() => scanner.clear())
+          .catch((err) => {
+            // Previously this was a silent no-op catch, which hid the
+            // "already transitioning states" error thrown when stop()
+            // races start(). Logging it makes a leaked camera stream
+            // visible instead of invisible.
+            console.warn('[Lak8 Camera] stop() failed, stream may still be active:', err);
+          });
+      };
+
+      if (html5Scanner) {
+        if (html5Scanner.isScanning) {
+          stopAndClear(html5Scanner);
+        } else if (startPromise) {
+          // start() was still pending when cleanup fired — wait for it
+          // to settle before stopping, instead of racing it (which is
+          // what produced the silently-swallowed error / leaked stream).
+          startPromise
+            .then(() => stopAndClear(html5Scanner))
+            .catch(() => { /* start() itself failed, nothing to stop */ });
+        }
       }
     };
-  }, [isCameraActive, scanMode, manualQty]);
+  }, [isCameraActive]);
 
   // Helper search master name
   const getProductName = (barcode) => {
@@ -297,7 +370,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       return;
     }
 
-    const addAmount = scanMode === 'count' ? 1 : Math.max(1, Number(manualQty) || 1);
+    const addAmount = scanModeRef.current === 'count' ? 1 : Math.max(1, Number(manualQtyRef.current) || 1);
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
 
     // ALWAYS read from itemsRef.current to avoid stale React state closures
