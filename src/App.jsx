@@ -1385,6 +1385,21 @@ function AppContent() {
                     </div>
                   )}
 
+                  {/* Stock Count Lak 8 Card Button */}
+                  <div className="glass-card rounded-[2.5rem] p-8 md:p-10 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden group w-full sm:w-[340px] hover:border-pink-500 hover:shadow-pink-500/10 transition-all duration-500 cursor-pointer" onClick={() => setStep('stock-count-lak8')}>
+                    <div className="w-16 h-16 rounded-3xl bg-pink-50 dark:bg-pink-500/10 flex items-center justify-center text-pink-600 dark:text-pink-400 shadow-inner group-hover:scale-110 transition-transform duration-500 mb-2 font-mono font-black text-xl">
+                      📦
+                    </div>
+                    <div className="space-y-2 mb-2">
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ນັບສິນຄ້າ ສາງລັກ 8</h3>
+                      <p className="text-[10px] text-pink-500 font-black uppercase tracking-[0.2em]">Stock Count Lak 8</p>
+                    </div>
+                    <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 shadow-pink-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('stock-count-lak8'); }}>
+                      <Box size={18} />
+                      <span>ກົດເຂົ້າໃຊ້ງານ</span>
+                    </button>
+                  </div>
+
                   {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
                   {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">

@@ -101,12 +101,75 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [barcodeInput, scanMode, manualQty]);
 
-  // Focus input automatically for handheld scanner
+  // Camera Barcode Scanner integration (html5-qrcode)
   useEffect(() => {
-    if (!isCameraActive && inputRef.current) {
-      inputRef.current.focus();
+    let html5Scanner = null;
+    let isMounted = true;
+
+    if (isCameraActive) {
+      // 1. Explicitly request camera permission first so browser shows popup
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then((stream) => {
+            // Stop preview stream immediately so html5qrcode can take control
+            stream.getTracks().forEach(track => track.stop());
+
+            // 2. Delay slightly so DOM element #lak8-reader is rendered
+            setTimeout(() => {
+              if (!isMounted) return;
+              import('html5-qrcode').then(({ Html5Qrcode }) => {
+                const element = document.getElementById('lak8-reader');
+                if (!element) return;
+
+                html5Scanner = new Html5Qrcode('lak8-reader');
+                html5Scanner.start(
+                  { facingMode: 'environment' },
+                  { fps: 15, qrbox: { width: 260, height: 140 } },
+                  (decodedText) => {
+                    setBarcodeInput(decodedText);
+                    setDebugLog({
+                      lastTrigger: new Date().toLocaleTimeString('lo-LA'),
+                      triggerType: 'CAMERA 📷',
+                      lastCode: decodedText,
+                      status: `SUCCESS!`
+                    });
+
+                    // Audio Beep
+                    try {
+                      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                      const osc = ctx.createOscillator();
+                      osc.type = 'sine';
+                      osc.frequency.setValueAtTime(1000, ctx.currentTime);
+                      osc.connect(ctx.destination);
+                      osc.start();
+                      osc.stop(ctx.currentTime + 0.15);
+                    } catch (e) {}
+
+                    processScanCode(decodedText);
+                  },
+                  () => {}
+                ).catch(err => {
+                  console.error('Camera start error:', err);
+                  setDebugLog(prev => ({ ...prev, status: 'CAM ERROR: ' + (err.message || err) }));
+                });
+              });
+            }, 200);
+          })
+          .catch((err) => {
+            console.error('Camera permission denied:', err);
+            alert('ກະລຸນາອະນຸຍາດການໃຊ້ກ້ອງ (Camera Permission) ໃນເບຣົາເຊີຂອງທ່ານ!');
+            setIsCameraActive(false);
+          });
+      }
     }
-  }, [isCameraActive, scanMode]);
+
+    return () => {
+      isMounted = false;
+      if (html5Scanner && html5Scanner.isScanning) {
+        html5Scanner.stop().then(() => html5Scanner.clear()).catch(() => {});
+      }
+    };
+  }, [isCameraActive, scanMode, manualQty]);
 
   // Helper search master name
   const getProductName = (barcode) => {
