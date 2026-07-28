@@ -87,6 +87,23 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
   useEffect(() => {
     fetchLak8Stock();
+
+    // ⚡ SUPABASE REALTIME SUBSCRIPTION
+    const channel = supabase
+      .channel('stock_count_lak8_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stock_count_lak8' },
+        (payload) => {
+          console.log('[Supabase Realtime Event Received]', payload);
+          fetchLak8Stock();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // ─── HARDWARE VOLUME BUTTON TRIGGER ──────────────────────────────
