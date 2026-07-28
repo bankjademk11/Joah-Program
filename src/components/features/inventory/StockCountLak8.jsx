@@ -41,6 +41,12 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const inputRef = useRef(null);
   const lastScannedBarcodeRef = useRef(null);
   const lastScanTimeRef = useRef(0);
+  const itemsRef = useRef(items);
+
+  // Synchronize itemsRef whenever items state changes
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   // Trigger floating toast with auto dismiss
   const showToast = (toastData) => {
@@ -77,6 +83,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA')
         }));
         setItems(formatted);
+        itemsRef.current = formatted;
       }
     } catch (err) {
       console.error('[Lak8 Fetch Error]', err);
@@ -136,7 +143,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   }, [isCameraActive, scanMode]);
 
-  // ─── CAMERA SCANNER WITH SMART THROTTLE & DEBOUNCE (2.0s Lock) ───
+  // ─── CAMERA SCANNER WITH STRICT 13-DIGIT FORMAT & DEBOUNCE ──────
   useEffect(() => {
     let html5Scanner = null;
     let isMounted = true;
@@ -149,37 +156,58 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
             setTimeout(() => {
               if (!isMounted) return;
-              import('html5-qrcode').then(({ Html5Qrcode }) => {
+              import('html5-qrcode').then(({ Html5Qrcode, Html5QrcodeSupportedFormats }) => {
                 const element = document.getElementById('lak8-reader');
                 if (!element) return;
 
-                html5Scanner = new Html5Qrcode('lak8-reader');
+                // 🎯 STRICT 13-DIGIT EAN-13 FORMAT ONLY
+                const formatsToSupport = [
+                  Html5QrcodeSupportedFormats.EAN_13,
+                  Html5QrcodeSupportedFormats.CODE_128
+                ];
+
+                html5Scanner = new Html5Qrcode('lak8-reader', { formatsToSupport, verbose: false });
                 html5Scanner.start(
                   { facingMode: 'environment' },
-                  { fps: 15, qrbox: { width: 260, height: 140 } },
+                  { 
+                    fps: 15, 
+                    qrbox: { width: 260, height: 140 },
+                    experimentalFeatures: {
+                      useBarCodeDetectorIfSupported: true
+                    }
+                  },
                   (decodedText) => {
                     const now = Date.now();
                     const cleanCode = decodedText.trim();
 
-                    // SMART THROTTLE: ป้องกันสแกนติดบาร์โค้ดเดิมซ้ำรัวๆ ภายใน 2.0 วินาที
+                    // 🎯 STRICT REQUIREMENT: MUST BE EXACTLY 13 NUMERIC DIGITS!
+                    if (!/^\d{13}$/.test(cleanCode)) {
+                      return; // Reject anything that is not exactly 13 digits
+                    }
+
+                    // SMART THROTTLE: Lock duplicate scans within 1.8 seconds
                     if (
                       lastScannedBarcodeRef.current === cleanCode && 
-                      (now - lastScanTimeRef.current) < 2000
+                      (now - lastScanTimeRef.current) < 1800
                     ) {
-                      return; // ข้ามการประมวลผล ไม่ดังรัว ไม่นับซ้ำ
+                      return; // Throttle scan
                     }
 
                     lastScannedBarcodeRef.current = cleanCode;
                     lastScanTimeRef.current = now;
 
+                    const addAmt = scanMode === 'count' ? 1 : Math.max(1, Number(manualQty) || 1);
+                    const existing = (itemsRef.current || []).find(i => String(i.barcode).trim() === cleanCode);
+                    const targetQty = (existing ? Number(existing.qty) || 0 : 0) + addAmt;
+
                     setDebugLog({
                       lastTrigger: new Date().toLocaleTimeString('lo-LA'),
                       triggerType: 'CAMERA 📷',
                       lastCode: cleanCode,
-                      status: `AUTO COUNTED (+${scanMode === 'count' ? 1 : manualQty})`
+                      status: `AUTO COUNT (13 Digits): ${cleanCode} ➔ ${targetQty} QTY`
                     });
 
-                    // Audio Beep เตือน 1 ครั้งถ้วน
+                    // Audio Beep
                     try {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
                       const osc = ctx.createOscillator();
@@ -190,7 +218,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       osc.stop(ctx.currentTime + 0.12);
                     } catch (e) {}
 
-                    // ประมวลผลนับ QTY ทันทีโดยไม่แตะ inputRef เพื่อไม่ให้แป้นพิมพ์คีย์บอร์ดเด้ง!
+                    // Process scan code without populating input field to avoid keyboard popup
                     processScanCode(cleanCode, false);
                   },
                   () => {}
@@ -230,17 +258,51 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     const code = codeToScan.trim();
     if (!code) return;
 
+    // 🎯 STRICT REQUIREMENT: MUST BE EXACTLY 13 NUMERIC DIGITS!
+    if (!/^\d{13}$/.test(code)) {
+      if (clearInput) {
+        showToast({
+          type: 'error',
+          title: 'ເລກບາໂຄດບໍ່ຖືກຕ້ອງ! ❌',
+          message: 'ລະບົບຮອງຮັບສະເພາະບາໂຄດຕົວເລກ 13 ຫຼັກເທົ່ານັ້ນ (EAN-13)'
+        });
+      }
+      return;
+    }
+
     const addAmount = scanMode === 'count' ? 1 : Math.max(1, Number(manualQty) || 1);
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
 
-    const existingItem = items.find(item => item.barcode === code);
+    // ALWAYS read from itemsRef.current to avoid stale React state closures
+    const currentList = itemsRef.current || [];
+    const existingItem = currentList.find(item => String(item.barcode).trim() === code);
     let prevQty = 0;
     let newQty = addAmount;
 
     if (existingItem) {
-      prevQty = existingItem.qty;
+      prevQty = Number(existingItem.qty) || 0;
       newQty = prevQty + addAmount;
     }
+
+    const productName = getProductName(code) || `ສິນຄ້າບາໂຄດ ${code}`;
+    const nowStr = new Date().toLocaleTimeString('lo-LA');
+
+    const newItemObj = {
+      id: existingItem?.id || Date.now(),
+      barcode: code,
+      name: productName,
+      qty: newQty,
+      createdBy: empId,
+      timestamp: nowStr
+    };
+
+    // Update items state AND itemsRef.current immediately
+    setItems(prevItems => {
+      const filtered = prevItems.filter(i => String(i.barcode).trim() !== code);
+      const updated = [newItemObj, ...filtered];
+      itemsRef.current = updated;
+      return updated;
+    });
 
     try {
       const { data, error } = await supabase
@@ -258,23 +320,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       if (error) throw error;
 
-      const productName = getProductName(code) || `ສິນຄ້າບາໂຄດ ${code}`;
-      const nowStr = new Date().toLocaleTimeString('lo-LA');
+      if (data?.[0]?.id && newItemObj.id !== data[0].id) {
+        setItems(prevItems => {
+          const updated = prevItems.map(i => i.barcode === code ? { ...i, id: data[0].id } : i);
+          itemsRef.current = updated;
+          return updated;
+        });
+      }
 
-      setItems(prevItems => {
-        const filtered = prevItems.filter(i => i.barcode !== code);
-        const newItemObj = {
-          id: data?.[0]?.id || Date.now(),
-          barcode: code,
-          name: productName,
-          qty: newQty,
-          createdBy: empId,
-          timestamp: nowStr
-        };
-        return [newItemObj, ...filtered];
-      });
-
-      // ลอยแจ้งเตือนแบบ Floating Toast
+      // Floating Toast notification
       showToast({
         type: existingItem ? 'success' : 'info',
         title: existingItem ? 'ເພີ່ມ QTY ສຳເລັດ! ➕' : 'ພົບເລກບາໂຄດໃໝ່! ✨',
