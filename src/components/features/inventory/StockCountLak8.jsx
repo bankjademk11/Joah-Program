@@ -34,6 +34,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   });
 
   const [isCameraActive, setIsCameraActive] = useState(false);
+  // 'idle' | 'asking' | 'granted' | 'denied'
+  const [cameraPermState, setCameraPermState] = useState('idle');
   const [debugLog, setDebugLog] = useState({
     lastTrigger: null,
     triggerType: 'NONE',
@@ -420,7 +422,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               {/* ปุ่มเปิดกล้องสแกนมือถือ */}
               <button
                 type="button"
-                onClick={() => setIsCameraActive(!isCameraActive)}
+                onClick={() => {
+                  if (isCameraActive) {
+                    setIsCameraActive(false);
+                    setCameraPermState('idle');
+                  } else {
+                    // แสดงหน้าขอสิทธิ์กล้องก่อน
+                    setCameraPermState('asking');
+                  }
+                }}
                 className={`px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all border ${
                   isCameraActive 
                     ? 'bg-rose-500 text-white border-rose-600' 
@@ -439,6 +449,46 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 ຕົກລົງ
               </button>
             </form>
+
+            {/* === CAMERA PERMISSION PROMPT UI (แสดงก่อน browser ขอ permission) === */}
+            {cameraPermState === 'asking' && !isCameraActive && (
+              <div className="mt-3 bg-slate-800 border-2 border-emerald-500/60 rounded-2xl p-5 text-white space-y-4 animate-in fade-in zoom-in duration-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-500/40">
+                    <Camera size={26} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-white">ຂໍອະນຸຍາດໃຊ້ກ້ອງ</h3>
+                    <p className="text-xs text-slate-300 mt-0.5">ລະບົບຕ້ອງການເຂົ້າໃຊ້ກ້ອງ ເພື່ອສະແກນບາໂຄດສິນຄ້າ</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-700/60 rounded-xl p-3 space-y-1.5 text-xs text-slate-300 border border-slate-600">
+                  <p className="flex items-start gap-2"><span className="text-emerald-400 font-bold mt-0.5">✓</span> ກ້ອງໃຊ້ສຳລັບສະແກນເລກບາໂຄດ ສິນຄ້າສາງລັກ 8 ເທົ່ານັ້ນ</p>
+                  <p className="flex items-start gap-2"><span className="text-emerald-400 font-bold mt-0.5">✓</span> ບໍ່ໄດ້ຖ່າຍຮູບ ຫຼື ບັນທຶກຮູບໃດໆ ທັງໝົດ</p>
+                  <p className="flex items-start gap-2"><span className="text-amber-400 font-bold mt-0.5">!</span> ຫຼັງຈາກກົດ "ອະນຸຍາດ" ເບຣົາເຊີຈະຖາມຂໍສິດໃຊ້ກ້ອງ ກະລຸນາກົດ <span className="text-emerald-300 font-bold">ອະນຸຍາດ (Allow)</span></p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => setCameraPermState('idle')}
+                    className="py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold text-sm rounded-xl transition-all cursor-pointer"
+                  >
+                    ຍົກເລີກ
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCameraPermState('granted');
+                      setIsCameraActive(true);
+                    }}
+                    className="py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
+                  >
+                    <Camera size={16} />
+                    ອະນຸຍາດ ແລ້ວເປີດກ້ອງ
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* CAMERA PREVIEW CONTAINER (กล้องสแกนสำหรับมือถือ) */}
             {isCameraActive && (
