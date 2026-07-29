@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Barcode,
   Plus,
@@ -15,7 +15,11 @@ import {
   X,
   Volume2,
   Check,
-  ScanLine
+  ScanLine,
+  Loader,
+  Package,
+  Clock,
+  User
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 
@@ -29,10 +33,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [isLoading, setIsLoading] = useState(true);
 
   // Floating Toast Notification State
-  const [toast, setToast] = useState(null); // { type, title, message, barcode, prevQty, newQty }
+  const [toast, setToast] = useState(null);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameraPermState, setCameraPermState] = useState('idle'); // 'idle' | 'asking' | 'granted' | 'denied'
+  const [cameraPermState, setCameraPermState] = useState('idle');
   const [debugLog, setDebugLog] = useState({
     lastTrigger: null,
     triggerType: 'NONE',
@@ -40,14 +44,19 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     status: 'READY'
   });
 
+  // ─── Loading states for async operations ──────────────────────
+  const [isSubmittingBarcode, setIsSubmittingBarcode] = useState(false);
+  const [isUpdatingQty, setIsUpdatingQty] = useState({});
+  const [isDeletingBarcode, setIsDeletingBarcode] = useState({});
+
   const inputRef = useRef(null);
   const lastScannedBarcodeRef = useRef(null);
   const lastScanTimeRef = useRef(0);
   const itemsRef = useRef(items);
-  const scanModeRef = useRef('count');      // Ref copy of scanMode (avoids stale closure in camera)
-  const manualQtyRef = useRef(1);           // Ref copy of manualQty
-  const barcodeInputRef = useRef('');       // Ref copy of barcodeInput (avoids re-binding keydown listener on every keystroke)
-  const isProcessingRef = useRef(false);    // Lock: prevent re-entry while async upsert is running
+  const scanModeRef = useRef('count');
+  const manualQtyRef = useRef(1);
+  const barcodeInputRef = useRef('');
+  const isProcessingRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
@@ -62,6 +71,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       return item.barcode?.toLowerCase().includes(term) || item.name?.toLowerCase().includes(term);
     })
     : items;
+
+  // ─── Memoized total QTY sum ──
+  const totalQtySum = useMemo(() => {
+    return items.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+  }, [items]);
 
   // Trigger floating toast with auto dismiss
   const showToast = (toastData) => {
@@ -78,10 +92,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [toast]);
 
   // ─── 1. FETCH REALTIME DATA FROM SUPABASE ─────────────────────────
-  // `silent = true` skips the loading spinner. Used by the realtime
-  // subscription so a remote change doesn't flash the whole list back
-  // to a loading state (it was fighting the optimistic setItems() calls
-  // made a moment earlier by processScanCode/updateItemQty).
   const fetchLak8Stock = async (silent = false) => {
     try {
       if (!silent) setIsLoading(true);
@@ -106,6 +116,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       }
     } catch (err) {
       console.error('[Lak8 Fetch Error]', err);
+      showToast({
+        type: 'error',
+        title: 'ຂໍ້ຜິດພາດ!',
+        message: 'ບໍ່ສາມາດໂຫຼດຂໍ້ມູນໄດ້'
+      });
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -114,7 +129,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   useEffect(() => {
     fetchLak8Stock();
 
-    // ⚡ SUPABASE REALTIME SUBSCRIPTION
+    // ⚡ SUPABASE REALTIME SUBSCRIPTION - IMPROVED
     const channel = supabase
       .channel('stock_count_lak8_realtime')
       .on(
@@ -122,7 +137,24 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         { event: '*', schema: 'public', table: 'stock_count_lak8' },
         (payload) => {
           console.log('[Supabase Realtime Event Received]', payload);
-          fetchLak8Stock(true); // silent refresh — don't blink the spinner on every write
+
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newData = payload.new;
+            setItems(prev => {
+              const filtered = prev.filter(i => i.id !== newData.id);
+              const formattedItem = {
+                id: newData.id,
+                barcode: newData.barcode,
+                name: getProductName(newData.barcode) || `ສິນຄ້າບາໂຄດ ${newData.barcode}`,
+                qty: Number(newData.qty) || 0,
+                createdBy: newData.created_by || 'Unknown',
+                timestamp: new Date(newData.updated_at || newData.created_at).toLocaleTimeString('lo-LA')
+              };
+              return [formattedItem, ...filtered];
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setItems(prev => prev.filter(i => i.id !== payload.old.id));
+          }
         }
       )
       .subscribe();
@@ -133,10 +165,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, []);
 
   // ─── HARDWARE VOLUME BUTTON TRIGGER ──────────────────────────────
-  // FIX: this used to depend on [barcodeInput, scanMode, manualQty], which
-  // meant the window keydown listener was removed and re-added on every
-  // single keystroke. It now reads current values from refs and only
-  // mounts once, so the listener is stable for the component's lifetime.
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown', 'F1', 'F2', 'F12'].includes(e.key) || e.code?.includes('Volume')) {
@@ -168,28 +196,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [isCameraActive, scanMode]);
 
   // ─── CAMERA SCANNER WITH STRICT 13-DIGIT FORMAT & DEBOUNCE ──────
-  // FIX (the "camera leak"): this effect used to depend on
-  // [isCameraActive, scanMode, manualQty]. Because scanMode/manualQty
-  // already had ref copies (scanModeRef/manualQtyRef) specifically to
-  // avoid stale closures, there was no reason for them to also be here —
-  // but leaving them in the deps array meant every mode switch or +/-
-  // tap on manualQty while the camera was open would tear down and
-  // restart getUserMedia() + the scanner from scratch.
-  //
-  // On top of that, cleanup could run *while* the dynamic import()
-  // and/or html5Scanner.start() was still in flight. The old code only
-  // checked `isMounted` once (before the import), not again after it
-  // resolved, so a scanner could finish starting *after* its effect had
-  // already been torn down — orphaning an active camera stream that the
-  // stale `html5Scanner` closure in that cleanup could never reach.
-  // The blind `.catch(() => {})` on stop() also swallowed the
-  // "already transitioning states" error that happens when stop() is
-  // called while start() is still pending, hiding the leak completely.
-  //
-  // Fix: effect now depends only on [isCameraActive]; we re-check
-  // isMounted after the import AND after start() resolves, we guard
-  // against calling stop() before start() has actually finished, and we
-  // log stop() failures instead of swallowing them.
   useEffect(() => {
     let html5Scanner = null;
     let isMounted = true;
@@ -205,14 +211,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             setTimeout(() => {
               if (!isMounted) return;
               import('html5-qrcode').then(({ Html5Qrcode, Html5QrcodeSupportedFormats }) => {
-                // Re-check: the component may have unmounted / camera may
-                // have been toggled off while this dynamic import was loading.
                 if (!isMounted) return;
 
                 const element = document.getElementById('lak8-reader');
                 if (!element) return;
 
-                // 🎯 STRICT 13-DIGIT EAN-13 FORMAT ONLY
                 const formatsToSupport = [
                   Html5QrcodeSupportedFormats.EAN_13,
                   Html5QrcodeSupportedFormats.CODE_128
@@ -230,26 +233,21 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     }
                   },
                   (decodedText) => {
-                    // ─── GATE 1: Ignore if currently processing a previous scan ───
                     if (isProcessingRef.current) return;
 
                     const now = Date.now();
                     const cleanCode = decodedText.trim();
 
-                    // ─── GATE 2: Must be exactly 13 numeric digits ───
                     if (!/^\d{13}$/.test(cleanCode)) return;
 
-                    // ─── GATE 3: Throttle - ignore same code within 2.5 seconds ───
                     if (
                       lastScannedBarcodeRef.current === cleanCode &&
                       (now - lastScanTimeRef.current) < 2500
                     ) return;
 
-                    // ─── Passed all gates: record time NOW before any async work ───
                     lastScannedBarcodeRef.current = cleanCode;
                     lastScanTimeRef.current = now;
 
-                    // ─── Beep exactly once per accepted scan ───
                     try {
                       const ctx = new (window.AudioContext || window.webkitAudioContext)();
                       const osc = ctx.createOscillator();
@@ -260,10 +258,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       osc.stop(ctx.currentTime + 0.12);
                     } catch (e) { }
 
-                    // ─── Read mode from ref (always up-to-date, no stale closure) ───
                     const currentMode = scanModeRef.current;
 
-                    // ─── MANUAL MODE: fill input + close camera ───
                     if (currentMode === 'manual') {
                       setBarcodeInput(cleanCode);
                       setIsCameraActive(false);
@@ -272,7 +268,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       return;
                     }
 
-                    // ─── SEARCH MODE: fill search + close camera ───
                     if (currentMode === 'search') {
                       setSearchTerm(cleanCode);
                       setIsCameraActive(false);
@@ -281,7 +276,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       return;
                     }
 
-                    // ─── COUNT MODE: auto-count with processing lock ───
                     const existing = (itemsRef.current || []).find(i => String(i.barcode).trim() === cleanCode);
                     const targetQty = (existing ? Number(existing.qty) || 0 : 0) + 1;
 
@@ -292,7 +286,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       status: `COUNT: ${cleanCode} ➔ ${targetQty} QTY`
                     });
 
-                    // Lock processing, run async, then release
                     isProcessingRef.current = true;
                     processScanCode(cleanCode, false).finally(() => {
                       isProcessingRef.current = false;
@@ -323,10 +316,6 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         scanner.stop()
           .then(() => scanner.clear())
           .catch((err) => {
-            // Previously this was a silent no-op catch, which hid the
-            // "already transitioning states" error thrown when stop()
-            // races start(). Logging it makes a leaked camera stream
-            // visible instead of invisible.
             console.warn('[Lak8 Camera] stop() failed, stream may still be active:', err);
           });
       };
@@ -335,12 +324,9 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         if (html5Scanner.isScanning) {
           stopAndClear(html5Scanner);
         } else if (startPromise) {
-          // start() was still pending when cleanup fired — wait for it
-          // to settle before stopping, instead of racing it (which is
-          // what produced the silently-swallowed error / leaked stream).
           startPromise
             .then(() => stopAndClear(html5Scanner))
-            .catch(() => { /* start() itself failed, nothing to stop */ });
+            .catch(() => { });
         }
       }
     };
@@ -350,15 +336,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const getProductName = (barcode) => {
     if (!masterData || masterData.length === 0) return null;
     const found = masterData.find(m => m.barcode === barcode || m.item_code === barcode);
-    return found ? (found.product_name_la || found.item_name || found.product_name) : null;
+    return found?.name || found?.item_name || null;
   };
 
-  // ─── 2. PROCESS SCAN & UPSERT TO SUPABASE ─────────────────────────
+  // ─── 2. PROCESS SCAN & UPSERT TO SUPABASE (IMPROVED WITH RPC) ─────
   const processScanCode = async (codeToScan, clearInput = true) => {
     const code = codeToScan.trim();
     if (!code) return;
 
-    // 🎯 STRICT REQUIREMENT: MUST BE EXACTLY 13 NUMERIC DIGITS!
     if (!/^\d{13}$/.test(code)) {
       if (clearInput) {
         showToast({
@@ -370,65 +355,25 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       return;
     }
 
+    setIsSubmittingBarcode(true);
     const addAmount = scanModeRef.current === 'count' ? 1 : Math.max(1, Number(manualQtyRef.current) || 1);
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
 
-    // ALWAYS read from itemsRef.current to avoid stale React state closures
-    const currentList = itemsRef.current || [];
-    const existingItem = currentList.find(item => String(item.barcode).trim() === code);
-    let prevQty = 0;
-    let newQty = addAmount;
-
-    if (existingItem) {
-      prevQty = Number(existingItem.qty) || 0;
-      newQty = prevQty + addAmount;
-    }
-
-    const productName = getProductName(code) || `ສິນຄ້າບາໂຄດ ${code}`;
-    const nowStr = new Date().toLocaleTimeString('lo-LA');
-
-    const newItemObj = {
-      id: existingItem?.id || Date.now(),
-      barcode: code,
-      name: productName,
-      qty: newQty,
-      createdBy: empId,
-      timestamp: nowStr
-    };
-
-    // Update items state AND itemsRef.current immediately
-    setItems(prevItems => {
-      const filtered = prevItems.filter(i => String(i.barcode).trim() !== code);
-      const updated = [newItemObj, ...filtered];
-      itemsRef.current = updated;
-      return updated;
-    });
-
     try {
-      const { data, error } = await supabase
-        .from('stock_count_lak8')
-        .upsert(
-          {
-            barcode: code,
-            qty: newQty,
-            created_by: empId,
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'barcode' }
-        )
-        .select();
+      const { error } = await supabase.rpc('increment_stock', {
+        target_barcode: code,
+        amount: addAmount,
+        user_id: empId
+      });
 
       if (error) throw error;
 
-      if (data?.[0]?.id && newItemObj.id !== data[0].id) {
-        setItems(prevItems => {
-          const updated = prevItems.map(i => i.barcode === code ? { ...i, id: data[0].id } : i);
-          itemsRef.current = updated;
-          return updated;
-        });
-      }
+      const currentList = itemsRef.current || [];
+      const existingItem = currentList.find(item => String(item.barcode).trim() === code);
+      const prevQty = existingItem ? Number(existingItem.qty) || 0 : 0;
+      const newQty = prevQty + addAmount;
+      const productName = getProductName(code) || `ສິນຄ້າບາໂຄດ ${code}`;
 
-      // Floating Toast notification
       showToast({
         type: existingItem ? 'success' : 'info',
         title: existingItem ? 'ເພີ່ມ QTY ສຳເລັດ! ➕' : 'ພົບເລກບາໂຄດໃໝ່! ✨',
@@ -443,97 +388,127 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       showToast({
         type: 'error',
         title: 'ຂໍ້ຜິດພາດ!',
-        message: err.message
+        message: err.message || 'ບໍ່ສາມາດບັນທຶກຂໍ້ມູນໄດ້'
       });
-    }
-
-    if (clearInput) {
-      setBarcodeInput('');
+    } finally {
+      setIsSubmittingBarcode(false);
+      if (clearInput) {
+        setBarcodeInput('');
+      }
     }
   };
 
   const handleBarcodeSubmit = (e) => {
     if (e) e.preventDefault();
-    processScanCode(barcodeInput);
+    if (!isSubmittingBarcode && barcodeInput.trim()) {
+      processScanCode(barcodeInput);
+    }
   };
 
+  // ─── 3. UPDATE ITEM QTY ──────────────────────────────────────────
   const updateItemQty = async (id, barcode, targetQty) => {
     const nextQty = Math.max(1, targetQty);
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
+
+    setIsUpdatingQty(prev => ({ ...prev, [barcode]: true }));
 
     try {
       const { error } = await supabase
         .from('stock_count_lak8')
         .update({ qty: nextQty, created_by: empId, updated_at: new Date().toISOString() })
-        .eq('barcode', barcode);
+        .eq('id', id);
 
       if (error) throw error;
 
-      setItems(items.map(item => item.barcode === barcode ? { ...item, qty: nextQty, timestamp: new Date().toLocaleTimeString('lo-LA') } : item));
+      setItems(items.map(item => item.id === id ? { ...item, qty: nextQty, timestamp: new Date().toLocaleTimeString('lo-LA') } : item));
     } catch (err) {
       console.error('[Lak8 Update Error]', err);
+      showToast({
+        type: 'error',
+        title: 'ຂໍ້ຜິດພາດ!',
+        message: 'ບໍ່ສາມາດອັปເດតຈຳນວນໄດ້'
+      });
+    } finally {
+      setIsUpdatingQty(prev => ({ ...prev, [barcode]: false }));
     }
   };
 
-  const removeItem = async (barcode) => {
+  // ─── 4. REMOVE ITEM ──────────────────────────────────────────────
+  const removeItem = async (id, barcode) => {
     if (!confirm('ທ່ານຕ້ອງການລຶບລາຍການນີ້ຫຼືບໍ່?')) return;
+
+    setIsDeletingBarcode(prev => ({ ...prev, [barcode]: true }));
+
     try {
       const { error } = await supabase
         .from('stock_count_lak8')
         .delete()
-        .eq('barcode', barcode);
+        .eq('id', id);
 
       if (error) throw error;
 
-      setItems(items.filter(item => item.barcode !== barcode));
+      setItems(items.filter(item => item.id !== id));
+      showToast({
+        type: 'success',
+        title: 'ລຶບສຳເລັດ! ✓',
+        message: 'ລາຍການຖືກລຶບອອກແລ້ວ'
+      });
     } catch (err) {
       console.error('[Lak8 Delete Error]', err);
+      showToast({
+        type: 'error',
+        title: 'ຂໍ້ຜິດພາດ!',
+        message: 'ບໍ່ສາມາດລຶບລາຍການໄດ້'
+      });
+    } finally {
+      setIsDeletingBarcode(prev => ({ ...prev, [barcode]: false }));
     }
   };
 
-  const totalQtySum = items.reduce((acc, curr) => acc + curr.qty, 0);
-
   return (
     <div
-      className="min-h-screen bg-slate-100 pb-12 select-none relative"
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 pb-20 select-none"
       style={{ fontFamily: "'Noto Sans Lao', 'Inter', sans-serif" }}
     >
-      {/* Google Fonts Noto Sans Lao */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;500;600;700;800;900&display=swap');
         .font-lao { fontFamily: 'Noto Sans Lao', sans-serif; }
+        .text-input-focus {
+          color: #1e293b;
+          background-color: #ffffff;
+        }
       `}</style>
 
-      {/* FLOATING TOAST NOTIFICATION (เด้งลอยสไตล์ Mobile App) */}
+      {/* FLOATING TOAST NOTIFICATION */}
       {toast && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md animate-in slide-in-from-top-4 duration-200">
-          <div className={`p-4 rounded-2xl shadow-xl backdrop-blur-md border flex items-center justify-between text-white ${toast.type === 'error'
-            ? 'bg-rose-600/95 border-rose-400'
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-sm animate-in slide-in-from-top-4 duration-300">
+          <div className={`p-4 rounded-2xl shadow-2xl backdrop-blur-lg border-2 flex items-start gap-3 ${toast.type === 'error'
+            ? 'bg-red-500/95 border-red-300 text-white'
             : toast.type === 'info'
-              ? 'bg-amber-600/95 border-amber-400'
-              : 'bg-emerald-600/95 border-emerald-400'
+              ? 'bg-amber-500/95 border-amber-300 text-white'
+              : 'bg-emerald-500/95 border-emerald-300 text-white'
             }`}>
-            <div className="flex items-center gap-3">
+            <div className="shrink-0 pt-0.5">
               {toast.type === 'error' ? (
-                <AlertCircle size={26} className="shrink-0" />
+                <AlertCircle size={24} className="text-white" />
               ) : (
-                <CheckCircle2 size={26} className="shrink-0 animate-bounce" />
+                <CheckCircle2 size={24} className="text-white animate-bounce" />
               )}
-              <div>
-                <h4 className="font-black text-sm leading-tight">{toast.title}</h4>
-                <p className="text-xs text-white/90 font-medium truncate max-w-[200px] sm:max-w-[260px]">{toast.message}</p>
-                {toast.barcode && (
-                  <div className="flex items-center gap-2 mt-1 text-[11px] font-mono font-bold bg-black/20 px-2 py-0.5 rounded-md">
-                    <span>{toast.barcode}</span>
-                    <span>➔</span>
-                    <span className="text-amber-200">{toast.prevQty} ➔ {toast.newQty} QTY</span>
-                  </div>
-                )}
-              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-black text-sm leading-tight">{toast.title}</h4>
+              <p className="text-xs text-white/95 font-medium mt-1">{toast.message}</p>
+              {toast.barcode && (
+                <div className="flex items-center gap-2 mt-2 text-xs font-mono font-bold bg-black/20 px-2.5 py-1 rounded-lg w-fit">
+                  <span className="text-white">{toast.barcode}</span>
+                  <span className="text-white/70">→</span>
+                  <span className="text-yellow-200">{toast.prevQty} → {toast.newQty}</span>
+                </div>
+              )}
             </div>
             <button
               onClick={() => setToast(null)}
-              className="p-1 hover:bg-white/20 rounded-lg text-white/80"
+              className="p-1 hover:bg-white/20 rounded-lg text-white/80 shrink-0"
             >
               <X size={18} />
             </button>
@@ -541,92 +516,98 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         </div>
       )}
 
-      {/* 1. TOP HEADER */}
-      <header className="bg-[#b81d6d] text-white py-3.5 px-4 sticky top-0 z-30 shadow-md flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-1.5 bg-white/20 hover:bg-white/30 rounded-xl transition-all active:scale-95 cursor-pointer"
-            >
-              <ArrowLeft size={20} />
-            </button>
-          )}
-          <div>
-            <h1 className="text-xl md:text-2xl font-black tracking-tight leading-none">
-              ລະບົບນັບສິນຄ້າສາງລັກ8
-            </h1>
-            <p className="text-[11px] text-pink-200 font-medium mt-0.5">
-              Stock Count System — Lak 8 Warehouse
-            </p>
+      {/* HEADER */}
+      <header className="sticky top-0 z-30 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-all active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft size={20} />
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl font-black tracking-tight">
+                📦 ລະບົບນັບສິນຄ້າ Lak 8
+              </h1>
+              <p className="text-xs text-white/80 font-medium mt-0.5">
+                Stock Count System — Warehouse Management
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center gap-2 border border-white/20">
-          <Layers size={16} className="text-pink-200" />
-          <span className="text-xs font-bold font-mono">ລວມ {totalQtySum} QTY</span>
+          <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/30">
+            <Package size={18} className="text-yellow-200" />
+            <span className="text-sm font-black font-mono">ລວມ {totalQtySum} QTY</span>
+          </div>
         </div>
       </header>
 
-      {/* 2. CONTROLS & CAMERA AREA */}
-      <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-4">
+      {/* MAIN CONTENT */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 space-y-6">
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            ເລືອກໂຫມດການນັບ (Counting Mode)
+        {/* SCAN MODE SELECTOR */}
+        <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-slate-200 space-y-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
+            <ScanLine size={18} className="text-indigo-600" />
+            ເລືອກໂຫມດການສະແກນ
           </h2>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setScanMode('manual')}
-              className={`p-3.5 rounded-2xl border-2 font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'manual'
-                ? 'border-[#b81d6d] bg-pink-50 text-[#b81d6d] shadow-sm'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'manual'
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                 }`}
             >
               {scanMode === 'manual' && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#b81d6d]" />
+                <span className="absolute top-2 right-2 w-3 h-3 rounded-full bg-indigo-600 animate-pulse" />
               )}
-              <span className="text-sm sm:text-base font-black leading-tight text-center">
-                ເພີ່ມສິນຄ້າແບບພິມຈຳນວນ
+              <span className="text-base font-black leading-tight text-center">
+                ✏️ ພິມຈຳນວນ
               </span>
+              <span className="text-xs opacity-75">ສະແກນ + ປ້ອນຈຳນວນ</span>
             </button>
 
             <button
               onClick={() => setScanMode('count')}
-              className={`p-3.5 rounded-2xl border-2 font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'count'
-                ? 'border-[#b81d6d] bg-pink-50 text-[#b81d6d] shadow-sm'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'count'
+                ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-lg'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                 }`}
             >
               {scanMode === 'count' && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#b81d6d]" />
+                <span className="absolute top-2 right-2 w-3 h-3 rounded-full bg-emerald-600 animate-pulse" />
               )}
-              <span className="text-sm sm:text-base font-black leading-tight text-center">
-                ເພີ່ມສິນຄ້າແບບ Count ສะແກນ 1ຄັ້ງ
+              <span className="text-base font-black leading-tight text-center">
+                🔢 Count ກົງ
               </span>
+              <span className="text-xs opacity-75">ສະແກນ +1 ທີລະຄັ້ງ</span>
             </button>
           </div>
 
           {scanMode === 'manual' && (
-            <div className="pt-2 flex items-center gap-2 animate-in fade-in duration-200">
-              <span className="text-xs font-bold text-slate-500 shrink-0">ກຳນົດ QTY ຕໍ່ການສະແກນ:</span>
-              <div className="flex items-center border border-slate-300 rounded-xl overflow-hidden bg-slate-50">
+            <div className="pt-2 flex items-center gap-3 animate-in fade-in duration-200 bg-indigo-50 p-3 rounded-xl border border-indigo-200">
+              <span className="text-sm font-bold text-slate-700 shrink-0">ຕັ້ງຄ່າ QTY:</span>
+              <div className="flex items-center border-2 border-slate-300 rounded-lg overflow-hidden bg-white">
                 <button
                   onClick={() => setManualQty(Math.max(1, manualQty - 1))}
-                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 font-bold text-slate-700"
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors"
                 >
-                  -
+                  −
                 </button>
                 <input
                   type="number"
                   value={manualQty}
                   onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))}
-                  className="w-16 text-center font-bold text-sm bg-transparent border-none focus:outline-none"
+                  className="w-20 text-center font-black text-lg bg-white border-none focus:outline-none text-slate-900"
                 />
                 <button
                   onClick={() => setManualQty(manualQty + 1)}
-                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 font-bold text-slate-700"
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors"
                 >
                   +
                 </button>
@@ -635,65 +616,82 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           )}
 
           {/* SCAN INPUT FIELD */}
-          <form onSubmit={handleBarcodeSubmit} className="pt-1 flex gap-2">
-            <div className="relative flex-1">
-              <input
-                ref={inputRef}
-                type="text"
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                readOnly={isCameraActive} // ขณะเปิดกล้อง ห้ามแป้นพิมพ์เด้ง!
-                inputMode={isCameraActive ? 'none' : 'text'}
-                placeholder={isCameraActive ? "ກ້ອງສະແກນກຳລັງທຳງານ..." : "ສະແກນ ຫຼື ພິມເລກບາໂຄດ..."}
-                className="w-full bg-slate-50 border-2 border-slate-300 focus:border-[#b81d6d] focus:bg-white rounded-xl py-2.5 px-3 pl-9 text-sm font-bold font-mono text-slate-800 placeholder-slate-400 focus:outline-none transition-all"
-              />
-              <Barcode size={18} className="absolute left-2.5 top-3 text-slate-400" />
+          <form onSubmit={handleBarcodeSubmit} className="space-y-3">
+            <div className="relative">
+              <label className="text-xs font-bold text-slate-600 block mb-2">ເລກບາໂຄດ (EAN-13)</label>
+              <div className="relative flex items-center">
+                <Barcode size={20} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  readOnly={isCameraActive || isSubmittingBarcode}
+                  inputMode={isCameraActive ? 'none' : 'numeric'}
+                  placeholder={isCameraActive ? "ກ້ອງສະແກນກຳລັງທຳງານ..." : "ສະແກນ ຫຼື ພິມເລກບາໂຄດ..."}
+                  className="w-full bg-white border-2 border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl py-3 px-4 pl-11 text-base font-bold font-mono text-slate-900 placeholder-slate-500 focus:outline-none transition-all disabled:opacity-60 disabled:bg-slate-100"
+                />
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (isCameraActive) {
-                  setIsCameraActive(false);
-                  setCameraPermState('idle');
-                } else {
-                  setCameraPermState('asking');
-                }
-              }}
-              className={`px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all border ${isCameraActive
-                ? 'bg-rose-500 text-white border-rose-600'
-                : 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                }`}
-            >
-              <Camera size={16} />
-              <span className="hidden sm:inline">{isCameraActive ? 'ປິດກ້ອງ' : 'ກ້ອງສະແກນ'}</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isCameraActive) {
+                    setIsCameraActive(false);
+                    setCameraPermState('idle');
+                  } else {
+                    setCameraPermState('asking');
+                  }
+                }}
+                disabled={isSubmittingBarcode}
+                className={`flex-1 px-4 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all border-2 disabled:opacity-60 ${isCameraActive
+                  ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
+                  : 'bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-lg'
+                  }`}
+              >
+                <Camera size={18} />
+                <span>{isCameraActive ? 'ປິດກ້ອງ' : 'ເປີດກ້ອງ'}</span>
+              </button>
 
-            <button
-              type="submit"
-              className="px-4 py-2.5 bg-[#b81d6d] hover:bg-[#a0185e] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
-            >
-              ຕົກລົງ
-            </button>
+              <button
+                type="submit"
+                disabled={isSubmittingBarcode || !barcodeInput.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isSubmittingBarcode ? (
+                  <>
+                    <Loader size={16} className="animate-spin" />
+                    <span>ກຳລັງບັນທຶກ...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>ຢືນຢັນ</span>
+                  </>
+                )}
+              </button>
+            </div>
           </form>
 
           {/* PERMISSION PROMPT SCREEN */}
           {cameraPermState === 'asking' && !isCameraActive && (
-            <div className="mt-3 bg-slate-800 border-2 border-emerald-500/60 rounded-2xl p-5 text-white space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="mt-4 bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-emerald-500 rounded-2xl p-5 text-white space-y-4 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-500/40">
-                  <Camera size={26} className="text-emerald-400" />
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0 border-2 border-emerald-500/50">
+                  <Camera size={28} className="text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base text-white">ຂໍອະນຸຍາດໃຊ້ກ້ອງ</h3>
-                  <p className="text-xs text-slate-300 mt-0.5">ລະບົບຕ້ອງການເຂົ້າໃຊ້ກ້ອງ ເພື່ອສະແກນບາໂຄດສິນຄ້າ</p>
+                  <h3 className="font-black text-base">ຂໍອະນຸຍາດໃຊ້ກ້ອງ</h3>
+                  <p className="text-xs text-slate-300 mt-1">ລະບົບຕ້ອງການເຂົ້າໃຊ້ກ້ອງ ເພື່ອສະແກນບາໂຄດສິນຄ້າ</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
                   onClick={() => setCameraPermState('idle')}
-                  className="py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold text-sm rounded-xl transition-all cursor-pointer"
+                  className="py-3 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-bold text-sm rounded-lg transition-all cursor-pointer"
                 >
                   ຍົກເລີກ
                 </button>
@@ -702,10 +700,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     setCameraPermState('granted');
                     setIsCameraActive(true);
                   }}
-                  className="py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
+                  className="py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
                 >
                   <Camera size={16} />
-                  ອະນຸຍາດ ແລ້ວເປີດກ້ອງ
+                  ອະນຸຍາດ
                 </button>
               </div>
             </div>
@@ -713,15 +711,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
           {/* CAMERA PREVIEW CONTAINER */}
           {isCameraActive && (
-            <div className="mt-3 p-3 bg-slate-900 rounded-2xl text-white space-y-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <div className="mt-4 p-4 bg-slate-900 rounded-2xl text-white space-y-3 border-2 border-slate-700 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                   <span>ກ້ອງສະແກນບາໂຄດກຳລັງທຳງານ...</span>
                 </div>
                 <button
                   onClick={() => setIsCameraActive(false)}
-                  className="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800"
+                  className="text-xs text-slate-400 hover:text-white px-2.5 py-1 rounded-lg bg-slate-800 transition-colors"
                 >
                   ✕ ປິດ
                 </button>
@@ -729,137 +727,141 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
               <div
                 id="lak8-reader"
-                className="w-full overflow-hidden rounded-xl bg-black min-h-[220px]"
+                className="w-full overflow-hidden rounded-xl bg-black min-h-[240px]"
               />
-
-              {/* DEBUG HUD */}
-              <div className="bg-slate-800/90 border border-slate-700 p-2 rounded-xl text-[11px] font-mono space-y-0.5">
-                <div className="flex justify-between items-center text-amber-400 font-bold border-b border-slate-700/60 pb-1">
-                  <span>CAMERA HARDWARE STATUS</span>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
-                    VOL KEYS READY 🔘
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-1 text-slate-300 pt-0.5">
-                  <div><span className="text-slate-500">Trigger:</span> <span className="text-emerald-400 font-bold">{debugLog.triggerType}</span></div>
-                  <div><span className="text-slate-500">Last Code:</span> <span className="text-cyan-300 font-bold">{debugLog.lastCode}</span></div>
-                </div>
-              </div>
             </div>
           )}
         </div>
 
-        {/* 3. ITEM LIST TABLE (HIGH CONTRAST DESIGN) */}
-        <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border-2 border-slate-200 text-slate-900 space-y-3">
-
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div className="flex items-center gap-2">
-              <Barcode size={22} className="text-[#b81d6d]" />
-              <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
-                ລາຍການສິນຄ້າທີ່ສະແກນແລ້ວ ({items.length} ລາຍການ)
-              </h2>
+        {/* ITEMS LIST */}
+        <div className="bg-white rounded-2xl shadow-md border-2 border-slate-200 overflow-hidden">
+          {/* LIST HEADER */}
+          <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-4 border-b-2 border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Package size={24} className="text-indigo-600" />
+              <div>
+                <h2 className="text-lg font-black text-slate-900">
+                  ລາຍການສິນຄ້າ
+                </h2>
+                <p className="text-xs text-slate-600 font-medium">{items.length} ລາຍການ</p>
+              </div>
             </div>
 
             <button
               onClick={() => fetchLak8Stock()}
-              className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+              disabled={isLoading}
+              className="text-sm font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 border-2 border-slate-300 px-4 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
-              <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> ໂຫຼດໃໝ່
+              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              ໂຫຼດໃໝ່
             </button>
           </div>
 
           {/* SEARCH BOX */}
-          <div className="relative pt-1 pb-2">
-            <input
-              type="text"
-              placeholder="ຄົ້ນຫາບາໂຄດ ຫຼື ຊື່ສິນຄ້າໃນລາຍການ..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border-2 border-slate-300 focus:border-[#b81d6d] focus:bg-white rounded-xl py-2.5 px-3 text-sm font-bold text-slate-800 placeholder-slate-400 pr-12 focus:outline-none transition-all"
-            />
-            <button
-              onClick={() => {
-                setScanMode('search');
-                setCameraPermState('granted');
-                setIsCameraActive(true);
-              }}
-              className="absolute right-2 top-2 p-1.5 text-slate-400 hover:text-[#b81d6d] hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
-              title="ສະແກນເພື່ອຄົ້ນຫາ"
-            >
-              <ScanLine size={18} />
-            </button>
+          <div className="px-5 py-4 border-b-2 border-slate-200 bg-slate-50">
+            <div className="relative">
+              <ScanLine size={18} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="ຄົ້ນຫາບາໂຄດ ຫຼື ຊື່ສິນຄ້າ..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white border-2 border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-lg py-2.5 px-4 pl-11 text-sm font-bold text-slate-900 placeholder-slate-500 focus:outline-none transition-all"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+          {/* ITEMS CONTAINER */}
+          <div className="max-h-[600px] overflow-y-auto divide-y-2 divide-slate-200">
             {isLoading ? (
-              <div className="py-12 text-center text-slate-500 space-y-2">
-                <RefreshCw size={36} className="mx-auto animate-spin text-[#b81d6d]" />
-                <p className="font-bold text-sm text-slate-700">ກຳລັງໂຫຼດຂໍ້ມູນຈາກ Supabase...</p>
+              <div className="py-16 text-center text-slate-500 space-y-3 px-5">
+                <RefreshCw size={40} className="mx-auto animate-spin text-indigo-600" />
+                <p className="font-bold text-sm text-slate-700">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
               </div>
             ) : filteredItems.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <Barcode size={48} className="mx-auto opacity-30" />
+              <div className="py-16 text-center text-slate-400 space-y-3 px-5">
+                <Package size={48} className="mx-auto opacity-30" />
                 <p className="font-bold text-sm text-slate-600">ບໍ່ພົບລາຍການ</p>
-                <p className="text-xs text-slate-400">ລອງຄົ້ນຫາໃໝ່ ຫຼື ຍິງບາໂຄດເພື່ອເພີ່ມສິນຄ້າ</p>
+                <p className="text-xs text-slate-500">ລອງຄົ້ນຫາໃໝ່ ຫຼື ຍິງບາໂຄດເພື່ອເພີ່ມສິນຄ້າ</p>
               </div>
             ) : (
-              filteredItems.slice(0, 50).map((item, index) => (
+              filteredItems.slice(0, 100).map((item, index) => (
                 <div
-                  key={item.id || item.barcode}
-                  className={`bg-slate-50 text-slate-900 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 border-2 ${index === 0 && !searchTerm ? 'border-[#b81d6d] bg-pink-50/70 shadow-sm' : 'border-slate-200'
+                  key={item.id}
+                  className={`px-5 py-4 flex items-center justify-between gap-4 hover:bg-blue-50 transition-colors ${index === 0 && !searchTerm ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''
                     }`}
                 >
-                  {/* Left info: Barcode & Product Name */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-xs bg-slate-900 text-amber-300 px-2 py-0.5 rounded shrink-0">
+                  {/* LEFT: Product Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-mono font-black text-xs bg-slate-900 text-amber-300 px-2.5 py-1 rounded-lg shrink-0">
                         {item.barcode}
                       </span>
-                      <p className="font-black text-xs sm:text-sm text-slate-900 truncate">
+                      <p className="font-black text-sm text-slate-900 truncate">
                         {item.name}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 mt-1">
-                      <span>ເວລາ: {item.timestamp}</span>
-                      {item.createdBy && <span>ໂດຍ: {item.createdBy}</span>}
+                    <div className="flex items-center gap-4 text-xs text-slate-600 font-medium">
+                      <div className="flex items-center gap-1">
+                        <Clock size={14} className="text-slate-400" />
+                        <span>{item.timestamp}</span>
+                      </div>
+                      {item.createdBy && (
+                        <div className="flex items-center gap-1">
+                          <User size={14} className="text-slate-400" />
+                          <span>{item.createdBy}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right controls: QTY & buttons */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center bg-white rounded-lg p-0.5 border-2 border-slate-300 shadow-2xs">
+                  {/* RIGHT: QTY Controls */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* QTY Adjuster */}
+                    <div className="flex items-center bg-slate-100 rounded-lg border-2 border-slate-300 overflow-hidden">
                       <button
                         onClick={() => updateItemQty(item.id, item.barcode, item.qty - 1)}
-                        className="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-rose-100 text-slate-900 hover:text-rose-700 font-black rounded text-sm active:scale-95 cursor-pointer"
-                        title="ຫຼຸດ 1"
+                        disabled={isUpdatingQty[item.barcode] || item.qty <= 1}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-red-100 text-slate-900 hover:text-red-700 font-black text-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        title="ຫຼຸດ"
                       >
-                        -
+                        −
                       </button>
-                      <span className="px-2 font-mono font-black text-base text-[#b81d6d] min-w-[32px] text-center">
-                        {item.qty}
-                      </span>
+                      <div className="px-3 py-1 bg-white min-w-[50px] text-center">
+                        {isUpdatingQty[item.barcode] ? (
+                          <Loader size={16} className="animate-spin mx-auto text-indigo-600" />
+                        ) : (
+                          <span className="font-black text-lg text-indigo-600">{item.qty}</span>
+                        )}
+                      </div>
                       <button
                         onClick={() => updateItemQty(item.id, item.barcode, item.qty + 1)}
-                        className="w-7 h-7 flex items-center justify-center bg-slate-200 hover:bg-emerald-100 text-slate-900 hover:text-emerald-700 font-black rounded text-sm active:scale-95 cursor-pointer"
-                        title="ເພີ່ມ 1"
+                        disabled={isUpdatingQty[item.barcode]}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-emerald-100 text-slate-900 hover:text-emerald-700 font-black text-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        title="ເພີ່ມ"
                       >
                         +
                       </button>
                     </div>
 
+                    {/* Delete Button */}
                     <button
-                      onClick={() => removeItem(item.barcode)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      onClick={() => removeItem(item.id, item.barcode)}
+                      disabled={isDeletingBarcode[item.barcode]}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                       title="ລຶບ"
                     >
-                      <Trash2 size={16} />
+                      {isDeletingBarcode[item.barcode] ? (
+                        <Loader size={18} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={18} />
+                      )}
                     </button>
                   </div>
                 </div>
               ))
             )}
           </div>
-
         </div>
 
       </div>
