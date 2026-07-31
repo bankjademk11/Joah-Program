@@ -15,11 +15,11 @@ import OdooValidateModal from './OdooValidateModal';
 import OdooAutoAgentModal from './OdooAutoAgentModal';
 
 const ODOO_COMPANIES = [
-    { id: 249, name: '171030003-Joah Patuxai / Taladlao', label: 'ຕະຫຼາດລາວ (TLL)' },
+    { id: 249, name: '171030003-Joah Taladlao', label: 'ຕະຫຼາດລາວ (TLL)' }, // Cleaned up name to prevent "Patuxai / Taladlao" confusion
     { id: 248, name: '171020002-Joah Sivilay', label: 'ສີວິໄລ (SVL)' },
     { id: 261, name: '171040004-Joah Vangxaiy', label: 'ວັງຊາຍ (VX)' },
     { id: 247, name: '171010001-Joah Phonsinuan', label: 'ໂພນສີນວນ (PSN)' },
-    { id: 273, name: '171050005-Patuxai', label: 'ເມກ້າມໍ (MGM)' },
+    { id: 273, name: '171050005-Joah Patuxai', label: 'ປະຕູໄຊ (PTX)' }, // Fixed label from MGM to PTX
 ];
 
 // ═════════════════════════════════════════════════════════════════════════

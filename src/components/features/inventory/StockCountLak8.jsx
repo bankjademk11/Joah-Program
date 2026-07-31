@@ -50,7 +50,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [isFilterMode, setIsFilterMode] = useState(false);
 
-  const branches = ['VX', 'SVL', 'TLL', 'MGM', 'PSN'];
+  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN'];
 
   // Floating Toast Notification State
   const [toast, setToast] = useState(null);

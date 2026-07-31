@@ -173,7 +173,7 @@ const resolveStoreBranchId = (branchId) => {
     if (normalizedId === 'PSN' || normalizedId.includes('ໂພນສີນວນ')) return 'ໂພນສີນວນ';
     if (normalizedId === 'VX' || normalizedId.includes('ວັງຊາຍ')) return 'ວັງຊາຍ';
     if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
-    if (normalizedId === 'MGM' || normalizedId.includes('ເມກ້າມໍ')) return 'ເມກ້າມໍ';
+    if (normalizedId === 'PTX' || normalizedId.includes('ປະຕູໄຊ')) return 'ປະຕູໄຊ';
 
     // Direct match first
     if (STORE_BRANCH_RACK_RULES[branchId]) return branchId;
