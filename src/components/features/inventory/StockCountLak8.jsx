@@ -43,14 +43,28 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   // New Branch & Date States
   const [selectedBranch, setSelectedBranch] = useState(localStorage.getItem('lak8_branch') || '');
   const [selectedDate, setSelectedDate] = useState(localStorage.getItem('lak8_date') || new Date().toISOString().split('T')[0]);
+  const [lak8OwnerBranch, setLak8OwnerBranch] = useState(localStorage.getItem('lak8_owner_branch') || '');
+  const [docNos, setDocNos] = useState(JSON.parse(localStorage.getItem('lak8_doc_nos') || '[]'));
+  const [hasDocNo, setHasDocNo] = useState(docNos.length > 0);
+  const [sessionStatus, setSessionStatus] = useState(localStorage.getItem(`lak8_status_${localStorage.getItem('lak8_branch')}_${localStorage.getItem('lak8_date')}_${localStorage.getItem('lak8_owner_branch')}`) || 'in_progress');
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(!localStorage.getItem('lak8_branch'));
+
+  // Event Log States
+  const [events, setEvents] = useState([]);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventQty, setEventQty] = useState(1);
+  const [eventImage, setEventImage] = useState(null);
+  const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   // Filter for GM
   const [filterBranch, setFilterBranch] = useState('');
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [isFilterMode, setIsFilterMode] = useState(false);
 
-  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN'];
+  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8'];
 
   // Floating Toast Notification State
   const [toast, setToast] = useState(null);
@@ -149,6 +163,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           qty: Number(item.qty) || 0,
           createdBy: item.created_by || 'Unknown',
           branch: item.branch,
+          owner_branch: item.owner_branch,
+          doc_nos: item.doc_nos,
           countDate: item.count_date,
           timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA')
         }));
@@ -167,11 +183,112 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   };
 
+  const fetchLak8Events = async () => {
+    try {
+      const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+      const targetDate = isFilterMode ? filterDate : selectedDate;
+      const targetOwner = isFilterMode ? null : lak8OwnerBranch;
+
+      let query = supabase.from('stock_count_lak8_events').select('*');
+      if (targetBranch) query = query.eq('branch', targetBranch);
+      if (targetDate) query = query.eq('count_date', targetDate);
+      if (targetOwner) query = query.eq('owner_branch', targetOwner);
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (!error && data) {
+        setEvents(data);
+      }
+    } catch (err) {
+      console.log('[Event fetch notice]', err.message);
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ຂະໜາດຮູບພາບໃຫຍ່ເກີນໄປ (ສູງສຸດ 5MB)');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setEventImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveEvent = async (e) => {
+    e.preventDefault();
+    if (!eventTitle.trim()) {
+      alert('ກະລຸນາປ້ອນຫົວຂໍ້/ລາຍລະອຽດເຫດການ!');
+      return;
+    }
+
+    setIsSubmittingEvent(true);
+    const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
+
+    try {
+      const newEvent = {
+        branch: selectedBranch,
+        owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
+        count_date: selectedDate,
+        title: eventTitle.trim(),
+        qty: Math.max(1, Number(eventQty) || 1),
+        image_url: eventImage,
+        created_by: empId,
+        created_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('stock_count_lak8_events')
+        .insert([newEvent])
+        .select();
+
+      if (error) {
+        // Fallback to local state if table does not exist in DB yet
+        console.warn('Events table might not exist yet, saving locally:', error.message);
+        setEvents(prev => [{ ...newEvent, id: Date.now() }, ...prev]);
+      } else if (data) {
+        setEvents(prev => [data[0], ...prev]);
+      }
+
+      setEventTitle('');
+      setEventQty(1);
+      setEventImage(null);
+      showToast({
+        type: 'success',
+        title: 'ບັນທຶກເຫດການສຳເລັດ! 📝',
+        message: `ບັນທຶກ "${eventTitle}" เรียบร้อยแล้ว`
+      });
+    } catch (err) {
+      console.error('[Event Insert Error]', err);
+    } finally {
+      setIsSubmittingEvent(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedBranch && selectedDate) {
       fetchLak8Stock();
+      fetchLak8Events();
     }
-  }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
+  }, [selectedBranch, selectedDate, lak8OwnerBranch, isFilterMode, filterBranch, filterDate]);
+
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('\u0e97\u0ec8\u0eb2\u0e99\u0e95\u0ec9\u0ead\u0e87\u0e81\u0eb2\u0e99\u0ea5\u0eb6\u0e9a\u0ec0\u0eab\u0e94\u0e81\u0eb2\u0e99\u0e99\u0eb5\u0ec9\u0ec1\u0e97\u0ec9\u0e9a\u0ecd?')) return;
+    try {
+      const { error } = await supabase
+        .from('stock_count_lak8_events')
+        .delete()
+        .eq('id', eventId);
+      if (error) throw error;
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+      showToast({ type: 'success', title: '\u0ea5\u0eb6\u0e9a\u0eaa\u0eb3\u0ec0\u0ea5\u0eb1\u0e94', message: '\u0ea5\u0eb2\u0e8d\u0e81\u0eb2\u0e99\u0ec0\u0eab\u0e94\u0e81\u0eb2\u0e99\u0e96\u0eb7\u0e81\u0ea5\u0eb6\u0e9a\u0ead\u0ead\u0e81\u0ec1\u0ea5\u0ec9\u0ea7' });
+    } catch (err) {
+      showToast({ type: 'error', title: '\u0e9c\u0eb4\u0e94\u0e9e\u0eb2\u0e94!', message: '\u0e9a\u0ecd\u0ec8\u0eaa\u0eb2\u0ea1\u0eb2\u0e96\u0ea5\u0eb6\u0e9a\u0ec4\u0e94\u0ec9' });
+    }
+  };
+
 
   useEffect(() => {
     // ⚡ SUPABASE REALTIME SUBSCRIPTION
@@ -202,6 +319,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 qty: Number(newData.qty) || 0,
                 createdBy: newData.created_by || 'Unknown',
                 branch: newData.branch,
+                owner_branch: newData.owner_branch,
+                doc_nos: newData.doc_nos,
                 countDate: newData.count_date,
                 timestamp: new Date(newData.updated_at || newData.created_at).toLocaleTimeString('lo-LA')
               };
@@ -219,14 +338,48 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     };
   }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
 
+  const toggleSessionStatus = () => {
+    const isConfirm = window.confirm(
+      sessionStatus === 'completed' 
+        ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?' 
+        : 'ທ່ານຕ້ອງການປ່ຽນສະຖານະເປັນ "ນັບສຳເລັດແລ້ວ" ແທ້ບໍ?'
+    );
+    if (!isConfirm) return;
+
+    const nextStatus = sessionStatus === 'completed' ? 'in_progress' : 'completed';
+    setSessionStatus(nextStatus);
+    const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
+    localStorage.setItem(statusKey, nextStatus);
+    showToast({
+      type: nextStatus === 'completed' ? 'success' : 'info',
+      title: nextStatus === 'completed' ? 'ສຳເລັດແລ້ວ! 🎉' : 'ກຳລັງນັບ... ⏳',
+      message: `ສະຖານະຖືກປ່ຽນເປັນ ${nextStatus === 'completed' ? 'ນັບສຳເລັດແລ້ວ' : 'ກຳລັງດຳເນີນການນັບ'}`
+    });
+  };
+
   // ─── Setup Session ────────────────────────────────────────────────
   const handleConfirmSetup = () => {
     if (!selectedBranch || !selectedDate) {
       alert('ກະລຸນາເລືອກສາຂາ ແລະ ວັນທີກ່ອນ!');
       return;
     }
+    if (selectedBranch === 'LAK8' && !lak8OwnerBranch) {
+      alert('ກະລຸນາເລືອກສາຂາເຈົ້າຂອງຂອງສຳລັບ LAK8!');
+      return;
+    }
+
+    const validDocNos = hasDocNo ? docNos.filter(d => d.trim() !== '') : [];
+
     localStorage.setItem('lak8_branch', selectedBranch);
     localStorage.setItem('lak8_date', selectedDate);
+    localStorage.setItem('lak8_owner_branch', lak8OwnerBranch);
+    localStorage.setItem('lak8_doc_nos', JSON.stringify(validDocNos));
+    
+    const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
+    const savedStatus = localStorage.getItem(statusKey) || 'in_progress';
+    setSessionStatus(savedStatus);
+    setDocNos(validDocNos);
+    
     setShowSetupModal(false);
     fetchLak8Stock();
   };
@@ -235,7 +388,12 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     if (window.confirm('ທ່ານຕ້ອງການອອກຈາກເຊດຊັນການນັບນີ້ບໍ?')) {
       localStorage.removeItem('lak8_branch');
       localStorage.removeItem('lak8_date');
+      localStorage.removeItem('lak8_owner_branch');
+      localStorage.removeItem('lak8_doc_nos');
       setSelectedBranch('');
+      setLak8OwnerBranch('');
+      setDocNos([]);
+      setHasDocNo(false);
       setShowSetupModal(true);
     }
   };
@@ -407,12 +565,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
 
     try {
-      const { error } = await supabase.rpc('increment_stock', {
+      const { error } = await supabase.rpc('increment_stock_lak8_v2', {
         target_barcode: code,
         amount: addAmount,
         user_id: empId,
         target_branch: selectedBranch,
-        target_date: selectedDate
+        target_date: selectedDate,
+        p_owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
+        p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null
       });
 
       if (error) throw error;
@@ -529,12 +689,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const bc = String(row[bIdx] || '').trim();
       const q = Number(row[qIdx]) || 0;
       if (bc && q > 0) {
-        await supabase.rpc('increment_stock', {
+        await supabase.rpc('increment_stock_lak8_v2', {
           target_barcode: bc,
           amount: q,
           user_id: empId,
           target_branch: selectedBranch,
-          target_date: selectedDate
+          target_date: selectedDate,
+          p_owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
+          p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null
         });
       }
       setImportProgress(p => ({ ...p, current: i + 1 }));
@@ -578,6 +740,84 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   </div>
                 </div>
 
+                {selectedBranch === 'LAK8' && (
+                  <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 space-y-4 animate-in fade-in slide-in-from-top-4">
+                    <div>
+                      <label className="text-xs font-black uppercase tracking-wider text-indigo-400 mb-1.5 block">
+                        ສາຂາເຈົ້າຂອງສິນຄ້າ (Owner Branch)
+                      </label>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {['VX', 'SVL', 'TLL', 'PTX', 'PSN'].map(b => (
+                          <button
+                            key={b}
+                            onClick={() => setLak8OwnerBranch(b)}
+                            className={`py-2 rounded-lg font-bold text-xs border transition-all ${lak8OwnerBranch === b
+                              ? 'border-indigo-600 bg-indigo-600 text-white'
+                              : 'border-indigo-200 bg-white hover:border-indigo-300 text-indigo-600'}`}
+                          >
+                            {b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <label className="text-xs font-black uppercase tracking-wider text-indigo-400">
+                          ມີເລກບິນ (Doc No) ບໍ່?
+                        </label>
+                        <button
+                          onClick={() => {
+                            setHasDocNo(!hasDocNo);
+                            if (!hasDocNo && docNos.length === 0) setDocNos(['']);
+                          }}
+                          className={`w-10 h-5 rounded-full relative transition-colors ${hasDocNo ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${hasDocNo ? 'translate-x-5' : ''}`}></span>
+                        </button>
+                      </div>
+                      
+                      {hasDocNo && (
+                        <div className="space-y-2 mt-2">
+                          {docNos.map((doc, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={doc}
+                                onChange={(e) => {
+                                  const newDocs = [...docNos];
+                                  newDocs[idx] = e.target.value;
+                                  setDocNos(newDocs);
+                                }}
+                                placeholder={`Doc No. ${idx + 1}`}
+                                className="flex-1 px-3 py-2 border border-indigo-200 rounded-lg text-sm font-bold focus:border-indigo-500 outline-none"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (docNos.length > 1) {
+                                    setDocNos(docNos.filter((_, i) => i !== idx));
+                                  }
+                                }}
+                                className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          {docNos.length < 20 && (
+                            <button
+                              onClick={() => setDocNos([...docNos, ''])}
+                              className="w-full py-2 border border-dashed border-indigo-300 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100 text-sm flex items-center justify-center gap-1"
+                            >
+                              <Plus size={16} /> ເພີ່ມບິນ (ສູງສຸດ 20)
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5 block">ວັນທີ (Date)</label>
                   <div className="relative">
@@ -594,7 +834,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
               <button
                 onClick={handleConfirmSetup}
-                disabled={!selectedBranch || !selectedDate}
+                disabled={!selectedBranch || !selectedDate || (selectedBranch === 'LAK8' && !lak8OwnerBranch)}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95"
               >
                 ຢືນຢັນການເລີ່ມຕົ້ນ
@@ -678,13 +918,45 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             )}
             <div>
               <h1 className="text-2xl font-black tracking-tight">📦 Lak 8</h1>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
                 <span className="bg-white/20 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border border-white/20">
                   {selectedBranch || '...'}
                 </span>
                 <span className="text-[10px] text-white/80 font-medium">
                   {selectedDate || '...'}
                 </span>
+
+                {/* Status Toggle Button */}
+                <button
+                  onClick={toggleSessionStatus}
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${
+                    sessionStatus === 'completed'
+                      ? 'bg-emerald-400 text-emerald-950 border border-emerald-300'
+                      : 'bg-amber-400 text-amber-950 border border-amber-300'
+                  }`}
+                  title="ກົດເພື່ອປ່ຽນສະຖານະ"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${sessionStatus === 'completed' ? 'bg-emerald-950' : 'bg-amber-950 animate-ping'}`}></span>
+                  {sessionStatus === 'completed' ? 'ນັບສຳເລັດແລ້ວ' : 'ກຳລັງນັບ...'}
+                </button>
+
+                {/* Session Details Button */}
+                <button
+                  onClick={() => setShowDetailModal(true)}
+                  className="bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/20"
+                  title="ເບິ່ງລາຍລະອຽດ"
+                >
+                  ℹ️ ລາຍລະອຽດ
+                </button>
+
+                {/* Event Modal Button */}
+                <button
+                  onClick={() => setShowEventModal(true)}
+                  className="bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-white/20"
+                  title="ບັນທຶກເຫດການ"
+                >
+                  📝 ເຫດການ {events.length > 0 && <span className="bg-purple-300 text-purple-950 px-1 rounded-full text-[9px] font-black">{events.length}</span>}
+                </button>
               </div>
             </div>
           </div>
@@ -922,7 +1194,23 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                         {item.branch}
                       </span>
                     </div>
-                    <p className="text-xs font-mono font-bold text-slate-400 mt-0.5">{item.barcode}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs font-mono font-bold text-slate-400">{item.barcode}</p>
+                      {item.branch === 'LAK8' && item.owner_branch && (
+                         <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
+                           👉 {item.owner_branch}
+                         </span>
+                      )}
+                    </div>
+                    {item.branch === 'LAK8' && item.doc_nos && item.doc_nos.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {item.doc_nos.map((doc, idx) => (
+                           <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
+                             {doc}
+                           </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                         <Clock size={10} /> {item.timestamp}
@@ -969,18 +1257,268 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         </div>
       </div>
 
-      {/* FOOTER STATS */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-slate-200 px-4 py-3 z-40 flex items-center justify-between sm:hidden">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-slate-400 uppercase">Total Items</span>
-          <span className="text-lg font-black text-indigo-600 leading-tight">{filteredItems.length}</span>
+      {/* SESSION DETAIL MODAL */}
+      {showDetailModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 space-y-5">
+              <div className="flex items-center justify-between border-b pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg">
+                    📊
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-slate-800">ລາຍລະອຽດເຊັດຊັນການນັບ</h3>
+                    <p className="text-xs text-slate-400 font-medium">ຂໍ້ມູນສະຫຼຸບ ແລະ ສະຖານະປະຈຸບັນ</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">ສະຖານະ (Status)</span>
+                  <button
+                    onClick={toggleSessionStatus}
+                    className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                      sessionStatus === 'completed'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    <span>{sessionStatus === 'completed' ? '✅ ນັບສຳເລັດແລ້ວ (Completed)' : '⏳ ກຳລັງນັບ... (In Progress)'}</span>
+                  </button>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">ສາຂາຫຼັກ (Main Branch)</span>
+                  <span className="font-black text-slate-800">{selectedBranch}</span>
+                </div>
+
+                {selectedBranch === 'LAK8' && (
+                  <div className="flex justify-between items-center bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
+                    <span className="font-bold text-indigo-600 text-xs">ສາຂາເຈົ້າຂອງສິນຄ້າ (Owner Branch)</span>
+                    <span className="font-black text-indigo-900 bg-indigo-200 px-2 py-0.5 rounded-lg text-xs">{lak8OwnerBranch || 'ຍັງບໍ່ໄດ້ລະບຸ'}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">ວັນທີນັບ (Date)</span>
+                  <span className="font-bold text-slate-800 font-mono">{selectedDate}</span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                  <span className="font-bold text-slate-500 text-xs block">ລາຍການບິນທີ່ກ່ຽວຂ້ອງ (Doc Nos)</span>
+                  {docNos && docNos.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {docNos.map((doc, idx) => (
+                        <span key={idx} className="bg-white border border-indigo-200 text-indigo-700 text-xs font-bold font-mono px-2.5 py-1 rounded-lg shadow-sm">
+                          📄 {doc}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">ບໍ່ມີຂໍ້ມູນເລກບິນ</p>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">ຈຳນວນລວມ (Total Qty / Items)</span>
+                  <span className="font-black text-indigo-600 font-mono text-base">{totalQtySum} Qty ({filteredItems.length} ລາຍການ)</span>
+                </div>
+
+                <div className="bg-purple-50/70 p-3 rounded-xl border border-purple-100 space-y-2">
+                  <span className="font-bold text-purple-700 text-xs block">ເຫດການ/ອຸປະກອນທີ່ບັນທຶກ ({events.length})</span>
+                  {events && events.length > 0 ? (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {events.map((evt, idx) => (
+                        <div key={idx} className="bg-white p-2 rounded-lg border border-purple-100 flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-700 truncate">{evt.title}</span>
+                          <span className="font-black text-purple-600 font-mono shrink-0 ml-2">x{evt.qty}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">ບໍ່ມີເຫດການທີ່ຖືກບັນທຶກ</p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-2xl transition-all"
+              >
+                ປິດໜ້າຕ່າງ
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="h-8 w-px bg-slate-200"></div>
-        <div className="flex flex-col items-end">
-          <span className="text-[10px] font-black text-slate-400 uppercase">Total Qty</span>
-          <span className="text-lg font-black text-indigo-600 leading-tight">{totalQtySum}</span>
+      )}
+
+      {/* DEDICATED EVENT MODAL */}
+      {showEventModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center font-bold text-lg">
+                  📝
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-800">ບັນທຶກເຫດການ / ອຸປະກອນ (Event Log)</h3>
+                  <p className="text-xs text-slate-400 font-medium">ບັນທຶກຂໍ້ມູນອຸປະກອນ ຫຼື ເຫດການປະຈຳວັນ</p>
+                </div>
+              </div>
+              <button onClick={() => setShowEventModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {!isFilterMode && (
+                <form onSubmit={handleSaveEvent} className="bg-purple-50/60 p-4 rounded-2xl border border-purple-100 space-y-3">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-purple-800">+ ເພີ່ມເຫດການໃໝ່</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">ລາຍລະອຽດເຫດການ / ອຸປະກອນ</label>
+                      <input
+                        type="text"
+                        value={eventTitle}
+                        onChange={(e) => setEventTitle(e.target.value)}
+                        placeholder="ເຊັ່ນ: ສົ່ງກ່ອງ, ອຸປະກອນຊຳຣຸດ..."
+                        className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-purple-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">ຈຳນວນ (Qty)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={eventQty}
+                        onChange={(e) => setEventQty(e.target.value)}
+                        className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-purple-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                    <div className="flex items-center gap-3">
+                      <label className="px-3 py-2 bg-white border border-purple-200 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 cursor-pointer flex items-center gap-2 transition-all">
+                        <Camera size={16} />
+                        <span>{eventImage ? 'ປ່ຽນຮູບ' : 'ແນບຮູບພາບ'}</span>
+                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                      </label>
+                      {eventImage && (
+                        <div className="relative group">
+                          <img src={eventImage} alt="Event Preview" className="w-10 h-10 object-cover rounded-lg border border-purple-300" />
+                          <button
+                            type="button"
+                            onClick={() => setEventImage(null)}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingEvent || !eventTitle.trim()}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {isSubmittingEvent ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
+                      <span>ບັນທຶກເຫດການ</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="space-y-3">
+                <h4 className="font-black text-xs uppercase tracking-wider text-slate-400">ລາຍການທີ່ບັນທຶກແລ້ວ ({events.length})</h4>
+                {events.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic text-center py-6">ບໍ່ມີເຫດການທີ່ຖືກບັນທຶກໃນມື້ນີ້</p>
+                ) : (
+                  <div className="space-y-2">
+                    {events.map((evt, idx) => (
+                      <div key={evt.id || idx} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex gap-3 items-start group">
+                        {evt.image_url ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightboxImage(evt.image_url)}
+                            className="w-14 h-14 shrink-0 rounded-xl border border-slate-300 overflow-hidden cursor-zoom-in hover:ring-2 hover:ring-purple-400 transition-all"
+                            title="ກົດເພື່ອດູຮູບใຫຍ່"
+                          >
+                            <img src={evt.image_url} alt="Event" className="w-full h-full object-cover" />
+                          </button>
+                        ) : (
+                          <div className="w-14 h-14 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center text-xl shrink-0 font-bold">
+                            📦
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-bold text-sm text-slate-800 truncate">{evt.title}</h4>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="bg-purple-100 text-purple-800 text-[11px] font-black px-2 py-0.5 rounded-full">
+                                x{evt.qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEvent(evt.id)}
+                                className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded-lg"
+                                title="ລຶບເຫດການ"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-3">
+                            <span>👤 {evt.created_by || 'Staff'}</span>
+                            <span>🕒 {new Date(evt.created_at).toLocaleTimeString('lo-LA')}</span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-slate-50 shrink-0">
+              <button
+                onClick={() => setShowEventModal(false)}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-2xl transition-all cursor-pointer"
+              >
+                ປິດໜ້າຕ່າງ
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+      {/* LIGHTBOX */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] w-full p-4" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-1 -right-1 z-10 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 transition-all"
+            >
+              <X size={22} />
+            </button>
+            <img
+              src={lightboxImage}
+              alt="Event Full"
+              className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
