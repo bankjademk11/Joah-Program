@@ -33,6 +33,54 @@ const Navbar = ({
     const shouldPlaySoundRef = useRef(false);
     const [soundTrigger, setSoundTrigger] = useState(0);
 
+    // ── 🔄 Auto Update Detection ──────────────────────────────────────────────
+    const [updateAvailable, setUpdateAvailable] = useState(false);
+    const [updateCountdown, setUpdateCountdown] = useState(30);
+    const initialHashRef = useRef(null);
+
+    // Check if app has been updated by comparing index.html script hashes
+    const checkForUpdate = useCallback(async () => {
+        try {
+            const res = await fetch('/', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
+            const html = await res.text();
+            // Extract all script src hashes from index.html
+            const matches = html.match(/src=\"\/assets\/[^"]+\.js\"/g) || [];
+            const hash = matches.sort().join('|');
+            if (!hash) return;
+            if (!initialHashRef.current) {
+                initialHashRef.current = hash; // Store first hash on mount
+            } else if (hash !== initialHashRef.current) {
+                setUpdateAvailable(true); // 🆕 New deploy detected!
+            }
+        } catch (e) {
+            // Silently ignore network errors
+        }
+    }, []);
+
+    // Poll every 5 minutes
+    useEffect(() => {
+        checkForUpdate(); // Initial check on mount
+        const interval = setInterval(checkForUpdate, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [checkForUpdate]);
+
+    // Countdown timer when update is available
+    useEffect(() => {
+        if (!updateAvailable) return;
+        setUpdateCountdown(30);
+        const timer = setInterval(() => {
+            setUpdateCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    window.location.reload();
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [updateAvailable]);
+
     // Play sound when relevant change occurs (with 10s cooldown)
     useEffect(() => {
         if (soundTrigger === 0) return; // Don't play on initial load
@@ -158,6 +206,27 @@ const Navbar = ({
 
     return (
         <nav className="sticky top-0 z-50 bg-white dark:bg-slate-950 border-b-2 border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/30 dark:shadow-black/30">
+
+            {/* ── 🆕 App Update Banner ─────────────────────────────────────── */}
+            {updateAvailable && (
+                <div className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white px-4 py-2.5 flex items-center justify-between gap-3 animate-pulse">
+                    <div className="flex items-center gap-2.5 text-sm font-bold">
+                        <span className="text-lg">🚀</span>
+                        <span>ມີການອັບເດດໃໝ່ຂອງລະບົບ! ກຳລັງໂຫຼດໃໝ່ອັດຕະໂນມັດໃນ</span>
+                        <span className="bg-white/20 rounded-full px-3 py-0.5 font-mono text-lg min-w-[2.5rem] text-center">
+                            {updateCountdown}
+                        </span>
+                        <span>ວິນາທີ...</span>
+                    </div>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="shrink-0 bg-white text-emerald-600 font-black text-sm px-4 py-1.5 rounded-full hover:scale-105 active:scale-95 transition-transform shadow-lg"
+                    >
+                        ອັບເດດດຽວນີ້ ⚡
+                    </button>
+                </div>
+            )}
+
             <div className="w-full">
                 <div className="flex items-center justify-between h-14 sm:h-20 lg:h-28 px-3 sm:px-6 lg:px-12 gap-2">
 
