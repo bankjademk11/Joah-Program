@@ -761,16 +761,16 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       sheet1.addRow([]); // Blank row 3
 
       const headers = [
-        'ลำดับ (#)',
-        'บาร์โค้ด (Barcode)',
-        'ชื่อสินค้า (Product Name)',
-        'จำนวน (Qty)',
-        'สาขาหลัก (Branch)',
-        'สาขาเจ้าของ (Owner Branch)',
-        'เลขที่บิล (Doc Nos)',
-        'วันที่นับ (Count Date)',
-        'ผู้บันทึก (Staff)',
-        'เวลา (Time)'
+        'ລຳດັບ (#)',
+        'ເລກບາໂຄດ (Barcode)',
+        'ຊື່ສິນຄ້າ (Product Name)',
+        'ຈຳນວນ (QTY)',
+        'ສາຂາຫຼັກ (Branch)',
+        'ສາຂາເຈົ້າຂອງ (Owner Branch)',
+        'ເລກທີບິນ (Doc Nos)',
+        'ວັນທີນັບ (Count Date)',
+        'ຜູ້ບັນທຶກ (Staff)',
+        'ເວລາ (Time)'
       ];
       const headerRow = sheet1.addRow(headers);
       headerRow.height = 28;
@@ -804,9 +804,9 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       });
 
       const footerRow = sheet1.addRow([
-        'รวมทั้งหมด',
+        'ລວມທັງໝົດ',
         '',
-        `ยอดรวม ${items.length} รายการ`,
+        `ຍອດລວມ ${items.length} ລາຍການ`,
         totalQty,
         '',
         '',
@@ -855,15 +855,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         sheet2.addRow([]);
 
         const eventHeaders = [
-          'ลำดับ (#)',
-          'หัวข้อ/รายละเอียด (Event Title)',
-          'จำนวน (Qty)',
-          'รูปภาพประกอบ (Has Image)',
-          'สาขาหลัก (Branch)',
-          'สาขาเจ้าของ (Owner Branch)',
-          'วันที่ (Date)',
-          'ผู้บันทึก (Staff)',
-          'เวลาบันทึก (Time)'
+          'ລຳດັບ (#)',
+          'ຫົວຂໍ້ / ລາຍລະອຽດ (Event Title)',
+          'ຈຳນວນ (QTY)',
+          'ຮູບພາບປະກອບ (Image)',
+          'ສາຂາຫຼັກ (Branch)',
+          'ສາຂາເຈົ້າຂອງ (Owner Branch)',
+          'ວັນທີ (Date)',
+          'ຜູ້ບັນທຶກ (Staff)',
+          'ເວລາບັນທຶກ (Time)'
         ];
         const eventHeaderRow = sheet2.addRow(eventHeaders);
         eventHeaderRow.height = 28;
@@ -875,30 +875,51 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         });
 
         events.forEach((evt, idx) => {
+          const hasImage = Boolean(evt.image_url);
           const row = sheet2.addRow([
             idx + 1,
             evt.title,
             evt.qty || 1,
-            evt.image_url ? 'มีรูปภาพ (Has Image)' : 'ไม่มีรูป',
+            hasImage ? '' : 'ບໍ່ມີຮູບ',
             evt.branch,
             evt.owner_branch || '-',
             evt.count_date,
             evt.created_by || 'Staff',
             new Date(evt.created_at).toLocaleTimeString('lo-LA')
           ]);
-          row.height = 22;
+
+          row.height = hasImage ? 60 : 24;
+
           row.eachCell((cell) => {
             cell.font = fontPhetsarath;
             cell.alignment = centerAlignment;
             cell.border = thinBorder;
           });
+
+          // ⚡ EMBED ACTUAL IMAGE INTO EXCEL CELL
+          if (hasImage && evt.image_url.startsWith('data:image')) {
+            try {
+              const base64Data = evt.image_url.split(',')[1];
+              const ext = evt.image_url.includes('png') ? 'png' : 'jpeg';
+              const imageId = workbook.addImage({
+                base64: base64Data,
+                extension: ext
+              });
+              sheet2.addImage(imageId, {
+                tl: { col: 3, row: row.number - 1 },
+                ext: { width: 55, height: 55 }
+              });
+            } catch (imgErr) {
+              console.error('Failed to embed image into Excel cell:', imgErr);
+            }
+          }
         });
 
         sheet2.columns = [
           { width: 10 }, // #
           { width: 35 }, // Title
           { width: 12 }, // Qty
-          { width: 22 }, // Has Image
+          { width: 22 }, // Image
           { width: 14 }, // Branch
           { width: 18 }, // Owner Branch
           { width: 15 }, // Date
