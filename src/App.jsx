@@ -622,6 +622,10 @@ function AppContent() {
     }
   }, [masterData, user, adminViewBranch, isAdmin, isPSNUser, lastLocationSyncTime, rawLocationRows]);
 
+  // Keep refreshFromCloud ref updated to avoid re-subscribing loop
+  const refreshFromCloudRef = useRef(refreshFromCloud);
+  useEffect(() => { refreshFromCloudRef.current = refreshFromCloud; }, [refreshFromCloud]);
+
   // --- Supabase Realtime Subscription ---
   useEffect(() => {
     // Only subscribe when on results page AND using Supabase
@@ -777,7 +781,7 @@ function AppContent() {
       supabase.removeChannel(channel);
       setRealtimeStatus('disconnected');
     };
-  }, [step, dbSource, user?.name, refreshFromCloud]);
+  }, [step, dbSource, user?.branch_id, adminViewBranch]);
 
   const [locationSynced, setLocationSynced] = useState(false);
 

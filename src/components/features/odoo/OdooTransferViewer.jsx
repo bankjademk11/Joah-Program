@@ -317,7 +317,8 @@ export default function OdooTransferViewer({ onBack }) {
             const records = await fetchOdooStockPickings({
                 companyId: selectedCompanyId,
                 search: searchQuery,
-                limit: 150
+                status: statusFilter,
+                limit: 1000
             });
             setPickings(records || []);
         } catch (err) {
@@ -330,7 +331,7 @@ export default function OdooTransferViewer({ onBack }) {
 
     useEffect(() => {
         loadPickings();
-    }, [selectedCompanyId]);
+    }, [selectedCompanyId, statusFilter]);
 
     // Open Picking in Full-Page Form View
     const handleOpenFormView = async (picking, index) => {
@@ -510,8 +511,8 @@ export default function OdooTransferViewer({ onBack }) {
                                 onClick={() => setShowValidateModal(true)}
                                 disabled={isDone}
                                 className={`hud-btn px-4 py-1.5 cursor-pointer font-black transition-all ${isDone
-                                        ? 'bg-emerald-50 text-emerald-500 border border-emerald-200 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-[0_0_16px_rgba(34,211,238,0.45)] hover:shadow-[0_0_24px_rgba(34,211,238,0.65)]'
+                                    ? 'bg-emerald-50 text-emerald-500 border border-emerald-200 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-[0_0_16px_rgba(34,211,238,0.45)] hover:shadow-[0_0_24px_rgba(34,211,238,0.65)]'
                                     }`}
                             >
                                 {isDone ? '✓ Validated' : '⚡ Validate'}
@@ -647,8 +648,8 @@ export default function OdooTransferViewer({ onBack }) {
                                                                     <td className="py-3 px-4 text-center text-slate-400 text-[11px]">{uomName}</td>
                                                                     <td className="py-3 px-4 text-center">
                                                                         <span className={`inline-block px-2 py-0.5 hud-btn text-[10px] font-bold border font-mono ${item.state === 'done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                                                                : item.state === 'assigned' ? 'bg-cyan-50 text-cyan-600 border-cyan-200'
-                                                                                    : 'bg-slate-50 text-slate-400 border-slate-200'
+                                                                            : item.state === 'assigned' ? 'bg-cyan-50 text-cyan-600 border-cyan-200'
+                                                                                : 'bg-slate-50 text-slate-400 border-slate-200'
                                                                             }`}>
                                                                             {item.state || '?'}
                                                                         </span>
@@ -799,8 +800,8 @@ export default function OdooTransferViewer({ onBack }) {
                                     key={st.id}
                                     onClick={() => setStatusFilter(st.id)}
                                     className={`hud-btn px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${statusFilter === st.id
-                                            ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-[0_0_10px_rgba(34,211,238,0.4)]'
-                                            : 'bg-white text-slate-400 border border-slate-200 hover:text-cyan-600 hover:border-cyan-200'
+                                        ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-[0_0_10px_rgba(34,211,238,0.4)]'
+                                        : 'bg-white text-slate-400 border border-slate-200 hover:text-cyan-600 hover:border-cyan-200'
                                         }`}
                                 >
                                     {st.label}

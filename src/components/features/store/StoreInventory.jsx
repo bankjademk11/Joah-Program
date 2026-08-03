@@ -67,18 +67,23 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
     setCurrentPage(1);
   }, [fetchInventory]);
 
+  // Keep fetchInventory ref updated to avoid re-subscribing loop
+  const fetchInventoryRef = useRef(fetchInventory);
+  useEffect(() => { fetchInventoryRef.current = fetchInventory; }, [fetchInventory]);
+
   // ---- Realtime ----
   useEffect(() => {
+    if (!selectedBranch) return;
     const channel = supabase
       .channel(`store_inventory_rt_${selectedBranch}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_inventory' }, (payload) => {
         const rowBranch = payload.new?.branch_id || payload.old?.branch_id;
         if (rowBranch !== selectedBranch) return;
-        fetchInventory();
+        if (fetchInventoryRef.current) fetchInventoryRef.current();
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [selectedBranch, fetchInventory]);
+  }, [selectedBranch]);
 
   // ---- Sort ----
   const handleSort = (key) => {

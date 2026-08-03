@@ -218,6 +218,10 @@ const StoreResultTable = ({
         }
     }, [refreshTrigger]);
 
+    // Keep onRefresh ref updated to avoid re-subscribing loop
+    const onRefreshRef = useRef(onRefresh);
+    useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
+
     // ── 🆕 Realtime Listener for Massive Imports ──
     useEffect(() => {
         const channel = supabase.channel('app_sync_signals_store')
@@ -225,7 +229,7 @@ const StoreResultTable = ({
                 if (payload.new && payload.new.signal_name === 'massive_import_done') {
                     success('มีการนำเข้าข้อมูลขนาดใหญ่ ระบบกำลังรีเฟรชข้อมูลล่าสุด...');
                     setIsRefreshing(true);
-                    if (onRefresh) onRefresh({ silent: false, delta: true });
+                    if (onRefreshRef.current) onRefreshRef.current({ silent: false, delta: true });
                     setTimeout(() => setIsRefreshing(false), 1500);
                 }
             })
@@ -234,7 +238,7 @@ const StoreResultTable = ({
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [onRefresh]);
+    }, []);
 
     const itemsPerPage = 50;
     const rowRefs = useRef({}); // Store refs for each barcode row

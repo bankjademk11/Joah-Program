@@ -139,8 +139,21 @@ export async function validateOdooPickingNoBackorder(pickingId, onProgress) {
 /**
  * Fetch Stock Pickings (Receipts / Transfer IN) จาก Odoo (stock.picking model)
  */
-export async function fetchOdooStockPickings({ companyId, search = '', limit = 100 } = {}) {
-  const domain = [['picking_type_code', '=', 'incoming']];
+export async function fetchOdooStockPickings({ companyId, search = '', status = '', pickingTypeCode = 'incoming', limit = 1000 } = {}) {
+  const domain = [];
+
+  if (pickingTypeCode && pickingTypeCode !== 'all') {
+    if (Array.isArray(pickingTypeCode)) {
+      domain.push(['picking_type_code', 'in', pickingTypeCode]);
+    } else {
+      domain.push(['picking_type_code', '=', pickingTypeCode]);
+    }
+  }
+
+  if (status && status !== 'all') {
+    domain.push(['state', '=', status]);
+  }
+
   if (companyId) {
     domain.push(['company_id', '=', Number(companyId)]);
   }
