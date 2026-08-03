@@ -332,14 +332,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
 
   useEffect(() => {
-    // ⚡ SUPABASE REALTIME SUBSCRIPTION
-    const channel = supabase
-      .channel('stock_count_lak8_realtime')
+    // ⚡ CHANNEL 1: Stock Count Realtime (critical - must always work)
+    const stockChannel = supabase
+      .channel(`lak8_stock_${selectedBranch}_${selectedDate}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'stock_count_lak8' },
         (payload) => {
-          // Only update if it matches current view criteria
           const targetBranch = isFilterMode ? filterBranch : selectedBranch;
           const targetDate = isFilterMode ? filterDate : selectedDate;
 
@@ -372,27 +371,42 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           }
         }
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'stock_count_lak8_status' },
-        (payload) => {
-          const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-          const targetDate = isFilterMode ? filterDate : selectedDate;
-          const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Stock channel connected ✅');
+        }
+      });
 
-          const item = payload.new || payload.old;
-          if (item?.branch === targetBranch && item?.count_date === targetDate) {
-            const isMatchOwner = targetBranch === 'LAK8' ? item?.owner_branch === targetOwner : true;
-            if (isMatchOwner && payload.new?.status) {
-              setSessionStatus(payload.new.status);
+    // ⚡ CHANNEL 2: Status Realtime (optional — won't break stock if table missing)
+    let statusChannel = null;
+    try {
+      statusChannel = supabase
+        .channel(`lak8_status_${selectedBranch}_${selectedDate}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'stock_count_lak8_status' },
+          (payload) => {
+            const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+            const targetDate = isFilterMode ? filterDate : selectedDate;
+            const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
+
+            const item = payload.new || payload.old;
+            if (item?.branch === targetBranch && item?.count_date === targetDate) {
+              const isMatchOwner = targetBranch === 'LAK8' ? item?.owner_branch === targetOwner : true;
+              if (isMatchOwner && payload.new?.status) {
+                setSessionStatus(payload.new.status);
+              }
             }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('[Realtime] Status channel skipped (table may not exist):', err.message);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(stockChannel);
+      if (statusChannel) supabase.removeChannel(statusChannel);
     };
   }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
 
