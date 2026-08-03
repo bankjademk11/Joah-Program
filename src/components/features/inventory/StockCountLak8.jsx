@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
@@ -156,6 +158,20 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       if (error) throw error;
 
       if (data) {
+        // ⚡ Auto-sync Doc Nos across staff: If any item in this session has doc_nos, sync it to current staff
+        const itemWithDoc = data.find(item => Array.isArray(item.doc_nos) && item.doc_nos.length > 0);
+        if (itemWithDoc && itemWithDoc.doc_nos?.length > 0) {
+          const sharedDocs = itemWithDoc.doc_nos;
+          setDocNos(prev => {
+            if (!prev || prev.length === 0) {
+              localStorage.setItem('lak8_doc_nos', JSON.stringify(sharedDocs));
+              setHasDocNo(true);
+              return sharedDocs;
+            }
+            return prev;
+          });
+        }
+
         const formatted = data.map(item => ({
           id: item.id,
           barcode: item.barcode,
@@ -701,20 +717,205 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   };
 
-  const handleExportExcel = () => {
-    const exportData = items.map(item => ({
-      'Barcode': item.barcode,
-      'Product Name': item.name,
-      'Quantity': item.qty,
-      'Branch': item.branch,
-      'Date': item.countDate,
-      'Staff': item.createdBy,
-      'Last Update': item.timestamp
-    }));
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'StockCount');
-    XLSX.writeFile(wb, `StockCount_Lak8_${selectedBranch}_${selectedDate}.xlsx`);
+  // ─── ELEGANT EXCEL EXPORT WITH EXCELJS ─────────────────────────────
+  const handleExportExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Joah Warehouse Validator';
+      workbook.created = new Date();
+
+      const fontPhetsarath = { name: 'Phetsarath OT', size: 11 };
+      const fontHeader = { name: 'Phetsarath OT', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      const thinBorder = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+      const headerFill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF334155' } // Slate 700
+      };
+      const centerAlignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+      // ─── Sheet 1: Stock Count ──────────────────────────────────────
+      const sheet1 = workbook.addWorksheet('Stock Count');
+
+      const currentOwner = selectedBranch === 'LAK8' ? (lak8OwnerBranch || '-') : '-';
+      const docStr = docNos && docNos.length > 0 ? docNos.join(', ') : '-';
+      const totalQty = items.reduce((acc, i) => acc + (Number(i.qty) || 0), 0);
+
+      sheet1.mergeCells('A1:J1');
+      const titleCell = sheet1.getCell('A1');
+      titleCell.value = `📦 ບົດລາຍງານການນັບສະຕັອກ LAK8 (Stock Count Report)`;
+      titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FF1E293B' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      sheet1.mergeCells('A2:J2');
+      const infoCell = sheet1.getCell('A2');
+      infoCell.value = `ສາຂາ: ${selectedBranch || 'All'} | ສາຂາເຈົ້າຂອງ: ${currentOwner} | ວັນທີ: ${selectedDate} | ເລກບິນ: ${docStr} | ລວມ: ${items.length} ລາຍການ (${totalQty} QTY)`;
+      infoCell.font = { name: 'Phetsarath OT', size: 11, italic: true, color: { argb: 'FF475569' } };
+      infoCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      sheet1.addRow([]); // Blank row 3
+
+      const headers = [
+        'ลำดับ (#)',
+        'บาร์โค้ด (Barcode)',
+        'ชื่อสินค้า (Product Name)',
+        'จำนวน (Qty)',
+        'สาขาหลัก (Branch)',
+        'สาขาเจ้าของ (Owner Branch)',
+        'เลขที่บิล (Doc Nos)',
+        'วันที่นับ (Count Date)',
+        'ผู้บันทึก (Staff)',
+        'เวลา (Time)'
+      ];
+      const headerRow = sheet1.addRow(headers);
+      headerRow.height = 28;
+      headerRow.eachCell((cell) => {
+        cell.font = fontHeader;
+        cell.fill = headerFill;
+        cell.alignment = centerAlignment;
+        cell.border = thinBorder;
+      });
+
+      items.forEach((item, index) => {
+        const docs = Array.isArray(item.doc_nos) ? item.doc_nos.join(', ') : (item.doc_nos || '-');
+        const row = sheet1.addRow([
+          index + 1,
+          item.barcode,
+          item.name,
+          item.qty,
+          item.branch,
+          item.owner_branch || '-',
+          docs,
+          item.countDate,
+          item.createdBy,
+          item.timestamp
+        ]);
+        row.height = 22;
+        row.eachCell((cell) => {
+          cell.font = fontPhetsarath;
+          cell.alignment = centerAlignment;
+          cell.border = thinBorder;
+        });
+      });
+
+      const footerRow = sheet1.addRow([
+        'รวมทั้งหมด',
+        '',
+        `ยอดรวม ${items.length} รายการ`,
+        totalQty,
+        '',
+        '',
+        '',
+        '',
+        '',
+        ''
+      ]);
+      footerRow.height = 24;
+      footerRow.eachCell((cell) => {
+        cell.font = { name: 'Phetsarath OT', size: 11, bold: true };
+        cell.alignment = centerAlignment;
+        cell.border = thinBorder;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      });
+
+      sheet1.columns = [
+        { width: 10 }, // #
+        { width: 20 }, // Barcode
+        { width: 35 }, // Name
+        { width: 14 }, // Qty
+        { width: 14 }, // Branch
+        { width: 18 }, // Owner Branch
+        { width: 25 }, // Doc Nos
+        { width: 15 }, // Count Date
+        { width: 16 }, // Staff
+        { width: 15 }  // Time
+      ];
+
+      // ─── Sheet 2: Event Logs (if events exist) ─────────────────────
+      if (events && events.length > 0) {
+        const sheet2 = workbook.addWorksheet('Event Logs');
+
+        sheet2.mergeCells('A1:I1');
+        const eventTitleCell = sheet2.getCell('A1');
+        eventTitleCell.value = `📝 ບົດລາຍງານເຫດການ & ອຸປະກອນ (Event Logs)`;
+        eventTitleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FF581C87' } };
+        eventTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet2.mergeCells('A2:I2');
+        const eventInfoCell = sheet2.getCell('A2');
+        eventInfoCell.value = `ສາຂາ: ${selectedBranch || 'All'} | ວັນທີ: ${selectedDate} | ລວມເຫດການ: ${events.length} ລາຍການ`;
+        eventInfoCell.font = { name: 'Phetsarath OT', size: 11, italic: true, color: { argb: 'FF6B21A8' } };
+        eventInfoCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet2.addRow([]);
+
+        const eventHeaders = [
+          'ลำดับ (#)',
+          'หัวข้อ/รายละเอียด (Event Title)',
+          'จำนวน (Qty)',
+          'รูปภาพประกอบ (Has Image)',
+          'สาขาหลัก (Branch)',
+          'สาขาเจ้าของ (Owner Branch)',
+          'วันที่ (Date)',
+          'ผู้บันทึก (Staff)',
+          'เวลาบันทึก (Time)'
+        ];
+        const eventHeaderRow = sheet2.addRow(eventHeaders);
+        eventHeaderRow.height = 28;
+        eventHeaderRow.eachCell((cell) => {
+          cell.font = fontHeader;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B21A8' } };
+          cell.alignment = centerAlignment;
+          cell.border = thinBorder;
+        });
+
+        events.forEach((evt, idx) => {
+          const row = sheet2.addRow([
+            idx + 1,
+            evt.title,
+            evt.qty || 1,
+            evt.image_url ? 'มีรูปภาพ (Has Image)' : 'ไม่มีรูป',
+            evt.branch,
+            evt.owner_branch || '-',
+            evt.count_date,
+            evt.created_by || 'Staff',
+            new Date(evt.created_at).toLocaleTimeString('lo-LA')
+          ]);
+          row.height = 22;
+          row.eachCell((cell) => {
+            cell.font = fontPhetsarath;
+            cell.alignment = centerAlignment;
+            cell.border = thinBorder;
+          });
+        });
+
+        sheet2.columns = [
+          { width: 10 }, // #
+          { width: 35 }, // Title
+          { width: 12 }, // Qty
+          { width: 22 }, // Has Image
+          { width: 14 }, // Branch
+          { width: 18 }, // Owner Branch
+          { width: 15 }, // Date
+          { width: 16 }, // Staff
+          { width: 15 }  // Time
+        ];
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `StockCount_Lak8_${selectedBranch}_${selectedDate}.xlsx`);
+
+      showToast({ type: 'success', title: 'ສົ່ງອອກສຳເລັດ! 📊', message: 'ໄຟລ໌ Excel ຖືກດາວໂຫຼດຮຽບຮ້ອຍແລ້ວ' });
+    } catch (err) {
+      console.error('[Excel Export Error]', err);
+      showToast({ type: 'error', title: 'ເກີດຂໍ້ຜິດພາດ!', message: 'ບໍ່ສາມາດສົ່ງອອກໄຟລ໌ Excel ໄດ້' });
+    }
   };
 
   const handleFileUpload = (e) => {
