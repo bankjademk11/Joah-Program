@@ -203,6 +203,30 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   };
 
+  const fetchLak8Status = async () => {
+    try {
+      const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+      const targetDate = isFilterMode ? filterDate : selectedDate;
+      const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
+      if (!targetBranch || !targetDate) return;
+
+      let query = supabase.from('stock_count_lak8_status').select('status');
+      query = query.eq('branch', targetBranch).eq('count_date', targetDate);
+      if (targetBranch === 'LAK8' && targetOwner) {
+        query = query.eq('owner_branch', targetOwner);
+      } else {
+        query = query.is('owner_branch', null);
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (!error && data?.status) {
+        setSessionStatus(data.status);
+      }
+    } catch (err) {
+      console.log('[Status fetch notice]', err.message);
+    }
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -271,6 +295,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     if (selectedBranch && selectedDate) {
       fetchLak8Stock();
       fetchLak8Events();
+      fetchLak8Status();
     }
   }, [selectedBranch, selectedDate, lak8OwnerBranch, isFilterMode, filterBranch, filterDate]);
 
@@ -331,6 +356,23 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stock_count_lak8_status' },
+        (payload) => {
+          const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+          const targetDate = isFilterMode ? filterDate : selectedDate;
+          const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
+
+          const item = payload.new || payload.old;
+          if (item?.branch === targetBranch && item?.count_date === targetDate) {
+            const isMatchOwner = targetBranch === 'LAK8' ? item?.owner_branch === targetOwner : true;
+            if (isMatchOwner && payload.new?.status) {
+              setSessionStatus(payload.new.status);
+            }
+          }
+        }
+      )
       .subscribe();
 
     return () => {
@@ -338,7 +380,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     };
   }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
 
-  const toggleSessionStatus = () => {
+  const toggleSessionStatus = async () => {
     const isConfirm = window.confirm(
       sessionStatus === 'completed' 
         ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?' 
@@ -350,6 +392,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     setSessionStatus(nextStatus);
     const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
     localStorage.setItem(statusKey, nextStatus);
+
+    try {
+      await supabase
+        .from('stock_count_lak8_status')
+        .upsert(
+          [
+            {
+              branch: selectedBranch,
+              owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
+              count_date: selectedDate,
+              status: nextStatus,
+              updated_at: new Date().toISOString()
+            }
+          ],
+          { onConflict: 'branch,count_date,owner_branch' }
+        );
+    } catch (err) {
+      console.warn('Status upsert notice:', err.message);
+    }
+
     showToast({
       type: nextStatus === 'completed' ? 'success' : 'info',
       title: nextStatus === 'completed' ? 'ສຳເລັດແລ້ວ! 🎉' : 'ກຳລັງນັບ... ⏳',
