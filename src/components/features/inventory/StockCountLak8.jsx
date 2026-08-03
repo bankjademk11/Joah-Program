@@ -101,6 +101,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const manualQtyRef = useRef(1);
   const barcodeInputRef = useRef('');
   const isProcessingRef = useRef(false);
+  const fetchDebounceRef = useRef(null); // ⏱️ Debounce rapid-scan fetches
 
   // Keep refs in sync with state
   useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
@@ -332,21 +333,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
 
   useEffect(() => {
-    // ⚡ CHANNEL 1: Stock Count Realtime (critical - must always work)
+    const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+    const targetDate   = isFilterMode ? filterDate   : selectedDate;
+
+    if (!targetBranch || !targetDate) return;
+
+    // ⚡ CHANNEL 1: Stock Realtime with SERVER-SIDE branch filter (most reliable)
     const stockChannel = supabase
-      .channel(`lak8_stock_${selectedBranch}_${selectedDate}`)
+      .channel(`lak8_stock_rt_${targetBranch}_${targetDate}_${Date.now()}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'stock_count_lak8' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'stock_count_lak8',
+          filter: `branch=eq.${targetBranch}`   // ✅ Server-side filter — avoids stale closure bugs
+        },
         (payload) => {
-          const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-          const targetDate = isFilterMode ? filterDate : selectedDate;
-
-          const itemBranch = payload.new?.branch || payload.old?.branch;
+          // Client-side date check only (lightweight)
           const itemDate = payload.new?.count_date || payload.old?.count_date;
-
-          if (targetBranch && itemBranch !== targetBranch) return;
-          if (targetDate && itemDate !== targetDate) return;
+          if (targetDate && itemDate && itemDate !== targetDate) return;
 
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newData = payload.new;
@@ -371,27 +377,33 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[Realtime] Stock channel connected ✅');
+          console.log(`[Realtime] Stock channel CONNECTED ✅ (${targetBranch}/${targetDate})`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Realtime] Stock channel ERROR ❌', err);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Realtime] Stock channel TIMED OUT ⚠️');
         }
       });
 
-    // ⚡ CHANNEL 2: Status Realtime (optional — won't break stock if table missing)
+    // ⏱️ POLLING FALLBACK: every 30s silent refresh in case WebSocket drops
+    const pollingInterval = setInterval(() => {
+      fetchLak8Stock(true);
+    }, 30000);
+
+    // ⚡ CHANNEL 2: Status Realtime (optional — isolated from stock channel)
     let statusChannel = null;
     try {
       statusChannel = supabase
-        .channel(`lak8_status_${selectedBranch}_${selectedDate}`)
+        .channel(`lak8_status_rt_${targetBranch}_${targetDate}_${Date.now()}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'stock_count_lak8_status' },
           (payload) => {
-            const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-            const targetDate = isFilterMode ? filterDate : selectedDate;
-            const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
-
             const item = payload.new || payload.old;
             if (item?.branch === targetBranch && item?.count_date === targetDate) {
+              const targetOwner = selectedBranch === 'LAK8' ? lak8OwnerBranch : null;
               const isMatchOwner = targetBranch === 'LAK8' ? item?.owner_branch === targetOwner : true;
               if (isMatchOwner && payload.new?.status) {
                 setSessionStatus(payload.new.status);
@@ -401,10 +413,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         )
         .subscribe();
     } catch (err) {
-      console.warn('[Realtime] Status channel skipped (table may not exist):', err.message);
+      console.warn('[Realtime] Status channel skipped:', err.message);
     }
 
     return () => {
+      clearInterval(pollingInterval);
       supabase.removeChannel(stockChannel);
       if (statusChannel) supabase.removeChannel(statusChannel);
     };
@@ -669,8 +682,12 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       if (error) throw error;
 
-      // ⚡ Instant refresh stock list so table updates immediately without waiting or refreshing
-      fetchLak8Stock(true);
+      // ⚡ Debounced fetch: wait 1.5s after last scan before refreshing list
+      // This prevents spamming Supabase with a request per scan during rapid counting
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+      fetchDebounceRef.current = setTimeout(() => {
+        fetchLak8Stock(true);
+      }, 1500);
 
       if (clearInput) {
         setBarcodeInput('');
