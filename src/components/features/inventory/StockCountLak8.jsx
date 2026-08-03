@@ -639,6 +639,9 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       if (error) throw error;
 
+      // ⚡ Instant refresh stock list so table updates immediately without waiting or refreshing
+      fetchLak8Stock(true);
+
       if (clearInput) {
         setBarcodeInput('');
         if (inputRef.current) inputRef.current.focus();
@@ -675,6 +678,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         .eq('id', id);
 
       if (error) throw error;
+      fetchLak8Stock(true);
     } catch (err) {
       showToast({ type: 'error', title: 'ຜິດພາດ!', message: 'ບໍ່ສາມາດປ່ຽນຈຳນວນໄດ້' });
     } finally {
@@ -688,6 +692,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     try {
       const { error } = await supabase.from('stock_count_lak8').delete().eq('id', id);
       if (error) throw error;
+      fetchLak8Stock(true);
       showToast({ type: 'success', title: 'ລຶບສຳເລັດ', message: 'ລາຍການຖືກລຶບອອກແລ້ວ' });
     } catch (err) {
       showToast({ type: 'error', title: 'ຜິດພາດ!', message: 'ບໍ່ສາມາດລຶບໄດ້' });
