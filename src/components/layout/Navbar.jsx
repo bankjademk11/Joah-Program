@@ -1,5 +1,6 @@
-import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut, LayoutGrid } from 'lucide-react';
+import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut, LayoutGrid, Gift } from 'lucide-react';
 import LowStockBell from '../ui/LowStockBell';
+import GachaModal from '../ui/GachaModal';
 import joahLogo from '../../assets/Joah.jpeg';
 import laosFlag from '../../assets/Laos.png';
 import englishFlag from '../../assets/EnglishFlang.png';
@@ -32,6 +33,9 @@ const Navbar = ({
     const lastSoundTimeRef = useRef(0);
     const shouldPlaySoundRef = useRef(false);
     const [soundTrigger, setSoundTrigger] = useState(0);
+
+    // ── 🎁 Gacha Box Modal State ─────────────────────────────────────────────
+    const [showGachaModal, setShowGachaModal] = useState(false);
 
     // ── 🔄 Auto Update Detection ──────────────────────────────────────────────
     const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -363,6 +367,7 @@ const Navbar = ({
                             <div className="w-px h-5 sm:h-8 bg-slate-200 dark:bg-slate-700 mx-0.5 sm:mx-1"></div>
 
                             {/* Language Toggle - Hidden on mobile to save space */}
+                            {/* Language Toggle */}
                             <button
                                 onClick={toggleLanguage}
                                 className="hidden sm:flex w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 items-center justify-center rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all duration-300 group"
@@ -377,6 +382,17 @@ const Navbar = ({
                                 </div>
                             </button>
 
+                            {/* Gacha Gift Box Button — Dev Only (K2601097) */}
+                            {currentUser?.id === 'K2601097' && (
+                                <button
+                                    onClick={() => setShowGachaModal(true)}
+                                    className="w-9 h-9 sm:w-12 sm:h-12 lg:w-14 lg:h-14 flex items-center justify-center rounded-lg sm:rounded-xl text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-amber-500 dark:hover:text-amber-400 hover:shadow-lg transition-all duration-300"
+                                    title="สุ่มกาชาสุ่มไอเทมมินิเกม MMO RPG (Gacha Box)"
+                                >
+                                    <Gift size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" />
+                                </button>
+                            )}
+
                             {/* Theme Toggle */}
                             <button
                                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -386,6 +402,12 @@ const Navbar = ({
                                 {isDarkMode ? <Sun size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" /> : <Moon size={18} className="sm:w-5 sm:h-5 lg:w-[22px] lg:h-[22px]" />}
                             </button>
                         </div>
+
+                        {/* Gacha Modal */}
+                        <GachaModal
+                            isOpen={showGachaModal}
+                            onClose={() => setShowGachaModal(false)}
+                        />
 
                         {/* App Launcher Button (Only for HQ) */}
                         <div className="flex items-center gap-2">
