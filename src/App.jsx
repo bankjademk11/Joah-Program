@@ -635,20 +635,26 @@ function AppContent() {
     }
 
     setRealtimeStatus('connecting');
-    console.log('🔌 Setting up Realtime subscription...');
+    const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+    const branchFilter = (targetBranch && targetBranch !== 'All Branches') ? `branch_id=eq.${targetBranch}` : undefined;
+    console.log(`🔌 Setting up Realtime subscription (Branch filter: ${branchFilter || 'All'})...`);
+
+    const channelConfig = (table) => {
+      const cfg = { event: '*', schema: 'public', table };
+      if (branchFilter) cfg.filter = branchFilter;
+      return cfg;
+    };
 
     const channel = supabase
-      .channel('realtime-location-inventory')
+      .channel(`realtime-location-inventory_${targetBranch || 'all'}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'location_inventory' },
+        channelConfig('location_inventory'),
         (payload) => {
           console.log('📡 Realtime change detected:', payload.eventType, payload);
 
-          // 🚨 BRANCH FILTER: Prevent changes from other branches from bleeding in!
-          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
+          // 🚨 BRANCH FILTER SAFETY CHECK: Prevent changes from other branches from bleeding in!
           const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
-
           if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) {
             console.log(`🛡️ Realtime ignored: Item is from ${payloadBranch}, but we are viewing ${targetBranch}`);
             return; // Skip this update!
@@ -721,10 +727,9 @@ function AppContent() {
       // 🚨 SUBSCRIBE TO table_dc_stock for Realtime DC Qty updates
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'table_dc_stock' },
+        channelConfig('table_dc_stock'),
         (payload) => {
           console.log('📡 Realtime DC Stock change:', payload);
-          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
           const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
           if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) return;
 
@@ -743,10 +748,9 @@ function AppContent() {
       // 🚨 SUBSCRIBE TO store_inventory for Realtime Shop Qty updates
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'store_inventory' },
+        channelConfig('store_inventory'),
         (payload) => {
           console.log('📡 Realtime Store Inventory change:', payload);
-          const targetBranch = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
           const payloadBranch = payload.new?.branch_id || payload.old?.branch_id;
           if (targetBranch !== 'All Branches' && payloadBranch && payloadBranch !== targetBranch) return;
 
