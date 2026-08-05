@@ -70,7 +70,7 @@ const ProductManager = ({ onBack, currentUser, activeBranch, initialBarcode, isA
         try {
             const { data, error } = await supabase
                 .from('master_data')
-                .select('*')
+                .select('id, branch_id, barcode, product_name_la, item_name, category_1, category_2, qty, price, created_at, source')
                 .eq('branch_id', selectedBranch)
                 .order('barcode', { ascending: true });
 

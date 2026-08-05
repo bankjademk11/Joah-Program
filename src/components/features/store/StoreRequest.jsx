@@ -109,7 +109,11 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
     const fetchRecentRequests = async () => {
         try {
             const userBranch = activeBranch || currentUser?.branch_id;
-            let query = supabase.from('store_requests').select('*').order('created_at', { ascending: false }).limit(100);
+            let query = supabase
+                .from('store_requests')
+                .select('id, barcode_no, item_name, request_qty, rack_location, status, request_by, accepted_by, branch_id, created_at, accepted_at, store_confirmed_at')
+                .order('created_at', { ascending: false })
+                .limit(50);
             if (userBranch) query = query.eq('branch_id', userBranch);
             const { data, error } = await query;
             if (error) throw error;

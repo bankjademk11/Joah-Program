@@ -50,7 +50,7 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
     try {
       const { data, error } = await supabase
         .from('store_inventory')
-        .select('*')
+        .select('id, branch_id, barcode_no, item_name, shelf_location, store_qty, sales_qty, min_qty, max_qty, updated_by, last_updated, updated_at')
         .eq('branch_id', selectedBranch)
         .order('item_name', { ascending: true });
       if (error) throw error;

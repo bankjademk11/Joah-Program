@@ -154,7 +154,9 @@ const StoreResultTable = ({
             await new Promise(r => setTimeout(r, 600)); // Add UX delay so the spin animation is clearly visible
 
             const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
-            let query = supabase.from('location_inventory').select('*').eq('barcode_no', row.barcode);
+            let query = supabase.from('location_inventory')
+                .select('id, barcode_no, qty, rack_location, category_1_actual, category_2_actual, uploaded_by, branch_id, updated_at')
+                .eq('barcode_no', row.barcode);
 
             if (row.rackLocation) {
                 query = query.eq('rack_location', row.rackLocation);

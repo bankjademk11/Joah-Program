@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     ArrowLeft, Search, RefreshCw, Filter, Building2, PackageCheck,
     CheckCircle2, Clock, XCircle, AlertCircle, FileText, Eye, Star,
-    Printer, Send, Lock, RotateCcw, ChevronLeft, ChevronRight, MessageSquare, History, User
+    Printer, Send, Lock, RotateCcw, ChevronLeft, ChevronRight, MessageSquare, History, User,
+    Download, ClipboardList, Trash2
 } from 'lucide-react';
 import {
     fetchOdooStockPickings,
@@ -13,6 +14,31 @@ import {
 } from '../../../services/odooTransferApi';
 import OdooValidateModal from './OdooValidateModal';
 import OdooAutoAgentModal from './OdooAutoAgentModal';
+
+// ── Session Log Excel Export ─────────────────────────────────────────────
+function exportSessionLogToExcel(logs) {
+    const headers = ['#', 'ชื่อบิล (Reference)', 'Bill Reference', 'ID', 'เวลา', 'สถานะ', 'รายละเอียด'];
+    const rows = logs.map((log, i) => [
+        i + 1,
+        log.name,
+        log.billRef || '-',
+        log.id,
+        log.time,
+        log.status === 'success' ? 'สำเร็จ' : log.status === 'skipped' ? 'ข้าม (ไม่มี Bill ref)' : 'Error',
+        log.detail || ''
+    ]);
+    const csvContent = [headers, ...rows]
+        .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `odoo_session_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
 
 const ODOO_COMPANIES = [
     { id: 249, name: '171030003-Joah Taladlao', label: 'ຕະຫຼາດລາວ (TLL)' }, // Cleaned up name to prevent "Patuxai / Taladlao" confusion
@@ -154,6 +180,29 @@ export default function OdooTransferViewer({ onBack }) {
     const [agentErrorHalt, setAgentErrorHalt] = useState(null); // { picking, error }
     const [agentSummaryReport, setAgentSummaryReport] = useState(null); // { success: [], skipped: [] }
 
+    // ── 📋 Session Log (memory only — cleared on refresh) ──────────────────
+    // Each entry: { id, name, billRef, time, status: 'success'|'error'|'skipped', detail }
+    const [sessionLog, setSessionLog] = useState([]);
+    const [showSessionLog, setShowSessionLog] = useState(false);
+    // Set of picking IDs that failed (for red row highlight)
+    const failedPickingIdsRef = useRef(new Set());
+    const [failedPickingIds, setFailedPickingIds] = useState(new Set());
+
+    const addSessionLog = (entry) => {
+        const time = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setSessionLog(prev => [...prev, { ...entry, time }]);
+        if (entry.status === 'error') {
+            failedPickingIdsRef.current = new Set([...failedPickingIdsRef.current, entry.id]);
+            setFailedPickingIds(new Set(failedPickingIdsRef.current));
+        }
+    };
+
+    const clearSessionLog = () => {
+        setSessionLog([]);
+        failedPickingIdsRef.current = new Set();
+        setFailedPickingIds(new Set());
+    };
+
     // Ref เพื่อหยุดการทำงานของ Agent loop
     const stopAgentRef = React.useRef(false);
 
@@ -190,6 +239,7 @@ export default function OdooTransferViewer({ onBack }) {
             if (!billRef || String(billRef).trim() === '' || billRef === false) {
                 console.warn(`[LiveAgent] Skipped ${picking.name} because it lacks Bill reference`);
                 skippedList.push({ ...picking, reason: 'ไม่มี Bill reference' });
+                addSessionLog({ id: picking.id, name: picking.name, billRef: picking.bill_reference, status: 'skipped', detail: 'ไม่มี Bill Reference — ข้ามอัตโนมัติ' });
                 setAgentStatusText(`⚠️ [บิลที่ ${i + 1}/${targetPickings.length}] บิล ${picking.name} ไม่มี Bill reference -> ข้ามอัตโนมัติตามนโยบาย!`);
                 await new Promise(r => setTimeout(r, 3000)); // แสดงเตือน 3 วินาที
                 setViewMode('list');
@@ -221,6 +271,7 @@ export default function OdooTransferViewer({ onBack }) {
                     // ✅ สำเร็จ
                     setSelectedPicking(prev => prev ? { ...prev, state: 'done' } : prev);
                     validatedList.push(picking);
+                    addSessionLog({ id: picking.id, name: picking.name, billRef: picking.bill_reference, status: 'success', detail: 'Validate สำเร็จ — Done ใน Odoo' });
                     setAgentStatusText(`✅ บิล ${picking.name} Validate สำเร็จแล้ว!`);
                     await new Promise(r => setTimeout(r, 1500));
                     validated = true;
@@ -262,12 +313,14 @@ export default function OdooTransferViewer({ onBack }) {
                             ? `Retry ${MAX_RETRIES}x แล้ว Odoo ยัง busy (concurrent lock)`
                             : `Odoo error: ${errMsg.slice(0, 70)}`;
                         skippedList.push({ ...picking, reason: skipReason });
+                        addSessionLog({ id: picking.id, name: picking.name, billRef: picking.bill_reference, status: 'error', detail: skipReason });
                         setAgentStatusText(`⚠️ [บิลที่ ${i + 1}/${targetPickings.length}] บิล ${picking.name} → ข้ามไปบิลถัดไป`);
                         await new Promise(r => setTimeout(r, 3000));
                         setViewMode('list');
                         await new Promise(r => setTimeout(r, 1000));
                     } else {
                         // ❌ Fatal error → หยุด Agent แสดง popup :(
+                        addSessionLog({ id: picking.id, name: picking.name, billRef: picking.bill_reference, status: 'error', detail: `FATAL: ${errMsg}` });
                         setAgentErrorHalt({
                             picking,
                             message: errMsg || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุขณะ Validate บิลนี้'
@@ -761,6 +814,40 @@ export default function OdooTransferViewer({ onBack }) {
                             ⏹ หยุด Live Agent
                         </button>
                     )}
+
+                    {/* 📋 ปุ่มดู Log & 📊 Export Excel อยู่ข้างปุ่มรีเฟรช Odoo เสมอ */}
+                    <button
+                        onClick={() => setShowSessionLog(v => !v)}
+                        className={`hud-btn flex items-center justify-center gap-1.5 px-3.5 py-2.5 border transition-all text-xs font-bold cursor-pointer ${
+                            showSessionLog
+                                ? 'bg-cyan-500 text-white border-cyan-500 shadow-md'
+                                : 'bg-white border-slate-200 hover:border-cyan-300 text-slate-700 hover:text-cyan-600'
+                        }`}
+                    >
+                        <ClipboardList size={15} />
+                        <span>📋 ดู Log</span>
+                        {sessionLog.length > 0 && (
+                            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-cyan-100 text-cyan-800">
+                                {sessionLog.length}
+                            </span>
+                        )}
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            if (sessionLog.length === 0) {
+                                alert('ยังไม่มีประวัติ Log ใน Session นี้ครับ (Log จะเกิดขึ้นหลังจากรัน Agent)');
+                                return;
+                            }
+                            exportSessionLogToExcel(sessionLog);
+                        }}
+                        className="hud-btn flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm transition-all text-xs font-bold cursor-pointer"
+                        title="ดาวน์โหลดประวัติ Log เป็นไฟล์ Excel / CSV"
+                    >
+                        <Download size={15} />
+                        <span>📊 Export Excel</span>
+                    </button>
+
                     <button onClick={loadPickings} disabled={isLoading || isAgentRunning} className="hud-btn flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-cyan-300 hover:text-cyan-600 text-slate-600 transition-all text-xs font-bold cursor-pointer disabled:opacity-40">
                         <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} /> รีเฟรช Odoo
                     </button>
@@ -903,8 +990,9 @@ export default function OdooTransferViewer({ onBack }) {
                                         const isReady = p.state === 'assigned';
                                         const isDone = p.state === 'done';
                                         const isCancel = p.state === 'cancel';
+                                        const hasFailed = failedPickingIds.has(p.id);
                                         return (
-                                            <tr key={p.id} className={`hover:bg-cyan-50/40 transition-colors ${selectedIds.has(p.id) ? 'bg-cyan-50/70' : ''}`}>
+                                            <tr key={p.id} className={`transition-colors ${hasFailed ? 'bg-rose-50 border-l-4 border-rose-400' : selectedIds.has(p.id) ? 'bg-cyan-50/70 hover:bg-cyan-50/80' : 'hover:bg-cyan-50/40'}`}>
                                                 <td className="py-3 px-3 text-center">
                                                     <input
                                                         type="checkbox"
@@ -919,7 +1007,10 @@ export default function OdooTransferViewer({ onBack }) {
                                                     />
                                                 </td>
                                                 <td className="py-3 px-4 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                <td className="py-3 px-4 font-bold text-slate-800 font-mono">{p.name}</td>
+                                                <td className="py-3 px-4 font-bold text-slate-800 font-mono">
+                                                    <span>{p.name}</span>
+                                                    {hasFailed && <span className="ml-2 text-[10px] font-bold text-rose-500 bg-rose-100 px-1.5 py-0.5 rounded">⚠ Error</span>}
+                                                </td>
                                                 <td className="py-3 px-4 text-slate-600">{fromName}</td>
                                                 <td className="py-3 px-4 text-slate-600 font-mono">{toName}</td>
                                                 <td className="py-3 px-4 text-slate-600">{contactName}</td>
@@ -949,6 +1040,84 @@ export default function OdooTransferViewer({ onBack }) {
                     )}
                 </HudPanel>
             </div>
+
+            {/* ── Session Log Panel ──────────────────────────────── */}
+            {showSessionLog && (
+                <div className="w-full mt-4">
+                    <HudPanel className="p-0 overflow-hidden">
+                            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+                                <div className="flex items-center gap-2">
+                                    <ClipboardList size={16} className="text-cyan-500" />
+                                    <span className="text-xs font-bold text-slate-700 font-mono hud-readout uppercase">
+                                        Session Log — {sessionLog.length} รายการ (หายเมื่อ Refresh)
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => exportSessionLogToExcel(sessionLog)}
+                                        className="hud-btn flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer transition-colors"
+                                    >
+                                        <Download size={13} /> Export Excel
+                                    </button>
+                                    <button
+                                        onClick={clearSessionLog}
+                                        className="hud-btn flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-500 text-xs font-bold border border-rose-200 cursor-pointer transition-colors"
+                                    >
+                                        <Trash2 size={13} /> ล้าง Log
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead className="sticky top-0 bg-slate-50">
+                                        <tr className="text-slate-400 text-[10px] font-bold uppercase border-b border-slate-200 font-mono hud-readout">
+                                            <th className="py-2.5 px-4 w-8">#</th>
+                                            <th className="py-2.5 px-4">เวลา</th>
+                                            <th className="py-2.5 px-4">ชื่อบิล</th>
+                                            <th className="py-2.5 px-4">Bill Reference</th>
+                                            <th className="py-2.5 px-4">สถานะ</th>
+                                            <th className="py-2.5 px-4">รายละเอียด</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {sessionLog.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="py-8 text-center text-slate-400 font-mono text-xs">
+                                                    📭 ยังไม่มีประวัติ Log ในรอบนี้ (Log จะเริ่มบันทึกทันทีที่สั่งรัน Agent)
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            sessionLog.map((log, i) => (
+                                                <tr key={i} className={`${
+                                                    log.status === 'error' ? 'bg-rose-50'
+                                                    : log.status === 'skipped' ? 'bg-amber-50'
+                                                    : 'bg-emerald-50/40'
+                                                }`}>
+                                                    <td className="py-2.5 px-4 text-slate-400 font-mono">{i + 1}</td>
+                                                    <td className="py-2.5 px-4 text-slate-500 font-mono">{log.time}</td>
+                                                    <td className="py-2.5 px-4 font-bold text-slate-800 font-mono">{log.name}</td>
+                                                    <td className="py-2.5 px-4 text-amber-600 font-mono">{log.billRef || '-'}</td>
+                                                    <td className="py-2.5 px-4">
+                                                        {log.status === 'success' && <span className="hud-btn inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200"><CheckCircle2 size={11} /> สำเร็จ</span>}
+                                                        {log.status === 'error' && <span className="hud-btn inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200"><XCircle size={11} /> Error</span>}
+                                                        {log.status === 'skipped' && <span className="hud-btn inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-700 border border-amber-200"><AlertCircle size={11} /> ข้าม</span>}
+                                                    </td>
+                                                    <td className="py-2.5 px-4 text-slate-500 text-[11px] max-w-xs truncate" title={log.detail}>{log.detail}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="px-5 py-2.5 border-t border-slate-200 bg-slate-50 flex items-center gap-4 text-[11px] font-mono text-slate-400">
+                                <span className="text-emerald-600 font-bold">✓ {sessionLog.filter(l => l.status === 'success').length} สำเร็จ</span>
+                                <span className="text-rose-600 font-bold">✕ {sessionLog.filter(l => l.status === 'error').length} Error</span>
+                                <span className="text-amber-600 font-bold">⚠ {sessionLog.filter(l => l.status === 'skipped').length} ข้าม</span>
+                                <span className="ml-auto text-slate-300">Log เก็บในหน่วยความจำเท่านั้น — หายเมื่อ Refresh</span>
+                            </div>
+                        </HudPanel>
+                </div>
+            )}
 
             {/* Error popup */}
             {agentErrorHalt && (
