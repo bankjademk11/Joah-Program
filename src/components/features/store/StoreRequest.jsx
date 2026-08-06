@@ -111,7 +111,7 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
             const userBranch = activeBranch || currentUser?.branch_id;
             let query = supabase
                 .from('store_requests')
-                .select('id, barcode_no, item_name, request_qty, rack_location, status, request_by, accepted_by, branch_id, created_at, accepted_at, store_confirmed_at')
+                .select('id, barcode, product_name, qty, status, request_by, accepted_by, branch_id, created_at, updated_at, batch_id, stock_at_request, store_confirmed_at, store_confirmed_by')
                 .order('created_at', { ascending: false })
                 .limit(50);
             if (userBranch) query = query.eq('branch_id', userBranch);
