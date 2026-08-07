@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory, fetchDcFromSupabase, fetchStoreInventoryFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box, Tag } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -26,6 +26,7 @@ import imgStoreClosing from './assets/RequestfromWarehouse.png';
 import imgStoreRequest from './assets/StoreRequest.png';
 import imgHQCenter from './assets/JoahHQcentercompressed.png';
 import imgStoreInventory from './assets/StoreInventory.png';
+import imgCheckPrice from './assets/Icons_AppJoah/checkpirce.webp';
 
 import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
@@ -54,6 +55,7 @@ import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
 import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
 import StockCountLak8 from './components/features/inventory/StockCountLak8';
+import CheckPrice from './components/Tools/CheckPrice';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -75,7 +77,20 @@ function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
 
-  const [step, setStep] = useState('upload');
+  const [step, setStep] = useState(() => {
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/checkprice')) return 'check-price';
+    return 'upload';
+  });
+
+  // Sync URL when step changes so user can bookmark or copy link
+  useEffect(() => {
+    const newPath = step === 'check-price' ? '/checkprice' : '/';
+    if (window.location.pathname !== newPath) {
+      window.history.pushState(null, '', newPath);
+    }
+  }, [step]);
+
   const [workbook, setWorkbook] = useState(null);
   const [rawFile, setRawFile] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
@@ -1408,6 +1423,32 @@ function AppContent() {
                     </button>
                   </div>
 
+                  {/* Check Price Card */}
+                  <div
+                    className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-cyan-500 hover:shadow-cyan-500/10 transition-all duration-500 cursor-pointer w-full sm:w-[340px]"
+                    onClick={() => setStep('check-price')}
+                  >
+                    {/* Image Banner */}
+                    <div className="w-full h-44 overflow-hidden bg-cyan-50 dark:bg-slate-800 relative">
+                      <img src={imgCheckPrice} alt="Check Price" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                      <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                    </div>
+                    {/* Content */}
+                    <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                      <div className="space-y-1.5 text-center">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດສອບລາຄາ</h3>
+                        <p className="text-[10px] text-cyan-500 font-black uppercase tracking-[0.2em]">Price Checker Terminal</p>
+                      </div>
+                      <button
+                        className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-cyan-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20"
+                        onClick={(e) => { e.stopPropagation(); setStep('check-price'); }}
+                      >
+                        <Tag size={18} />
+                        <span>ເປີດໃຊ້ງານ</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
                   {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
@@ -1646,6 +1687,12 @@ function AppContent() {
                 currentUser={user}
               />
             </div>
+          )}
+
+          {step === 'check-price' && (
+            <CheckPrice
+              onBack={() => setStep('upload')}
+            />
           )}
 
 

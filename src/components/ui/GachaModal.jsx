@@ -267,16 +267,24 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
     const eyeLightR = new THREE.PointLight(0x00ff44, 3.5, 2.0);
     scene.add(eyeLightL, eyeLightR);
 
-    // ── Materials ──────────────────────────────────────────────────────────
-    const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x1a0a30, roughness: 0.75, metalness: 0.15 });
-    const ironMat = new THREE.MeshStandardMaterial({ color: 0x1c2535, roughness: 0.3, metalness: 0.85 });
-    const ironAccentMat = new THREE.MeshStandardMaterial({ color: 0x2d3f52, roughness: 0.25, metalness: 0.9 });
+    // ── Materials ── (upgraded to a gilded "legendary relic" look) ─────────
+    const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3d1808, roughness: 0.55, metalness: 0.1 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x8a6a1f, roughness: 0.32, metalness: 0.95, emissive: 0x2a1a00, emissiveIntensity: 0.25 });
+    const ironAccentMat = new THREE.MeshStandardMaterial({ color: 0xe8c25a, roughness: 0.18, metalness: 1.0, emissive: 0x3a2400, emissiveIntensity: 0.35 });
     const boneMat = new THREE.MeshStandardMaterial({ color: 0xd6c9a0, roughness: 0.55, metalness: 0.05 });
     const darkBoneMat = new THREE.MeshStandardMaterial({ color: 0x8c7a4a, roughness: 0.7, metalness: 0.0 });
     const voidMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1.0, metalness: 0.0 });
     const toothMat = new THREE.MeshStandardMaterial({ color: 0xede8d0, roughness: 0.35, metalness: 0.05 });
     const eyeGlowMat = new THREE.MeshStandardMaterial({
       color: 0x00ff44, emissive: new THREE.Color(0x00ff44), emissiveIntensity: 4.0, roughness: 0, metalness: 0
+    });
+    // Central lid gem — pulses/cycles color and is the anchor for the light beams
+    const gemMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, emissive: new THREE.Color(0xffffff), emissiveIntensity: 3.0, roughness: 0.05, metalness: 0.2
+    });
+    // Beam material — additive, unlit, cycles color independently of scene lighting
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false,
     });
 
     // ── Chest Group ────────────────────────────────────────────────────────
@@ -292,7 +300,7 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
     // Corner iron bolts (8 corners)
     const boltGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
     [[-1.07, 0.08, 0.65], [1.07, 0.08, 0.65], [-1.07, 1.0, 0.65], [1.07, 1.0, 0.65],
-     [-1.07, 0.08, -0.65], [1.07, 0.08, -0.65], [-1.07, 1.0, -0.65], [1.07, 1.0, -0.65]].forEach(([x, y, z]) => {
+    [-1.07, 0.08, -0.65], [1.07, 0.08, -0.65], [-1.07, 1.0, -0.65], [1.07, 1.0, -0.65]].forEach(([x, y, z]) => {
       const b = new THREE.Mesh(boltGeo, ironMat);
       b.position.set(x, y, z);
       chestGroup.add(b);
@@ -331,6 +339,46 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
       b.position.set(0, y, 0.72);
       lidGroup.add(b);
     });
+
+    // ── LEGENDARY GEM + LIGHT BEAM RIG (mounted above the skull) ───────────
+    const beamRig = new THREE.Group();
+    beamRig.position.set(0, 0.95, 0.55);
+    lidGroup.add(beamRig);
+
+    // Floating gem — the core light source that cycles / settles on rarity color
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), gemMat);
+    gem.position.set(0, 0, 0);
+    beamRig.add(gem);
+
+    // Small gold claw mount under the gem
+    const mount = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.14, 6), ironAccentMat);
+    mount.position.set(0, -0.16, 0);
+    mount.rotation.x = Math.PI;
+    beamRig.add(mount);
+
+    // Radiating light-shaft cones (cycle color together with the gem)
+    const BEAM_COUNT = 8;
+    const beamMeshes = [];
+    for (let i = 0; i < BEAM_COUNT; i++) {
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(0.05, 2.6, 6, 1, true), beamMat.clone());
+      const angle = (i / BEAM_COUNT) * Math.PI * 2;
+      beam.position.set(0, 1.1, 0);
+      beam.rotation.z = Math.PI; // point cone outward from tip
+      beam.rotation.y = angle;
+      beam.rotation.x = 0.55; // splay outward/upward
+      beam.scale.setScalar(0.001);
+      beamRig.add(beam);
+      beamMeshes.push(beam);
+    }
+    // One tall central pillar beam shooting straight up
+    const pillarBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.22, 4.2, 10, 1, true), beamMat.clone());
+    pillarBeam.position.set(0, 2.0, 0);
+    pillarBeam.scale.setScalar(0.001);
+    beamRig.add(pillarBeam);
+
+    const gemLight = new THREE.PointLight(0xffffff, 0, 4.5);
+    gemLight.position.set(0, 0, 0);
+    beamRig.add(gemLight);
 
     // ── SKULL on front-center of lid ───────────────────────────────────────
     const skullGroup = new THREE.Group();
@@ -436,6 +484,9 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
       eyeLightL.position.set(skullWorldPos.x - 0.145, skullWorldPos.y + 0.24, skullWorldPos.z + 0.35);
       eyeLightR.position.set(skullWorldPos.x + 0.145, skullWorldPos.y + 0.24, skullWorldPos.z + 0.35);
 
+      // Fast rainbow cycle used while the box is "deciding" what it rolled
+      const cycleColor = new THREE.Color().setHSL((t * 0.85) % 1, 1.0, 0.55);
+
       if (p === 'chest') {
         // IDLE: gentle float, sway, eye pulse, jaw chatters slightly
         chestGroup.position.y = Math.sin(t * 1.9) * 0.1;
@@ -452,6 +503,17 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
         eyeLightL.color.set(0x00ff44);
         eyeLightR.color.set(0x00ff44);
 
+        // Gem/beams dormant — soft golden shimmer only
+        gem.scale.setScalar(1 + Math.sin(t * 2.2) * 0.08);
+        gemMat.emissive.set(0xffcc55);
+        gemMat.color.set(0xffcc55);
+        gemMat.emissiveIntensity = 1.4 + Math.sin(t * 2.2) * 0.6;
+        gemLight.intensity = 0.6 + Math.sin(t * 2.2) * 0.3;
+        gemLight.color.set(0xffcc55);
+        beamMeshes.forEach(b => { b.scale.setScalar(THREE.MathUtils.lerp(b.scale.x, 0.001, 0.1)); b.material.opacity = THREE.MathUtils.lerp(b.material.opacity, 0, 0.1); });
+        pillarBeam.scale.setScalar(THREE.MathUtils.lerp(pillarBeam.scale.x, 0.001, 0.1));
+        pillarBeam.material.opacity = THREE.MathUtils.lerp(pillarBeam.material.opacity, 0, 0.1);
+
       } else if (p === 'opening') {
         // OPENING: violent shaking + lid flies open + jaw screams open
         chestGroup.position.y = Math.sin(t * 22) * 0.13;
@@ -463,14 +525,35 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
         jawGroup.rotation.x = THREE.MathUtils.lerp(jawGroup.rotation.x, Math.PI * 0.58, 0.1);
         // Explosion of inner light
         innerLight.intensity = THREE.MathUtils.lerp(innerLight.intensity, 28, 0.14);
-        // Eyes flash white → rarity color
+        innerLight.color.copy(cycleColor);
+        // Eyes flash + cycle rainbow (color still deciding)
         eyeGlowMat.emissiveIntensity = 10 + Math.sin(t * 15) * 5;
-        eyeGlowMat.emissive.set(0xffffff);
-        eyeGlowMat.color.set(0xffffff);
+        eyeGlowMat.emissive.copy(cycleColor);
+        eyeGlowMat.color.copy(cycleColor);
         eyeLightL.intensity = 9 + Math.sin(t * 12) * 4;
         eyeLightR.intensity = eyeLightL.intensity;
-        eyeLightL.color.set(0xffffff);
-        eyeLightR.color.set(0xffffff);
+        eyeLightL.color.copy(cycleColor);
+        eyeLightR.color.copy(cycleColor);
+
+        // Gem + beams burst outward, colors racing through the spectrum
+        const burst = Math.min(1, beamMeshes[0].scale.x + 0.06);
+        gem.scale.setScalar(THREE.MathUtils.lerp(gem.scale.x, 1.6, 0.15));
+        gemMat.emissive.copy(cycleColor);
+        gemMat.color.copy(cycleColor);
+        gemMat.emissiveIntensity = 8 + Math.sin(t * 20) * 3;
+        gemLight.intensity = 6 + Math.sin(t * 18) * 2;
+        gemLight.color.copy(cycleColor);
+        const hueNow = cycleColor.getHSL({ h: 0, s: 0, l: 0 }).h;
+        beamMeshes.forEach((b, i) => {
+          b.scale.setScalar(THREE.MathUtils.lerp(b.scale.x, 1, 0.15));
+          const bc = new THREE.Color().setHSL((hueNow + i * 0.05) % 1, 1, 0.55);
+          b.material.color.copy(bc);
+          b.material.opacity = 0.75 * burst;
+          b.rotation.y += 0.05 + i * 0.002;
+        });
+        pillarBeam.scale.setScalar(THREE.MathUtils.lerp(pillarBeam.scale.x, 1, 0.15));
+        pillarBeam.material.color.copy(cycleColor);
+        pillarBeam.material.opacity = 0.55 * burst;
 
       } else if (p === 'revealing' || p === 'result') {
         // REVEALED: fully open, slow spin, rarity-colored eyes
@@ -488,6 +571,21 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
           eyeLightL.color.lerp(rc, 0.1);
           eyeLightR.color.lerp(rc, 0.1);
           innerLight.color.lerp(rc, 0.08);
+
+          // Gem + beams settle and lock onto the rarity color — the "stop" moment
+          gemMat.emissive.lerp(rc, 0.12);
+          gemMat.color.lerp(rc, 0.12);
+          gemMat.emissiveIntensity = 6 + Math.sin(t * 4) * 2.2;
+          gemLight.color.lerp(rc, 0.12);
+          gemLight.intensity = 4 + Math.sin(t * 4) * 1.5;
+          gem.scale.setScalar(THREE.MathUtils.lerp(gem.scale.x, 1.35 + (r.beamCount / 30), 0.08));
+          beamMeshes.forEach((b, i) => {
+            b.material.color.lerp(rc, 0.12);
+            b.material.opacity = THREE.MathUtils.lerp(b.material.opacity, r.beamCount > 0 ? 0.6 : 0.15, 0.08);
+            b.rotation.y += 0.006 + i * 0.0005;
+          });
+          pillarBeam.material.color.lerp(rc, 0.12);
+          pillarBeam.material.opacity = THREE.MathUtils.lerp(pillarBeam.material.opacity, r.beamCount > 5 ? 0.5 : 0.2, 0.08);
         }
         eyeLightL.intensity = 7 + Math.sin(t * 4) * 2.5;
         eyeLightR.intensity = eyeLightL.intensity;
@@ -526,13 +624,36 @@ function ThreeChestCanvas({ phase, rarity, onClick }) {
   );
 }
 
+// Turn an HSL hue (0-1) into a hex color string, used for the rainbow "still deciding" phase
+function hueToHex(h) {
+  const c = new (typeof window !== 'undefined' ? Object : Object)(); // no-op guard for SSR safety
+  const col = { h, s: 1, l: 0.58 };
+  // simple HSL→RGB
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = col.l < 0.5 ? col.l * (1 + col.s) : col.l + col.s - col.l * col.s;
+  const p = 2 * col.l - q;
+  const r = Math.round(hue2rgb(p, q, col.h + 1 / 3) * 255);
+  const g = Math.round(hue2rgb(p, q, col.h) * 255);
+  const b = Math.round(hue2rgb(p, q, col.h - 1 / 3) * 255);
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 // ─── CANVAS PARTICLE ENGINE ──────────────────────────────────────────────────
-function useParticleEngine(canvasRef, active, rarity) {
+// phase 'opening'  → rainbow colors racing (the box hasn't decided yet)
+// phase 'revealing'/'result' → locked onto the rarity's own colors
+function useParticleEngine(canvasRef, phase, rarity) {
+  const active = phase === 'opening' || phase === 'revealing' || phase === 'result';
   const animFrameRef = useRef(null);
   const particlesRef = useRef([]);
 
-  const spawnParticle = useCallback((canvas, r) => {
-    const colors = r.particleColors;
+  const spawnParticle = useCallback((canvas, r, cycling) => {
+    const colors = cycling ? [hueToHex(Math.random()), hueToHex(Math.random()), '#ffffff'] : r.particleColors;
     const cx = canvas.width / 2, cy = canvas.height / 2;
     const angle = Math.random() * Math.PI * 2;
     const speed = 2.0 + Math.random() * 6.5;
@@ -568,26 +689,33 @@ function useParticleEngine(canvasRef, active, rarity) {
 
     particlesRef.current = [];
     let frameCount = 0;
-    const spawnRate = Math.max(1, Math.floor(60 / (rarity.particleCount / 10)));
+    // While 'opening', always run a lively beam/particle count regardless of what rarity
+    // eventually lands — the visual excitement shouldn't spoil the result early.
+    const effCount = phase === 'opening' ? 220 : rarity.particleCount;
+    const effBeams = phase === 'opening' ? 10 : rarity.beamCount;
+    const spawnRate = Math.max(1, Math.floor(60 / (effCount / 10)));
 
     const loop = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       frameCount++;
-      if (frameCount % spawnRate === 0 && particlesRef.current.length < rarity.particleCount * 3.5) {
+      const cycling = phase === 'opening';
+      const beamColor = cycling ? hueToHex((frameCount * 0.012) % 1) : rarity.color;
+
+      if (frameCount % spawnRate === 0 && particlesRef.current.length < effCount * 3.5) {
         for (let i = 0; i < 4; i++) {
-          particlesRef.current.push(spawnParticle(canvas, rarity));
+          particlesRef.current.push(spawnParticle(canvas, rarity, cycling));
         }
       }
 
-      // Light beams (Vampire Survivors style rays)
-      if (rarity.beamCount > 0) {
+      // Light beams (Vampire Survivors style rays) — rainbow while opening, locked to rarity on reveal
+      if (effBeams > 0) {
         const cx = canvas.width / 2;
         const cy = canvas.height * 0.5;
-        for (let b = 0; b < rarity.beamCount; b++) {
-          const angle = (b / rarity.beamCount) * Math.PI * 2 + frameCount * 0.015;
+        for (let b = 0; b < effBeams; b++) {
+          const angle = (b / effBeams) * Math.PI * 2 + frameCount * (cycling ? 0.03 : 0.015);
+          const bc = cycling ? hueToHex(((frameCount * 0.012) + b * 0.06) % 1) : beamColor;
           const grad = ctx.createLinearGradient(cx, cy, cx + Math.cos(angle) * 450, cy + Math.sin(angle) * 450);
-          grad.addColorStop(0, rarity.color + '66');
+          grad.addColorStop(0, bc + '77');
           grad.addColorStop(1, 'transparent');
           ctx.beginPath();
           ctx.moveTo(cx, cy);
@@ -641,7 +769,7 @@ function useParticleEngine(canvasRef, active, rarity) {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [active, rarity, spawnParticle, canvasRef]);
+  }, [active, phase, rarity, spawnParticle, canvasRef]);
 }
 
 // ─── MAIN GACHA MODAL COMPONENT ────────────────────────────────────────────
@@ -652,7 +780,7 @@ export default function GachaModal({ isOpen, onClose }) {
   const canvasRef = useRef(null);
   const timeoutRef = useRef(null);
 
-  useParticleEngine(canvasRef, phase === 'revealing' || phase === 'result', result?.rarity);
+  useParticleEngine(canvasRef, phase, result?.rarity);
 
   useEffect(() => {
     return () => {
@@ -733,25 +861,52 @@ export default function GachaModal({ isOpen, onClose }) {
           0%,100% { text-shadow: 0 0 15px currentColor, 0 0 30px currentColor; }
           50%     { text-shadow: 0 0 30px currentColor, 0 0 60px currentColor, 0 0 90px currentColor; }
         }
+        @keyframes gacha-bg-spin {
+          0%   { transform: rotate(0deg) scale(1.6); }
+          100% { transform: rotate(360deg) scale(1.6); }
+        }
+        @keyframes gacha-bg-spin-fast {
+          0%   { transform: rotate(0deg) scale(1.9); }
+          100% { transform: rotate(360deg) scale(1.9); }
+        }
+        @keyframes gacha-bg-pulse {
+          0%,100% { opacity: 0.35; }
+          50%     { opacity: 0.65; }
+        }
 
         .gacha-shake-screen { animation: gacha-screen-shake 0.65s ease-in-out; }
         .gacha-card-reveal { animation: gacha-card-in 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .gacha-grade-stamp { animation: gacha-grade-stamp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .gacha-title-glow { animation: gacha-title-glow 2s ease-in-out infinite; }
         .pixel-art-img { image-rendering: pixelated; image-rendering: crisp-edges; }
+        .gacha-bg-layer {
+          position: absolute; inset: -20%; pointer-events: none;
+          background: conic-gradient(from 0deg, #7c3aed, #db2777, #f59e0b, #059669, #2563eb, #7c3aed);
+          filter: blur(60px) saturate(1.3);
+          animation: gacha-bg-spin 14s linear infinite, gacha-bg-pulse 4s ease-in-out infinite;
+        }
+        .gacha-bg-layer-fast {
+          position: absolute; inset: -25%; pointer-events: none;
+          background: conic-gradient(from 90deg, #f59e0b, #ef4444, #ec4899, #8b5cf6, #22d3ee, #f59e0b);
+          filter: blur(45px) saturate(1.5);
+          animation: gacha-bg-spin-fast 3.2s linear infinite reverse, gacha-bg-pulse 1.4s ease-in-out infinite;
+        }
       `}</style>
 
       {/* ── OVERLAY ──────────────────────────────────────────────── */}
       <div
-        className={`fixed inset-0 z-[9999] flex items-center justify-center font-['Outfit',sans-serif] ${shakeActive ? 'gacha-shake-screen' : ''}`}
-        style={{ background: isRevealing && r ? `radial-gradient(ellipse at center, ${r.bg1} 0%, ${r.bg2} 100%)` : 'radial-gradient(ellipse at center, #1a1035 0%, #0a0a1a 100%)' }}
+        className={`fixed inset-0 z-[9999] flex items-center justify-center font-['Outfit',sans-serif] overflow-hidden ${shakeActive ? 'gacha-shake-screen' : ''}`}
+        style={{ background: isRevealing && r ? `radial-gradient(ellipse at center, ${r.bg1} 0%, ${r.bg2} 100%)` : 'radial-gradient(ellipse at center, #150a28 0%, #05030c 100%)', transition: 'background 0.8s ease' }}
         onClick={phase === 'result' ? onClose : undefined}
       >
+        {/* Living magical background — slow swirl while idle, fast rainbow churn while opening, fades out once the item is revealed */}
+        <div className="gacha-bg-layer" style={{ opacity: phase === 'chest' ? 0.5 : phase === 'opening' ? 0.2 : 0, transition: 'opacity 0.6s' }} />
+        <div className="gacha-bg-layer-fast" style={{ opacity: phase === 'opening' ? 0.55 : 0, transition: 'opacity 0.3s' }} />
         {/* Particle Canvas */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ opacity: isRevealing ? 1 : 0, transition: 'opacity 0.5s' }}
+          style={{ opacity: phase === 'opening' || isRevealing ? 1 : 0, transition: 'opacity 0.4s' }}
         />
 
         {/* Rarity flash */}

@@ -297,9 +297,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     const promises = branches.map(b => fetchDailySales(b.id, startUTC, endUTC, joahOnly));
                     const results = await Promise.all(promises);
                     results.forEach(branchData => {
-                        if(branchData) {
-                            branchData.forEach(day => { 
-                                totalSales += day.price_subtotal_incl || 0; 
+                        if (branchData) {
+                            branchData.forEach(day => {
+                                totalSales += day.price_subtotal_incl || 0;
                                 totalBills += day.order_count || 0;
                                 totalSKUs += day.sku_count || 0;
                             });
@@ -307,9 +307,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     });
                 } else {
                     const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly);
-                    if(data) {
-                        data.forEach(day => { 
-                            totalSales += day.price_subtotal_incl || 0; 
+                    if (data) {
+                        data.forEach(day => {
+                            totalSales += day.price_subtotal_incl || 0;
                             totalBills += day.order_count || 0;
                             totalSKUs += day.sku_count || 0;
                         });
@@ -323,13 +323,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     weeklyBills: totalBills / weeksInMonth,
                     dailySKUs: totalSKUs / daysInMonth,
                     weeklySKUs: totalSKUs / weeksInMonth,
-                    monthLabel: targetMonth.toLocaleDateString('lo-LA', {month: 'short', year:'numeric'})
+                    monthLabel: targetMonth.toLocaleDateString('lo-LA', { month: 'short', year: 'numeric' })
                 };
             };
 
             const result = await fetchMonthData(avgCalcYear, avgCalcMonth);
             setAvgCalcResult(result);
-        } catch(e) {
+        } catch (e) {
             console.error("Error calculating average", e);
         } finally {
             setIsCalculatingAvg(false);
@@ -721,19 +721,19 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                     ຍອດຂາຍ
                                                     <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{monthLabel}</span>
                                                 </h3>
-                                                <button 
+                                                <button
                                                     onClick={() => setShowAvgCalculator(!showAvgCalculator)}
                                                     className="px-2 py-1 bg-white/50 hover:bg-white/80 dark:bg-slate-800/50 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-md border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
                                                 >
                                                     {showAvgCalculator ? 'ປິດທຽບສະເລ່ຍ' : 'ເປີດທຽບສະເລ່ຍ'}
                                                 </button>
                                             </div>
-                                            
+
                                             {/* Average Calculator UI */}
                                             {showAvgCalculator && (
                                                 <div className="flex flex-col gap-2 bg-white/50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm w-fit mt-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <select 
+                                                        <select
                                                             value={`${avgCalcYear}-${avgCalcMonth}`}
                                                             onChange={(e) => {
                                                                 const [y, m] = e.target.value.split('-');
@@ -743,13 +743,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                             }}
                                                             className="text-xs bg-transparent outline-none font-bold text-slate-700 dark:text-slate-300 cursor-pointer border-b border-dashed border-slate-400"
                                                         >
-                                                            {Array.from({length: 12}).map((_, i) => {
+                                                            {Array.from({ length: 12 }).map((_, i) => {
                                                                 const d = new Date();
                                                                 d.setMonth(d.getMonth() - i);
-                                                                return <option key={i} value={`${d.getFullYear()}-${d.getMonth()}`} className="text-slate-800">{d.toLocaleDateString('lo-LA', {month: 'short', year:'numeric'})}</option>
+                                                                return <option key={i} value={`${d.getFullYear()}-${d.getMonth()}`} className="text-slate-800">{d.toLocaleDateString('lo-LA', { month: 'short', year: 'numeric' })}</option>
                                                             })}
                                                         </select>
-                                                        <button 
+                                                        <button
                                                             onClick={calculateMonthlyAverage}
                                                             disabled={isCalculatingAvg}
                                                             className="px-2 py-1 ml-2 bg-joah-orange text-white text-[10px] font-bold rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
@@ -760,21 +760,21 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                     {avgCalcResult && (
                                                         <div className="flex flex-col gap-1.5 text-[10px] font-bold bg-white dark:bg-slate-700 px-3 py-2 rounded-md mt-1">
                                                             <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><TrendingUp size={12} className="text-emerald-500"/>ຍອດຂາຍ:</span>
+                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><TrendingUp size={12} className="text-emerald-500" />ຍອດຂາຍ:</span>
                                                                 <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.daily))} ₭</span>
                                                                 <span className="text-slate-300 dark:text-slate-600">|</span>
                                                                 <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weekly))} ₭</span>
                                                                 {renderAvgGrowth(currentSales, avgCalcResult.daily)}
                                                             </div>
                                                             <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Users size={12} className="text-sky-500"/>ລູກຄ້າ:</span>
+                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Users size={12} className="text-sky-500" />ລູກຄ້າ:</span>
                                                                 <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.dailyBills))} ບິນ</span>
                                                                 <span className="text-slate-300 dark:text-slate-600">|</span>
                                                                 <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weeklyBills))} ບິນ</span>
                                                                 {renderAvgGrowth(currentCustomers, avgCalcResult.dailyBills)}
                                                             </div>
                                                             <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Package size={12} className="text-violet-500"/>ສິນຄ້າ:</span>
+                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Package size={12} className="text-violet-500" />ສິນຄ້າ:</span>
                                                                 <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.dailySKUs))} ລາຍການ</span>
                                                                 <span className="text-slate-300 dark:text-slate-600">|</span>
                                                                 <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weeklySKUs))} ລາຍການ</span>
@@ -1041,56 +1041,56 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                     </div>
 
                                                     {calendarMode === '14' && (
-                                                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
-                                                        {Array.from({ length: 7 }).map((_, j) => {
-                                                            const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
-                                                            const wk2 = amounts[j + 7] ?? 0;   // Week 2: days 8-14 of month
+                                                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-3 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
+                                                            {Array.from({ length: 7 }).map((_, j) => {
+                                                                const wk1 = amounts[j] ?? 0;        // Week 1: days 1-7 of month
+                                                                const wk2 = amounts[j + 7] ?? 0;   // Week 2: days 8-14 of month
 
-                                                            let status = 'FINISHED';
-                                                            if (weekOffset === 0 && todayIndex !== -1) {
-                                                                if ((j + 7) > todayIndex) {
-                                                                    status = 'FUTURE';
-                                                                } else if ((j + 7) === todayIndex) {
-                                                                    const currentHour = new Date().getHours();
-                                                                    if (currentHour < 21) {
-                                                                        status = 'SELLING';
+                                                                let status = 'FINISHED';
+                                                                if (weekOffset === 0 && todayIndex !== -1) {
+                                                                    if ((j + 7) > todayIndex) {
+                                                                        status = 'FUTURE';
+                                                                    } else if ((j + 7) === todayIndex) {
+                                                                        const currentHour = new Date().getHours();
+                                                                        if (currentHour < 21) {
+                                                                            status = 'SELLING';
+                                                                        }
                                                                     }
                                                                 }
-                                                            }
 
-                                                            let percent = 0;
-                                                            const diff = wk2 - wk1;
-                                                            if (wk1 === 0) {
-                                                                percent = wk2 > 0 ? 100 : 0;
-                                                            } else {
-                                                                percent = (diff / wk1) * 100;
-                                                            }
-                                                            const isPos = percent >= 0;
+                                                                let percent = 0;
+                                                                const diff = wk2 - wk1;
+                                                                if (wk1 === 0) {
+                                                                    percent = wk2 > 0 ? 100 : 0;
+                                                                } else {
+                                                                    percent = (diff / wk1) * 100;
+                                                                }
+                                                                const isPos = percent >= 0;
 
-                                                            const dayNamesLao = ['ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ', 'ອາທິດ'];
+                                                                const dayNamesLao = ['ຈັນ', 'ອັງຄານ', 'ພຸດ', 'ພະຫັດ', 'ສຸກ', 'ເສົາ', 'ອາທິດ'];
 
-                                                            return (
-                                                                <div key={j} className="min-w-[130px] sm:min-w-0 shrink-0 snap-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
-                                                                    <span className="text-[9px] font-black text-slate-400 tracking-wider">ທຽບວັນ{dayNamesLao[j]}</span>
-                                                                    {status === 'FINISHED' ? (
-                                                                        <div className="flex flex-col items-center gap-0.5">
-                                                                            <span className={`text-[11px] font-black ${isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                                                {isPos ? '+' : ''}{formatNumber(diff)}
-                                                                            </span>
-                                                                            <div className={`px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 ${isPos ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
-                                                                                {isPos ? <TrendingUp size={10} /> : <TrendingUp size={10} className="rotate-180" />}
-                                                                                {isPos ? '+' : ''}{percent.toFixed(1)}%
+                                                                return (
+                                                                    <div key={j} className="min-w-[130px] sm:min-w-0 shrink-0 snap-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                                                                        <span className="text-[9px] font-black text-slate-400 tracking-wider">ທຽບວັນ{dayNamesLao[j]}</span>
+                                                                        {status === 'FINISHED' ? (
+                                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                                <span className={`text-[11px] font-black ${isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                                    {isPos ? '+' : ''}{formatNumber(diff)}
+                                                                                </span>
+                                                                                <div className={`px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 ${isPos ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                                                                                    {isPos ? <TrendingUp size={10} /> : <TrendingUp size={10} className="rotate-180" />}
+                                                                                    {isPos ? '+' : ''}{percent.toFixed(1)}%
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    ) : status === 'SELLING' ? (
-                                                                        <span className="text-[10px] font-bold text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-md animate-pulse">ກຳລັງຂາຍ...</span>
-                                                                    ) : (
-                                                                        <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded-md">NULL</span>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
+                                                                        ) : status === 'SELLING' ? (
+                                                                            <span className="text-[10px] font-bold text-joah-orange bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-md animate-pulse">ກຳລັງຂາຍ...</span>
+                                                                        ) : (
+                                                                            <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded-md">NULL</span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
                                                 </div>
                                             );

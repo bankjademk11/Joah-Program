@@ -10,8 +10,9 @@ const MEGAMALL_ALL_RACKS = (() => {
             for (let l = 1; l <= 4; l++) { all.push(`MSA${String(r).padStart(2, '0')}-${s}-${l}`); }
         }
     }
-    // MSW01-31 (Section 1-4, Level 1-4)
+    // MSW01-31 (Section 1-4, Level 1-4) (Excluding MSW27-29)
     for (let r = 1; r <= 31; r++) {
+        if (r >= 27 && r <= 29) continue; // Skip MSW27, MSW28, MSW29
         for (let s = 1; s <= 4; s++) {
             for (let l = 1; l <= 4; l++) { all.push(`MSW${String(r).padStart(2, '0')}-${s}-${l}`); }
         }

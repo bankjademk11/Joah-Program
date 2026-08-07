@@ -5,6 +5,7 @@ import StoreIcon from '../../assets/Icons_AppJoah/Storeicon.png';
 import RequestIcon from '../../assets/Icons_AppJoah/Requesticon.png';
 import HQIcon from '../../assets/Icons_AppJoah/HQicon.png';
 import SaleViewIcon from '../../assets/Icons_AppJoah/SaleView.png';
+import CheckPriceIcon from '../../assets/Icons_AppJoah/checkpirce.webp';
 import BgImage from '../../assets/Icons_AppJoah/web_background.jpg';
 
 const apps = [
@@ -49,6 +50,12 @@ const apps = [
         name: 'ນັບສິນຄ້າ ສາງລັກ 8',
         icon: InventoryIcon,
         step: 'stock-count-lak8'
+    },
+    {
+        id: 'check-price',
+        name: 'ກວດສອບລາຄາ (Check Price)',
+        icon: CheckPriceIcon,
+        step: 'check-price'
     }
 ];
 
