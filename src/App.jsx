@@ -172,16 +172,22 @@ function AppContent() {
 
     if (storedId && storedName) {
       const branch = storedBranch || 'ຕະຫຼາດລາວ';
-      setUser({
+      const currentUserObj = {
         id: storedId,
         name: storedName,
         role: storedRole || 'staff',
         workplace: storedWorkplace || 'front',
         branch_id: branch
-      });
+      };
+      setUser(currentUserObj);
       setImportBranch(branch);
-      setAdminViewBranch(branch); // <--- Bug Fix: Set initial view branch for HQ
+      setAdminViewBranch(branch);
       setIsLoggedIn(true);
+
+      const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+      if (storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase())) {
+        setStep('check-price');
+      }
     }
   }, []);
 
@@ -255,9 +261,24 @@ function AppContent() {
     setUser(userInfo);
     const loginBranch = userInfo.branch_id || 'ຕະຫຼາດລາວ';
     setImportBranch(loginBranch);
-    setAdminViewBranch(loginBranch); // <--- Bug Fix: Set initial view branch for HQ
+    setAdminViewBranch(loginBranch);
     setIsLoggedIn(true);
+
+    const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+    if (userInfo.role === 'cashier' || (userInfo.id && CASHIER_EMPLOYEE_IDS.includes(String(userInfo.id).toUpperCase()))) {
+      setStep('check-price');
+    }
   };
+
+  // 🔒 Lock Cashier users to Check Price Terminal
+  useEffect(() => {
+    const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+    const isCashier = user?.role === 'cashier' || 
+      (user?.id && CASHIER_EMPLOYEE_IDS.includes(String(user.id).toUpperCase()));
+    if (isLoggedIn && isCashier && step !== 'check-price') {
+      setStep('check-price');
+    }
+  }, [isLoggedIn, user, step]);
 
 
 
@@ -907,6 +928,7 @@ function AppContent() {
           isOpen={showAppLauncher} 
           onClose={() => setShowAppLauncher(false)} 
           onNavigate={(newStep) => setStep(newStep)} 
+          user={user}
         />
 
         {/* Main Content */}

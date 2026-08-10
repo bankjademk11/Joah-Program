@@ -59,12 +59,22 @@ const apps = [
     }
 ];
 
-const AppLauncher = ({ isOpen, onClose, onNavigate }) => {
+const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+
+const AppLauncher = ({ isOpen, onClose, onNavigate, user }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     if (!isOpen) return null;
 
-    const filteredApps = apps.filter(app => 
+    const isCashier = user?.role === 'cashier' || 
+        (user?.id && CASHIER_EMPLOYEE_IDS.includes(String(user.id).toUpperCase()));
+
+    // Cashiers only see Price Checker Terminal
+    const availableApps = isCashier 
+        ? apps.filter(app => app.id === 'check-price')
+        : apps;
+
+    const filteredApps = availableApps.filter(app => 
         app.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
