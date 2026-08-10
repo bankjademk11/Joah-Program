@@ -25,8 +25,8 @@ const MEGAMALL_ALL_RACKS = (() => {
     for (let r = 1; r <= 30; r++) {
         for (let l = 1; l <= 3; l++) { all.push(`MSC${String(r).padStart(2, '0')}-${l}`); }
     }
-    // MSD01-20 (Section 1-4, Level 1-4)
-    for (let r = 1; r <= 20; r++) {
+    // MSD01-24 (Section 1-4, Level 1-4)
+    for (let r = 1; r <= 24; r++) {
         for (let s = 1; s <= 4; s++) {
             for (let l = 1; l <= 4; l++) { all.push(`MSD${String(r).padStart(2, '0')}-${s}-${l}`); }
         }

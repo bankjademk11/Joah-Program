@@ -171,6 +171,21 @@ function AppContent() {
     const storedBranch = localStorage.getItem('joah_branch_id');
 
     if (storedId && storedName) {
+      const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+      const isCashier = storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase());
+
+      // 🔒 Cashier security: Do NOT auto-login on refresh. Force login prompt.
+      if (isCashier) {
+        localStorage.removeItem('joah_employee_id');
+        localStorage.removeItem('joah_employee_name');
+        localStorage.removeItem('joah_employee_role');
+        localStorage.removeItem('joah_employee_workplace');
+        localStorage.removeItem('joah_branch_id');
+        setIsLoggedIn(false);
+        setUser(null);
+        return;
+      }
+
       const branch = storedBranch || 'ຕະຫຼາດລາວ';
       const currentUserObj = {
         id: storedId,
@@ -183,11 +198,6 @@ function AppContent() {
       setImportBranch(branch);
       setAdminViewBranch(branch);
       setIsLoggedIn(true);
-
-      const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
-      if (storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase())) {
-        setStep('check-price');
-      }
     }
   }, []);
 
