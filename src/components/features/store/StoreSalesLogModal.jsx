@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../../utils/supabaseClient';
-import { X, Search, Download, PackageSearch, Loader2, BarChart3, Table2, TrendingUp, TrendingDown, Minus, Filter, Calendar } from 'lucide-react';
+import { X, Search, Download, PackageSearch, Loader2, BarChart3, Table2, TrendingUp, TrendingDown, Minus, Filter, Calendar, Trophy } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import {
     ResponsiveContainer,
     LineChart, Line,
@@ -194,23 +196,173 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
         }
     };
 
-    const exportToExcel = () => {
+    const exportToExcel = async () => {
         if (logs.length === 0) return;
 
-        const exportData = logs.map(log => ({
-            'ວັນທີ-ເວລາ (Date)': log.odoo_sync_logs?.sync_completed_at ? new Date(log.odoo_sync_logs.sync_completed_at).toLocaleString('lo-LA') : '',
-            'ບາໂຄດ (Barcode)': log.barcode_no,
-            'ຊື່ສິນຄ້າ (Item Name)': log.item_name,
-            'ຈຳນວນທີ່ຂາຍ (Sold Qty)': log.qty_sold,
-            'ສະຕັອກກ່ອນຫັກ (Old Qty)': log.old_store_qty,
-            'ສະຕັອກຫຼັງຫັກ (New Qty)': log.new_store_qty,
-            'ສະຖານະ (Status)': log.status
-        }));
+        const workbook = new ExcelJS.Workbook();
+        const ws = workbook.addWorksheet('Sales Deduct Logs');
 
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Sales_Deduct_Logs');
-        XLSX.writeFile(workbook, `Sales_Deduct_Log_${branchId}_${new Date().getTime()}.xlsx`);
+        const fontLao = { name: 'Phetsarath OT', size: 11 };
+        const fontHeader = { name: 'Phetsarath OT', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        const thinBorder = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+
+        ws.columns = [
+            { header: 'ວັນທີ-ເວລາ (Date-Time)', key: 'date', width: 22 },
+            { header: 'ບາໂຄດ (Barcode)', key: 'barcode', width: 18 },
+            { header: 'ຊື່ສິນຄ້າ (Item Name)', key: 'itemName', width: 45 },
+            { header: 'ຈຳນວນທີ່ຂາຍ (Qty Sold)', key: 'qtySold', width: 18 },
+            { header: 'ສະຕັອກກ່ອນຫັກ (Old Qty)', key: 'oldQty', width: 18 },
+            { header: 'ສະຕັອກຫຼັງຫັກ (New Qty)', key: 'newQty', width: 18 },
+            { header: 'ສະຖານະ (Status)', key: 'status', width: 14 }
+        ];
+
+        // Format Header Row
+        const headerRow = ws.getRow(1);
+        headerRow.height = 30;
+        headerRow.eachCell((cell) => {
+            cell.font = fontHeader;
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0369A1' } }; // Sky 700
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = thinBorder;
+        });
+
+        // Add Data Rows
+        logs.forEach(log => {
+            const row = ws.addRow({
+                date: log.odoo_sync_logs?.sync_completed_at ? new Date(log.odoo_sync_logs.sync_completed_at).toLocaleString('lo-LA') : '',
+                barcode: log.barcode_no,
+                itemName: log.item_name,
+                qtySold: Number(log.qty_sold) || 0,
+                oldQty: Number(log.old_store_qty) || 0,
+                newQty: Number(log.new_store_qty) || 0,
+                status: log.status || 'OK'
+            });
+
+            row.eachCell((cell, colNumber) => {
+                cell.font = fontLao;
+                cell.border = thinBorder;
+                if (colNumber === 4 || colNumber === 5 || colNumber === 6) {
+                    cell.alignment = { horizontal: 'right' };
+                } else if (colNumber === 1 || colNumber === 2 || colNumber === 7) {
+                    cell.alignment = { horizontal: 'center' };
+                } else {
+                    cell.alignment = { horizontal: 'left' };
+                }
+            });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveAs(blob, `Sales_Deduct_Log_${branchId}_${new Date().getTime()}.xlsx`);
+    };
+
+    const exportTop250ToExcel = async () => {
+        if (top250Items.length === 0) return;
+
+        const workbook = new ExcelJS.Workbook();
+        const ws = workbook.addWorksheet('Top 250 Best Sellers');
+
+        const fontLao = { name: 'Phetsarath OT', size: 11 };
+        const fontHeader = { name: 'Phetsarath OT', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        const thinBorder = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+
+        ws.columns = [
+            { header: 'ລຳດັບ (#)', key: 'rank', width: 10 },
+            { header: 'ບາໂຄດ (Barcode)', key: 'barcode', width: 20 },
+            { header: 'ຊື່ສິນຄ້າ (Product Name)', key: 'name', width: 50 },
+            { header: 'ຈຳນວນຂາຍລວມ (Total Sold Qty)', key: 'qty', width: 22 },
+            { header: 'ສັດສ່ວນ % (% Share)', key: 'pct', width: 16 }
+        ];
+
+        // Format Header Row (Amber Gold ERP Header)
+        const headerRow = ws.getRow(1);
+        headerRow.height = 32;
+        headerRow.eachCell((cell) => {
+            cell.font = fontHeader;
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD97706' } }; // Amber 600
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = thinBorder;
+        });
+
+        // Add Data Rows
+        top250Items.forEach(item => {
+            const row = ws.addRow({
+                rank: item.rank,
+                barcode: item.barcode,
+                name: item.name,
+                qty: item.qty,
+                pct: `${item.pct}%`
+            });
+
+            row.eachCell((cell, colNumber) => {
+                cell.font = fontLao;
+                cell.border = thinBorder;
+
+                // Rank & Barcode alignment
+                if (colNumber === 1 || colNumber === 2) {
+                    cell.alignment = { horizontal: 'center' };
+                } else if (colNumber === 4 || colNumber === 5) {
+                    cell.alignment = { horizontal: 'right' };
+                } else {
+                    cell.alignment = { horizontal: 'left' };
+                }
+
+                // Highlight Top 3
+                if (item.rank === 1) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }; // Gold light
+                    cell.font = { name: 'Phetsarath OT', size: 11, bold: true, color: { argb: 'FF92400E' } };
+                } else if (item.rank === 2) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; // Silver light
+                    cell.font = { name: 'Phetsarath OT', size: 11, bold: true };
+                } else if (item.rank === 3) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }; // Bronze light
+                    cell.font = { name: 'Phetsarath OT', size: 11, bold: true };
+                }
+            });
+        });
+
+        // Add Total / Summary Row
+        const totalQtySum = top250Items.reduce((sum, item) => sum + item.qty, 0);
+        const summaryRow = ws.addRow({
+            rank: 'ລວມ',
+            barcode: '-',
+            name: `ລວມຈຳນວນຂາຍ Top ${top250Items.length} ລາຍການທັງໝົດ`,
+            qty: totalQtySum,
+            pct: '100%'
+        });
+
+        summaryRow.height = 26;
+        summaryRow.eachCell((cell, colNumber) => {
+            cell.font = { name: 'Phetsarath OT', size: 12, bold: true, color: { argb: 'FF92400E' } }; // Amber 800
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }; // Amber 100
+            cell.border = {
+                top: { style: 'medium', color: { argb: 'FFD97706' } },
+                bottom: { style: 'double', color: { argb: 'FFD97706' } },
+                left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+            };
+            if (colNumber === 1 || colNumber === 2) {
+                cell.alignment = { horizontal: 'center' };
+            } else if (colNumber === 4 || colNumber === 5) {
+                cell.alignment = { horizontal: 'right' };
+            } else {
+                cell.alignment = { horizontal: 'left' };
+            }
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveAs(blob, `Top250_Best_Sellers_${branchId}_${new Date().getTime()}.xlsx`);
     };
 
     const splitProduct = (productStr) => {
@@ -291,6 +443,39 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
             }))
             .reverse();
     }, [logs]);
+
+    const top250Items = useMemo(() => {
+        const byItem = {};
+        const globalTotalQty = stats.totalQty || 1;
+
+        logs.forEach(log => {
+            const { barcode: parsedBarcode, name } = splitProduct(log.item_name);
+            const rawBarcode = (log.barcode_no && log.barcode_no !== '-') ? log.barcode_no.trim() : (parsedBarcode || '-');
+            const cleanName = name || 'ບໍ່ລະບຸ';
+            // Group by barcode if valid, else by product name
+            const key = (rawBarcode && rawBarcode !== '-') ? rawBarcode : cleanName;
+
+            if (!byItem[key]) {
+                byItem[key] = { barcode: rawBarcode, name: cleanName, qty: 0, txCount: 0 };
+            } else if (byItem[key].name === 'ບໍ່ລະບຸ' && cleanName !== 'ບໍ່ລະບຸ') {
+                byItem[key].name = cleanName;
+            }
+            byItem[key].qty += Number(log.qty_sold) || 0;
+            byItem[key].txCount += 1;
+        });
+
+        const sorted = Object.values(byItem).sort((a, b) => b.qty - a.qty).slice(0, 250);
+        const maxQty = sorted[0]?.qty || 1;
+        const totalTop250Qty = sorted.reduce((s, i) => s + i.qty, 0);
+
+        return sorted.map((item, idx) => ({
+            ...item,
+            rank: idx + 1,
+            pct: totalTop250Qty > 0 ? ((item.qty / totalTop250Qty) * 100).toFixed(1) : '0.0',
+            globalPct: globalTotalQty > 0 ? ((item.qty / globalTotalQty) * 100).toFixed(1) : '0.0',
+            barPct: Math.round((item.qty / maxQty) * 100),
+        }));
+    }, [logs, stats.totalQty]);
 
     const activeFilterDisplay = useMemo(() => {
         if (filterType === 'latest') {
@@ -392,14 +577,30 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
                         >
                             <BarChart3 size={18} /> <span className="hidden sm:inline">ວິເຄາະຂໍ້ມູນ</span>
                         </button>
+                        <button
+                            onClick={() => setViewMode('top250')}
+                            className={`jsl-focus flex items-center gap-2 px-3.5 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'top250'
+                                ? 'bg-amber-500 text-white shadow-sm border border-amber-400'
+                                : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            aria-pressed={viewMode === 'top250'}
+                        >
+                            <Trophy size={18} /> <span className="hidden sm:inline">Top 250</span>
+                        </button>
                     </div>
 
                     <button
-                        onClick={exportToExcel}
-                        disabled={logs.length === 0}
-                        className="jsl-focus flex items-center gap-2 px-4 py-2.5 bg-sky-700 hover:bg-sky-800 active:bg-sky-900 border border-sky-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-white transition-colors shadow-sm shrink-0"
+                        onClick={viewMode === 'top250' ? exportTop250ToExcel : exportToExcel}
+                        disabled={viewMode === 'top250' ? top250Items.length === 0 : logs.length === 0}
+                        className={`jsl-focus flex items-center gap-2 px-4 py-2.5 border disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-white transition-colors shadow-sm shrink-0 ${viewMode === 'top250'
+                                ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 border-amber-700'
+                                : 'bg-sky-700 hover:bg-sky-800 active:bg-sky-900 border-sky-800'
+                            }`}
                     >
-                        <Download size={18} /> <span className="hidden sm:inline">Export Excel</span>
+                        <Download size={18} />
+                        <span className="hidden sm:inline">
+                            {viewMode === 'top250' ? 'Export Top 250 Excel' : 'Export Excel'}
+                        </span>
                     </button>
                 </div>
             </div>
@@ -430,14 +631,173 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
                             {stats.uniqueItems.toLocaleString()}
                         </div>
                     </div>
-                    <div className="bg-white px-5 py-4 rounded-xl border border-slate-300 shadow-sm flex flex-col justify-between h-full">
-                        <div className="text-sm font-bold text-slate-600 uppercase tracking-wider">ຊ່ວງເວລາທີ່ຄົ້ນຫາ</div>
-                        <div className="text-[13px] font-bold text-slate-900 mt-2 leading-relaxed" style={{ fontFamily: MONO_STACK }}>
-                            {loading ? 'ກຳລັງໂຫຼດ...' : activeFilterDisplay}
+                    <div
+                        onClick={() => {
+                            if (!showFilterPanel) {
+                                setTempFilterType(filterType === 'latest' ? 'custom' : filterType);
+                                setTempStartDate(startDate);
+                                setTempStartTime(startTime);
+                                setTempEndDate(endDate);
+                                setTempEndTime(endTime);
+                            }
+                            setShowFilterPanel(true);
+                        }}
+                        className="bg-white px-5 py-4 rounded-xl border border-slate-300 shadow-sm flex flex-col justify-between h-full cursor-pointer hover:border-sky-500 hover:shadow-md transition-all group"
+                        title="ກົດເພື່ອເລືອກຊ່ວງວັນທີ-ເວລາ"
+                    >
+                        <div className="flex items-center justify-between text-sm font-bold text-slate-600 uppercase tracking-wider">
+                            <span>ຊ່ວງເວລາທີ່ຄົ້ນຫາ</span>
+                            <Calendar size={16} className="text-slate-400 group-hover:text-sky-600 transition-colors" />
+                        </div>
+                        <div className="text-[13px] font-bold text-slate-900 mt-2 leading-relaxed flex items-center justify-between gap-1" style={{ fontFamily: MONO_STACK }}>
+                            <span className="truncate">{loading ? 'ກຳລັງໂຫຼດ...' : activeFilterDisplay}</span>
+                            <span className="text-xs text-sky-600 font-bold shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">ເລືອກ ➔</span>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Collapsible Filter Panel — Available for all view modes */}
+                {showFilterPanel && (
+                    <div className="max-w-7xl mx-auto mt-4 p-5 bg-white border border-sky-300 rounded-xl shadow-md transition-all duration-200">
+                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-200">
+                            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                                <Calendar size={18} className="text-sky-600" />
+                                ກຳນົດຊ່ວງເວລາທີ່ຕ້ອງການດຶງຂໍ້ມູນ (Select Date & Time Range)
+                            </h3>
+                            <button
+                                onClick={() => setShowFilterPanel(false)}
+                                className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Column 1: Presets */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">ຮູບແບບການກັ່ນຕອງ</label>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTempFilterType('latest')}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'latest'
+                                                ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                                                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                                            }`}
+                                    >
+                                        ⭐ ຊິງຄ໌ລ່າສຸດ (Latest Sync)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTempFilterType('all')}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'all'
+                                                ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                                                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                                            }`}
+                                    >
+                                        📅 ປະຫວັດທັງໝົດ (All History)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTempFilterType('custom')}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'custom'
+                                                ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                                                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                                            }`}
+                                    >
+                                        ⏱️ ກຳນົດຊ່ວງເວລາ (Custom Range)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Column 2: Start Date & Time */}
+                            <div className={`space-y-4 transition-opacity duration-200 ${tempFilterType === 'custom' ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                        <Calendar size={14} /> ເລີ່ມວັນທີ (From Date)
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={tempStartDate}
+                                        onChange={(e) => setTempStartDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ເລີ່ມເວລາ (From Time)</label>
+                                    <input
+                                        type="time"
+                                        value={tempStartTime}
+                                        onChange={(e) => setTempStartTime(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Column 3: End Date & Time */}
+                            <div className={`space-y-4 transition-opacity duration-200 ${tempFilterType === 'custom' ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                        <Calendar size={14} /> ສິ້ນສຸດວັນທີ (To Date)
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={tempEndDate}
+                                        onChange={(e) => setTempEndDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ສິ້ນສຸດເວລາ (To Time)</label>
+                                    <input
+                                        type="time"
+                                        value={tempEndTime}
+                                        onChange={(e) => setTempEndTime(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTempFilterType('latest');
+                                    setTempStartDate(new Date().toLocaleDateString('en-CA'));
+                                    setTempStartTime('00:00');
+                                    setTempEndDate(new Date().toLocaleDateString('en-CA'));
+                                    setTempEndTime('23:59');
+
+                                    setFilterType('latest');
+                                    setStartDate(new Date().toLocaleDateString('en-CA'));
+                                    setStartTime('00:00');
+                                    setEndDate(new Date().toLocaleDateString('en-CA'));
+                                    setEndTime('23:59');
+                                    setShowFilterPanel(false);
+                                }}
+                                className="px-4 py-2 hover:bg-slate-200 active:bg-slate-300 rounded-lg text-sm font-bold text-slate-600 transition-colors"
+                            >
+                                ລ້າງຄ່າ (Reset)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFilterType(tempFilterType);
+                                    setStartDate(tempStartDate);
+                                    setStartTime(tempStartTime);
+                                    setEndDate(tempEndDate);
+                                    setEndTime(tempEndTime);
+                                    setShowFilterPanel(false);
+                                }}
+                                className="px-5 py-2.5 bg-sky-700 hover:bg-sky-800 active:bg-sky-900 text-white rounded-lg text-sm font-bold transition-colors shadow-sm"
+                            >
+                                ດຶງຂໍ້ມູນ (Apply Filter)
+                            </button>
+                        </div>
+                    </div>
+                )}
 
             {/* Toolbar — Clean Search with comfortable touch target */}
             {viewMode === 'table' && (
@@ -491,135 +851,7 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
                         </button>
                     </div>
 
-                    {/* Collapsible Filter Panel */}
-                    {showFilterPanel && (
-                        <div className="max-w-7xl mx-auto mt-4 p-5 bg-slate-50 border border-slate-300 rounded-xl transition-all duration-200">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                {/* Column 1: Presets */}
-                                <div className="space-y-2">
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">ຮູບແບບການກັ່ນຕອງ</label>
-                                    <div className="flex flex-col gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setTempFilterType('latest')}
-                                            className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'latest'
-                                                    ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
-                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                                                }`}
-                                        >
-                                            ⭐ ຊິງຄ໌ລ່າສຸດ (Latest Sync)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setTempFilterType('all')}
-                                            className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'all'
-                                                    ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
-                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                                                }`}
-                                        >
-                                            📅 ປະຫວັດທັງໝົດ (All History)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setTempFilterType('custom')}
-                                            className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold transition-all border ${tempFilterType === 'custom'
-                                                    ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
-                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                                                }`}
-                                        >
-                                            ⏱️ ກຳນົດຊ່ວງເວລາ (Custom Range)
-                                        </button>
-                                    </div>
-                                </div>
 
-                                {/* Column 2: Start Date & Time */}
-                                <div className={`space-y-4 transition-opacity duration-200 ${tempFilterType === 'custom' ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                            <Calendar size={14} /> ເລີ່ມວັນທີ
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={tempStartDate}
-                                            onChange={(e) => setTempStartDate(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ເລີ່ມເວລາ</label>
-                                        <input
-                                            type="time"
-                                            value={tempStartTime}
-                                            onChange={(e) => setTempStartTime(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Column 3: End Date & Time */}
-                                <div className={`space-y-4 transition-opacity duration-200 ${tempFilterType === 'custom' ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                            <Calendar size={14} /> ສິ້ນສຸດວັນທີ
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={tempEndDate}
-                                            onChange={(e) => setTempEndDate(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ສິ້ນສຸດເວລາ</label>
-                                        <input
-                                            type="time"
-                                            value={tempEndTime}
-                                            onChange={(e) => setTempEndTime(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Footer Actions */}
-                            <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-300">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setTempFilterType('latest');
-                                        setTempStartDate(new Date().toLocaleDateString('en-CA'));
-                                        setTempStartTime('00:00');
-                                        setTempEndDate(new Date().toLocaleDateString('en-CA'));
-                                        setTempEndTime('23:59');
-
-                                        setFilterType('latest');
-                                        setStartDate(new Date().toLocaleDateString('en-CA'));
-                                        setStartTime('00:00');
-                                        setEndDate(new Date().toLocaleDateString('en-CA'));
-                                        setEndTime('23:59');
-                                        setShowFilterPanel(false);
-                                    }}
-                                    className="px-4 py-2 hover:bg-slate-200 active:bg-slate-300 rounded-lg text-sm font-bold text-slate-600 transition-colors"
-                                >
-                                    ລ້າງຄ່າ (Reset)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setFilterType(tempFilterType);
-                                        setStartDate(tempStartDate);
-                                        setStartTime(tempStartTime);
-                                        setEndDate(tempEndDate);
-                                        setEndTime(tempEndTime);
-                                        setShowFilterPanel(false);
-                                    }}
-                                    className="px-5 py-2.5 bg-sky-700 hover:bg-sky-800 active:bg-sky-900 text-white rounded-lg text-sm font-bold transition-colors shadow-sm"
-                                >
-                                    ດຶງຂໍ້ມູນ (Apply Filter)
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -706,6 +938,120 @@ export default function StoreSalesLogModal({ isOpen, onClose, branchId }) {
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
+                        </div>
+                    ) : viewMode === 'top250' ? (
+                        <div className="px-4 sm:px-8">
+                            {/* Top 250 Header */}
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                                    <Trophy size={22} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-extrabold text-slate-900">Top 250 ສິນຄ້າຂາຍດີ</h3>
+                                    <p className="text-sm font-medium text-slate-500">ລຳດັບສິນຄ້າທີ່ຂາຍອອກມາກທີ່ສຸດ ຈາກຂໍ່ມູນທີ່ໄດ້ເລືອກໄວ້</p>
+                                </div>
+                                <div className="ml-auto">
+                                    <span className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-bold text-sm">
+                                        {top250Items.length} ລາຍການ
+                                    </span>
+                                </div>
+                            </div>
+
+                            {top250Items.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center text-slate-500 gap-3 py-24">
+                                    <Trophy size={36} className="text-slate-300" />
+                                    <p className="font-bold text-slate-700">ຍັງບໍ່ມີຂໍ່ມູນ</p>
+                                </div>
+                            ) : (
+                                <div className="bg-white border border-slate-300 rounded-xl shadow-sm overflow-hidden">
+                                    <table className="w-full text-left border-collapse text-sm">
+                                        <thead className="bg-slate-100 sticky top-0 z-10 border-b-2 border-slate-300">
+                                            <tr>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600 w-14 text-center">#</th>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">Barcode</th>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">ຊື່ສິນຄ້າ</th>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600 text-right w-24">ຈຳນວນ</th>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600 text-right w-16">%</th>
+                                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wider text-slate-600 w-40 hidden sm:table-cell">ສັດສ່ວນ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-200">
+                                            {top250Items.map((item) => {
+                                                const rankColor =
+                                                    item.rank === 1 ? '#D97706' :
+                                                    item.rank === 2 ? '#6B7280' :
+                                                    item.rank === 3 ? '#92400E' :
+                                                    TOKENS.textMuted;
+                                                const rowBg =
+                                                    item.rank === 1 ? 'bg-amber-50/60' :
+                                                    item.rank === 2 ? 'bg-slate-50/60' :
+                                                    item.rank === 3 ? 'bg-orange-50/40' :
+                                                    item.rank % 2 === 0 ? 'bg-slate-50/30' : 'bg-white';
+                                                return (
+                                                    <tr key={item.barcode + item.name} className={`hover:bg-sky-50/50 transition-colors ${rowBg}`}>
+                                                        {/* Rank */}
+                                                        <td className="px-4 py-3 text-center">
+                                                            {item.rank <= 3 ? (
+                                                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-extrabold" style={{ backgroundColor: rankColor + '22', color: rankColor }}>
+                                                                    {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : '🥉'}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-sm font-bold tabular-nums" style={{ color: TOKENS.textMuted, fontFamily: MONO_STACK }}>{item.rank}</span>
+                                                            )}
+                                                        </td>
+                                                        {/* Barcode */}
+                                                        <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap" style={{ fontFamily: MONO_STACK, fontSize: 13 }}>
+                                                            {item.barcode}
+                                                        </td>
+                                                        {/* Name */}
+                                                        <td className="px-4 py-3 text-slate-900 font-semibold max-w-xs">
+                                                            <div className="truncate" title={item.name}>{item.name}</div>
+                                                        </td>
+                                                        {/* Qty */}
+                                                        <td className="px-4 py-3 text-right">
+                                                            <span className="font-extrabold tabular-nums text-base" style={{ fontFamily: MONO_STACK, color: TOKENS.amber }}>
+                                                                {item.qty.toLocaleString()}
+                                                            </span>
+                                                        </td>
+                                                        {/* % */}
+                                                        <td className="px-4 py-3 text-right">
+                                                            <span className="text-xs font-bold tabular-nums" style={{ fontFamily: MONO_STACK, color: TOKENS.textMuted }}>
+                                                                {item.pct}%
+                                                            </span>
+                                                        </td>
+                                                        {/* Bar */}
+                                                        <td className="px-4 py-3 hidden sm:table-cell">
+                                                            <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                                                <div
+                                                                    className="h-2.5 rounded-full transition-all duration-500"
+                                                                    style={{
+                                                                        width: `${item.barPct}%`,
+                                                                        backgroundColor: item.rank <= 3 ? rankColor : TOKENS.brand
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-amber-50/90 border-t-2 border-amber-300 font-bold text-slate-900">
+                                            <tr>
+                                                <td colSpan={3} className="px-4 py-3 text-right font-extrabold text-slate-800">
+                                                    ລວມຈຳນວນຂາຍ Top {top250Items.length} ທັງໝົດ (Total Qty):
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <span className="font-extrabold tabular-nums text-lg text-amber-700" style={{ fontFamily: MONO_STACK }}>
+                                                        {top250Items.reduce((sum, item) => sum + item.qty, 0).toLocaleString()}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs font-mono font-bold text-slate-600">100%</td>
+                                                <td className="hidden sm:table-cell"></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     ) : filteredLogs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-slate-600 gap-3 py-28 px-6 text-center">
