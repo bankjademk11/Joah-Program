@@ -32,6 +32,8 @@ import { supabase } from '../../../utils/supabaseClient';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import joahLogo from '../../../assets/Joah.jpeg';
+import technoHubLogo from '../../../assets/technohublogo.png';
 
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
@@ -52,6 +54,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(!localStorage.getItem('lak8_branch'));
+  const [selectedBrand, setSelectedBrand] = useState(localStorage.getItem('lak8_brand') || null); // null | 'joah' | 'technohub'
 
   // Event Log States
   const [events, setEvents] = useState([]);
@@ -153,6 +156,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       if (targetBranch) query = query.eq('branch', targetBranch);
       if (targetDate) query = query.eq('count_date', targetDate);
+
+      // 🏷️ Brand Filter: If joah, include 'joah' and null (legacy records); if technohub, match 'technohub'
+      const currentBrand = selectedBrand || 'joah';
+      if (currentBrand === 'technohub') {
+        query = query.eq('brand', 'technohub');
+      } else {
+        query = query.or('brand.eq.joah,brand.is.null');
+      }
 
       const { data, error } = await query.order('updated_at', { ascending: false });
 
@@ -677,7 +688,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         target_branch: selectedBranch,
         target_date: selectedDate,
         p_owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
-        p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null
+        p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null,
+        p_brand: selectedBrand || 'joah'
       });
 
       if (error) throw error;
@@ -1027,19 +1039,134 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     showToast({ type: 'success', title: 'ນຳເຂົ້າສຳເລັດ', message: `ນຳເຂົ້າຂໍ້ມູນຮຽບຮ້ອຍແລ້ວ` });
   };
 
+  // ─── Brand Selector (shown before setup modal if brand not yet chosen) ────
+  if (!selectedBrand) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 relative overflow-hidden">
+        {/* Animated background circles */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full bg-indigo-600/10 blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        </div>
+
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="absolute top-5 left-5 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={20} />
+          <span className="text-sm font-semibold">ກັບຄືນ</span>
+        </button>
+
+        {/* Header */}
+        <div className="relative z-10 text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-slate-300 text-xs font-bold tracking-widest uppercase mb-4">
+            <Package size={14} />
+            ນັບສິນຄ້າ Stock Count
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">ເລືອກປະເພດສິນຄ້າ</h1>
+          <p className="text-slate-400 text-base">ທ່ານຕ້ອງການນັບສິນຄ້າຂອງໃຜ?</p>
+        </div>
+
+        {/* Brand Cards */}
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+
+          {/* Joah Card */}
+          <button
+            onClick={() => {
+              localStorage.setItem('lak8_brand', 'joah');
+              setSelectedBrand('joah');
+            }}
+            className="group relative flex flex-col items-center justify-center gap-5 p-8 rounded-3xl bg-white/5 border-2 border-white/10 hover:border-orange-400/60 hover:bg-orange-500/10 transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:shadow-orange-500/20 cursor-pointer"
+          >
+            <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 group-hover:border-orange-400/50 transition-all duration-300">
+              <img src={joahLogo} alt="Joah" className="w-full h-full object-cover" />
+            </div>
+            <div className="text-center">
+              <p className="text-white text-xl font-black tracking-wide">JOAH</p>
+              <p className="text-slate-400 text-sm mt-1">Joy of a Home</p>
+            </div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-orange-500/20 border border-orange-400/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <ArrowLeft size={14} className="text-orange-400 rotate-180" />
+            </div>
+          </button>
+
+          {/* TechnoHub Card */}
+          <button
+            onClick={() => {
+              localStorage.setItem('lak8_brand', 'technohub');
+              setSelectedBrand('technohub');
+            }}
+            className="group relative flex flex-col items-center justify-center gap-5 p-8 rounded-3xl bg-white/5 border-2 border-white/10 hover:border-blue-400/60 hover:bg-blue-500/10 transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer"
+          >
+            <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 group-hover:border-blue-400/50 transition-all duration-300 bg-white flex items-center justify-center p-2">
+              <img src={technoHubLogo} alt="TechnoHub" className="w-full h-full object-contain" />
+            </div>
+            <div className="text-center">
+              <p className="text-white text-xl font-black tracking-wide">TECHNOHUB</p>
+              <p className="text-slate-400 text-sm mt-1">Technology Products</p>
+            </div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <ArrowLeft size={14} className="text-blue-400 rotate-180" />
+            </div>
+          </button>
+        </div>
+
+        <p className="relative z-10 mt-8 text-slate-600 text-xs">Stock Count System · Lak 8 Warehouse</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
       {/* SETUP MODAL (FIRST ENTRY) */}
       {showSetupModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+            {/* Top Brand Banner Header */}
+            <div className={`py-3 px-6 flex items-center justify-between border-b ${
+              selectedBrand === 'technohub'
+                ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white'
+                : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+            }`}>
+              <div className="flex items-center gap-2">
+                <img
+                  src={selectedBrand === 'technohub' ? technoHubLogo : joahLogo}
+                  alt={selectedBrand}
+                  className={`w-6 h-6 rounded-md object-contain ${selectedBrand === 'technohub' ? 'bg-white p-0.5' : ''}`}
+                />
+                <span className="text-xs font-black uppercase tracking-widest">
+                  {selectedBrand === 'technohub' ? 'TECHNOHUB TEMPLATE' : 'JOAH TEMPLATE'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('lak8_brand');
+                  setSelectedBrand(null);
+                }}
+                className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-2 cursor-pointer flex items-center gap-1"
+              >
+                ← ຍ້ອນກັບ
+              </button>
+            </div>
+
             <div className="p-8 space-y-6">
               <div className="text-center space-y-2">
-                <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Building2 size={40} />
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-sm ${
+                  selectedBrand === 'technohub'
+                    ? 'bg-sky-50 border-sky-100 text-sky-600'
+                    : 'bg-indigo-50 border-indigo-100 text-indigo-600'
+                }`}>
+                  {selectedBrand === 'technohub' ? (
+                    <img src={technoHubLogo} alt="TechnoHub" className="w-14 h-14 object-contain" />
+                  ) : (
+                    <Building2 size={40} />
+                  )}
                 </div>
-                <h2 className="text-2xl font-black text-slate-800">ເລີ່ມຕົ້ນການນັບສິນຄ້າ</h2>
-                <p className="text-slate-500 font-medium">ກະລຸນາເລືອກສາຂາ ແລະ ວັນທີທີ່ທ່ານຈະນັບ</p>
+                <h2 className="text-2xl font-black text-slate-800">
+                  {selectedBrand === 'technohub' ? 'ເລີ່ມຕົ້ນນັບສິນຄ້າ TechnoHub' : 'ເລີ່ມຕົ້ນການນັບສິນຄ້າ Joah'}
+                </h2>
+                <p className="text-slate-500 font-medium text-sm">ກະລຸນາເລືອກສາຂາ ແລະ ວັນທີທີ່ທ່ານຈະນັບ</p>
               </div>
 
               <div className="space-y-4">
@@ -1155,7 +1282,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               <button
                 onClick={handleConfirmSetup}
                 disabled={!selectedBranch || !selectedDate || (selectedBranch === 'LAK8' && !lak8OwnerBranch)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95"
+                className={`w-full text-white py-4 rounded-2xl font-black text-lg shadow-xl disabled:opacity-50 transition-all active:scale-95 cursor-pointer ${
+                  selectedBrand === 'technohub'
+                    ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200'
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                }`}
               >
                 ຢືນຢັນການເລີ່ມຕົ້ນ
               </button>
@@ -1228,7 +1359,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       )}
 
       {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg">
+      <header className={`sticky top-0 z-30 text-white shadow-lg transition-all duration-300 ${
+        selectedBrand === 'technohub'
+          ? 'bg-gradient-to-r from-slate-900 via-sky-900 to-blue-950 border-b border-sky-500/30'
+          : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600'
+      }`}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -1237,7 +1372,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               </button>
             )}
             <div>
-              <h1 className="text-2xl font-black tracking-tight">📦 Lak 8</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black tracking-tight">📦 Lak 8</h1>
+                {/* Brand badge with switch button */}
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('lak8_brand');
+                    setSelectedBrand(null);
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg border border-white/30 transition-all cursor-pointer"
+                  title="ຍ້ອນກັບ"
+                >
+                  {selectedBrand === 'joah' ? (
+                    <img src={joahLogo} alt="Joah" className="w-5 h-5 rounded object-cover" />
+                  ) : (
+                    <img src={technoHubLogo} alt="TechnoHub" className="w-5 h-5 rounded bg-white object-contain p-0.5" />
+                  )}
+                  <span className="text-[10px] font-bold uppercase">{selectedBrand === 'joah' ? 'Joah' : 'TechnoHub'}</span>
+                  <X size={10} className="opacity-60" />
+                </button>
+              </div>
               <div className="flex flex-wrap items-center gap-2 mt-0.5">
                 <span className="bg-white/20 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border border-white/20">
                   {selectedBranch || '...'}
