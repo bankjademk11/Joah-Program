@@ -141,18 +141,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [toast]);
 
   // ─── 1. FETCH REALTIME DATA FROM SUPABASE ─────────────────────────
-  const fetchLak8Stock = async (silent = false) => {
+  const fetchLak8Stock = async (silent = false, overrideBranch = null, overrideDate = null, overrideOwner = null) => {
     try {
       if (!silent) setIsLoading(true);
 
-      // Use filter values if in filter mode, otherwise use current session values
-      const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-      const targetDate = isFilterMode ? filterDate : selectedDate;
+      // Use override values (passed directly from handleConfirmSetup to avoid stale closure),
+      // or fall back to filter mode / current session state
+      const targetBranch = overrideBranch ?? (isFilterMode ? filterBranch : selectedBranch);
+      const targetDate   = overrideDate   ?? (isFilterMode ? filterDate   : selectedDate);
+      const targetOwner  = overrideOwner  ?? (isFilterMode ? null         : lak8OwnerBranch);
 
       let query = supabase.from('stock_count_lak8').select('*');
 
       if (targetBranch) query = query.eq('branch', targetBranch);
-      if (targetDate) query = query.eq('count_date', targetDate);
+      if (targetDate)   query = query.eq('count_date', targetDate);
+
+      // ✅ KEY FIX: filter by owner_branch when branch=LAK8
+      // Without this, selecting LAK8+VX would return ALL LAK8 rows (TLL, PTX, etc.)
+      if (targetBranch === 'LAK8' && targetOwner) {
+        query = query.eq('owner_branch', targetOwner);
+      }
 
       const { data, error } = await query.order('updated_at', { ascending: false });
 
@@ -421,7 +429,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       supabase.removeChannel(stockChannel);
       if (statusChannel) supabase.removeChannel(statusChannel);
     };
-  }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
+  }, [selectedBranch, selectedDate, lak8OwnerBranch, isFilterMode, filterBranch, filterDate]);
 
   const toggleSessionStatus = async () => {
     const isConfirm = window.confirm(
@@ -486,7 +494,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     setDocNos(validDocNos);
     
     setShowSetupModal(false);
-    fetchLak8Stock();
+    // ✅ Pass values directly — React setState is async so selectedBranch in closure is still the old value
+    fetchLak8Stock(false, selectedBranch, selectedDate, lak8OwnerBranch);
   };
 
   const handleLogoutSession = () => {
