@@ -9,7 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import notificationSound from '../../assets/notification_compact.mp3';
 
-const STORE_STEPS = ['store-inventory-mockup', 'store-request'];
+const STORE_STEPS = ['store-inventory-mockup', 'store-request', 'store-request-by-rack'];
 
 const Navbar = ({
     step,
@@ -92,7 +92,7 @@ const Navbar = ({
         const now = Date.now();
         const canPlaySound = now - lastSoundTimeRef.current > 10000; // 10s cooldown
 
-        if (['upload', 'results', 'store-inventory-mockup', 'store-request', 'hq-dashboard'].includes(step) &&
+        if (['upload', 'results', 'store-inventory-mockup', 'store-request', 'store-request-by-rack', 'hq-dashboard'].includes(step) &&
             !isFirstLoadRef.current &&
             shouldPlaySoundRef.current &&
             canPlaySound) {
@@ -125,21 +125,25 @@ const Navbar = ({
         try {
             const isHQ = currentUser?.role === 'HQ';
             const userBranch = currentUser?.branch_id;
+            const userName = currentUser?.name || 'Store Staff';
+            const userId = currentUser?.id;
 
             let query = supabase
                 .from('store_requests')
                 .select('*', { count: 'exact', head: true });
 
             if (isStoreMode) {
-                // Store pages: count accepted requests waiting for store confirmation for THIS user only
-                const requestByStr = currentUser?.id ? `${currentUser.name} (${currentUser.id})` : (currentUser?.name || 'Store Staff');
-                query = query.eq('status', 'accepted').is('store_confirmed_at', null).eq('request_by', requestByStr);
+                // Store pages: count accepted requests waiting for store confirmation for THIS user
+                query = query.eq('status', 'accepted').is('store_confirmed_at', null);
+
+                if (userId) {
+                    query = query.or(`request_by.ilike.%${userName}%,request_by.ilike.%${userId}%`);
+                } else {
+                    query = query.ilike('request_by', `%${userName}%`);
+                }
 
                 // Keep branch filter as a safety boundary
                 if (userBranch) query = query.eq('branch_id', userBranch);
-
-                // IGNORE legacy bills created before 14/5/2026
-                query = query.gte('created_at', '2026-05-14T00:00:00.000Z');
             } else {
                 // Inventory/HQ page: count pending requests
                 query = query.eq('status', 'pending');
@@ -290,20 +294,22 @@ const Navbar = ({
                     {/* === RIGHT: Actions Section === */}
                     <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4">
                         {/* Notifications */}
-                        {['results', 'store-inventory-mockup', 'store-request'].includes(step) && (
+                        {['results', 'store-inventory-mockup', 'store-request', 'store-request-by-rack'].includes(step) && (
                             <div
                                 className="relative group cursor-pointer"
                                 onClick={isStoreMode ? onOpenStoreInbox : onOpenRequests}
                                 title={isStoreMode ? 'ຂອງທີ່ສາງອະນຸມັດ · ລໍຖ້າຢືນຢັນ' : 'ຈັດການ Store Requests'}
                             >
-                                <div className={`p-2 sm:p-3 rounded-full transition-all ${isStoreMode
-                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40'
-                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400'
+                                <div className={`p-2 sm:p-3 rounded-full transition-all relative ${pendingCount > 0
+                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 ring-4 ring-emerald-500/30 animate-pulse'
+                                    : isStoreMode
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40'
+                                        : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400'
                                     }`}>
-                                    <Mail size={20} className="sm:w-6 sm:h-6" />
+                                    <Mail size={20} className={`sm:w-6 sm:h-6 ${pendingCount > 0 ? 'animate-bounce' : ''}`} />
                                 </div>
                                 {pendingCount > 0 && (
-                                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] sm:w-6 sm:h-6 text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-slate-950 animate-bounce ${isStoreMode ? 'bg-emerald-500' : 'bg-rose-500'
+                                    <div className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] sm:w-6 sm:h-6 text-white text-[10px] sm:text-[11px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-slate-950 shadow-md ${isStoreMode ? 'bg-emerald-600' : 'bg-rose-500'
                                         }`}>
                                         {pendingCount > 99 ? '99+' : pendingCount}
                                     </div>

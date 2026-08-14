@@ -274,18 +274,23 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
   const fetchPendingConfirmations = useCallback(async () => {
     setIsLoading(true);
     try {
-      const requestByStr = currentUser?.id
-        ? `${currentUser.name} (${currentUser.id})`
-        : (currentUser?.name || 'Store Staff');
+      const userName = currentUser?.name || 'Store Staff';
+      const userId = currentUser?.id;
 
         let query = supabase
           .from('store_requests')
           .select('*')
           .eq('status', 'accepted')
           .is('store_confirmed_at', null)
-          .eq('request_by', requestByStr)
           .gte('created_at', '2026-04-30T00:00:00.000Z')
           .order('created_at', { ascending: false });
+
+      // 🎯 Match request_by by name OR employee ID (handles "Name (ID)" and "Name (ID) [Rack: X]" formats)
+      if (userId) {
+        query = query.or(`request_by.ilike.%${userName}%,request_by.ilike.%${userId}%`);
+      } else {
+        query = query.ilike('request_by', `%${userName}%`);
+      }
 
       if (userBranch) query = query.eq('branch_id', userBranch);
 
@@ -414,58 +419,6 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
     } catch (err) {
       toast.error('ຜິດພາດ: ' + err.message);
       setConfirmingItem(null);
-    }
-  };
-
-  const handleReceiveAllBatch = async (batch) => {
-    if (!batch || !batch.items || batch.items.length === 0) return;
-    const confirmAll = window.confirm(`ທ່ານຕ້ອງການຮັບສິນຄ້າທັງໝົດ ${batch.items.length} ລາຍການ ໃນ Batch ນີ້ເຂົ້າສະຕັອກ ຫຼື ບໍ່?`);
-    if (!confirmAll) return;
-
-    setIsLoading(true);
-    try {
-      const updatedByStr = currentUser?.id
-        ? `${currentUser.name} (${currentUser.id})`
-        : (currentUser?.name || 'Store Staff');
-
-      let successCount = 0;
-
-      for (const item of batch.items) {
-        // Query existing record
-        let query = supabase
-          .from('store_inventory')
-          .select('*')
-          .eq('barcode_no', String(item.barcode).trim());
-
-        if (userBranch) query = query.eq('branch_id', userBranch);
-
-        const { data: existingItems } = await query;
-
-        if (existingItems && existingItems.length >= 1) {
-          const rec = existingItems[0];
-          const newQty = (rec.store_qty || 0) + (item.qty || 0);
-
-          await supabase
-            .from('store_inventory')
-            .update({
-              store_qty: newQty,
-              last_updated: new Date().toISOString(),
-              updated_by: updatedByStr
-            })
-            .eq('id', rec.id);
-
-          await markItemConfirmed(item.id);
-          removeItemFromUI(item.id, batch.batch_id);
-          successCount++;
-        }
-      }
-
-      fireConfetti(true);
-      toast.success(`ຮັບສິນຄ້າ ${successCount} ລາຍການ ເຂົ້າສະຕັອກໜ້າຮ້ານສຳເລັດ! 🎉`);
-    } catch (err) {
-      toast.error('ເກີດຂໍ້ຜິດພາດ: ' + err.message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -744,16 +697,6 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                       {/* Expanded: Per-SKU rows */}
                       {isExpanded && (
                         <div className="bg-slate-50/50 dark:bg-slate-900/50 p-2 sm:p-3 space-y-2">
-                          {filteredItems.length > 1 && (
-                            <button
-                              onClick={() => handleReceiveAllBatch(batch)}
-                              disabled={isLoading}
-                              className="w-full py-2.5 px-4 mb-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
-                            >
-                              <Sparkles size={15} />
-                              <span>⚡ ຮັບທັງໝົດໃນ Batch ນີ້ ({filteredItems.length} ລາຍການ)</span>
-                            </button>
-                          )}
                           {filteredItems.map(item => {
                             const isThisConfirming = confirmingItem === item.id;
                             return (
