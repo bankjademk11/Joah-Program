@@ -7,10 +7,13 @@ import ExcelJS from 'exceljs';
 import soundOK from '../../../assets/RequestOK.mp3';
 import soundError from '../../../assets/RequestEror.mp3';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal'; // Import shared component
+import StoreRequestByRack from './StoreRequestByRack';
+import { MapPin } from 'lucide-react';
 
 const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
 
     const { t } = useLanguage();
+    const [requestMode, setRequestMode] = useState('single'); // 'single' | 'rack'
     const [barcode, setBarcode] = useState('');
     const [product, setProduct] = useState(null);
     const [qty, setQty] = useState(1);
@@ -519,6 +522,16 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
         </div>
     );
 
+    if (requestMode === 'rack') {
+        return (
+            <StoreRequestByRack
+                onBack={() => setRequestMode('single')}
+                currentUser={currentUser}
+                activeBranch={activeBranch}
+            />
+        );
+    }
+
     return (
         <>
             {showScanner && (
@@ -529,22 +542,42 @@ const StoreRequest = ({ onBack, currentUser, activeBranch }) => {
             )}
 
             <div className="w-full max-w-6xl mx-auto p-3 sm:p-6 animate-fade-in-up">
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-4">
-                    <button onClick={onBack} className="p-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm border border-slate-100 dark:border-slate-700 flex-shrink-0">
-                        <ArrowLeft size={22} />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tight truncate">{t('storeRequest.title')}</h1>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('storeRequest.subtitle')}</p>
+                {/* Header & Mode Switcher */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack} className="p-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm border border-slate-100 dark:border-slate-700 flex-shrink-0">
+                            <ArrowLeft size={22} />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tight truncate">{t('storeRequest.title')}</h1>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('storeRequest.subtitle')}</p>
+                        </div>
                     </div>
-                    <div className="flex gap-2 md:hidden">
-                        {requestStats.pending > 0 && (
-                            <span className="px-3 py-1.5 bg-orange-100 text-orange-600 rounded-xl text-xs font-black">⏳ {requestStats.pending}</span>
-                        )}
-                        {requestStats.accepted > 0 && (
-                            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-600 rounded-xl text-xs font-black">✅ {requestStats.accepted}</span>
-                        )}
+
+                    {/* Mode Toggle Buttons: Single Barcode vs By Rack Location */}
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto shrink-0 gap-1">
+                        <button
+                            onClick={() => setRequestMode('single')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                                requestMode === 'single'
+                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                        >
+                            <ScanLine size={16} />
+                            <span>ຂໍເທື່ອລະຊິ້ນ (Barcode)</span>
+                        </button>
+                        <button
+                            onClick={() => setRequestMode('rack')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                                requestMode === 'rack'
+                                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                        >
+                            <MapPin size={16} />
+                            <span>ຂໍຕາມ Rack Location 📍</span>
+                        </button>
                     </div>
                 </div>
 

@@ -345,7 +345,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
   useEffect(() => {
     const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-    const targetDate   = isFilterMode ? filterDate   : selectedDate;
+    const targetDate = isFilterMode ? filterDate : selectedDate;
 
     if (!targetBranch || !targetDate) return;
 
@@ -436,8 +436,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
   const toggleSessionStatus = async () => {
     const isConfirm = window.confirm(
-      sessionStatus === 'completed' 
-        ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?' 
+      sessionStatus === 'completed'
+        ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?'
         : 'ທ່ານຕ້ອງການປ່ຽນສະຖານະເປັນ "ນັບສຳເລັດແລ້ວ" ແທ້ບໍ?'
     );
     if (!isConfirm) return;
@@ -490,12 +490,12 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     localStorage.setItem('lak8_date', selectedDate);
     localStorage.setItem('lak8_owner_branch', lak8OwnerBranch);
     localStorage.setItem('lak8_doc_nos', JSON.stringify(validDocNos));
-    
+
     const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
     const savedStatus = localStorage.getItem(statusKey) || 'in_progress';
     setSessionStatus(savedStatus);
     setDocNos(validDocNos);
-    
+
     setShowSetupModal(false);
     fetchLak8Stock();
   };
@@ -1124,11 +1124,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
             {/* Top Brand Banner Header */}
-            <div className={`py-3 px-6 flex items-center justify-between border-b ${
-              selectedBrand === 'technohub'
+            <div className={`py-3 px-6 flex items-center justify-between border-b ${selectedBrand === 'technohub'
                 ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white'
                 : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-            }`}>
+              }`}>
               <div className="flex items-center gap-2">
                 <img
                   src={selectedBrand === 'technohub' ? technoHubLogo : joahLogo}
@@ -1152,11 +1151,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
             <div className="p-8 space-y-6">
               <div className="text-center space-y-2">
-                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-sm ${
-                  selectedBrand === 'technohub'
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-sm ${selectedBrand === 'technohub'
                     ? 'bg-sky-50 border-sky-100 text-sky-600'
                     : 'bg-indigo-50 border-indigo-100 text-indigo-600'
-                }`}>
+                  }`}>
                   {selectedBrand === 'technohub' ? (
                     <img src={technoHubLogo} alt="TechnoHub" className="w-14 h-14 object-contain" />
                   ) : (
@@ -1223,7 +1221,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                           <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${hasDocNo ? 'translate-x-5' : ''}`}></span>
                         </button>
                       </div>
-                      
+
                       {hasDocNo && (
                         <div className="space-y-2 mt-2">
                           {docNos.map((doc, idx) => (
@@ -1282,11 +1280,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               <button
                 onClick={handleConfirmSetup}
                 disabled={!selectedBranch || !selectedDate || (selectedBranch === 'LAK8' && !lak8OwnerBranch)}
-                className={`w-full text-white py-4 rounded-2xl font-black text-lg shadow-xl disabled:opacity-50 transition-all active:scale-95 cursor-pointer ${
-                  selectedBrand === 'technohub'
+                className={`w-full text-white py-4 rounded-2xl font-black text-lg shadow-xl disabled:opacity-50 transition-all active:scale-95 cursor-pointer ${selectedBrand === 'technohub'
                     ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200'
                     : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
-                }`}
+                  }`}
               >
                 ຢືນຢັນການເລີ່ມຕົ້ນ
               </button>
@@ -1359,11 +1356,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       )}
 
       {/* HEADER */}
-      <header className={`sticky top-0 z-30 text-white shadow-lg transition-all duration-300 ${
-        selectedBrand === 'technohub'
+      <header className={`sticky top-0 z-30 text-white shadow-lg transition-all duration-300 ${selectedBrand === 'technohub'
           ? 'bg-gradient-to-r from-slate-900 via-sky-900 to-blue-950 border-b border-sky-500/30'
           : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600'
-      }`}>
+        }`}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -1373,7 +1369,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             )}
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight">📦 Lak 8</h1>
+                <h1 className="text-2xl font-black tracking-tight">📦DC TO STORE DELIVERY CHECK</h1>
                 {/* Brand badge with switch button */}
                 <button
                   onClick={() => {
@@ -1403,11 +1399,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 {/* Status Toggle Button */}
                 <button
                   onClick={toggleSessionStatus}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${
-                    sessionStatus === 'completed'
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${sessionStatus === 'completed'
                       ? 'bg-emerald-400 text-emerald-950 border border-emerald-300'
                       : 'bg-amber-400 text-amber-950 border border-amber-300'
-                  }`}
+                    }`}
                   title="ກົດເພື່ອປ່ຽນສະຖານະ"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${sessionStatus === 'completed' ? 'bg-emerald-950' : 'bg-amber-950 animate-ping'}`}></span>
@@ -1671,17 +1666,17 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-xs font-mono font-bold text-slate-400">{item.barcode}</p>
                       {item.branch === 'LAK8' && item.owner_branch && (
-                         <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
-                           👉 {item.owner_branch}
-                         </span>
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
+                          👉 {item.owner_branch}
+                        </span>
                       )}
                     </div>
                     {item.branch === 'LAK8' && item.doc_nos && item.doc_nos.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {item.doc_nos.map((doc, idx) => (
-                           <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
-                             {doc}
-                           </span>
+                          <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
+                            {doc}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -1756,11 +1751,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   <span className="font-bold text-slate-500 text-xs">ສະຖານະ (Status)</span>
                   <button
                     onClick={toggleSessionStatus}
-                    className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                      sessionStatus === 'completed'
+                    className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${sessionStatus === 'completed'
                         ? 'bg-emerald-500 text-white'
                         : 'bg-amber-500 text-white'
-                    }`}
+                      }`}
                   >
                     <span>{sessionStatus === 'completed' ? '✅ ນັບສຳເລັດແລ້ວ (Completed)' : '⏳ ກຳລັງນັບ... (In Progress)'}</span>
                   </button>

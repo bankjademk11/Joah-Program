@@ -1446,8 +1446,8 @@ function AppContent() {
                       📦
                     </div>
                     <div className="space-y-2 mb-2">
-                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ນັບສິນຄ້າ ສາງລັກ 8</h3>
-                      <p className="text-[10px] text-pink-500 font-black uppercase tracking-[0.2em]">Stock Count Lak 8</p>
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດການຈັດສົ່ງ DC ຫາຮ້ານ</h3>
+                      <p className="text-[10px] text-pink-500 font-black uppercase tracking-[0.15em]">DC TO STORE DELIVERY CHECK</p>
                     </div>
                     <button className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 shadow-pink-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20" onClick={(e) => { e.stopPropagation(); setStep('stock-count-lak8'); }}>
                       <Box size={18} />

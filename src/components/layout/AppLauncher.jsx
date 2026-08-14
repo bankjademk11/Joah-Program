@@ -47,7 +47,7 @@ const apps = [
     },
     {
         id: 'stock-count-lak8',
-        name: 'ນັບສິນຄ້າ ສາງລັກ 8',
+        name: 'ກວດການຈັດສົ່ງ DC ຫາຮ້ານ (DC Delivery Check)',
         icon: InventoryIcon,
         step: 'stock-count-lak8'
     },
