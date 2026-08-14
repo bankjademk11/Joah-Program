@@ -32,6 +32,8 @@ import { supabase } from '../../../utils/supabaseClient';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import joahLogo from '../../../assets/Joah.jpeg';
+import technoHubLogo from '../../../assets/technohublogo.png';
 
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
@@ -52,6 +54,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(!localStorage.getItem('lak8_branch'));
+  const [selectedBrand, setSelectedBrand] = useState(localStorage.getItem('lak8_brand') || null); // null | 'joah' | 'technohub'
 
   // Event Log States
   const [events, setEvents] = useState([]);
@@ -145,7 +148,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     try {
       if (!silent) setIsLoading(true);
 
-      // Use override values (passed directly from handleConfirmSetup to avoid stale closure),
+      // Use override values (passed from handleConfirmSetup to avoid stale closure),
       // or fall back to filter mode / current session state
       const targetBranch = overrideBranch ?? (isFilterMode ? filterBranch : selectedBranch);
       const targetDate   = overrideDate   ?? (isFilterMode ? filterDate   : selectedDate);
@@ -157,9 +160,17 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       if (targetDate)   query = query.eq('count_date', targetDate);
 
       // ✅ KEY FIX: filter by owner_branch when branch=LAK8
-      // Without this, selecting LAK8+VX would return ALL LAK8 rows (TLL, PTX, etc.)
+      // Without this, selecting LAK8+VX fetches ALL LAK8 rows (TLL, PTX, etc.)
       if (targetBranch === 'LAK8' && targetOwner) {
         query = query.eq('owner_branch', targetOwner);
+      }
+
+      // 🏷️ Brand Filter: If joah, include 'joah' and null (legacy records); if technohub, match 'technohub'
+      const currentBrand = selectedBrand || 'joah';
+      if (currentBrand === 'technohub') {
+        query = query.eq('brand', 'technohub');
+      } else {
+        query = query.or('brand.eq.joah,brand.is.null');
       }
 
       const { data, error } = await query.order('updated_at', { ascending: false });
@@ -342,7 +353,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
   useEffect(() => {
     const targetBranch = isFilterMode ? filterBranch : selectedBranch;
-    const targetDate   = isFilterMode ? filterDate   : selectedDate;
+    const targetDate = isFilterMode ? filterDate : selectedDate;
 
     if (!targetBranch || !targetDate) return;
 
@@ -429,12 +440,12 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       supabase.removeChannel(stockChannel);
       if (statusChannel) supabase.removeChannel(statusChannel);
     };
-  }, [selectedBranch, selectedDate, lak8OwnerBranch, isFilterMode, filterBranch, filterDate]);
+  }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
 
   const toggleSessionStatus = async () => {
     const isConfirm = window.confirm(
-      sessionStatus === 'completed' 
-        ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?' 
+      sessionStatus === 'completed'
+        ? 'ທ່ານຕ້ອງການປ່ຽນສະຖານະກັບມາເປັນ "ກຳລັງນັບ" ແທ້ບໍ?'
         : 'ທ່ານຕ້ອງການປ່ຽນສະຖານະເປັນ "ນັບສຳເລັດແລ້ວ" ແທ້ບໍ?'
     );
     if (!isConfirm) return;
@@ -487,14 +498,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     localStorage.setItem('lak8_date', selectedDate);
     localStorage.setItem('lak8_owner_branch', lak8OwnerBranch);
     localStorage.setItem('lak8_doc_nos', JSON.stringify(validDocNos));
-    
+
     const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
     const savedStatus = localStorage.getItem(statusKey) || 'in_progress';
     setSessionStatus(savedStatus);
     setDocNos(validDocNos);
-    
+
     setShowSetupModal(false);
-    // ✅ Pass values directly — React setState is async so selectedBranch in closure is still the old value
+    // ✅ Pass values directly — React setState is async so closure still has old values
     fetchLak8Stock(false, selectedBranch, selectedDate, lak8OwnerBranch);
   };
 
@@ -686,7 +697,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         target_branch: selectedBranch,
         target_date: selectedDate,
         p_owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
-        p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null
+        p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null,
+        p_brand: selectedBrand || 'joah'
       });
 
       if (error) throw error;
@@ -786,9 +798,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const docStr = docNos && docNos.length > 0 ? docNos.join(', ') : '-';
       const totalQty = items.reduce((acc, i) => acc + (Number(i.qty) || 0), 0);
 
+      // Determine Brand Display Name dynamically based on selectedBrand state
+      const brandName = selectedBrand === 'technohub' ? 'Techno Hub' : 'JOAH';
+      const brandPrefix = selectedBrand === 'technohub' ? 'TechnoHub' : 'JOAH';
+
       sheet1.mergeCells('A1:J1');
       const titleCell = sheet1.getCell('A1');
-      titleCell.value = `📦 ບົດລາຍງານການນັບສະຕັອກ LAK8 (Stock Count Report)`;
+      titleCell.value = `📦 ບົດລາຍງານການນັບສະຕັອກ ${brandName} (Stock Count Report ${brandName})`;
       titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FF1E293B' } };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -970,7 +986,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      saveAs(blob, `StockCount_Lak8_${selectedBranch}_${selectedDate}.xlsx`);
+      saveAs(blob, `StockCount_${brandPrefix}_${selectedBranch}_${selectedDate}.xlsx`);
 
       showToast({ type: 'success', title: 'ສົ່ງອອກສຳເລັດ! 📊', message: 'ໄຟລ໌ Excel ຖືກດາວໂຫຼດຮຽບຮ້ອຍແລ້ວ' });
     } catch (err) {
@@ -1036,19 +1052,132 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     showToast({ type: 'success', title: 'ນຳເຂົ້າສຳເລັດ', message: `ນຳເຂົ້າຂໍ້ມູນຮຽບຮ້ອຍແລ້ວ` });
   };
 
+  // ─── Brand Selector (shown before setup modal if brand not yet chosen) ────
+  if (!selectedBrand) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 relative overflow-hidden">
+        {/* Animated background circles */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full bg-indigo-600/10 blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        </div>
+
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="absolute top-5 left-5 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={20} />
+          <span className="text-sm font-semibold">ກັບຄືນ</span>
+        </button>
+
+        {/* Header */}
+        <div className="relative z-10 text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-slate-300 text-xs font-bold tracking-widest uppercase mb-4">
+            <Package size={14} />
+            ນັບສິນຄ້າ Stock Count
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">ເລືອກປະເພດສິນຄ້າ</h1>
+          <p className="text-slate-400 text-base">ທ່ານຕ້ອງການນັບສິນຄ້າຂອງໃຜ?</p>
+        </div>
+
+        {/* Brand Cards */}
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+
+          {/* Joah Card */}
+          <button
+            onClick={() => {
+              localStorage.setItem('lak8_brand', 'joah');
+              setSelectedBrand('joah');
+            }}
+            className="group relative flex flex-col items-center justify-center gap-5 p-8 rounded-3xl bg-white/5 border-2 border-white/10 hover:border-orange-400/60 hover:bg-orange-500/10 transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:shadow-orange-500/20 cursor-pointer"
+          >
+            <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 group-hover:border-orange-400/50 transition-all duration-300">
+              <img src={joahLogo} alt="Joah" className="w-full h-full object-cover" />
+            </div>
+            <div className="text-center">
+              <p className="text-white text-xl font-black tracking-wide">JOAH</p>
+              <p className="text-slate-400 text-sm mt-1">Joy of a Home</p>
+            </div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-orange-500/20 border border-orange-400/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <ArrowLeft size={14} className="text-orange-400 rotate-180" />
+            </div>
+          </button>
+
+          {/* TechnoHub Card */}
+          <button
+            onClick={() => {
+              localStorage.setItem('lak8_brand', 'technohub');
+              setSelectedBrand('technohub');
+            }}
+            className="group relative flex flex-col items-center justify-center gap-5 p-8 rounded-3xl bg-white/5 border-2 border-white/10 hover:border-blue-400/60 hover:bg-blue-500/10 transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer"
+          >
+            <div className="w-28 h-28 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 group-hover:border-blue-400/50 transition-all duration-300 bg-white flex items-center justify-center p-2">
+              <img src={technoHubLogo} alt="TechnoHub" className="w-full h-full object-contain" />
+            </div>
+            <div className="text-center">
+              <p className="text-white text-xl font-black tracking-wide">TECHNOHUB</p>
+              <p className="text-slate-400 text-sm mt-1">Technology Products</p>
+            </div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <ArrowLeft size={14} className="text-blue-400 rotate-180" />
+            </div>
+          </button>
+        </div>
+
+        <p className="relative z-10 mt-8 text-slate-600 text-xs">Stock Count System · Lak 8 Warehouse</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
       {/* SETUP MODAL (FIRST ENTRY) */}
       {showSetupModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+            {/* Top Brand Banner Header */}
+            <div className={`py-3 px-6 flex items-center justify-between border-b ${selectedBrand === 'technohub'
+                ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white'
+                : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+              }`}>
+              <div className="flex items-center gap-2">
+                <img
+                  src={selectedBrand === 'technohub' ? technoHubLogo : joahLogo}
+                  alt={selectedBrand}
+                  className={`w-6 h-6 rounded-md object-contain ${selectedBrand === 'technohub' ? 'bg-white p-0.5' : ''}`}
+                />
+                <span className="text-xs font-black uppercase tracking-widest">
+                  {selectedBrand === 'technohub' ? 'TECHNOHUB TEMPLATE' : 'JOAH TEMPLATE'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('lak8_brand');
+                  setSelectedBrand(null);
+                }}
+                className="text-xs font-bold text-white/80 hover:text-white underline underline-offset-2 cursor-pointer flex items-center gap-1"
+              >
+                ← ຍ້ອນກັບ
+              </button>
+            </div>
+
             <div className="p-8 space-y-6">
               <div className="text-center space-y-2">
-                <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Building2 size={40} />
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-sm ${selectedBrand === 'technohub'
+                    ? 'bg-sky-50 border-sky-100 text-sky-600'
+                    : 'bg-indigo-50 border-indigo-100 text-indigo-600'
+                  }`}>
+                  {selectedBrand === 'technohub' ? (
+                    <img src={technoHubLogo} alt="TechnoHub" className="w-14 h-14 object-contain" />
+                  ) : (
+                    <Building2 size={40} />
+                  )}
                 </div>
-                <h2 className="text-2xl font-black text-slate-800">ເລີ່ມຕົ້ນການນັບສິນຄ້າ</h2>
-                <p className="text-slate-500 font-medium">ກະລຸນາເລືອກສາຂາ ແລະ ວັນທີທີ່ທ່ານຈະນັບ</p>
+                <h2 className="text-2xl font-black text-slate-800">
+                  {selectedBrand === 'technohub' ? 'ເລີ່ມຕົ້ນນັບສິນຄ້າ TechnoHub' : 'ເລີ່ມຕົ້ນການນັບສິນຄ້າ Joah'}
+                </h2>
+                <p className="text-slate-500 font-medium text-sm">ກະລຸນາເລືອກສາຂາ ແລະ ວັນທີທີ່ທ່ານຈະນັບ</p>
               </div>
 
               <div className="space-y-4">
@@ -1105,7 +1234,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                           <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${hasDocNo ? 'translate-x-5' : ''}`}></span>
                         </button>
                       </div>
-                      
+
                       {hasDocNo && (
                         <div className="space-y-2 mt-2">
                           {docNos.map((doc, idx) => (
@@ -1164,7 +1293,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               <button
                 onClick={handleConfirmSetup}
                 disabled={!selectedBranch || !selectedDate || (selectedBranch === 'LAK8' && !lak8OwnerBranch)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95"
+                className={`w-full text-white py-4 rounded-2xl font-black text-lg shadow-xl disabled:opacity-50 transition-all active:scale-95 cursor-pointer ${selectedBrand === 'technohub'
+                    ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200'
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                  }`}
               >
                 ຢືນຢັນການເລີ່ມຕົ້ນ
               </button>
@@ -1237,7 +1369,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       )}
 
       {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg">
+      <header className={`sticky top-0 z-30 text-white shadow-lg transition-all duration-300 ${selectedBrand === 'technohub'
+          ? 'bg-gradient-to-r from-slate-900 via-sky-900 to-blue-950 border-b border-sky-500/30'
+          : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600'
+        }`}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -1246,7 +1381,26 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               </button>
             )}
             <div>
-              <h1 className="text-2xl font-black tracking-tight">📦 Lak 8</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black tracking-tight">📦DC TO STORE DELIVERY CHECK</h1>
+                {/* Brand badge with switch button */}
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('lak8_brand');
+                    setSelectedBrand(null);
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg border border-white/30 transition-all cursor-pointer"
+                  title="ຍ້ອນກັບ"
+                >
+                  {selectedBrand === 'joah' ? (
+                    <img src={joahLogo} alt="Joah" className="w-5 h-5 rounded object-cover" />
+                  ) : (
+                    <img src={technoHubLogo} alt="TechnoHub" className="w-5 h-5 rounded bg-white object-contain p-0.5" />
+                  )}
+                  <span className="text-[10px] font-bold uppercase">{selectedBrand === 'joah' ? 'Joah' : 'TechnoHub'}</span>
+                  <X size={10} className="opacity-60" />
+                </button>
+              </div>
               <div className="flex flex-wrap items-center gap-2 mt-0.5">
                 <span className="bg-white/20 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border border-white/20">
                   {selectedBranch || '...'}
@@ -1258,11 +1412,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 {/* Status Toggle Button */}
                 <button
                   onClick={toggleSessionStatus}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${
-                    sessionStatus === 'completed'
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${sessionStatus === 'completed'
                       ? 'bg-emerald-400 text-emerald-950 border border-emerald-300'
                       : 'bg-amber-400 text-amber-950 border border-amber-300'
-                  }`}
+                    }`}
                   title="ກົດເພື່ອປ່ຽນສະຖານະ"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${sessionStatus === 'completed' ? 'bg-emerald-950' : 'bg-amber-950 animate-ping'}`}></span>
@@ -1526,17 +1679,17 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-xs font-mono font-bold text-slate-400">{item.barcode}</p>
                       {item.branch === 'LAK8' && item.owner_branch && (
-                         <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
-                           👉 {item.owner_branch}
-                         </span>
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
+                          👉 {item.owner_branch}
+                        </span>
                       )}
                     </div>
                     {item.branch === 'LAK8' && item.doc_nos && item.doc_nos.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {item.doc_nos.map((doc, idx) => (
-                           <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
-                             {doc}
-                           </span>
+                          <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
+                            {doc}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -1611,11 +1764,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   <span className="font-bold text-slate-500 text-xs">ສະຖານະ (Status)</span>
                   <button
                     onClick={toggleSessionStatus}
-                    className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                      sessionStatus === 'completed'
+                    className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${sessionStatus === 'completed'
                         ? 'bg-emerald-500 text-white'
                         : 'bg-amber-500 text-white'
-                    }`}
+                      }`}
                   >
                     <span>{sessionStatus === 'completed' ? '✅ ນັບສຳເລັດແລ້ວ (Completed)' : '⏳ ກຳລັງນັບ... (In Progress)'}</span>
                   </button>
