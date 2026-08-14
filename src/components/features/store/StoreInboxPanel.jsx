@@ -431,9 +431,38 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
         ? `${currentUser.name} (${currentUser.id})`
         : (currentUser?.name || 'Store Staff');
 
-      const newQty = (existingRecord.store_qty || 0) + (item.qty || 0);
-      const now = Date.now();
+      const targetLocation = String(existingRecord.shelf_location || '').trim();
+      const targetBatch = batches.find(b => b.batch_id === batchId);
+      const batchItems = targetBatch?.items || [item];
 
+      // 🔍 Find ALL items in the same batch that belong to this same location
+      const matchingItemsToProcess = [];
+
+      for (const batchItem of batchItems) {
+        let query = supabase
+          .from('store_inventory')
+          .select('id, barcode_no, shelf_location, store_qty, item_name, product_tag, branch_id, max_qty')
+          .eq('barcode_no', String(batchItem.barcode).trim());
+
+        if (userBranch) query = query.eq('branch_id', userBranch);
+
+        const { data: invRecords } = await query;
+        const matchingRec = (invRecords || []).find(r => String(r.shelf_location || '').trim().toUpperCase() === targetLocation.toUpperCase());
+
+        if (matchingRec) {
+          matchingItemsToProcess.push({
+            batchItem,
+            existingRecord: matchingRec
+          });
+        }
+      }
+
+      // If no matching records found by location, fallback to current single item
+      if (matchingItemsToProcess.length === 0) {
+        matchingItemsToProcess.push({ batchItem: item, existingRecord });
+      }
+
+      const now = Date.now();
       const processTimeSeconds = locationModal.startTime
         ? Math.floor((now - locationModal.startTime) / 1000)
         : 0;
@@ -441,45 +470,50 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
       const batchTiming = batchTimings[batchId];
       const batchStartedAt = batchTiming?.startedAt ? new Date(batchTiming.startedAt).toISOString() : null;
       const batchEndedAt = new Date(now).toISOString();
-      const batchTotalSeconds = batchTiming?.startedAt
+
+      const remainingAfterBatch = (targetBatch?.items.length ?? 1) - matchingItemsToProcess.length;
+      const isLastInBatch = remainingAfterBatch <= 0;
+      const batchTotalSeconds = (isLastInBatch && batchTiming?.startedAt)
         ? Math.floor((now - batchTiming.startedAt) / 1000)
         : 0;
 
-      const targetBatch = batches.find(b => b.batch_id === batchId);
-      const remainingAfterThis = (targetBatch?.items.length ?? 1) - 1;
-      const isLastInBatch = remainingAfterThis === 0;
+      // ⚡ Process ALL matching items in this location together
+      for (const { batchItem, existingRecord: rec } of matchingItemsToProcess) {
+        const newQty = (rec.store_qty || 0) + (batchItem.qty || 0);
 
-      const historyPayload = {
-        actionType: 'received',
-        barcode: item.barcode,
-        itemName: item.product_name,
-        oldQty: existingRecord.store_qty || 0,
-        newQty: newQty,
-        oldLocation: existingRecord.shelf_location,
-        newLocation: existingRecord.shelf_location,
-        oldTag: existingRecord.product_tag || null,
-        newTag: existingRecord.product_tag || null,
-        oldMaxQty: existingRecord.max_qty || null,
-        newMaxQty: existingRecord.max_qty || null,
-        reason: 'ຮັບສິນຄ້າຈາກສາງ (Inbox) - ວາງເຄື່ອງຕຳແໜ່ງເດີມ',
-        branchId: existingRecord.branch_id || userBranch,
-        updatedBy: updatedByStr,
-        processTimeSeconds: processTimeSeconds,
-        processStartedAt: locationModal.startTime ? new Date(locationModal.startTime).toISOString() : null,
-        billId: batchId,
-        batchStartedAt: batchStartedAt,
-        batchEndedAt: isLastInBatch ? batchEndedAt : null,
-        batchTotalSeconds: isLastInBatch ? batchTotalSeconds : null,
-      };
+        const historyPayload = {
+          actionType: 'received',
+          barcode: batchItem.barcode,
+          itemName: batchItem.product_name,
+          oldQty: rec.store_qty || 0,
+          newQty: newQty,
+          oldLocation: rec.shelf_location,
+          newLocation: rec.shelf_location,
+          oldTag: rec.product_tag || null,
+          newTag: rec.product_tag || null,
+          oldMaxQty: rec.max_qty || null,
+          newMaxQty: rec.max_qty || null,
+          reason: 'ຮັບສິນຄ້າຈາກສາງ (Inbox) - ວາງເຄື່ອງຕຳແໜ່ງເດີມ (Batch Auto)',
+          branchId: rec.branch_id || userBranch,
+          updatedBy: updatedByStr,
+          processTimeSeconds: processTimeSeconds,
+          processStartedAt: locationModal.startTime ? new Date(locationModal.startTime).toISOString() : null,
+          billId: batchId,
+          batchStartedAt: batchStartedAt,
+          batchEndedAt: isLastInBatch ? batchEndedAt : null,
+          batchTotalSeconds: isLastInBatch ? batchTotalSeconds : null,
+        };
 
-      const { error: updateErr } = await supabase
-        .from('store_inventory')
-        .update({ store_qty: newQty, updated_by: updatedByStr })
-        .eq('id', existingRecord.id);
-      if (updateErr) throw updateErr;
+        const { error: updateErr } = await supabase
+          .from('store_inventory')
+          .update({ store_qty: newQty, updated_by: updatedByStr })
+          .eq('id', rec.id);
+        if (updateErr) throw updateErr;
 
-      await logStoreInventoryHistory(historyPayload);
-      await markItemConfirmed(item.id);
+        await logStoreInventoryHistory(historyPayload);
+        await markItemConfirmed(batchItem.id);
+        removeItemFromUI(batchItem.id, batchId);
+      }
 
       if (isLastInBatch) {
         saveBatchTimings(prev => {
@@ -489,9 +523,13 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
         });
       }
 
-      toast.success(`✅ ວາງ "${item.product_name}" ທີ່ ${existingRecord.shelf_location} ສຳເລັດ!`);
+      if (matchingItemsToProcess.length > 1) {
+        toast.success(`⚡ ຮັບສິນຄ້າ ${matchingItemsToProcess.length} ລາຍການ ຢູ່ ${targetLocation} ເຂົ້າສະຕັອກສຳເລັດ! 🎉`);
+      } else {
+        toast.success(`✅ ວາງ "${item.product_name}" ທີ່ ${targetLocation} ສຳເລັດ!`);
+      }
+
       fireConfetti(isLastInBatch);
-      removeItemFromUI(item.id, batchId);
       setLocationModal(null);
     } catch (err) {
       toast.error('ຜິດພາດ: ' + err.message);

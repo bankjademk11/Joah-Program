@@ -789,9 +789,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const docStr = docNos && docNos.length > 0 ? docNos.join(', ') : '-';
       const totalQty = items.reduce((acc, i) => acc + (Number(i.qty) || 0), 0);
 
+      // Determine Brand Display Name dynamically based on selectedBrand state
+      const brandName = selectedBrand === 'technohub' ? 'Techno Hub' : 'JOAH';
+      const brandPrefix = selectedBrand === 'technohub' ? 'TechnoHub' : 'JOAH';
+
       sheet1.mergeCells('A1:J1');
       const titleCell = sheet1.getCell('A1');
-      titleCell.value = `📦 ບົດລາຍງານການນັບສະຕັອກ LAK8 (Stock Count Report)`;
+      titleCell.value = `📦 ບົດລາຍງານການນັບສະຕັອກ ${brandName} (Stock Count Report ${brandName})`;
       titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FF1E293B' } };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -973,7 +977,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      saveAs(blob, `StockCount_Lak8_${selectedBranch}_${selectedDate}.xlsx`);
+      saveAs(blob, `StockCount_${brandPrefix}_${selectedBranch}_${selectedDate}.xlsx`);
 
       showToast({ type: 'success', title: 'ສົ່ງອອກສຳເລັດ! 📊', message: 'ໄຟລ໌ Excel ຖືກດາວໂຫຼດຮຽບຮ້ອຍແລ້ວ' });
     } catch (err) {
