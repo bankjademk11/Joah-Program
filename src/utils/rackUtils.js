@@ -26,7 +26,7 @@ const MEGAMALL_ALL_RACKS = (() => {
         for (let l = 1; l <= 3; l++) { all.push(`MSC${String(r).padStart(2, '0')}-${l}`); }
     }
     // MSD01-24 (Section 1-4, Level 1-4)
-    for (let r = 1; r <= 24; r++) {
+    for (let r = 1; r <= 30; r++) {
         for (let s = 1; s <= 4; s++) {
             for (let l = 1; l <= 4; l++) { all.push(`MSD${String(r).padStart(2, '0')}-${s}-${l}`); }
         }
@@ -340,7 +340,7 @@ const BRANCH_RACK_RULES = {
     'ເມກ້າມໍ': (() => {
         const mgmMap = {};
         const rule = [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0, format: 'exact' }];
-        
+
         const categories = [
             'KITCHEN', 'STATIONERY', 'STORAGE', 'INTERIOR', 'TOY', 'TOYS',
             'FASHION', 'BEAUTY', 'SPORT', 'SPORTS', 'CLEANING', 'TOOL/DIGITAL'
