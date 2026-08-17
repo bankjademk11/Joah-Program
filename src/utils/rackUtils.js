@@ -25,11 +25,15 @@ const MEGAMALL_ALL_RACKS = (() => {
     for (let r = 1; r <= 30; r++) {
         for (let l = 1; l <= 3; l++) { all.push(`MSC${String(r).padStart(2, '0')}-${l}`); }
     }
-    // MSD01-24 (Section 1-4, Level 1-4)
+    // MSD01-30 (Section 1-4, Level 1-4)
     for (let r = 1; r <= 30; r++) {
         for (let s = 1; s <= 4; s++) {
             for (let l = 1; l <= 4; l++) { all.push(`MSD${String(r).padStart(2, '0')}-${s}-${l}`); }
         }
+    }
+    // MSL01-20 (ໂລພື້ນ — Floor locations, no section/level)
+    for (let r = 1; r <= 20; r++) {
+        all.push(`MSL${String(r).padStart(2, '0')}`);
     }
     return all;
 })();
