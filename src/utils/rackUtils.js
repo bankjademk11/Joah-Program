@@ -4,8 +4,8 @@
 
 const MEGAMALL_ALL_RACKS = (() => {
     const all = [];
-    // MSA01-16 (Section 1-4, Level 1-4)
-    for (let r = 1; r <= 16; r++) {
+    // MSA01-30 (Section 1-4, Level 1-4)
+    for (let r = 1; r <= 30; r++) {
         for (let s = 1; s <= 4; s++) {
             for (let l = 1; l <= 4; l++) { all.push(`MSA${String(r).padStart(2, '0')}-${s}-${l}`); }
         }
