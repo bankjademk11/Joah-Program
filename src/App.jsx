@@ -1136,7 +1136,7 @@ function AppContent() {
                         {(() => {
                           const branches = isAdmin
                             ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເມກ້າມໍtest']
-                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ', 'ເມກ້າມໍtest'].filter(Boolean)));
+                            : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;
 
@@ -1500,7 +1500,7 @@ function AppContent() {
                         {(() => {
                           const branches = isAdmin
                             ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
-                            : Array.from(new Set([user?.branch_id, 'ເມກ້າມໍ'].filter(Boolean)));
+                            : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;
 
