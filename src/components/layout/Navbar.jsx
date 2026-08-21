@@ -134,7 +134,8 @@ const Navbar = ({
 
             if (isStoreMode) {
                 // Store pages: count accepted requests waiting for store confirmation for THIS user
-                query = query.eq('status', 'accepted').is('store_confirmed_at', null);
+                query = query.eq('status', 'accepted').is('store_confirmed_at', null)
+                    .gte('created_at', '2026-08-01T00:00:00.000Z');
 
                 if (userId) {
                     query = query.or(`request_by.ilike.%${userName}%,request_by.ilike.%${userId}%`);

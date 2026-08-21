@@ -282,7 +282,7 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
           .select('*')
           .eq('status', 'accepted')
           .is('store_confirmed_at', null)
-          .gte('created_at', '2026-04-30T00:00:00.000Z')
+          .gte('created_at', '2026-08-01T00:00:00.000Z')
           .order('created_at', { ascending: false });
 
       // 🎯 Match request_by by name OR employee ID (handles "Name (ID)" and "Name (ID) [Rack: X]" formats)
