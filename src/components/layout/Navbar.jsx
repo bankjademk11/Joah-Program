@@ -1,7 +1,7 @@
 import { History, RotateCw, Sun, Moon, X, ShieldCheck, Database, Menu, Home, Mail, LogOut, LayoutGrid, Gift } from 'lucide-react';
 import LowStockBell from '../ui/LowStockBell';
 import GachaModal from '../ui/GachaModal';
-import joahLogo from '../../assets/Joah.jpeg';
+import joahLogo from '../../assets/favicon-full-transparent.png';
 import laosFlag from '../../assets/Laos.png';
 import englishFlag from '../../assets/EnglishFlang.png';
 import { supabase } from '../../utils/supabaseClient';

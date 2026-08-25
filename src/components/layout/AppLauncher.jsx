@@ -40,6 +40,12 @@ const apps = [
         step: 'odoo-sales-viewer'
     },
     {
+        id: 'odoo-stock-adjustment',
+        name: 'Odoo Stock Adjustment',
+        icon: InventoryIcon,
+        step: 'odoo-stock-adjustment'
+    },
+    {
         id: 'odoo-transfers',
         name: 'Odoo Transfer IN',
         icon: RequestIcon,

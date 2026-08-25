@@ -1,6 +1,7 @@
 import { useLanguage } from '../../contexts/LanguageContext';
+import { ExternalLink } from 'lucide-react';
 
-const Footer = () => {
+const Footer = ({ onNavigateLanding }) => {
     const { t } = useLanguage();
     const currentYear = new Date().getFullYear();
 
@@ -20,8 +21,17 @@ const Footer = () => {
                     </span>
                 </div>
 
-                {/* Center: Credits */}
+                {/* Center: Company Link + Credits */}
                 <div className="flex flex-col items-center gap-0.5">
+                    <button
+                        onClick={onNavigateLanding}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-500/10 dark:to-amber-500/10 border border-orange-200/50 dark:border-orange-500/20 hover:from-orange-100 hover:to-amber-100 dark:hover:from-orange-500/20 dark:hover:to-amber-500/20 transition-all duration-300 group mb-0.5"
+                    >
+                        <span className="text-[8px] sm:text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
+                            JOAH Company
+                        </span>
+                        <ExternalLink size={8} className="text-orange-400 dark:text-orange-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </button>
                     <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                         Developed by <span className="text-slate-600 dark:text-slate-300 font-black">JOAH ❤️ Santisouk Laxayphone</span>
                     </p>

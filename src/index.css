@@ -658,3 +658,41 @@
     @apply hidden;
   }
 }
+
+/* ===== JOAH LANDING MOTION ===== */
+@keyframes joahFloat {
+  0%,
+  100% { transform: translate3d(0, 0, 0) rotate(-0.35deg); }
+  50% { transform: translate3d(0, -9px, 0) rotate(0.35deg); }
+}
+
+@keyframes joahOrbit {
+  0%,
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(5px, -8px, 0) rotate(18deg); }
+}
+
+@keyframes joahMarquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+.joah-float {
+  animation: joahFloat 7s ease-in-out infinite;
+}
+
+.joah-orbit {
+  animation: joahOrbit 5s ease-in-out infinite;
+}
+
+.joah-marquee-track {
+  animation: joahMarquee 24s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joah-float,
+  .joah-orbit,
+  .joah-marquee-track {
+    animation: none;
+  }
+}

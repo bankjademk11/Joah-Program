@@ -43,6 +43,7 @@ import MasterAudit from './components/features/admin/MasterAudit';
 import ProductManager from './components/features/admin/ProductManager';
 import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
+import LandingPage from './components/layout/LandingPage';
 import AppLauncher from './components/layout/AppLauncher';
 import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -51,6 +52,7 @@ import ExcelCompressor from './components/Tools/excel-compressor';
 import SalesAggregator from './components/Tools/SalesAggregator';
 import DcStockImporter from './components/Tools/DcStockImporter';
 import OdooSalesViewer from './components/Tools/OdooSalesViewer';
+import OdooStockAdjustmentView from './components/Tools/OdooStockAdjustmentView';
 import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
 import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
@@ -80,12 +82,13 @@ function AppContent() {
   const [step, setStep] = useState(() => {
     const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/checkprice')) return 'check-price';
+    if (path.startsWith('/landing')) return 'landing';
     return 'upload';
   });
 
   // Sync URL when step changes so user can bookmark or copy link
   useEffect(() => {
-    const newPath = step === 'check-price' ? '/checkprice' : '/';
+    const newPath = step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
     if (window.location.pathname !== newPath) {
       window.history.pushState(null, '', newPath);
     }
@@ -884,11 +887,17 @@ function AppContent() {
     }
   };
 
+    // Public landing route: render before the authentication gate.
+  if (step === 'landing') {
+    return <LandingPage onBack={() => setStep('upload')} />;
+  }
+
   if (!isLoggedIn) {
     return <Login onLogin={handleLogin} />;
   }
 
   return (
+
     <ToastProvider>
       {/* 🔄 PWA Auto-Update Prompt — แจ้งเตือนเมื่อมีเวอร์ชันใหม่ */}
       <ReloadPrompt />
@@ -901,6 +910,8 @@ function AppContent() {
         progress={loadingProgress}
         showProgressBar={showProgressBar}
       />
+
+      
 
       <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots overflow-x-hidden">
         {/* Navigation */}
@@ -1648,6 +1659,10 @@ function AppContent() {
             <OdooSalesViewer onBack={() => setStep('upload')} userBranch={user?.branch_id} isAdmin={isAdmin} />
           )}
 
+          {step === 'odoo-stock-adjustment' && (
+            <OdooStockAdjustmentView onBack={() => setStep('upload')} userBranch={user?.branch_id} isAdmin={isAdmin} />
+          )}
+
           {step === 'dc-stock-importer' && (
             <DcStockImporter onBack={() => setStep('upload')} />
           )}
@@ -1850,7 +1865,7 @@ function AppContent() {
           )}
         </main>
 
-        <Footer />
+        <Footer onNavigateLanding={() => setStep('landing')} />
 
         {/* History Modal */}
         {showHistory && <HistoryLog onClose={() => setShowHistory(false)} currentUser={user} activeBranch={adminViewBranch} />}

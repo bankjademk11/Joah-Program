@@ -21,7 +21,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
         { id: 248, name: 'ສີວິໄລ', short: 'SVL' },
         { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
         { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
-        { id: 273, name: 'ປະຕູໄຊ', short: 'PTX' },
+        { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(
@@ -184,7 +184,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
             uniqueBarcodes.forEach(barcode => {
                 const sold = salesSummary[barcode];
                 let remainingToDeduct = sold.qty_sold;
-                
+
                 const rowsForBarcode = storeItemsByBarcode[barcode] || [];
                 // Sort rows by store_qty DESC (largest rack first)
                 rowsForBarcode.sort((a, b) => (b.store_qty || 0) - (a.store_qty || 0));
@@ -194,28 +194,28 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                 if (rowsForBarcode.length > 0) {
                     for (let i = 0; i < rowsForBarcode.length; i++) {
                         if (remainingToDeduct <= 0) break;
-                        
+
                         const row = rowsForBarcode[i];
                         const rowQty = row.store_qty || 0;
-                        
+
                         // If it's the LAST row, and we still have to deduct, just let it go negative
                         const isLastRow = i === rowsForBarcode.length - 1;
-                        
+
                         let deductFromThis = 0;
                         if (rowQty >= remainingToDeduct || isLastRow) {
                             deductFromThis = remainingToDeduct;
                         } else {
                             deductFromThis = rowQty;
                         }
-                        
+
                         remainingToDeduct -= deductFromThis;
                         const newRowQty = rowQty - deductFromThis;
-                        
+
                         updatePromises.push(
-                            supabase.from('store_inventory').update({ 
-                                store_qty: newRowQty, 
+                            supabase.from('store_inventory').update({
+                                store_qty: newRowQty,
                                 sales_qty: (row.sales_qty || 0) + deductFromThis,
-                                last_updated: new Date().toISOString() 
+                                last_updated: new Date().toISOString()
                             }).eq('id', row.id)
                         );
                     }
@@ -351,8 +351,8 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <select 
-                            value={selectedBranchId} 
+                        <select
+                            value={selectedBranchId}
                             onChange={(e) => setSelectedBranchId(Number(e.target.value))}
                             className="px-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-lg font-black text-teal-700 dark:text-teal-400 outline-none focus:border-teal-500 shadow-sm cursor-pointer"
                         >

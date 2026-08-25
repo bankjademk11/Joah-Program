@@ -60,13 +60,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [calendarMode, setCalendarMode] = useState('14'); // '30' = full month, '14' = last 14 days
     const [selectedDay, setSelectedDay] = useState(null); // { dateObj, branchId, branchName, dayData, joahOnly }
 
-    // --- Average Calculator State ---
-    const [avgCalcMonth, setAvgCalcMonth] = useState(new Date().getMonth());
-    const [avgCalcYear, setAvgCalcYear] = useState(new Date().getFullYear());
-    const [avgCalcResult, setAvgCalcResult] = useState(null); // { daily, weekly, monthLabel }
-    const [isCalculatingAvg, setIsCalculatingAvg] = useState(false);
-    const [showAvgCalculator, setShowAvgCalculator] = useState(false);
-
     const todayStr = new Date().toISOString().split('T')[0];
     const [dateStart, setDateStart] = useState(`${todayStr}T00:00`);
     const [dateEnd, setDateEnd] = useState(`${todayStr}T23:59`);
@@ -76,7 +69,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         { id: 248, name: 'ສີວິໄລ', short: 'SVL' },
         { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
         { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
-        { id: 273, name: 'ປະຕູໄຊ', short: 'PTX' },
+        { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(
@@ -119,6 +112,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setAuditStates(stateData);
                 setAbnormalOrders(abnormalData);
             } else if (activeTab === 'weekly' || activeTab === 'dashboard') {
+                +6
                 const today = new Date();
                 const pad = (n) => n.toString().padStart(2, '0');
 
@@ -264,77 +258,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             setLoading(false);
         }
     }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset, calendarMode]);
-
-    const calculateMonthlyAverage = async () => {
-        setIsCalculatingAvg(true);
-        try {
-            await authenticate(
-                import.meta.env.VITE_ODOO_DB,
-                import.meta.env.VITE_ODOO_USER,
-                import.meta.env.VITE_ODOO_PASSWORD
-            );
-
-            const pad = (n) => n.toString().padStart(2, '0');
-            const toUTC = (dateStr, isEnd) => {
-                if (!dateStr) return null;
-                const d = new Date(`${dateStr}:00`);
-                if (isEnd) d.setSeconds(59);
-                return d.toISOString().replace('T', ' ').substring(0, 19);
-            };
-
-            const fetchMonthData = async (y, m) => {
-                const targetMonth = new Date(y, m, 1);
-                const daysInMonth = new Date(y, m + 1, 0).getDate();
-                const startStr = `${targetMonth.getFullYear()}-${pad(targetMonth.getMonth() + 1)}-01T00:00`;
-                const endStr = `${targetMonth.getFullYear()}-${pad(targetMonth.getMonth() + 1)}-${pad(daysInMonth)}T23:59`;
-                const startUTC = toUTC(startStr, false);
-                const endUTC = toUTC(endStr, true);
-
-                let totalSales = 0;
-                let totalBills = 0;
-                let totalSKUs = 0;
-                if (selectedBranchId === 'ALL') {
-                    const promises = branches.map(b => fetchDailySales(b.id, startUTC, endUTC, joahOnly));
-                    const results = await Promise.all(promises);
-                    results.forEach(branchData => {
-                        if (branchData) {
-                            branchData.forEach(day => {
-                                totalSales += day.price_subtotal_incl || 0;
-                                totalBills += day.order_count || 0;
-                                totalSKUs += day.sku_count || 0;
-                            });
-                        }
-                    });
-                } else {
-                    const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly);
-                    if (data) {
-                        data.forEach(day => {
-                            totalSales += day.price_subtotal_incl || 0;
-                            totalBills += day.order_count || 0;
-                            totalSKUs += day.sku_count || 0;
-                        });
-                    }
-                }
-                const weeksInMonth = daysInMonth / 7;
-                return {
-                    daily: totalSales / daysInMonth,
-                    weekly: totalSales / weeksInMonth,
-                    dailyBills: totalBills / daysInMonth,
-                    weeklyBills: totalBills / weeksInMonth,
-                    dailySKUs: totalSKUs / daysInMonth,
-                    weeklySKUs: totalSKUs / weeksInMonth,
-                    monthLabel: targetMonth.toLocaleDateString('lo-LA', { month: 'short', year: 'numeric' })
-                };
-            };
-
-            const result = await fetchMonthData(avgCalcYear, avgCalcMonth);
-            setAvgCalcResult(result);
-        } catch (e) {
-            console.error("Error calculating average", e);
-        } finally {
-            setIsCalculatingAvg(false);
-        }
-    };
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -698,93 +621,14 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             const isPositiveGrowthAll = growthPercentAll >= 0;
                             const salesDifference = currentSales - compareSales;
 
-                            const currentDaysCount = Math.ceil((endObj - startObj) / (1000 * 60 * 60 * 24));
-                            const renderAvgGrowth = (currentTotal, avgCalcTarget) => {
-                                if (!avgCalcTarget) return null;
-                                const currentDailyAvg = currentTotal / currentDaysCount;
-                                const pct = ((currentDailyAvg - avgCalcTarget) / avgCalcTarget) * 100;
-                                const isPos = pct >= 0;
-                                return (
-                                    <span className={`ml-auto text-[10px] font-black ${isPos ? 'text-emerald-500' : 'text-rose-500'} flex items-center`}>
-                                        {isPos ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
-                                    </span>
-                                );
-                            };
-
                             return (
                                 <>
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 relative z-0 shrink-0 gap-4">
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                                                    <CalendarDays className="text-joah-orange" />
-                                                    ຍອດຂາຍ
-                                                    <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{monthLabel}</span>
-                                                </h3>
-                                                <button
-                                                    onClick={() => setShowAvgCalculator(!showAvgCalculator)}
-                                                    className="px-2 py-1 bg-white/50 hover:bg-white/80 dark:bg-slate-800/50 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-md border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
-                                                >
-                                                    {showAvgCalculator ? 'ປິດທຽບສະເລ່ຍ' : 'ເປີດທຽບສະເລ່ຍ'}
-                                                </button>
-                                            </div>
-
-                                            {/* Average Calculator UI */}
-                                            {showAvgCalculator && (
-                                                <div className="flex flex-col gap-2 bg-white/50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm w-fit mt-1">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <select
-                                                            value={`${avgCalcYear}-${avgCalcMonth}`}
-                                                            onChange={(e) => {
-                                                                const [y, m] = e.target.value.split('-');
-                                                                setAvgCalcYear(Number(y));
-                                                                setAvgCalcMonth(Number(m));
-                                                                setAvgCalcResult(null);
-                                                            }}
-                                                            className="text-xs bg-transparent outline-none font-bold text-slate-700 dark:text-slate-300 cursor-pointer border-b border-dashed border-slate-400"
-                                                        >
-                                                            {Array.from({ length: 12 }).map((_, i) => {
-                                                                const d = new Date();
-                                                                d.setMonth(d.getMonth() - i);
-                                                                return <option key={i} value={`${d.getFullYear()}-${d.getMonth()}`} className="text-slate-800">{d.toLocaleDateString('lo-LA', { month: 'short', year: 'numeric' })}</option>
-                                                            })}
-                                                        </select>
-                                                        <button
-                                                            onClick={calculateMonthlyAverage}
-                                                            disabled={isCalculatingAvg}
-                                                            className="px-2 py-1 ml-2 bg-joah-orange text-white text-[10px] font-bold rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
-                                                        >
-                                                            {isCalculatingAvg ? 'ກຳລັງໂຫຼດ...' : 'ຄຳນວນສະເລ່ຍ'}
-                                                        </button>
-                                                    </div>
-                                                    {avgCalcResult && (
-                                                        <div className="flex flex-col gap-1.5 text-[10px] font-bold bg-white dark:bg-slate-700 px-3 py-2 rounded-md mt-1">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><TrendingUp size={12} className="text-emerald-500" />ຍອດຂາຍ:</span>
-                                                                <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.daily))} ₭</span>
-                                                                <span className="text-slate-300 dark:text-slate-600">|</span>
-                                                                <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weekly))} ₭</span>
-                                                                {renderAvgGrowth(currentSales, avgCalcResult.daily)}
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Users size={12} className="text-sky-500" />ລູກຄ້າ:</span>
-                                                                <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.dailyBills))} ບິນ</span>
-                                                                <span className="text-slate-300 dark:text-slate-600">|</span>
-                                                                <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weeklyBills))} ບິນ</span>
-                                                                {renderAvgGrowth(currentCustomers, avgCalcResult.dailyBills)}
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-slate-500 w-16 flex items-center gap-1"><Package size={12} className="text-violet-500" />ສິນຄ້າ:</span>
-                                                                <span className="text-sky-600 dark:text-sky-400">/ມື້: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.dailySKUs))} ລາຍການ</span>
-                                                                <span className="text-slate-300 dark:text-slate-600">|</span>
-                                                                <span className="text-emerald-600 dark:text-emerald-400">/ທິດ: {new Intl.NumberFormat('lo-LA').format(Math.round(avgCalcResult.weeklySKUs))} ລາຍການ</span>
-                                                                {renderAvgGrowth(currentSKUs, avgCalcResult.dailySKUs)}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
+                                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2 shrink-0">
+                                            <CalendarDays className="text-joah-orange" />
+                                            ຍອດຂາຍ
+                                            <span className="text-[10px] sm:text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{monthLabel}</span>
+                                        </h3>
 
                                         {/* 📊 SUMMARY BOX: Full Month vs Previous Month */}
                                         <div className="flex-1 w-full sm:max-w-[680px] px-2 sm:px-4 flex gap-2 sm:gap-4 justify-between sm:justify-center items-center bg-slate-50/80 dark:bg-slate-800/80 py-2 sm:py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 mx-auto shadow-inner relative group">
