@@ -7,7 +7,10 @@ const MEGAMALL_ALL_RACKS = ["MFA01-1", "MFA01-10", "MFA01-2", "MFA01-3", "MFA01-
     "MFT01", "MFT02", "MFT03", "MFT04", "MFT05", "MFT06", "MFT07", "MFT08", "MFT09", "MFT10", "MFT11", "MFT12", "MFT13", "MFT14", "MFT15", "MFT16", "MFT17", "MFT18", "MFT19", "MFT20", "MFT21", "MFT22", "MFT23", "MFT24", "MFT25", "MFT26", "MFT27", "MFT28", "MFT29", "MFT30", "MFT31", "MFT32", "MFT33", "MFT34",
     // ໂລ MSG (Megamall Storage/Grid Racks)
     "MSG - 1", "MSG - 2", "MSG - 3", "MSG - 4", "MSG - 5", "MSG - 6", "MSG - 7", "MSG - 8", "MSG - 9", "MSG - 10", "MSG - 11",
-    "MSG-33-1", "MSG-33-2", "MSG-33-3", "MSG-33-4", "MSG-33-5", "MSG-33-6"
+    "MSG-33-1", "MSG-33-2", "MSG-33-3", "MSG-33-4", "MSG-33-5", "MSG-33-6",
+    // ໂລ MST & MSY
+    "MST-1", "MST-2", "MST-3", "MST-4", "MST-5", "MST-6", "MST-7",
+    "MSY-1", "MSY-2", "MSY-3"
 ];
 
 export const STORE_BRANCH_RACK_RULES = {
