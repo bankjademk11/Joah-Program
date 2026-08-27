@@ -58,6 +58,7 @@ import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
 import StockCountLak8 from './components/features/inventory/StockCountLak8';
 import CheckPrice from './components/Tools/CheckPrice';
+import InventoryOverviewDashboard from './components/features/odoo/InventoryOverviewDashboard';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -1740,6 +1741,20 @@ function AppContent() {
             <CheckPrice
               onBack={() => setStep('upload')}
             />
+          )}
+
+          {step === 'odoo-inventory-overview' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-100 flex flex-col animate-fade-in overflow-y-auto">
+              <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
+                <button
+                  onClick={() => setStep('upload')}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors flex items-center gap-2"
+                >
+                  ← ກັບຄືນ (Back)
+                </button>
+              </div>
+              <InventoryOverviewDashboard mockData={null} />
+            </div>
           )}
 
 

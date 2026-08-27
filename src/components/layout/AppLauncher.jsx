@@ -52,6 +52,12 @@ const apps = [
         step: 'odoo-transfers'
     },
     {
+        id: 'odoo-inventory-overview',
+        name: 'Inventory Overview',
+        icon: InventoryIcon,
+        step: 'odoo-inventory-overview'
+    },
+    {
         id: 'stock-count-lak8',
         name: 'ກວດການຈັດສົ່ງ DC ຫາຮ້ານ (DC Delivery Check)',
         icon: InventoryIcon,

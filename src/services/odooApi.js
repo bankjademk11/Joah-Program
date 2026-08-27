@@ -832,3 +832,211 @@ export async function fetchProductBarcodes(productIds) {
 
   return barcodeMap;
 }
+
+
+/**
+ * Fetch Inventory Overview picking types (stock.picking.type)
+ * @returns {Promise<Object[]>} List of picking types for Inventory Overview
+ */
+export async function fetchInventoryOverview(allowedCompanyIds = null) {
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'stock.picking.type',
+      method: 'web_search_read',
+      args: [],
+      kwargs: {
+        domain: [],
+        specification: {
+          id: {},
+          color: {},
+          code: {},
+          count_move_ready: {},
+          show_picking_type: {},
+          is_favorite: {},
+          name: {},
+          warehouse_id: { fields: { display_name: {} } },
+          count_picking_batch: {},
+          count_picking_ready: {},
+          count_picking_waiting: {},
+          count_picking_late: {},
+          count_picking_backorders: {},
+          count_picking_wave: {},
+          kanban_dashboard_graph: {},
+          count_mo_todo: {},
+          count_mo_waiting: {},
+          count_mo_late: {},
+          count_mo_in_progress: {},
+          count_mo_to_close: {}
+        },
+        ...(Array.isArray(allowedCompanyIds) && allowedCompanyIds.length > 0 ? { context: { allowed_company_ids: allowedCompanyIds } } : {})
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    const msg = json.error.data?.message || json.error.message || 'Odoo API error';
+    if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      const err = new Error('SESSION_EXPIRED');
+      err.isAuthError = true;
+      throw err;
+    }
+    throw new Error(msg);
+  }
+
+  const result = json.result;
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.records)) return result.records;
+  return [];
+}
+
+/**
+ * Fetch stock.picking records for a given picking_type_id (drill-down from Inventory Overview card)
+ * @param {number} pickingTypeId - The id of the stock.picking.type
+ * @param {number} limit - Max records to fetch
+ * @returns {Promise<{records: Object[], length: number}>}
+ */
+export async function fetchPickingsByType(pickingTypeId, limit = 80) {
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'stock.picking',
+      method: 'web_search_read',
+      args: [],
+      kwargs: {
+        domain: [['picking_type_id', '=', pickingTypeId]],
+        specification: {
+          id: {},
+          name: {},
+          company_id: { fields: { display_name: {} } },
+          location_id: { fields: { display_name: {} } },
+          location_dest_id: { fields: { display_name: {} } },
+          partner_id: { fields: { display_name: {} } },
+          user_id: { fields: { display_name: {} } },
+          scheduled_date: {},
+          date_done: {},
+          origin: {},
+          state: {},
+          picking_type_code: {},
+          batch_id: { fields: { display_name: {} } },
+          picking_type_id: { fields: { display_name: {} } },
+        },
+        limit,
+        order: 'scheduled_date desc',
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    const msg = json.error.data?.message || json.error.message || 'Odoo API error';
+    if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      const err = new Error('SESSION_EXPIRED');
+      err.isAuthError = true;
+      throw err;
+    }
+    throw new Error(msg);
+  }
+
+  const result = json.result;
+  if (Array.isArray(result)) return { records: result, length: result.length };
+  if (result && Array.isArray(result.records)) return { records: result.records, length: result.length || result.records.length };
+  return { records: [], length: 0 };
+}
+
+/**
+ * Fetch detailed single stock.picking record including its products/moves (move_ids_without_package)
+ * @param {number} pickingId - The ID of stock.picking record
+ * @returns {Promise<Object>}
+ */
+export async function fetchPickingDetail(pickingId) {
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'stock.picking',
+      method: 'web_read',
+      args: [[pickingId]],
+      kwargs: {
+        specification: {
+          id: {},
+          name: {},
+          state: {},
+          scheduled_date: {},
+          date_done: {},
+          origin: {},
+          location_id: { fields: { display_name: {} } },
+          location_dest_id: { fields: { display_name: {} } },
+          partner_id: { fields: { display_name: {} } },
+          user_id: { fields: { display_name: {} } },
+          company_id: { fields: { display_name: {} } },
+          picking_type_id: { fields: { display_name: {} } },
+          move_ids_without_package: {
+            fields: {
+              id: {},
+              name: {},
+              barcode: {},
+              product_id: { fields: { display_name: {} } },
+              product_uom_qty: {},
+              quantity: {},
+              product_uom: { fields: { display_name: {} } },
+              state: {},
+              image_1920: {}
+            }
+          }
+        }
+      }
+    }
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    const msg = json.error.data?.message || json.error.message || 'Odoo API error';
+    if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      const err = new Error('SESSION_EXPIRED');
+      err.isAuthError = true;
+      throw err;
+    }
+    throw new Error(msg);
+  }
+
+  const result = json.result;
+  if (Array.isArray(result) && result.length > 0) return result[0];
+  return result;
+}
