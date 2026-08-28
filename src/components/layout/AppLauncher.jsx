@@ -68,6 +68,12 @@ const apps = [
         name: 'ກວດສອບລາຄາ (Check Price)',
         icon: CheckPriceIcon,
         step: 'check-price'
+    },
+    {
+        id: 'check-price-ultimate',
+        name: 'ກວດສອບລາຄາ & ຮູບພາບ (Check Price ULTIMATE)',
+        icon: CheckPriceIcon,
+        step: 'check-price-ultimate'
     }
 ];
 
@@ -80,11 +86,15 @@ const AppLauncher = ({ isOpen, onClose, onNavigate, user }) => {
 
     const isCashier = user?.role === 'cashier' || 
         (user?.id && CASHIER_EMPLOYEE_IDS.includes(String(user.id).toUpperCase()));
+    const isHQ = user?.role === 'HQ';
 
-    // Cashiers only see Price Checker Terminal
+    // Filter apps based on role
     const availableApps = isCashier 
         ? apps.filter(app => app.id === 'check-price')
-        : apps;
+        : apps.filter(app => {
+            if (app.id === 'check-price-ultimate' && !isHQ) return false;
+            return true;
+        });
 
     const filteredApps = availableApps.filter(app => 
         app.name.toLowerCase().includes(searchTerm.toLowerCase())

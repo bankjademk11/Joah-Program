@@ -1040,3 +1040,156 @@ export async function fetchPickingDetail(pickingId) {
   if (Array.isArray(result) && result.length > 0) return result[0];
   return result;
 }
+
+
+// ── CheckPrice ULTIMATE (Read-Only Product Details) ───────────
+
+/**
+ * Fetch rich product details for CheckPrice ULTIMATE.
+ * Queries product.template or product.product safely with comprehensive fields.
+ * @param {string} searchTerm - Barcode or Default Code (SKU)
+ * @returns {Promise<Object|null>}
+ */
+export async function fetchProductUltimate(searchTerm) {
+  if (!searchTerm || !searchTerm.trim()) return null;
+  const term = searchTerm.trim();
+
+  // Search domain matching barcode, default_code, or exact name
+  const domain = [
+    '|',
+    ['barcode', '=', term],
+    ['default_code', '=', term]
+  ];
+
+  const fields = [
+    'id',
+    'name',
+    'display_name',
+    'product_name_la',
+    'product_name_eng',
+    'default_code',
+    'barcode',
+    'list_price',
+    'standard_price',
+    'qty_available',
+    'virtual_available',
+    'uom_id',
+    'uom_name',
+    'categ_id',
+    'product_brand_id',
+    'product_owner',
+    'vendor_code',
+    'vendor_current_status',
+    'packing_size',
+    'packing_size_qty',
+    'dc_min_stock',
+    'min_order_pcs',
+    'replenishment_type',
+    'available_in_pos',
+    'sale_ok',
+    'active',
+    'currency_id',
+    'write_date',
+    'product_variant_id',
+    'image_1920',
+    'image_512',
+    'image_128'
+  ];
+
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'product.template',
+      method: 'search_read',
+      args: [domain],
+      kwargs: {
+        fields,
+        limit: 1,
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const json = await response.json();
+
+  if (json.error) {
+    const msg = json.error.data?.message || json.error.message || 'Odoo API error';
+    if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      const err = new Error('SESSION_EXPIRED');
+      err.isAuthError = true;
+      throw err;
+    }
+    throw new Error(msg);
+  }
+
+  const results = json.result;
+  if (!Array.isArray(results) || results.length === 0) {
+    // If not found in product.template, try product.product as fallback
+    return await fetchProductProductUltimate(term);
+  }
+
+  return results[0];
+}
+
+async function fetchProductProductUltimate(term) {
+  const domain = [
+    '|',
+    ['barcode', '=', term],
+    ['default_code', '=', term]
+  ];
+
+  const fields = [
+    'id',
+    'name',
+    'display_name',
+    'default_code',
+    'barcode',
+    'list_price',
+    'standard_price',
+    'qty_available',
+    'virtual_available',
+    'uom_id',
+    'uom_name',
+    'categ_id',
+    'product_tmpl_id',
+    'write_date'
+  ];
+
+  const payload = {
+    jsonrpc: '2.0',
+    method: 'call',
+    id: Date.now(),
+    params: {
+      model: 'product.product',
+      method: 'search_read',
+      args: [domain],
+      kwargs: {
+        fields,
+        limit: 1,
+      },
+    },
+  };
+
+  const response = await fetch(`${BASE}/web/dataset/call_kw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) return null;
+  const json = await response.json();
+  if (json.error || !json.result || json.result.length === 0) return null;
+
+  return json.result[0];
+}

@@ -58,6 +58,7 @@ import OdooSyncEngine from './components/Tools/OdooSyncEngine';
 import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
 import StockCountLak8 from './components/features/inventory/StockCountLak8';
 import CheckPrice from './components/Tools/CheckPrice';
+import CheckPriceUltimate from './components/Tools/CheckPriceUltimate';
 import InventoryOverviewDashboard from './components/features/odoo/InventoryOverviewDashboard';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
@@ -82,6 +83,7 @@ function AppContent() {
 
   const [step, setStep] = useState(() => {
     const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) return 'check-price-ultimate';
     if (path.startsWith('/checkprice')) return 'check-price';
     if (path.startsWith('/landing')) return 'landing';
     return 'upload';
@@ -89,7 +91,7 @@ function AppContent() {
 
   // Sync URL when step changes so user can bookmark or copy link
   useEffect(() => {
-    const newPath = step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
+    const newPath = step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
     if (window.location.pathname !== newPath) {
       window.history.pushState(null, '', newPath);
     }
@@ -1493,6 +1495,37 @@ function AppContent() {
                     </div>
                   </div>
 
+                  {/* Check Price ULTIMATE Card (HQ / Admin Only) */}
+                  {isAdmin && (
+                    <div
+                      className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-purple-500 hover:shadow-purple-500/20 transition-all duration-500 cursor-pointer w-full sm:w-[340px] relative"
+                      onClick={() => setStep('check-price-ultimate')}
+                    >
+                      <div className="absolute top-4 right-4 z-20 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white text-[10px] font-black tracking-wider uppercase shadow-lg animate-pulse">
+                        HQ ONLY
+                      </div>
+                      {/* Image Banner */}
+                      <div className="w-full h-44 overflow-hidden bg-purple-50 dark:bg-slate-800 relative">
+                        <img src={imgCheckPrice} alt="Check Price Ultimate" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 filter saturate-150" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      {/* Content */}
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ກວດລາຄາ & ຮູບພາບ</h3>
+                          <p className="text-[10px] text-purple-500 font-black uppercase tracking-[0.2em]">HQ Ultimate View</p>
+                        </div>
+                        <button
+                          className="w-full btn-primary mt-auto py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-purple-500/30 flex items-center justify-center gap-2 text-white rounded-2xl z-20"
+                          onClick={(e) => { e.stopPropagation(); setStep('check-price-ultimate'); }}
+                        >
+                          <Tag size={18} />
+                          <span>ເປີດໃຊ້ Ultimate (HQ)</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Store Request Card (For Front Store, or HQ, when not in Admin Menu) */}
                   {!showAdminMenu && (user?.workplace !== 'back' || isAdmin) && (
                     <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-blue-500 hover:shadow-blue-500/10 transition-all duration-500 w-full sm:w-[340px]">
@@ -1741,6 +1774,19 @@ function AppContent() {
             <CheckPrice
               onBack={() => setStep('upload')}
             />
+          )}
+
+          {step === 'check-price-ultimate' && (
+            isAdmin ? (
+              <CheckPriceUltimate
+                onBack={() => setStep('upload')}
+                isOdooLoggedIn={!!user}
+              />
+            ) : (
+              <CheckPrice
+                onBack={() => setStep('upload')}
+              />
+            )
           )}
 
           {step === 'odoo-inventory-overview' && (

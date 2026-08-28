@@ -33,7 +33,7 @@ const LoadingOverlay = ({
                     />
                 </div>
 
-                {/* Loading Text */}ก้
+                {/* Loading Text */}
                 <div className="text-center space-y-2">
                     <h3 className="text-xl md:text-2xl font-black text-white tracking-tight">
                         {message}
