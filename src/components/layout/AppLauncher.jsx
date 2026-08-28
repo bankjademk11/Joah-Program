@@ -74,6 +74,12 @@ const apps = [
         name: 'ກວດສອບລາຄາ & ຮູບພາບ (Check Price ULTIMATE)',
         icon: CheckPriceIcon,
         step: 'check-price-ultimate'
+    },
+    {
+        id: 'image-uploader',
+        name: 'ອັບໂຫຼດຮູບພາບສິນຄ້າ (Bulk Image Uploader)',
+        icon: HQIcon,
+        step: 'image-uploader'
     }
 ];
 

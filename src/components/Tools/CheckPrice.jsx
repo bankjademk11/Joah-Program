@@ -58,7 +58,7 @@ const CheckPrice = ({ onBack }) => {
         try {
             const { data, error } = await supabase
                 .from('price_checker')
-                .select('barcode, product_name, price, updated_at')
+                .select('barcode, product_name, price, image_url, updated_at')
                 .eq('barcode', barcode)
                 .single();
 
@@ -207,11 +207,22 @@ const CheckPrice = ({ onBack }) => {
                         <div className="w-full rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-white/10 overflow-hidden shadow-2xl">
                             <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-cyan-500" />
                             <div className="px-5 py-6 sm:px-8 sm:py-10 flex flex-col items-center text-center gap-4">
-                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-                                    <CheckCircle2 size={26} className="text-emerald-400" />
+                                <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-slate-950/80 border border-white/20 p-2 overflow-hidden flex items-center justify-center shadow-lg">
+                                    <img
+                                        src={productData.image_url || `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${productData.barcode}.png`}
+                                        alt={productData.product_name}
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                        className="w-full h-full object-contain"
+                                    />
+                                    <div className="hidden flex-col items-center justify-center text-slate-500">
+                                        <CheckCircle2 size={32} className="text-emerald-400" />
+                                    </div>
                                 </div>
-                                <p className="font-mono text-slate-500 text-xs tracking-widest">{productData.barcode}</p>
-                                <h2 className="text-xl sm:text-3xl font-bold text-white leading-snug">
+                                <p className="font-mono text-slate-400 text-xs tracking-widest">{productData.barcode}</p>
+                                <h2 className="text-xl sm:text-2xl font-bold text-white leading-snug">
                                     {productData.product_name}
                                 </h2>
                                 <div className="w-full h-px bg-white/10" />

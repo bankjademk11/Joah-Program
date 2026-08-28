@@ -59,6 +59,7 @@ import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
 import StockCountLak8 from './components/features/inventory/StockCountLak8';
 import CheckPrice from './components/Tools/CheckPrice';
 import CheckPriceUltimate from './components/Tools/CheckPriceUltimate';
+import ImageBulkUploader from './components/Tools/ImageBulkUploader';
 import InventoryOverviewDashboard from './components/features/odoo/InventoryOverviewDashboard';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
@@ -1787,6 +1788,12 @@ function AppContent() {
                 onBack={() => setStep('upload')}
               />
             )
+          )}
+
+          {step === 'image-uploader' && (
+            <ImageBulkUploader
+              onClose={() => setStep('upload')}
+            />
           )}
 
           {step === 'odoo-inventory-overview' && (

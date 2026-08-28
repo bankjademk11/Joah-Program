@@ -148,17 +148,21 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
 
     const getProductImageUrl = (item) => {
         if (!item) return null;
+        if (item.image_url) return item.image_url;
         if (item.image_512) return `data:image/png;base64,${item.image_512}`;
         if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
         if (item.image_128) return `data:image/png;base64,${item.image_128}`;
+        if (item.barcode) return `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${item.barcode}.png`;
         if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_512`;
         return null;
     };
 
     const getZoomImageUrl = (item) => {
         if (!item) return null;
+        if (item.image_url) return item.image_url;
         if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
         if (item.image_512) return `data:image/png;base64,${item.image_512}`;
+        if (item.barcode) return `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${item.barcode}.png`;
         if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_1920`;
         return null;
     };
