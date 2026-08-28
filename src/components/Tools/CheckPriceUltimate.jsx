@@ -147,11 +147,24 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
     };
 
     const getProductImageUrl = (item) => {
-        if (!item || !item.id) return null;
-        return `/api/web/image?model=product.template&id=${item.id}&field=image_512`;
+        if (!item) return null;
+        if (item.image_512) return `data:image/png;base64,${item.image_512}`;
+        if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
+        if (item.image_128) return `data:image/png;base64,${item.image_128}`;
+        if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_512`;
+        return null;
+    };
+
+    const getZoomImageUrl = (item) => {
+        if (!item) return null;
+        if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
+        if (item.image_512) return `data:image/png;base64,${item.image_512}`;
+        if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_1920`;
+        return null;
     };
 
     const imageUrl = productData ? getProductImageUrl(productData) : null;
+    const zoomUrl = productData ? (getZoomImageUrl(productData) || imageUrl) : null;
 
     return (
         <div
@@ -593,7 +606,7 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
                         <X size={24} />
                     </button>
                     <img 
-                        src={`/api/web/image?model=product.template&id=${productData.id}&field=image_1920`} 
+                        src={zoomUrl || imageUrl} 
                         alt={productData.displayLaoName}
                         className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl border-2 border-purple-400/50 shadow-[0_0_60px_rgba(168,85,247,0.4)]"
                     />
