@@ -1,16 +1,18 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ChevronLeft, ChevronRight, Search, Download,
     Loader2, X, AlertTriangle, Database, MapPin,
     Edit2, Save, Filter, ChevronDown, CheckCircle,
     UploadCloud, FileSpreadsheet, Info, History, Clock,
-    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles, ScanLine
+    ArrowUpDown, FilterX, HelpCircle, Package, Calendar, User, RotateCw, Plus, Eye, ClipboardList, Sparkles, ScanLine, ZoomIn, CheckCircle2, Tag, Layers, Store, Boxes
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { supabase } from '../../../utils/supabaseClient';
 import { syncLocationResultsToSupabase, syncMasterDataToSupabase, fetchMasterFromSupabase, addLocationRecord, logInventoryHistory } from '../../../utils/supabaseSync';
 import { readExcelFromUrl, sheetToJSON, readExcelFile } from '../../../utils/excelProcessor';
 import databaseUrl from '../../../assets/DataBaseJoah.xlsx';
+import joahLogo from '../../../assets/Joah.jpeg';
 import { useToast } from '../../ui/ToastProvider';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import DiagnosticPanel from './DiagnosticPanel';
@@ -54,6 +56,11 @@ const ResultTable = ({
     const [showLocationFilter, setShowLocationFilter] = useState(false);
     const [locationSearchTerm, setLocationSearchTerm] = useState('');
     const locationFilterRef = useRef(null);
+
+    // Quick Price / Product Inspector Modal State
+    const [quickPriceProduct, setQuickPriceProduct] = useState(null);
+    const [isLoadingQuickPrice, setIsLoadingQuickPrice] = useState(false);
+    const [zoomImage, setZoomImage] = useState(false);
 
     // --- Helper: Extract & Filter Locations ---
     const uniqueLocations = useMemo(() => {
@@ -110,6 +117,58 @@ const ResultTable = ({
             return () => clearInterval(timer);
         }
     }, [cooldownRemaining]);
+
+    // --- Quick Price & Product Inspector ---
+    const handleOpenQuickPrice = async (row) => {
+        if (!row || !row.barcode) return;
+        setIsLoadingQuickPrice(true);
+        const barcode = String(row.barcode).trim();
+
+        // 1. Initial data from row
+        let productInfo = {
+            barcode: barcode,
+            product_name: row.itemName || row.masterItemName || 'ສິນຄ້າບໍ່ມີຊື່',
+            price: row.price || row.list_price || 0,
+            image_url: `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${barcode}.png`,
+            rackLocation: row.rackLocation || '-',
+            category1: row.category1 || '-',
+            category2: row.category2 || '-',
+            qty: row.qty ?? 0,
+            shopQty: row.shopQty ?? 0,
+            dcQty: row.dcQty ?? 0,
+            odooQty: row.odooQty ?? null
+        };
+
+        setQuickPriceProduct(productInfo);
+
+        // 2. Fetch realtime data from Supabase price_checker table
+        try {
+            const { data } = await supabase
+                .from('price_checker')
+                .select('barcode, product_name, price, image_url, updated_at')
+                .eq('barcode', barcode)
+                .maybeSingle();
+
+            if (data) {
+                setQuickPriceProduct(prev => ({
+                    ...prev,
+                    product_name: data.product_name || prev.product_name,
+                    price: data.price !== undefined && data.price !== null ? data.price : prev.price,
+                    image_url: data.image_url || prev.image_url,
+                    updated_at: data.updated_at
+                }));
+            }
+        } catch (err) {
+            console.warn('Failed to fetch from price_checker:', err);
+        } finally {
+            setIsLoadingQuickPrice(false);
+        }
+    };
+
+    const formatLaoPrice = (price) => {
+        if (price === undefined || price === null) return '0';
+        return new Intl.NumberFormat('lo-LA', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
+    };
 
     const handleManualRefresh = async () => {
         if (cooldownRemaining > 0) return;
@@ -1663,8 +1722,15 @@ const ResultTable = ({
                                             <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col gap-2 min-w-[220px] py-1">
-                                                    <div className="flex items-center">
+                                                    <div className="flex items-center gap-2">
                                                         <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
+                                                        <button
+                                                            onClick={() => handleOpenQuickPrice(row)}
+                                                            className="p-1.5 rounded-lg bg-orange-50 hover:bg-joah-orange text-joah-orange hover:text-white dark:bg-orange-950/40 dark:hover:bg-joah-orange dark:text-orange-300 dark:hover:text-white border border-orange-200 dark:border-orange-800/40 transition-all duration-200 shadow-sm hover:scale-110 active:scale-95 group/btn"
+                                                            title="ເບິ່ງລາຍລະອຽດ & ລາຄາສິນຄ້າ (Quick Check Price)"
+                                                        >
+                                                            <ZoomIn size={14} className="group-hover/btn:rotate-12 transition-transform" />
+                                                        </button>
                                                     </div>
                                                     <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                 </div>
@@ -1929,6 +1995,157 @@ const ResultTable = ({
                     }}
                     onClose={() => setShowScanner(false)}
                 />
+            )}
+
+            {/* 🔍 Mini CheckPrice Quick Inspector Modal (Rendered via Portal to avoid scrolling bugs) */}
+            {quickPriceProduct && createPortal(
+                <div 
+                    className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in font-lao select-none overflow-y-auto"
+                    onClick={() => setQuickPriceProduct(null)}
+                >
+                    <div 
+                        className="w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-900/95 border border-white/20 rounded-3xl shadow-2xl animate-fade-in-up flex flex-col relative my-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Top Gradient Stripe */}
+                        <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500" />
+                        
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setQuickPriceProduct(null)}
+                            className="absolute top-3.5 right-3.5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors z-20"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <div className="p-5 sm:p-6 flex flex-col items-center text-center gap-3.5">
+                            
+                            {/* Product Image Frame (Click to Zoom) */}
+                            <div 
+                                onClick={() => setZoomImage(true)}
+                                className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl bg-slate-950/90 border-2 border-white/15 p-2.5 overflow-hidden flex items-center justify-center shadow-inner group cursor-zoom-in hover:border-emerald-400/60 transition-all duration-300"
+                                title="ຄລິກເພື່ອເບິ່ງຮູບຂະໜາດເຕັມ (Click to view full image)"
+                            >
+                                <img
+                                    src={quickPriceProduct.image_url}
+                                    alt={quickPriceProduct.product_name}
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                    className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-300"
+                                />
+                                <div className="hidden flex-col items-center justify-center text-slate-500 gap-1.5">
+                                    <Package size={44} className="text-slate-600 animate-pulse" />
+                                    <span className="text-[10px] text-slate-400 font-mono">ບໍ່ມີຮູບພາບ</span>
+                                </div>
+                                <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/70 backdrop-blur-md text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity border border-white/10 shadow-lg">
+                                    <ZoomIn size={14} />
+                                </div>
+                            </div>
+
+                            {/* Barcode Pill */}
+                            <div className="flex items-center gap-1.5 font-mono text-xs">
+                                <span className="px-3 py-1 rounded-lg bg-slate-800 text-emerald-400 font-black tracking-widest border border-white/10">
+                                    {quickPriceProduct.barcode}
+                                </span>
+                            </div>
+
+                            {/* Product Name */}
+                            <h2 className="text-lg sm:text-xl font-extrabold text-white leading-snug px-2 line-clamp-2">
+                                {quickPriceProduct.product_name}
+                            </h2>
+
+                            {/* Divider */}
+                            <div className="w-full h-px bg-white/10 my-0.5" />
+
+                            {/* Retail Price Display */}
+                            <div className="flex flex-col items-center gap-1 w-full py-1 bg-white/5 rounded-2xl border border-white/5">
+                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                    <Tag size={13} className="text-emerald-400" /> ລາຄາຂາຍ / RETAIL PRICE
+                                </p>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-4xl sm:text-5xl font-black text-emerald-400 tabular-nums leading-none tracking-tight font-mono">
+                                        {formatLaoPrice(quickPriceProduct.price)}
+                                    </span>
+                                    <span className="text-xl sm:text-2xl text-emerald-500 font-black">₭</span>
+                                </div>
+                            </div>
+
+                            {/* Quick Inventory Summary Grid */}
+                            <div className="grid grid-cols-3 gap-2 w-full font-mono text-xs mt-1">
+                                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/10 flex flex-col items-center">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <MapPin size={10} className="text-joah-orange" /> ໂລເຄຊັ່ນ
+                                    </span>
+                                    <span className="font-extrabold text-slate-200 mt-0.5 text-xs truncate max-w-full">
+                                        {quickPriceProduct.rackLocation || '-'}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/10 flex flex-col items-center">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Boxes size={10} className="text-indigo-400" /> ຈຳນວນ QTY
+                                    </span>
+                                    <span className="font-extrabold text-white mt-0.5 text-xs">
+                                        {quickPriceProduct.qty}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/10 flex flex-col items-center">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Store size={10} className="text-emerald-400" /> ໜ້າຮ້ານ
+                                    </span>
+                                    <span className="font-extrabold text-emerald-300 mt-0.5 text-xs">
+                                        {quickPriceProduct.shopQty}
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Footer button */}
+                        <div className="p-3 bg-slate-950/80 border-t border-white/10 flex justify-center">
+                            <button
+                                onClick={() => setQuickPriceProduct(null)}
+                                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <CheckCircle2 size={16} className="text-emerald-400" />
+                                ປິດໜ້າຈໍ (Close)
+                            </button>
+                        </div>
+
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* 🔍 Full-Size Image Lightbox Modal */}
+            {zoomImage && quickPriceProduct && createPortal(
+                <div 
+                    className="fixed inset-0 z-[100000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in select-none"
+                    onClick={() => setZoomImage(false)}
+                >
+                    <button 
+                        onClick={() => setZoomImage(false)}
+                        className="absolute top-6 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20 shadow-2xl z-30"
+                        title="ປິດຮູບຂະໜາດເຕັມ (Close Full View)"
+                    >
+                        <X size={24} />
+                    </button>
+                    <div 
+                        className="relative max-w-[90vw] max-h-[85vh] flex flex-col items-center gap-3 animate-fade-in-up"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <img 
+                            src={quickPriceProduct.image_url} 
+                            alt={quickPriceProduct.product_name}
+                            className="max-w-[90vw] max-h-[80vh] object-contain rounded-3xl border-2 border-white/20 shadow-[0_0_80px_rgba(0,0,0,0.8)] bg-slate-950/60 p-4"
+                        />
+                        <div className="px-4 py-2 rounded-xl bg-slate-900/90 border border-white/10 text-white text-xs font-mono text-center shadow-lg">
+                            {quickPriceProduct.barcode} — {quickPriceProduct.product_name}
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </>
     );
