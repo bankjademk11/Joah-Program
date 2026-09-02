@@ -13,6 +13,15 @@ const MEGAMALL_ALL_RACKS = ["MFA01-1", "MFA01-10", "MFA01-2", "MFA01-3", "MFA01-
     "MSY-1", "MSY-2", "MSY-3"
 ];
 
+// ໂລພື້ນ PSN (Floor Storage Racks) PSN001-PSN045 ສຳລັບສາຂາ ໂພນສີນວນ (ໃຊ້ເກັບເຄື່ອງໄດ້ທຸກ Category)
+export const PSN_FLOOR_STORAGE_RACKS = [
+    "PSN001", "PSN002", "PSN003", "PSN004", "PSN005", "PSN006", "PSN007", "PSN008", "PSN009", "PSN010",
+    "PSN011", "PSN012", "PSN013", "PSN014", "PSN015", "PSN016", "PSN017", "PSN018", "PSN019", "PSN020",
+    "PSN021", "PSN022", "PSN023", "PSN024", "PSN025", "PSN026", "PSN027", "PSN028", "PSN029", "PSN030",
+    "PSN031", "PSN032", "PSN033", "PSN034", "PSN035", "PSN036", "PSN037", "PSN038", "PSN039", "PSN040",
+    "PSN041", "PSN042", "PSN043", "PSN044", "PSN045"
+];
+
 export const STORE_BRANCH_RACK_RULES = {
     'ຕະຫຼາດລາວ': {
         'INTERIOR': [
@@ -205,18 +214,25 @@ export const getStoreRackSuggestions = (category, branchId) => {
     const resolved = resolveStoreBranchId(branchId);
     const branchRules = STORE_BRANCH_RACK_RULES[resolved];
     const rules = branchRules?.[String(category).toUpperCase()];
-    if (!rules) return [];
 
     const suggestions = [];
-    rules.forEach(rule => {
-        if (rule.format === 'store_exact') {
-            suggestions.push(...rule.zones);
-        } else {
-            rule.zones.forEach(zone => {
-                suggestions.push(zone); // fallback if custom logic is needed later
-            });
-        }
-    });
+    if (rules) {
+        rules.forEach(rule => {
+            if (rule.format === 'store_exact') {
+                suggestions.push(...rule.zones);
+            } else {
+                rule.zones.forEach(zone => {
+                    suggestions.push(zone); // fallback if custom logic is needed later
+                });
+            }
+        });
+    }
+
+    // ໂລພື້ນ PSN001-PSN045 ໃຊ້ເກັບເຄື່ອງໜ້າຮ້ານໄດ້ທຸກ Category ສຳລັບສາຂາ ໂພນສີນວນ
+    if (resolved === 'ໂພນສີນວນ') {
+        suggestions.push(...PSN_FLOOR_STORAGE_RACKS);
+    }
+
     return suggestions;
 };
 
@@ -224,7 +240,16 @@ export const getStoreRackSuggestions = (category, branchId) => {
  * Validate if a rack is correct for a given category
  */
 export const validateStoreRack = (rack, category, branchId) => {
-    if (!rack || !category) return false;
+    if (!rack) return false;
+    const resolved = resolveStoreBranchId(branchId);
+    const cleanRack = String(rack).trim();
+
+    // ສຳລັບສາຂາ ໂພນສີນວນ: ໂລພື້ນ PSN001-PSN045 ຖືກຕ້ອງສະເໝີກັບທຸກ Category
+    if (resolved === 'ໂພນສີນວນ' && PSN_FLOOR_STORAGE_RACKS.includes(cleanRack)) {
+        return true;
+    }
+
+    if (!category) return false;
     const suggestions = getStoreRackSuggestions(category, branchId);
-    return suggestions.includes(String(rack).trim());
+    return suggestions.includes(cleanRack);
 };
