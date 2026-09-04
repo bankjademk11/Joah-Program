@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { X, Edit2, Database, MapPin, Info, User, Save, Loader2, Eye, Plus, ChevronDown, ChevronRight, CheckCircle, AlertTriangle, CornerDownRight, RefreshCw, ArrowRightLeft, ScanLine } from 'lucide-react';
 import { getStoreRackSuggestions, getStoreBranchCategories } from '../../../utils/storeRackUtils';
 import LocationInspector from '../inventory/LocationInspector';
 import { supabase } from '../../../utils/supabaseClient';
+import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 
 const EditPanel = ({
     selectedRow,
@@ -36,6 +37,7 @@ const EditPanel = ({
     const [localInspectedLocation, setLocalInspectedLocation] = useState(null);
     const dropdownRef = useRef(null);
     const [locationSearch, setLocationSearch] = useState('');
+    const [showLocationScanner, setShowLocationScanner] = useState(false);
     const [isSplitMode, setIsSplitMode] = useState(false);
     const [isCloneMode, setIsCloneMode] = useState(false);
 
@@ -48,6 +50,11 @@ const EditPanel = ({
         branchCategories.forEach(cat => {
             allLocs.push(...getStoreRackSuggestions(cat, currentBranch));
         });
+        if (allResults && allResults.length > 0) {
+            allResults.forEach(r => {
+                if (r.rackLocation) allLocs.push(r.rackLocation);
+            });
+        }
         return [...new Set(allLocs)].sort();
     };
 
@@ -117,6 +124,7 @@ const EditPanel = ({
             setSelectedCategory('');
             setViewingCategories(false);
             setLocalInspectedLocation(null);
+            setShowLocationScanner(false);
             setIsSplitMode(false);
             setIsCloneMode(false);
             if (setEditTag) setEditTag('');
@@ -130,6 +138,21 @@ const EditPanel = ({
             setLocationSearch('');
         }
     }, [dropdownOpen]);
+
+    // Auto-select Rack if search matches an existing location (for Barcode Scanners)
+    useEffect(() => {
+        if (!locationSearch) return;
+        
+        const searchUpper = locationSearch.trim().toUpperCase();
+        const allPossible = getAllLocations();
+        const match = allPossible.find(loc => loc.trim().toUpperCase() === searchUpper);
+        
+        if (match) {
+            setEditLocation(match);
+            setDropdownOpen(false);
+            setLocationSearch('');
+        }
+    }, [locationSearch, setEditLocation]);
 
     if (!selectedRow) return null;
 
@@ -164,7 +187,7 @@ const EditPanel = ({
     // Use allResults if available, fallback to filtered results for inspector
     const inspectorData = allResults || results || [];
 
-    return createPortal(
+    const panelPortal = createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-0 sm:p-4 bg-black/40">
             {/* Simple Backdrop */}
             <div
@@ -342,15 +365,45 @@ const EditPanel = ({
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col">
                                             {/* Search Input */}
                                             <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-20 flex-shrink-0">
-                                                <input
-                                                    type="text"
-                                                    value={locationSearch}
-                                                    onChange={(e) => setLocationSearch(e.target.value)}
-                                                    placeholder="🔍 ຄົ້ນຫາ Location..."
-                                                    className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
-                                                    autoFocus
-                                                    onClick={(e) => e.stopPropagation()}
-                                                />
+                                                <div className="relative group">
+                                                    <input
+                                                        type="text"
+                                                        value={locationSearch}
+                                                        onChange={(e) => setLocationSearch(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                if (locationSearch) {
+                                                                    const allLocs = getAllLocations();
+                                                                    const searchFilteredAll = allLocs.filter(loc => loc.toUpperCase().includes(locationSearch.toUpperCase()));
+                                                                    let picked = searchFilteredAll.length > 0 ? searchFilteredAll[0] : locationSearch.toUpperCase();
+                                                                    if (picked) {
+                                                                        setEditLocation(picked);
+                                                                        setDropdownOpen(false);
+                                                                        setLocationSearch('');
+                                                                    }
+                                                                } else {
+                                                                    setDropdownOpen(false);
+                                                                }
+                                                            }
+                                                        }}
+                                                        placeholder="🔍 ຄົ້ນຫາ Location..."
+                                                        className="w-full pl-3 pr-10 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all font-bold"
+                                                        autoFocus
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setShowLocationScanner(true);
+                                                        }}
+                                                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-indigo-500 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all"
+                                                        title="Scan Location Label"
+                                                    >
+                                                        <ScanLine size={16} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div className="overflow-y-auto flex-1">
 
@@ -674,6 +727,42 @@ const EditPanel = ({
             </div>
         </div>,
         document.body
+    );
+
+    // Camera Barcode Scanner Portal
+    const scannerPortal = showLocationScanner ? createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200000 }}>
+            <BarcodeScannerModal
+                onDetected={(code) => {
+                    if (!code) return;
+                    const cleanedCode = code.trim().toUpperCase();
+                    setShowLocationScanner(false);
+                    
+                    const allLocs = getAllLocations();
+                    const exactMatch = allLocs.find(loc => loc.trim().toUpperCase() === cleanedCode);
+                    
+                    if (exactMatch) {
+                        setEditLocation(exactMatch);
+                    } else {
+                        // If exact match not found in catalog, check partial match or apply raw scanned value
+                        const partialMatch = allLocs.find(loc => loc.trim().toUpperCase().includes(cleanedCode));
+                        setEditLocation(partialMatch || cleanedCode);
+                    }
+                    
+                    setDropdownOpen(false);
+                    setLocationSearch('');
+                }}
+                onClose={() => setShowLocationScanner(false)}
+            />
+        </div>,
+        document.body
+    ) : null;
+
+    return (
+        <>
+            {panelPortal}
+            {scannerPortal}
+        </>
     );
 };
 
