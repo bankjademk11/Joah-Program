@@ -179,7 +179,7 @@ const ResultTable = ({
         if (onRefresh) {
             await onRefresh({ skipMaster: true, silent: true }); // Avoid downloading Master if we can
         }
-        
+
         setCooldownRemaining(3); // 3 seconds cooldown
         setIsRefreshing(false);
     };
@@ -194,7 +194,7 @@ const ResultTable = ({
             let query = supabase.from('location_inventory')
                 .select('id, barcode_no, qty, rack_location, category_1_actual, category_2_actual, uploaded_by, branch_id, updated_at')
                 .eq('barcode_no', row.barcode);
-            
+
             if (row.rackLocation) {
                 query = query.eq('rack_location', row.rackLocation);
             }
@@ -702,11 +702,11 @@ const ResultTable = ({
 
         setIsUpdating(true);
         const branchToSave = currentBranch || currentUser?.branch_id || localStorage.getItem('joah_branch_id');
-        
+
         try {
             const splitQtyNum = Number(splitAmount);
             const oldQtyNum = Number(selectedRow.qty || 0);
-            
+
             if (splitQtyNum <= 0 || splitQtyNum > oldQtyNum) {
                 throw new Error("ຈຳນວນແບ່ງຕ້ອງຫຼາຍກວ່າ 0 ແລະ ບໍ່ເກີນຈຳນວນທີ່ມີຢູ່. (Invalid split amount)");
             }
@@ -716,7 +716,7 @@ const ResultTable = ({
             if (newRackLocation === selectedRow.rackLocation) {
                 throw new Error("ບໍ່ສາມາດແບ່ງໄປ Rack ເດີມໄດ້ (Must select different Rack)");
             }
-            
+
             const remainingQty = oldQtyNum - splitQtyNum;
 
             if (dbSource === 'supabase') {
@@ -744,10 +744,10 @@ const ResultTable = ({
                     remarks: `Split from ${selectedRow.rackLocation}: ${splitReason}`,
                     uploaded_by: activeUser
                 };
-                
+
                 const result = await addLocationRecord(newPayload, branchToSave);
                 if (!result.success) throw new Error(result.error);
-                
+
                 // 3. Log History for Old Record Deduct
                 await logInventoryHistory({
                     barcode: selectedRow.barcode,
@@ -760,7 +760,7 @@ const ResultTable = ({
                     reason: `ແບ່ງເຄື່ອງອອກໄປ Rack ${newRackLocation} ຈຳນວນ ${splitQtyNum} : ${splitReason}`,
                     branchId: branchToSave
                 });
-                
+
                 // 4. Log History for New Record Add
                 await logInventoryHistory({
                     barcode: selectedRow.barcode,
@@ -777,12 +777,12 @@ const ResultTable = ({
 
             // Local state optimistic update
             if (onUpdateRowQty) {
-                onUpdateRowQty(selectedRow.rowIndex, { 
+                onUpdateRowQty(selectedRow.rowIndex, {
                     qty: remainingQty,
                     updatedBy: activeUser,
                     updatedAt: new Date().toISOString()
                 });
-                
+
                 // Insert optimistic new item
                 const newOptimisticItem = {
                     id: `temp-split-${Date.now()}`,
@@ -861,10 +861,10 @@ const ResultTable = ({
 
                 // ── 🆕 Deduct DC stock if "New Stock In" OR "First-time product data recording" ─────────────
                 const remarkStr = quickAddForm.remarks || '';
-                const isNewStockRemark = remarkStr.includes('New Stock In') || 
-                                         remarkStr.includes('ສິນຄ້າເຂົ້າໃໝ່') || 
-                                         remarkStr.includes('First-time product data recording') || 
-                                         remarkStr.includes('ການບັນທຶກຂໍ້ມູນສິນຄ້າໜ້າຮ້ານຄັ້ງທຳອິດ');
+                const isNewStockRemark = remarkStr.includes('New Stock In') ||
+                    remarkStr.includes('ສິນຄ້າເຂົ້າໃໝ່') ||
+                    remarkStr.includes('First-time product data recording') ||
+                    remarkStr.includes('ການບັນທຶກຂໍ້ມູນສິນຄ້າໜ້າຮ້ານຄັ້ງທຳອິດ');
 
                 if (isNewStockRemark && Number(quickAddForm.qty) > 0) {
                     try {
@@ -875,7 +875,7 @@ const ResultTable = ({
                             .eq('barcode', quickAddForm.barcode_no)
                             .eq('branch_id', branchToSave)
                             .maybeSingle();
-                        
+
                         if (dcData) {
                             const newDcQty = Math.max(0, (dcData.qty || 0) - deductAmt);
                             await supabase
@@ -942,7 +942,7 @@ const ResultTable = ({
                     .select('barcode, change_reason, details, updated_at')
                     .order('updated_at', { ascending: false })
                     .limit(5000); // Increased limit for broader coverage
-                
+
                 if (currentBranch) {
                     histQuery = histQuery.eq('branch_id', currentBranch);
                 }
@@ -1328,9 +1328,9 @@ const ResultTable = ({
 
     return (
         <>
-            <LanguageWarningModal 
-                isOpen={showLanguageWarning} 
-                onClose={() => setShowLanguageWarning(false)} 
+            <LanguageWarningModal
+                isOpen={showLanguageWarning}
+                onClose={() => setShowLanguageWarning(false)}
             />
 
             <LocationInspector
@@ -1347,15 +1347,14 @@ const ResultTable = ({
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 group-focus-within:text-joah-orange transition-colors" size={18} />
                             <input
                                 type="text" placeholder="ຄົ້ນຫາບາໂຄ້ດ, ສິນຄ້າ ຫຼື ໂລເຄຊັ້ນ..."
-                                className={`input-field pl-14 pr-12 font-bold ${
-                                    searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
+                                className={`input-field pl-14 pr-12 font-bold ${searchTerm.length > 0 && filteredResults.length > 0 && !filteredResults.some(r => r.barcode === searchTerm)
                                         ? 'border-red-500 ring-2 ring-red-500/50 animate-pulse'
                                         : ''
-                                }`}
+                                    }`}
                                 value={searchTerm}
-                                onChange={(e) => { 
-                                    setSearchTerm(e.target.value.replace(/\s+/g, '')); 
-                                    setCurrentPage(1); 
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value.replace(/\s+/g, ''));
+                                    setCurrentPage(1);
                                 }}
                                 onKeyDown={(e) => {
                                     if (e.key === ' ') e.preventDefault();
@@ -1363,7 +1362,7 @@ const ResultTable = ({
                                         // 💡 NEW LOGIC: Check for Thai/Lao characters or no numbers (Language forgot to switch)
                                         const hasThaiLao = /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(searchTerm);
                                         const hasNoNumbers = !/\d/.test(searchTerm);
-                                        
+
                                         if (hasThaiLao || hasNoNumbers) {
                                             const audio = new Audio(barcodeNotCorrectSound);
                                             audio.play().catch(err => console.error("Error playing sound:", err));
@@ -1373,7 +1372,7 @@ const ResultTable = ({
 
                                         // 💡 NEW LOGIC: Check if exact barcode exists in filtered results
                                         const exactMatch = filteredResults.find(r => r.barcode === searchTerm);
-                                        
+
                                         // If no exact match is found, prompt to Quick Add
                                         if (!exactMatch) {
                                             if (dbSource !== 'supabase') {
@@ -1636,16 +1635,16 @@ const ResultTable = ({
                                         </div>
                                     </th>
                                     <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                                        {t('results.shopQty')}<br/><span className="opacity-50">{t('results.shopQtySub')}</span>
+                                        {t('results.shopQty')}<br /><span className="opacity-50">{t('results.shopQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                                        {t('results.dcQty')}<br/><span className="opacity-50">{t('results.dcQtySub')}</span>
+                                        {t('results.dcQty')}<br /><span className="opacity-50">{t('results.dcQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                                        {t('results.salesQty')}<br/><span className="opacity-50">{t('results.salesQtySub')}</span>
+                                        {t('results.salesQty')}<br /><span className="opacity-50">{t('results.salesQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                                        {t('results.scrapQty')}<br/><span className="opacity-50">{t('results.scrapQtySub')}</span>
+                                        {t('results.scrapQty')}<br /><span className="opacity-50">{t('results.scrapQtySub')}</span>
                                     </th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.status')}</th>
                                     <th className="px-6 py-6 text-center text-[11px] font-black text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">{t('results.odooQty')}</th>
@@ -1716,124 +1715,124 @@ const ResultTable = ({
                                         {currentResults.map((row) => (
                                             <tr
                                                 key={row.rowIndex}
-                                            ref={el => rowRefs.current[row.barcode] = el}
-                                            className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
-                                        >
-                                            <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col gap-2 min-w-[220px] py-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
-                                                        <button
-                                                            onClick={() => handleOpenQuickPrice(row)}
-                                                            className="p-1.5 rounded-lg bg-orange-50 hover:bg-joah-orange text-joah-orange hover:text-white dark:bg-orange-950/40 dark:hover:bg-joah-orange dark:text-orange-300 dark:hover:text-white border border-orange-200 dark:border-orange-800/40 transition-all duration-200 shadow-sm hover:scale-110 active:scale-95 group/btn"
-                                                            title="ເບິ່ງລາຍລະອຽດ & ລາຄາສິນຄ້າ (Quick Check Price)"
-                                                        >
-                                                            <ZoomIn size={14} className="group-hover/btn:rotate-12 transition-transform" />
-                                                        </button>
+                                                ref={el => rowRefs.current[row.barcode] = el}
+                                                className={`group transition-all duration-500 ${searchTerm === row.barcode ? 'bg-joah-orange/10 ring-2 ring-joah-orange shadow-lg shadow-joah-orange/20 z-10 relative' : 'hover:bg-joah-orange/[0.03] dark:hover:bg-joah-orange/[0.05]'}`}
+                                            >
+                                                <td className="px-8 py-6 text-xs font-black text-slate-300 dark:text-slate-700">#{row.rowIndex}</td>
+                                                <td className="px-6 py-6">
+                                                    <div className="flex flex-col gap-2 min-w-[220px] py-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-black font-mono tracking-wider shadow-sm">{row.barcode}</span>
+                                                            <button
+                                                                onClick={() => handleOpenQuickPrice(row)}
+                                                                className="p-1.5 rounded-lg bg-orange-50 hover:bg-joah-orange text-joah-orange hover:text-white dark:bg-orange-950/40 dark:hover:bg-joah-orange dark:text-orange-300 dark:hover:text-white border border-orange-200 dark:border-orange-800/40 transition-all duration-200 shadow-sm hover:scale-110 active:scale-95 group/btn"
+                                                                title="ເບິ່ງລາຍລະອຽດ & ລາຄາສິນຄ້າ (Quick Check Price)"
+                                                            >
+                                                                <ZoomIn size={14} className="group-hover/btn:rotate-12 transition-transform" />
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
                                                     </div>
-                                                    <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[280px] leading-relaxed" title={row.itemName || row.masterItemName}>{row.itemName || row.masterItemName || <span className="opacity-50 italic">Unnamed Item</span>}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-joah-orange/50 transition-all font-mono whitespace-nowrap">
-                                                    <MapPin size={13} className="text-joah-orange shrink-0" />
-                                                    <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase whitespace-nowrap">{row.rackLocation}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6 hidden lg:table-cell">
-                                                <div className="flex flex-col gap-2 max-w-[180px]">
-                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/30 shadow-sm">
-                                                        <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
+                                                </td>
+                                                <td className="px-6 py-6">
+                                                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:border-joah-orange/50 transition-all font-mono whitespace-nowrap">
+                                                        <MapPin size={13} className="text-joah-orange shrink-0" />
+                                                        <span className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-wide uppercase whitespace-nowrap">{row.rackLocation}</span>
                                                     </div>
-                                                    <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50 shadow-sm">
-                                                        <span className="text-[10px] font-bold uppercase tracking-widest truncate">{row.category2 || '-'}</span>
+                                                </td>
+                                                <td className="px-6 py-6 hidden lg:table-cell">
+                                                    <div className="flex flex-col gap-2 max-w-[180px]">
+                                                        <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/30 shadow-sm">
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest truncate">{row.category1 || '-'}</span>
+                                                        </div>
+                                                        <div className="inline-flex w-fit items-center px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50 shadow-sm">
+                                                            <span className="text-[10px] font-bold uppercase tracking-widest truncate">{row.category2 || '-'}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
-                                                    <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
-                                                        <Database size={8} className="text-sky-500" />
-                                                        <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.shopQty || 0}</span>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{row.dcQty || 0}</span>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-black text-amber-600 dark:text-amber-500 leading-none">{row.salesQty || 0}</span>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
-                                            </td>
-                                            <td className="px-6 py-6 text-center">
-                                                <button
-                                                    onClick={() => setDiagnosticRow(row)}
-                                                    className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}
-                                                >
-                                                    {getStatusHint(row).icon}
-                                                    {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
-                                                </button>
-                                            </td>
-                                            {/* Odoo Qty Column */}
-                                            <td className="px-6 py-6 text-center">
-                                                {row.odooQty !== undefined && row.odooQty !== null ? (
+                                                </td>
+                                                <td className="px-6 py-6">
                                                     <div className="flex flex-col items-center">
-                                                        <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                            {row.odooQty}
-                                                        </span>
-                                                        {Number(row.qty) !== Number(row.odooQty) && (
-                                                            <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Diff</span>
-                                                        )}
+                                                        <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{row.qty || 0}</span>
+                                                        <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 p-1 px-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
+                                                            <Database size={8} className="text-sky-500" />
+                                                            <span>Sys: <b className="text-slate-700 dark:text-slate-300">{row.masterQty || 0}</b></span>
+                                                        </div>
                                                     </div>
-                                                ) : (
-                                                    <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-6 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button onClick={() => {
-                                                        const sourceInfo = row.hasOwnProperty('id') ? "Source: location_inventory (Scanned from warehouse)" : "Source: master_data (No scan record)";
-                                                        const debugStr = `🔍 DEBUG INFO:\n${sourceInfo}\n\nRAW DATA:\n${JSON.stringify(row, null, 2)}`;
-                                                        navigator.clipboard.writeText(debugStr).then(() => {
-                                                            alert(`✅ ຂໍ້ມູນຖືກ Copy ແລ້ວ!\n\n${debugStr}`);
-                                                        }).catch(() => {
-                                                            prompt("Copy ຂໍ້ມູນຢູ່ດ້ານລຸ່ມນີ້:", debugStr);
-                                                        });
-                                                        console.log("DEBUG ROW:", row);
-                                                    }} className="p-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-bold hover:bg-purple-100 hover:scale-105 transition-all flex items-center gap-1 text-[10px]" title="Debug & Copy data">
-                                                        <Database size={14} /> DEBUG
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{row.shopQty || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{row.dcQty || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-xl font-black text-amber-600 dark:text-amber-500 leading-none">{row.salesQty || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <button
+                                                        onClick={() => setDiagnosticRow(row)}
+                                                        className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}
+                                                    >
+                                                        {getStatusHint(row).icon}
+                                                        {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
                                                     </button>
-                                                    <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
-                                                        <Info size={18} />
-                                                    </button>
-                                                    {dbSource === 'supabase' && (
-                                                        <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
-                                                            <History size={18} />
-                                                        </button>
+                                                </td>
+                                                {/* Odoo Qty Column */}
+                                                <td className="px-6 py-6 text-center">
+                                                    {row.odooQty !== undefined && row.odooQty !== null ? (
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-xl font-black ${Number(row.qty) !== Number(row.odooQty) ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                                {row.odooQty}
+                                                            </span>
+                                                            {Number(row.qty) !== Number(row.odooQty) && (
+                                                                <span className="text-[9px] font-bold text-rose-400 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Diff</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
                                                     )}
-                                                    <button onClick={() => refreshSingleRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="Refresh Item">
-                                                        <RotateCw size={18} className={refreshingRowId === (row.id || row.barcode) ? 'animate-spin text-emerald-500' : ''} />
-                                                    </button>
-                                                    <button onClick={() => {
-                                                        setSelectedRow(row);
-                                                        setEditQty(row.qty || 0);
-                                                        setEditLocation(row.rackLocation || '');
-                                                        setEditCat1(row.category1 || '');
-                                                        setEditCat2(row.category2 || '');
-                                                        setMergeAmount(''); // Reset merge amount when opening edit
-                                                    }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
-                                                        <Edit2 size={18} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => {
+                                                            const sourceInfo = row.hasOwnProperty('id') ? "Source: location_inventory (Scanned from warehouse)" : "Source: master_data (No scan record)";
+                                                            const debugStr = `🔍 DEBUG INFO:\n${sourceInfo}\n\nRAW DATA:\n${JSON.stringify(row, null, 2)}`;
+                                                            navigator.clipboard.writeText(debugStr).then(() => {
+                                                                alert(`✅ ຂໍ້ມູນຖືກ Copy ແລ້ວ!\n\n${debugStr}`);
+                                                            }).catch(() => {
+                                                                prompt("Copy ຂໍ້ມູນຢູ່ດ້ານລຸ່ມນີ້:", debugStr);
+                                                            });
+                                                            console.log("DEBUG ROW:", row);
+                                                        }} className="p-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-bold hover:bg-purple-100 hover:scale-105 transition-all flex items-center gap-1 text-[10px]" title="Debug & Copy data">
+                                                            <Database size={14} /> DEBUG
+                                                        </button>
+                                                        <button onClick={() => setDiagnosticRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="View Diagnostics">
+                                                            <Info size={18} />
+                                                        </button>
+                                                        {dbSource === 'supabase' && (
+                                                            <button onClick={() => fetchHistory(row.barcode)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all" title="View History">
+                                                                <History size={18} />
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => refreshSingleRow(row)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-all" title="Refresh Item">
+                                                            <RotateCw size={18} className={refreshingRowId === (row.id || row.barcode) ? 'animate-spin text-emerald-500' : ''} />
+                                                        </button>
+                                                        <button onClick={() => {
+                                                            setSelectedRow(row);
+                                                            setEditQty(row.qty || 0);
+                                                            setEditLocation(row.rackLocation || '');
+                                                            setEditCat1(row.category1 || '');
+                                                            setEditCat2(row.category2 || '');
+                                                            setMergeAmount(''); // Reset merge amount when opening edit
+                                                        }} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-joah-orange transition-all" title="Edit Quantity">
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         ))}
                                     </>
                                 ) : (
@@ -1871,7 +1870,7 @@ const ResultTable = ({
                                                             const hasNoNumbers = !/\d/.test(searchTerm);
                                                             if (hasThaiLao || hasNoNumbers) {
                                                                 const audio = new Audio(barcodeNotCorrectSound);
-                                                                audio.play().catch(() => {});
+                                                                audio.play().catch(() => { });
                                                                 setShowLanguageWarning(true);
                                                                 return;
                                                             }
@@ -1999,17 +1998,17 @@ const ResultTable = ({
 
             {/* 🔍 Mini CheckPrice Quick Inspector Modal (Rendered via Portal to avoid scrolling bugs) */}
             {quickPriceProduct && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in font-lao select-none overflow-y-auto"
                     onClick={() => setQuickPriceProduct(null)}
                 >
-                    <div 
+                    <div
                         className="w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-900/95 border border-white/20 rounded-3xl shadow-2xl animate-fade-in-up flex flex-col relative my-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Top Gradient Stripe */}
                         <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500" />
-                        
+
                         {/* Close Button */}
                         <button
                             onClick={() => setQuickPriceProduct(null)}
@@ -2019,9 +2018,9 @@ const ResultTable = ({
                         </button>
 
                         <div className="p-5 sm:p-6 flex flex-col items-center text-center gap-3.5">
-                            
+
                             {/* Product Image Frame (Click to Zoom) */}
-                            <div 
+                            <div
                                 onClick={() => setZoomImage(true)}
                                 className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl bg-slate-950/90 border-2 border-white/15 p-2.5 overflow-hidden flex items-center justify-center shadow-inner group cursor-zoom-in hover:border-emerald-400/60 transition-all duration-300"
                                 title="ຄລິກເພື່ອເບິ່ງຮູບຂະໜາດເຕັມ (Click to view full image)"
@@ -2120,23 +2119,23 @@ const ResultTable = ({
 
             {/* 🔍 Full-Size Image Lightbox Modal */}
             {zoomImage && quickPriceProduct && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[100000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in select-none"
                     onClick={() => setZoomImage(false)}
                 >
-                    <button 
+                    <button
                         onClick={() => setZoomImage(false)}
                         className="absolute top-6 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20 shadow-2xl z-30"
                         title="ປິດຮູບຂະໜາດເຕັມ (Close Full View)"
                     >
                         <X size={24} />
                     </button>
-                    <div 
+                    <div
                         className="relative max-w-[90vw] max-h-[85vh] flex flex-col items-center gap-3 animate-fade-in-up"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <img 
-                            src={quickPriceProduct.image_url} 
+                        <img
+                            src={quickPriceProduct.image_url}
                             alt={quickPriceProduct.product_name}
                             className="max-w-[90vw] max-h-[80vh] object-contain rounded-3xl border-2 border-white/20 shadow-[0_0_80px_rgba(0,0,0,0.8)] bg-slate-950/60 p-4"
                         />

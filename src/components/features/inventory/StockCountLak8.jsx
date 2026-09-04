@@ -26,7 +26,13 @@ import {
   Building2,
   Calendar,
   Filter,
-  LogOut
+  LogOut,
+  Shield,
+  ChevronRight,
+  ChevronLeft,
+  Search,
+  Eye,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 import * as XLSX from 'xlsx';
@@ -34,6 +40,7 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import joahLogo from '../../../assets/Joah.jpeg';
 import technoHubLogo from '../../../assets/technohublogo.png';
+import gardenBg from '../../../assets/BackGroundIM/website-background-light-blue.jpg';
 
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
@@ -68,6 +75,25 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [filterBranch, setFilterBranch] = useState('');
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [isFilterMode, setIsFilterMode] = useState(false);
+
+  // ─── Back-Office View States (ສຳລັບພະນັກງານຫຼັງບ້ານ) ───────────────
+  const [viewMode, setViewMode] = useState('counter'); // 'counter' | 'backoffice'
+  const [boStartDate, setBoStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7); // Default to last 7 days
+    return d.toISOString().split('T')[0];
+  });
+  const [boEndDate, setBoEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [boBranch, setBoBranch] = useState('');
+  const [boSearchTerm, setBoSearchTerm] = useState('');
+  const [boItems, setBoItems] = useState([]);
+  const [boLoading, setBoLoading] = useState(false);
+  const [boExporting, setBoExporting] = useState(false);
+  const [showImportBlockedNotice, setShowImportBlockedNotice] = useState(false);
+  const [boHasSearched, setBoHasSearched] = useState(false); // ยังไม่อ่านข้อมูลถ้ายังไม่ได้กดค้นหา/ฟิลเตอร์
+  const [boCurrentPage, setBoCurrentPage] = useState(1);
+  const [boPageSize, setBoPageSize] = useState(50); // ทีละ 50 รายการ
+  const [boLoadProgress, setBoLoadProgress] = useState({ loaded: 0, isChunking: false });
 
   const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8'];
 
@@ -151,13 +177,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       // Use override values (passed from handleConfirmSetup to avoid stale closure),
       // or fall back to filter mode / current session state
       const targetBranch = overrideBranch ?? (isFilterMode ? filterBranch : selectedBranch);
-      const targetDate   = overrideDate   ?? (isFilterMode ? filterDate   : selectedDate);
-      const targetOwner  = overrideOwner  ?? (isFilterMode ? null         : lak8OwnerBranch);
+      const targetDate = overrideDate ?? (isFilterMode ? filterDate : selectedDate);
+      const targetOwner = overrideOwner ?? (isFilterMode ? null : lak8OwnerBranch);
 
       let query = supabase.from('stock_count_lak8').select('*');
 
       if (targetBranch) query = query.eq('branch', targetBranch);
-      if (targetDate)   query = query.eq('count_date', targetDate);
+      if (targetDate) query = query.eq('count_date', targetDate);
 
       // ✅ KEY FIX: filter by owner_branch when branch=LAK8
       // Without this, selecting LAK8+VX fetches ALL LAK8 rows (TLL, PTX, etc.)
@@ -995,6 +1021,270 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   };
 
+  // ─── BACK-OFFICE: FETCH DATA IN DATE RANGE (UNLIMITED WITH CHUNKING) ─────
+  const fetchBackOfficeStock = async () => {
+    try {
+      setBoLoading(true);
+      setBoHasSearched(true);
+      setBoCurrentPage(1); // Reset to page 1 on new search
+      setBoLoadProgress({ loaded: 0, isChunking: true });
+
+      const currentBrand = selectedBrand || 'joah';
+      const CHUNK_SIZE = 1000;
+      let allRecords = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase.from('stock_count_lak8').select('*');
+
+        if (boStartDate) {
+          query = query.gte('count_date', boStartDate);
+        }
+        if (boEndDate) {
+          query = query.lte('count_date', boEndDate);
+        }
+        if (boBranch) {
+          query = query.eq('branch', boBranch);
+        }
+
+        if (currentBrand === 'technohub') {
+          query = query.eq('brand', 'technohub');
+        } else {
+          query = query.or('brand.eq.joah,brand.is.null');
+        }
+
+        const { data, error } = await query
+          .order('count_date', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .range(from, from + CHUNK_SIZE - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allRecords.push(...data);
+          setBoLoadProgress({ loaded: allRecords.length, isChunking: true });
+          if (data.length < CHUNK_SIZE) {
+            hasMore = false;
+          } else {
+            from += CHUNK_SIZE;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const formatted = allRecords.map(item => ({
+        id: item.id,
+        barcode: item.barcode,
+        name: getProductName(item.barcode) || `ສິນຄ້າບາໂຄດ ${item.barcode}`,
+        qty: Number(item.qty) || 0,
+        createdBy: item.created_by || 'Unknown',
+        branch: item.branch,
+        owner_branch: item.owner_branch,
+        doc_nos: item.doc_nos,
+        countDate: item.count_date,
+        timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA')
+      }));
+
+      setBoItems(formatted);
+      showToast({
+        type: 'success',
+        title: 'ໂຫຼດຂໍ້ມູນສຳເລັດ! 📦',
+        message: `ດຶງຂໍ້ມູນຄົບທຸກແຖວ (${formatted.length.toLocaleString()} ລາຍການ)`
+      });
+    } catch (err) {
+      console.error('[Backoffice Fetch Error]', err);
+      showToast({
+        type: 'error',
+        title: 'ຂໍ້ຜິດພາດ!',
+        message: 'ບໍ່ສາມາດໂຫຼດຂໍ້ມູນຫຼັງບ້ານໄດ້: ' + (err.message || '')
+      });
+    } finally {
+      setBoLoading(false);
+      setBoLoadProgress({ loaded: 0, isChunking: false });
+    }
+  };
+
+  // Do NOT automatically fetch without user clicking filter button!
+  // Only reset search state if brand changes while in backoffice
+  useEffect(() => {
+    if (viewMode === 'backoffice' && boHasSearched) {
+      fetchBackOfficeStock();
+    }
+  }, [selectedBrand]);
+
+  // Back-office derived items based on search term
+  const filteredBoItems = useMemo(() => {
+    if (!boSearchTerm.trim()) return boItems;
+    const term = boSearchTerm.toLowerCase();
+    return boItems.filter(item =>
+      item.barcode?.toLowerCase().includes(term) ||
+      item.name?.toLowerCase().includes(term) ||
+      item.branch?.toLowerCase().includes(term) ||
+      item.owner_branch?.toLowerCase().includes(term) ||
+      item.createdBy?.toLowerCase().includes(term) ||
+      (Array.isArray(item.doc_nos) && item.doc_nos.some(d => d.toLowerCase().includes(term)))
+    );
+  }, [boItems, boSearchTerm]);
+
+  // Back-office summary stats
+  const boStats = useMemo(() => {
+    const totalQty = filteredBoItems.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+    const uniqueBarcodes = new Set(filteredBoItems.map(i => i.barcode)).size;
+    const uniqueBranches = new Set(filteredBoItems.map(i => i.branch)).size;
+    return {
+      totalItems: filteredBoItems.length,
+      totalQty,
+      uniqueBarcodes,
+      uniqueBranches
+    };
+  }, [filteredBoItems]);
+
+  // Back-office pagination calculations (50 items per page)
+  const boTotalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredBoItems.length / boPageSize));
+  }, [filteredBoItems.length, boPageSize]);
+
+  const paginatedBoItems = useMemo(() => {
+    const start = (boCurrentPage - 1) * boPageSize;
+    return filteredBoItems.slice(start, start + boPageSize);
+  }, [filteredBoItems, boCurrentPage, boPageSize]);
+
+  // ─── BACK-OFFICE EXCEL EXPORT (RANGE) ─────────────────────────────
+  const handleExportBackOfficeExcel = async () => {
+    if (filteredBoItems.length === 0) {
+      alert('ບໍ່ມີຂໍ້ມູນສຳລັບການສົ່ງອອກ (No data to export)');
+      return;
+    }
+    try {
+      setBoExporting(true);
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Joah Warehouse Validator - Back Office';
+      workbook.created = new Date();
+
+      const fontPhetsarath = { name: 'Phetsarath OT', size: 11 };
+      const fontHeader = { name: 'Phetsarath OT', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      const thinBorder = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+      const headerFill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E40AF' } // Blue 800
+      };
+      const centerAlignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+      const sheet1 = workbook.addWorksheet('Stock Report Back-Office');
+      const brandName = selectedBrand === 'technohub' ? 'Techno Hub' : 'JOAH';
+      const brandPrefix = selectedBrand === 'technohub' ? 'TechnoHub' : 'JOAH';
+
+      sheet1.mergeCells('A1:J1');
+      const titleCell = sheet1.getCell('A1');
+      titleCell.value = `🏢 ບົດລາຍງານການນັບສະຕັອກສຳລັບພະນັກງານຫຼັງບ້ານ ${brandName}`;
+      titleCell.font = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FF0F172A' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      sheet1.mergeCells('A2:J2');
+      const infoCell = sheet1.getCell('A2');
+      infoCell.value = `ຊ່ວງວັນທີ: ${boStartDate || 'ເລີ່ມຕົ້ນ'} ຫາ ${boEndDate || 'ປະຈຸບັນ'} | ສາຂາ: ${boBranch || 'ທຸກສາຂາ'} | ລວມ: ${filteredBoItems.length} ລາຍການ (${boStats.totalQty} QTY)`;
+      infoCell.font = { name: 'Phetsarath OT', size: 11, italic: true, color: { argb: 'FF475569' } };
+      infoCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      sheet1.addRow([]); // Row 3 Blank
+
+      const headers = [
+        'ລຳດັບ (#)',
+        'ເລກບາໂຄດ (Barcode)',
+        'ຊື່ສິນຄ້າ (Product Name)',
+        'ຈຳນວນ (QTY)',
+        'ສາຂາຫຼັກ (Branch)',
+        'ສາຂາເຈົ້າຂອງ (Owner Branch)',
+        'ເລກທີບິນ (Doc Nos)',
+        'ວັນທີນັບ (Count Date)',
+        'ຜູ້ບັນທຶກ (Staff)',
+        'ເວລາ (Time)'
+      ];
+      const headerRow = sheet1.addRow(headers);
+      headerRow.height = 28;
+      headerRow.eachCell((cell) => {
+        cell.font = fontHeader;
+        cell.fill = headerFill;
+        cell.alignment = centerAlignment;
+        cell.border = thinBorder;
+      });
+
+      filteredBoItems.forEach((item, index) => {
+        const docs = Array.isArray(item.doc_nos) ? item.doc_nos.join(', ') : (item.doc_nos || '-');
+        const row = sheet1.addRow([
+          index + 1,
+          item.barcode,
+          item.name,
+          item.qty,
+          item.branch,
+          item.owner_branch || '-',
+          docs,
+          item.countDate,
+          item.createdBy,
+          item.timestamp
+        ]);
+        row.height = 22;
+        row.eachCell((cell) => {
+          cell.font = fontPhetsarath;
+          cell.alignment = centerAlignment;
+          cell.border = thinBorder;
+        });
+      });
+
+      const footerRow = sheet1.addRow([
+        'ລວມທັງໝົດ',
+        '',
+        `ຍອດລວມ ${filteredBoItems.length} ລາຍການ`,
+        boStats.totalQty,
+        '',
+        '',
+        '',
+        '',
+        '',
+        ''
+      ]);
+      footerRow.height = 26;
+      footerRow.eachCell((cell) => {
+        cell.font = { name: 'Phetsarath OT', size: 11, bold: true };
+        cell.alignment = centerAlignment;
+        cell.border = thinBorder;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      });
+
+      sheet1.columns = [
+        { width: 10 },
+        { width: 20 },
+        { width: 35 },
+        { width: 14 },
+        { width: 14 },
+        { width: 18 },
+        { width: 25 },
+        { width: 15 },
+        { width: 16 },
+        { width: 15 }
+      ];
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `BackOffice_StockCount_${brandPrefix}_${boStartDate}_to_${boEndDate}.xlsx`);
+
+      showToast({ type: 'success', title: 'ສົ່ງອອກສຳເລັດ! 📊', message: 'ໄຟລ໌ Excel ຫຼັງບ້ານຖືກດາວໂຫຼດຮຽບຮ້ອຍແລ້ວ' });
+    } catch (err) {
+      console.error('[BO Excel Export Error]', err);
+      showToast({ type: 'error', title: 'ເກີດຂໍ້ຜິດພາດ!', message: 'ບໍ່ສາມາດສົ່ງອອກໄຟລ໌ Excel ໄດ້' });
+    } finally {
+      setBoExporting(false);
+    }
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1055,7 +1345,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   // ─── Brand Selector (shown before setup modal if brand not yet chosen) ────
   if (!selectedBrand) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 relative overflow-hidden font-joah">
         {/* Animated background circles */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full bg-indigo-600/10 blur-3xl animate-pulse" />
@@ -1131,15 +1421,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+    <div className="min-h-screen bg-slate-50 font-joah text-slate-900 pb-20">
       {/* SETUP MODAL (FIRST ENTRY) */}
       {showSetupModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
             {/* Top Brand Banner Header */}
             <div className={`py-3 px-6 flex items-center justify-between border-b ${selectedBrand === 'technohub'
-                ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white'
-                : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+              ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white'
+              : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
               }`}>
               <div className="flex items-center gap-2">
                 <img
@@ -1165,8 +1455,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             <div className="p-8 space-y-6">
               <div className="text-center space-y-2">
                 <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-sm ${selectedBrand === 'technohub'
-                    ? 'bg-sky-50 border-sky-100 text-sky-600'
-                    : 'bg-indigo-50 border-indigo-100 text-indigo-600'
+                  ? 'bg-sky-50 border-sky-100 text-sky-600'
+                  : 'bg-indigo-50 border-indigo-100 text-indigo-600'
                   }`}>
                   {selectedBrand === 'technohub' ? (
                     <img src={technoHubLogo} alt="TechnoHub" className="w-14 h-14 object-contain" />
@@ -1294,8 +1584,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 onClick={handleConfirmSetup}
                 disabled={!selectedBranch || !selectedDate || (selectedBranch === 'LAK8' && !lak8OwnerBranch)}
                 className={`w-full text-white py-4 rounded-2xl font-black text-lg shadow-xl disabled:opacity-50 transition-all active:scale-95 cursor-pointer ${selectedBrand === 'technohub'
-                    ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200'
-                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                  ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200'
+                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
                   }`}
               >
                 ຢືນຢັນການເລີ່ມຕົ້ນ
@@ -1370,8 +1660,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       {/* HEADER */}
       <header className={`sticky top-0 z-30 text-white shadow-lg transition-all duration-300 ${selectedBrand === 'technohub'
-          ? 'bg-gradient-to-r from-slate-900 via-sky-900 to-blue-950 border-b border-sky-500/30'
-          : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600'
+        ? 'bg-gradient-to-r from-slate-900 via-sky-900 to-blue-950 border-b border-sky-500/30'
+        : 'bg-gradient-to-r from-slate-800 via-blue-800 to-slate-700 border-b border-blue-600/30'
         }`}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1413,8 +1703,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 <button
                   onClick={toggleSessionStatus}
                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all shadow-sm cursor-pointer ${sessionStatus === 'completed'
-                      ? 'bg-emerald-400 text-emerald-950 border border-emerald-300'
-                      : 'bg-amber-400 text-amber-950 border border-amber-300'
+                    ? 'bg-emerald-400 text-emerald-950 border border-emerald-300'
+                    : 'bg-amber-400 text-amber-950 border border-amber-300'
                     }`}
                   title="ກົດເພື່ອປ່ຽນສະຖານະ"
                 >
@@ -1444,31 +1734,33 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           </div>
 
           <div className="flex items-center gap-2">
+            {/* 🏢 Button for Back-Office Staff (ສຳລັບພະນັກງານຫຼັງບ້ານ) */}
             <button
-              onClick={() => setIsFilterMode(!isFilterMode)}
-              className={`p-2 rounded-lg transition-colors ${isFilterMode ? 'bg-yellow-400 text-indigo-900' : 'bg-white/10 hover:bg-white/20'}`}
-              title="Filter for GM"
+              onClick={() => {
+                if (viewMode === 'backoffice') {
+                  setViewMode('counter');
+                } else {
+                  setViewMode('backoffice');
+                }
+              }}
+              className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer border ${viewMode === 'backoffice'
+                  ? 'bg-amber-400 hover:bg-amber-300 text-amber-950 border-amber-300 ring-2 ring-amber-300/50'
+                  : 'bg-white/20 hover:bg-white/30 text-white border-white/30 active:scale-95'
+                }`}
+              title="ສຳລັບພະນັກງານຫຼັງບ້ານ"
             >
-              <Filter size={18} />
+              <Building2 size={16} className={viewMode === 'backoffice' ? 'text-amber-950' : 'text-amber-300'} />
+              <span className="hidden sm:inline">ສຳລັບພະນັກງານຫຼັງບ້ານ</span>
+              <span className="sm:hidden">ຫຼັງບ້ານ</span>
             </button>
 
-            <div className="flex items-center bg-white/10 rounded-lg p-1">
-              <button onClick={handleExportExcel} className="p-2 hover:bg-white/20 rounded-lg transition-colors" title="Export Excel">
-                <Download size={18} />
-              </button>
-              <label className="p-2 hover:bg-white/20 rounded-lg transition-colors cursor-pointer" title="Import Excel">
-                <Upload size={18} />
-                <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileUpload} />
-              </label>
-            </div>
-
-            <button onClick={handleLogoutSession} className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg transition-colors" title="Change Branch">
+            <button onClick={handleLogoutSession} className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg transition-colors cursor-pointer" title="ປ່ຽນສາຂາ (Change Branch)">
               <LogOut size={18} />
             </button>
 
             <div className="bg-white/20 backdrop-blur-md px-3 py-2 rounded-xl flex items-center gap-2 border border-white/30 hidden sm:flex">
               <Package size={18} className="text-yellow-200" />
-              <span className="text-sm font-black font-mono">ລວມ {totalQtySum}</span>
+              <span className="text-sm font-black font-mono">ລວມ {viewMode === 'backoffice' ? boStats.totalQty : totalQtySum}</span>
             </div>
           </div>
         </div>
@@ -1502,242 +1794,648 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         </div>
       )}
 
-      {/* MAIN CONTENT */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 space-y-6">
+      {/* ─────────────────────────────────────────────────────────────
+          BACK-OFFICE VIEW (ສຳລັບພະນັກງານຫຼັງບ້ານ)
+          ───────────────────────────────────────────────────────────── */}
+      {viewMode === 'backoffice' ? (
+        <div
+          className="min-h-screen relative animate-in fade-in duration-300"
+          style={{
+            backgroundImage: `url(${gardenBg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            backgroundAttachment: 'fixed',
+          }}
+        >
+          {/* Very light overlay to keep readability on white-blue BG */}
+          <div className="absolute inset-0 bg-white/30 pointer-events-none z-0" />
+          <div className="relative z-10 max-w-[1760px] mx-auto px-6 xl:px-10 py-6 space-y-5">
+            {/* TOP BANNER / NAVIGATION — Light Blue-White Theme */}
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 xl:p-8 shadow-xl border border-blue-100 relative overflow-hidden">
+              {/* Subtle blue gradient decoration top-right */}
+              <div className="absolute right-0 top-0 w-[500px] h-[300px] bg-gradient-to-bl from-blue-100/80 via-sky-50/60 to-transparent rounded-full blur-2xl pointer-events-none -mr-20 -mt-20"></div>
+              <div className="absolute left-0 bottom-0 w-[300px] h-[200px] bg-gradient-to-tr from-indigo-50/60 to-transparent rounded-full blur-2xl pointer-events-none -ml-10 -mb-10"></div>
 
-        {/* Only show scanner if NOT in filter mode (Staff mode) */}
-        {!isFilterMode ? (
-          <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-slate-200 space-y-4">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
-              <ScanLine size={18} className="text-indigo-600" />
-              ເລືອກໂຫມດການສະແກນ
-            </h2>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setScanMode('manual')}
-                className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'manual'
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg'
-                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-                  }`}
-              >
-                <span className="text-base font-black leading-tight text-center">✏️ ພິມຈຳນວນ</span>
-                <span className="text-xs opacity-75">ສະແກນ + ປ້ອນຈຳນວນ</span>
-              </button>
-
-              <button
-                onClick={() => setScanMode('count')}
-                className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'count'
-                  ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-lg'
-                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-                  }`}
-              >
-                <span className="text-base font-black leading-tight text-center">🔢 Count ກົງ</span>
-                <span className="text-xs opacity-75">ສະແກນ +1 ທີລະຄັ້ງ</span>
-              </button>
-            </div>
-
-            {scanMode === 'manual' && (
-              <div className="pt-2 flex items-center gap-3 animate-in fade-in duration-200 bg-indigo-50 p-3 rounded-xl border border-indigo-200">
-                <span className="text-sm font-bold text-slate-700 shrink-0">ຕັ້ງຄ່າ QTY:</span>
-                <div className="flex items-center border-2 border-slate-300 rounded-lg overflow-hidden bg-white">
-                  <button onClick={() => setManualQty(Math.max(1, manualQty - 1))} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">−</button>
-                  <input type="number" value={manualQty} onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))} className="w-20 text-center font-black text-lg bg-white border-none focus:outline-none text-slate-900" />
-                  <button onClick={() => setManualQty(manualQty + 1)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">+</button>
+              <div className="relative z-10 flex flex-row items-center justify-between gap-6">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                      <Shield size={14} /> ລະບົບຫຼັງບ້ານ
+                    </span>
+                    <span className="text-sm text-slate-500 font-bold">
+                      {selectedBrand === 'technohub' ? 'Techno Hub' : 'JOAH'} Back-Office System
+                    </span>
+                  </div>
+                  <h2 className="text-3xl xl:text-4xl font-black tracking-tight text-slate-800 flex items-center gap-2">
+                    🏢 ລະບົບກວດສອບ & ລາຍງານສຳລັບພະນັກງານຫຼັງບ້ານ
+                  </h2>
+                  <p className="text-slate-500 text-sm font-medium">
+                    ຄົ້ນຫາ, ກວດກາຂໍ້ມູນການນັບສະຕັອກຕາມຊ່ວງວັນທີ (From - To), ສົ່ງອອກ Excel ແລະ ຈັດການຂໍ້ມູນ
+                  </p>
                 </div>
-              </div>
-            )}
-
-            <form onSubmit={handleBarcodeSubmit} className="space-y-3">
-              <div className="relative">
-                <label className="text-xs font-bold text-slate-600 block mb-2">ເລກບາໂຄດ (EAN-13)</label>
-                <div className="relative flex items-center">
-                  <Barcode size={20} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    readOnly={isCameraActive || isSubmittingBarcode}
-                    inputMode={isCameraActive ? 'none' : 'numeric'}
-                    placeholder={isCameraActive ? "ກ້ອງສະແກນກຳລັງທຳງານ..." : "ສະແກນ ຫຼື ພິມເລກບາໂຄດ..."}
-                    className="w-full bg-white border-2 border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl py-3 px-4 pl-11 text-base font-bold font-mono text-slate-900 placeholder-slate-500 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsCameraActive(!isCameraActive)}
-                  disabled={isSubmittingBarcode}
-                  className={`flex-1 px-4 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all border-2 ${isCameraActive ? 'bg-red-500 text-white border-red-600' : 'bg-emerald-500 text-white border-emerald-600 shadow-lg'}`}
-                >
-                  <Camera size={18} />
-                  <span>{isCameraActive ? 'ປິດກ້ອງ' : 'ເປີດກ້ອງ'}</span>
-                </button>
 
                 <button
-                  type="submit"
-                  disabled={isSubmittingBarcode || !barcodeInput.trim()}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                  onClick={() => setViewMode('counter')}
+                  className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-black flex items-center gap-2 border border-slate-200 transition-all cursor-pointer shrink-0 active:scale-95 shadow-sm"
                 >
-                  {isSubmittingBarcode ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
-                  <span>{isSubmittingBarcode ? 'ກຳລັງບັນທຶກ...' : 'ຢືນຢັນ'}</span>
+                  <ArrowLeft size={18} />
+                  <span>ກັບໄປໜ້າສະແກນນັບ</span>
                 </button>
               </div>
-            </form>
-          </div>
-        ) : (
-          <div className="bg-yellow-100/50 border-2 border-yellow-200 rounded-2xl p-6 text-center">
-            <div className="w-16 h-16 bg-yellow-200 text-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Filter size={32} />
-            </div>
-            <h3 className="text-xl font-black text-yellow-800">ໂຫມດເບິ່ງຂໍ້ມູນ (GM Mode)</h3>
-            <p className="text-yellow-700 font-medium mt-1">ທ່ານກຳລັງເບິ່ງລາຍການທີ່ນັບແລ້ວ ໂດຍສາມາດເລືອກສາຂາ ແລະ ວັນທີໄດ້ຢູ່ດ້ານເທິງ</p>
-          </div>
-        )}
 
-        {/* CAMERA VIEWPORT */}
-        {isCameraActive && (
-          <div className="bg-black rounded-2xl overflow-hidden shadow-2xl border-4 border-emerald-500 relative aspect-video">
-            <div id="lak8-reader" className="w-full h-full"></div>
-            <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40 flex items-center justify-center">
-              <div className="w-64 h-32 border-2 border-emerald-400 rounded-lg relative">
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-emerald-400 -translate-x-1 -translate-y-1"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-emerald-400 translate-x-1 -translate-y-1"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-emerald-400 -translate-x-1 translate-y-1"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-emerald-400 translate-x-1 translate-y-1"></div>
-                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-emerald-400/50 animate-pulse"></div>
-              </div>
-            </div>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-bold flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-              ວາງບາໂຄດໃຫ້ກົງກັບກອບ
-            </div>
-          </div>
-        )}
-
-        {/* LIST SECTION */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                <Layers size={20} className="text-indigo-600" />
-                ລາຍການທີ່ນັບແລ້ວ
-              </h2>
-              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-black">
-                {filteredItems.length} ລາຍການ
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="ຄົ້ນຫາ..."
-                  className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:border-indigo-500 w-32 sm:w-48 transition-all"
-                />
-                <ScanLine size={14} className="absolute left-2.5 top-2 text-slate-400" />
-              </div>
-              <button onClick={() => fetchLak8Stock(true)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors">
-                <RefreshCw size={18} />
-              </button>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 flex flex-col items-center justify-center gap-4">
-              <div className="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-              <p className="text-slate-500 font-bold animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 text-center space-y-3">
-              <div className="w-16 h-16 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mx-auto">
-                <Barcode size={32} />
-              </div>
-              <h3 className="font-black text-slate-400">ຍັງບໍ່ມີຂໍ້ມູນການນັບ</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                {searchTerm ? 'ບໍ່ພົບລາຍການທີ່ຄົ້ນຫາ' : 'ເລີ່ມສະແກນບາໂຄດເພື່ອບັນທຶກຂໍ້ມູນ'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {filteredItems.map((item) => (
-                <div key={item.id} className="group bg-white rounded-2xl p-4 shadow-sm border border-slate-200 hover:border-indigo-300 transition-all flex items-center gap-4 relative overflow-hidden">
-                  <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors shrink-0">
-                    <Barcode size={24} />
+              {/* QUICK STATS CARDS — White Cards with colored left-border accents */}
+              <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow space-y-1 border-l-4 border-l-amber-400">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide">ລວມຈຳນວນທີ່ນັບໄດ້ (Total QTY)</div>
+                  <div className="text-3xl font-black text-amber-500 font-mono">
+                    {boStats.totalQty.toLocaleString()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-black text-slate-800 truncate leading-tight">{item.name}</h3>
-                      <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
-                        {item.branch}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs font-mono font-bold text-slate-400">{item.barcode}</p>
-                      {item.branch === 'LAK8' && item.owner_branch && (
-                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
-                          👉 {item.owner_branch}
-                        </span>
-                      )}
-                    </div>
-                    {item.branch === 'LAK8' && item.doc_nos && item.doc_nos.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {item.doc_nos.map((doc, idx) => (
-                          <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
-                            {doc}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                        <Clock size={10} /> {item.timestamp}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                        <User size={10} /> {item.createdBy}
-                      </span>
-                    </div>
+                </div>
+                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow space-y-1 border-l-4 border-l-emerald-400">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide">ຈຳນວນລາຍການ (Rows)</div>
+                  <div className="text-3xl font-black text-emerald-600 font-mono">
+                    {boStats.totalItems.toLocaleString()}
                   </div>
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                    <button
-                      onClick={() => updateItemQty(item.id, item.qty, -1)}
-                      disabled={isUpdatingQty[item.id] || isFilterMode}
-                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-lg transition-all shadow-sm active:scale-90 disabled:opacity-50"
+                </div>
+                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow space-y-1 border-l-4 border-l-sky-400">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide">ບາໂຄດບໍ່ຊ້ຳ (Unique Barcodes)</div>
+                  <div className="text-3xl font-black text-sky-600 font-mono">
+                    {boStats.uniqueBarcodes.toLocaleString()}
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-shadow space-y-1 border-l-4 border-l-indigo-400">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide">ສາຂາທີ່ມີຂໍ້ມູນ (Branches)</div>
+                  <div className="text-3xl font-black text-indigo-600">
+                    <span className="font-mono">{boStats.uniqueBranches}</span> <span className="text-xl">ສາຂາ</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-5 xl:p-6 shadow-lg border border-blue-50 space-y-4">
+              {/* FILTER ROW + ACTION BUTTONS - all in 1 horizontal row for 1080p */}
+              <div className="flex flex-row items-center justify-between gap-4">
+                {/* LEFT: DATE RANGE & BRANCH FILTERS */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                    <div className="flex items-center gap-1.5 px-2 text-slate-600">
+                      <Calendar size={16} className="text-indigo-600" />
+                      <span className="text-sm font-black text-slate-700">ວັນທີ:</span>
+                    </div>
+                    <input
+                      type="date"
+                      value={boStartDate}
+                      onChange={(e) => setBoStartDate(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      title="ວັນທີເລີ່ມຕົ້ນ (Start Date)"
+                    />
+                    <span className="text-sm font-bold text-slate-400 px-1">→</span>
+                    <input
+                      type="date"
+                      value={boEndDate}
+                      onChange={(e) => setBoEndDate(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      title="ວັນທີສິ້ນສຸດ (End Date)"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                    <Building2 size={16} className="text-indigo-600 ml-2" />
+                    <select
+                      value={boBranch}
+                      onChange={(e) => setBoBranch(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[180px]"
                     >
-                      <Minus size={16} />
-                    </button>
-                    <div className="w-10 text-center">
-                      {isUpdatingQty[item.id] ? (
-                        <Loader size={14} className="animate-spin mx-auto text-indigo-600" />
-                      ) : (
-                        <span className="text-base font-black font-mono text-slate-900">{item.qty}</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => updateItemQty(item.id, item.qty, 1)}
-                      disabled={isUpdatingQty[item.id] || isFilterMode}
-                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-lg transition-all shadow-sm active:scale-90 disabled:opacity-50"
-                    >
-                      <Plus size={16} />
-                    </button>
+                      <option value="">🏢 ທຸກສາຂາ (All Branches)</option>
+                      {branches.map(b => (
+                        <option key={b} value={b}>ສາຂາ {b}</option>
+                      ))}
+                    </select>
                   </div>
+
+                  {/* 🔍 FILTER BUTTON */}
                   <button
-                    onClick={() => deleteItem(item.id)}
-                    disabled={isDeletingBarcode[item.id] || isFilterMode}
-                    className="p-2 text-slate-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                    onClick={fetchBackOfficeStock}
+                    disabled={boLoading}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-md shadow-indigo-500/20 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                    title="ກົດເພື່ອດຶງຂໍ້ມູນ (Filter & Read Data)"
                   >
-                    {isDeletingBarcode[item.id] ? <Loader size={16} className="animate-spin" /> : <Trash2 size={18} />}
+                    {boLoading ? (
+                      <Loader size={16} className="animate-spin" />
+                    ) : (
+                      <Search size={16} />
+                    )}
+                    <span>{boLoading ? 'ກຳລັງດຶງຂໍ້ມູນ...' : 'ຄົ້ນຫາຂໍ້ມູນ (Filter)'}</span>
                   </button>
                 </div>
-              ))}
+
+                {/* RIGHT: ACTION BUTTONS */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    onClick={handleExportBackOfficeExcel}
+                    disabled={boExporting || filteredBoItems.length === 0}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="ສົ່ງອອກຂໍ້ມູນເປັນໄຟລ໌ Excel"
+                  >
+                    <FileSpreadsheet size={18} />
+                    <span>{boExporting ? 'ກຳລັງສົ່ງອອກ...' : 'Export Excel'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowImportBlockedNotice(true)}
+                    className="px-5 py-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-2 cursor-not-allowed opacity-70 hover:opacity-100 hover:bg-slate-200 transition-all"
+                    title="ຟັງຊັນ Import Excel ຖືກລັອກໄວ້ (Blocked)"
+                  >
+                    <Upload size={18} className="text-slate-400" />
+                    <span>Import Excel</span>
+                    <span className="bg-slate-300 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded uppercase">Lock</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* BLOCKED NOTICE ALERT */}
+              {showImportBlockedNotice && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                  <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 text-xs text-amber-900">
+                    <span className="font-black">ຟັງຊັນ Import Excel ຖືກປິດໃຊ້ງານຊົ່ວຄາວ: </span>
+                    ລະບົບໄດ້ລັອກປຸ່ມ Import ໄວ້ກ່ອນຕາມນະໂຍບາຍຄວາມປອດໄພຂອງຂໍ້ມູນຫຼັງບ້ານ ທ່ານຍັງສາມາດດາວໂຫຼດ (Export Excel) ໄດ້ປົກກະຕິ.
+                  </div>
+                  <button
+                    onClick={() => setShowImportBlockedNotice(false)}
+                    className="text-amber-500 hover:text-amber-800 p-1 rounded-lg"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
+              {/* SEARCH IN TABLE */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                <div className="relative flex-1 max-w-md">
+                  <ScanLine size={15} className="absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={boSearchTerm}
+                    onChange={(e) => {
+                      setBoSearchTerm(e.target.value);
+                      setBoCurrentPage(1); // Reset to page 1 on typing
+                    }}
+                    disabled={!boHasSearched}
+                    placeholder={boHasSearched ? "ຄົ້ນຫາບາໂຄດ, ຊື່ສິນຄ້າ, ສາຂາ, ຜູ້ບັນທຶກ, ເລກບິນ..." : "ກະລຸນາກົດປຸ່ມ 'ຄົ້ນຫາຂໍ້ມູນ (Filter)' ກ່ອນ..."}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none transition-all disabled:opacity-50"
+                  />
+                </div>
+
+                <div className="text-xs font-bold text-slate-500 flex items-center justify-between sm:justify-end gap-3">
+                  {boHasSearched && (
+                    <span>
+                      ສະແດง <span className="text-indigo-600 font-black">{paginatedBoItems.length}</span> / ໜ້າ (<span className="text-slate-700 font-black">{filteredBoItems.length.toLocaleString()}</span> ລາຍການ)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* BACK-OFFICE DATA TABLE */}
+            <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-lg border border-blue-50 overflow-hidden">
+              {boLoading ? (
+                <div className="p-16 text-center space-y-4">
+                  <div className="w-14 h-14 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+                  <div className="space-y-1">
+                    <p className="text-base font-black text-indigo-900">ກຳລັງດຶງຂໍ້ມູນຫຼັງບ້ານທັງໝົດແບບບໍ່ຈຳກັດ (Unlimited)...</p>
+                    {boLoadProgress.loaded > 0 && (
+                      <p className="text-xs font-mono font-bold text-slate-500">
+                        ດຶງມາແລ້ວ {boLoadProgress.loaded.toLocaleString()} ແຖວ...
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400">ກະລຸນາລໍຖ້າຈັກໜ່ອຍ ລະບົບກຳລັງດຶງຂໍ້ມູນໃຫ້ຄົບຖ້ວນ</p>
+                  </div>
+                </div>
+              ) : !boHasSearched ? (
+                <div className="p-16 text-center space-y-4">
+                  <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                    <Filter size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-black text-slate-800 text-lg">ຍັງບໍ່ທັນໄດ້ອ່ານຂໍ້ມູນ</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                      ກະລຸນາເລືອກຊ່ວງວັນທີ (From - To) ແລະ ສາຂາທີ່ຕ້ອງການ ແລ້ວກົດປຸ່ມ <span className="text-indigo-600 font-black">"ຄົ້ນຫາຂໍ້ມູນ (Filter)"</span> ດ້ານເທິງເພື່ອດຶງຂໍ້ມູນ
+                    </p>
+                  </div>
+                  <button
+                    onClick={fetchBackOfficeStock}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer active:scale-95 inline-flex items-center gap-2"
+                  >
+                    <Search size={15} />
+                    <span>ເລີ່ມຕົ້ນຄົ້ນຫາຂໍ້ມູນດຽວນີ້</span>
+                  </button>
+                </div>
+              ) : filteredBoItems.length === 0 ? (
+                <div className="p-16 text-center space-y-3">
+                  <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
+                    <Package size={32} />
+                  </div>
+                  <h3 className="font-black text-slate-700 text-base">ບໍ່ພົບຂໍ້ມູນການນັບສະຕັອກ</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    {boSearchTerm
+                      ? 'ບໍ່ມີລາຍການທີ່ຕົງກັບຄຳຄົ້ນຫາຂອງທ່ານ ກະລຸນາລອງຄົ້ນຫາດ້ວຍຄຳອື່ນ'
+                      : 'ບໍ່ມີຂໍ້ມູນໃນຊ່ວງວັນທີ ແລະ ສາຂາທີ່ທ່ານເລືອກ ກະລຸນາປ່ຽນຊ່ວງວັນທີແລ້ວກົດ ຄົ້ນຫາຂໍ້ມູນ'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-slate-700 via-blue-800 to-slate-700 text-white font-bold border-b border-blue-900">
+                          <th className="py-4 px-4 text-center w-16 font-black text-xs uppercase tracking-widest">#</th>
+                          <th className="py-4 px-4 min-w-[160px] font-black text-xs uppercase tracking-widest">ເລກບາໂຄດ</th>
+                          <th className="py-4 px-4 min-w-[260px] font-black text-xs uppercase tracking-widest">ຊື່ສິນຄ້າ</th>
+                          <th className="py-4 px-4 text-center min-w-[110px] font-black text-xs uppercase tracking-widest">ຈຳນວນ (QTY)</th>
+                          <th className="py-4 px-4 text-center min-w-[90px] font-black text-xs uppercase tracking-widest">ສາຂາ</th>
+                          <th className="py-4 px-4 text-center min-w-[110px] font-black text-xs uppercase tracking-widest">ສາຂາເຈົ້າຂອງ</th>
+                          <th className="py-4 px-4 text-center min-w-[140px] font-black text-xs uppercase tracking-widest">ເລກບິນ</th>
+                          <th className="py-4 px-4 text-center min-w-[120px] font-black text-xs uppercase tracking-widest">ວັນທີນັບ</th>
+                          <th className="py-4 px-4 min-w-[130px] font-black text-xs uppercase tracking-widest">ຜູ້ບັນທຶກ</th>
+                          <th className="py-4 px-4 text-center min-w-[100px] font-black text-xs uppercase tracking-widest">ເວລາ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedBoItems.map((item, idx) => {
+                          const globalIndex = (boCurrentPage - 1) * boPageSize + idx + 1;
+                          return (
+                            <tr
+                              key={item.id || idx}
+                              className="hover:bg-indigo-50/40 transition-colors group"
+                            >
+                              <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-bold text-sm">
+                                {globalIndex}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="font-mono font-black text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-sm">
+                                  {item.barcode}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="font-semibold text-slate-800 truncate max-w-[280px]" title={item.name}>
+                                  {item.name}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-block px-3 py-1 bg-amber-50 text-amber-900 font-black font-mono rounded-lg border border-amber-200 text-base">
+                                  {item.qty}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="px-2.5 py-1 rounded-lg font-black text-xs bg-indigo-100 text-indigo-700 uppercase">
+                                  {item.branch}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                {item.owner_branch ? (
+                                  <span className="px-2.5 py-1 rounded-lg font-bold text-xs bg-purple-100 text-purple-700">
+                                    {item.owner_branch}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                {Array.isArray(item.doc_nos) && item.doc_nos.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1 justify-center">
+                                    {item.doc_nos.map((doc, dIdx) => (
+                                      <span key={dIdx} className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-mono border border-slate-200">
+                                        {doc}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-medium text-slate-600 font-mono">
+                                {item.countDate}
+                              </td>
+                              <td className="py-3.5 px-4 font-medium text-slate-700">
+                                <span className="flex items-center gap-1.5">
+                                  <User size={13} className="text-slate-400" />
+                                  {item.createdBy}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center text-slate-400 font-mono text-xs">
+                                {item.timestamp}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gradient-to-r from-slate-700 via-blue-800 to-slate-700 text-white font-bold border-t-2 border-blue-700">
+                          <td colSpan={3} className="py-4 px-5 text-right text-sm font-bold">
+                            ລວມທັງໝົດທຸກໜ້າ ({filteredBoItems.length.toLocaleString()} ລາຍການ):
+                          </td>
+                          <td className="py-4 px-4 text-center font-black font-mono text-xl text-amber-300">
+                            {boStats.totalQty.toLocaleString()}
+                          </td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* 📄 PAGINATION CONTROLS */}
+                  <div className="px-5 py-4 bg-blue-50/70 border-t border-blue-100 flex flex-row items-center justify-between gap-4">
+                    <div className="text-sm font-bold text-slate-500">
+                      ໜ້າ <span className="text-indigo-600 font-black text-base">{boCurrentPage}</span> / <span className="text-slate-700 font-black">{boTotalPages}</span>
+                      &nbsp;·&nbsp;
+                      ລາຍການທີ <span className="font-black text-slate-800">{((boCurrentPage - 1) * boPageSize) + 1}</span> – <span className="font-black text-slate-800">{Math.min(boCurrentPage * boPageSize, filteredBoItems.length)}</span> ຈາກ <span className="font-black text-indigo-700">{filteredBoItems.length.toLocaleString()}</span> ລາຍການ
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setBoCurrentPage(1)}
+                        disabled={boCurrentPage === 1}
+                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="ໜ້າທຳອິດ"
+                      >
+                        ⏮ ທຳອິດ
+                      </button>
+                      <button
+                        onClick={() => setBoCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={boCurrentPage === 1}
+                        className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <ChevronLeft size={16} />
+                        <span>ກັບຄືນ</span>
+                      </button>
+
+                      <div className="px-4 py-2 bg-indigo-600 border border-indigo-700 rounded-xl font-mono font-black text-sm text-white shadow-sm">
+                        {boCurrentPage} / {boTotalPages}
+                      </div>
+
+                      <button
+                        onClick={() => setBoCurrentPage(prev => Math.min(boTotalPages, prev + 1))}
+                        disabled={boCurrentPage >= boTotalPages}
+                        className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <span>ຖັດໄປ (+50)</span>
+                        <ChevronRight size={16} />
+                      </button>
+                      <button
+                        onClick={() => setBoCurrentPage(boTotalPages)}
+                        disabled={boCurrentPage >= boTotalPages}
+                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="ໜ້າສຸດທ້າຍ"
+                      >
+                        ສຸດທ້າຍ ⏭
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ─────────────────────────────────────────────────────────────
+           STAFF SCANNER VIEW (ໂຫມດນັບສະຕັອກປົກກະຕິ)
+           ───────────────────────────────────────────────────────────── */
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 space-y-6">
+
+          {/* Only show scanner if NOT in filter mode (Staff mode) */}
+          {!isFilterMode ? (
+            <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-slate-200 space-y-4">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
+                <ScanLine size={18} className="text-indigo-600" />
+                ເລືອກໂຫມດການສະແກນ
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setScanMode('manual')}
+                  className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'manual'
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                    }`}
+                >
+                  <span className="text-base font-black leading-tight text-center">✏️ ພິມຈຳນວນ</span>
+                  <span className="text-xs opacity-75">ສະແກນ + ປ້ອນຈຳນວນ</span>
+                </button>
+
+                <button
+                  onClick={() => setScanMode('count')}
+                  className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'count'
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-lg'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                    }`}
+                >
+                  <span className="text-base font-black leading-tight text-center">🔢 Count ກົງ</span>
+                  <span className="text-xs opacity-75">ສະແກນ +1 ທີລະຄັ້ງ</span>
+                </button>
+              </div>
+
+              {scanMode === 'manual' && (
+                <div className="pt-2 flex items-center gap-3 animate-in fade-in duration-200 bg-indigo-50 p-3 rounded-xl border border-indigo-200">
+                  <span className="text-sm font-bold text-slate-700 shrink-0">ຕັ້ງຄ່າ QTY:</span>
+                  <div className="flex items-center border-2 border-slate-300 rounded-lg overflow-hidden bg-white">
+                    <button onClick={() => setManualQty(Math.max(1, manualQty - 1))} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">−</button>
+                    <input type="number" value={manualQty} onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))} className="w-20 text-center font-black text-lg bg-white border-none focus:outline-none text-slate-900" />
+                    <button onClick={() => setManualQty(manualQty + 1)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">+</button>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleBarcodeSubmit} className="space-y-3">
+                <div className="relative">
+                  <label className="text-xs font-bold text-slate-600 block mb-2">ເລກບາໂຄດ (EAN-13)</label>
+                  <div className="relative flex items-center">
+                    <Barcode size={20} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      readOnly={isCameraActive || isSubmittingBarcode}
+                      inputMode={isCameraActive ? 'none' : 'numeric'}
+                      placeholder={isCameraActive ? "ກ້ອງສະແກນກຳລັງທຳງານ..." : "ສະແກນ ຫຼື ພິມເລກບາໂຄດ..."}
+                      className="w-full bg-white border-2 border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl py-3 px-4 pl-11 text-base font-bold font-mono text-slate-900 placeholder-slate-500 focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCameraActive(!isCameraActive)}
+                    disabled={isSubmittingBarcode}
+                    className={`flex-1 px-4 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all border-2 ${isCameraActive ? 'bg-red-500 text-white border-red-600' : 'bg-emerald-500 text-white border-emerald-600 shadow-lg'}`}
+                  >
+                    <Camera size={18} />
+                    <span>{isCameraActive ? 'ປິດກ້ອງ' : 'ເປີດກ້ອງ'}</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingBarcode || !barcodeInput.trim()}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingBarcode ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                    <span>{isSubmittingBarcode ? 'ກຳລັງບັນທຶກ...' : 'ຢືນຢັນ'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="bg-yellow-100/50 border-2 border-yellow-200 rounded-2xl p-6 text-center">
+              <div className="w-16 h-16 bg-yellow-200 text-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Filter size={32} />
+              </div>
+              <h3 className="text-xl font-black text-yellow-800">ໂຫມດເບິ່ງຂໍ້ມູນ (GM Mode)</h3>
+              <p className="text-yellow-700 font-medium mt-1">ທ່ານກຳລັງເບິ່ງລາຍການທີ່ນັບແລ້ວ ໂດຍສາມາດເລືອກສາຂາ ແລະ ວັນທີໄດ້ຢູ່ດ້ານເທິງ</p>
             </div>
           )}
+
+          {/* CAMERA VIEWPORT */}
+          {isCameraActive && (
+            <div className="bg-black rounded-2xl overflow-hidden shadow-2xl border-4 border-emerald-500 relative aspect-video">
+              <div id="lak8-reader" className="w-full h-full"></div>
+              <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40 flex items-center justify-center">
+                <div className="w-64 h-32 border-2 border-emerald-400 rounded-lg relative">
+                  <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-emerald-400 -translate-x-1 -translate-y-1"></div>
+                  <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-emerald-400 translate-x-1 -translate-y-1"></div>
+                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-emerald-400 -translate-x-1 translate-y-1"></div>
+                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-emerald-400 translate-x-1 translate-y-1"></div>
+                  <div className="absolute top-1/2 left-0 w-full h-0.5 bg-emerald-400/50 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-bold flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                ວາງບາໂຄດໃຫ້ກົງກັບກອບ
+              </div>
+            </div>
+          )}
+
+          {/* LIST SECTION */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Layers size={20} className="text-indigo-600" />
+                  ລາຍການທີ່ນັບແລ້ວ
+                </h2>
+                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-black">
+                  {filteredItems.length} ລາຍການ
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="ຄົ້ນຫາ..."
+                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:border-indigo-500 w-32 sm:w-48 transition-all"
+                  />
+                  <ScanLine size={14} className="absolute left-2.5 top-2 text-slate-400" />
+                </div>
+                <button onClick={() => fetchLak8Stock(true)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors cursor-pointer">
+                  <RefreshCw size={18} />
+                </button>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 flex flex-col items-center justify-center gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p className="text-slate-500 font-bold animate-pulse">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-200 text-center space-y-3">
+                <div className="w-16 h-16 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mx-auto">
+                  <Barcode size={32} />
+                </div>
+                <h3 className="font-black text-slate-400">ຍັງບໍ່ມີຂໍ້ມູນການນັບ</h3>
+                <p className="text-slate-400 text-sm font-medium">
+                  {searchTerm ? 'ບໍ່ພົບລາຍການທີ່ຄົ້ນຫາ' : 'ເລີ່ມສະແກນບາໂຄດເພື່ອບັນທຶກຂໍ້ມູນ'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {filteredItems.map((item) => (
+                  <div key={item.id} className="group bg-white rounded-2xl p-4 shadow-sm border border-slate-200 hover:border-indigo-300 transition-all flex items-center gap-4 relative overflow-hidden">
+                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors shrink-0">
+                      <Barcode size={24} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-slate-800 truncate leading-tight">{item.name}</h3>
+                        <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                          {item.branch}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs font-mono font-bold text-slate-400">{item.barcode}</p>
+                        {item.branch === 'LAK8' && item.owner_branch && (
+                          <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded-sm font-bold border border-purple-200">
+                            👉 {item.owner_branch}
+                          </span>
+                        )}
+                      </div>
+                      {item.branch === 'LAK8' && item.doc_nos && item.doc_nos.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.doc_nos.map((doc, idx) => (
+                            <span key={idx} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200 font-mono">
+                              {doc}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          <Clock size={10} /> {item.timestamp}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          <User size={10} /> {item.createdBy}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button
+                        onClick={() => updateItemQty(item.id, item.qty, -1)}
+                        disabled={isUpdatingQty[item.id] || isFilterMode}
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-lg transition-all shadow-sm active:scale-90 disabled:opacity-50"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <div className="w-10 text-center">
+                        {isUpdatingQty[item.id] ? (
+                          <Loader size={14} className="animate-spin mx-auto text-indigo-600" />
+                        ) : (
+                          <span className="text-base font-black font-mono text-slate-900">{item.qty}</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => updateItemQty(item.id, item.qty, 1)}
+                        disabled={isUpdatingQty[item.id] || isFilterMode}
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-lg transition-all shadow-sm active:scale-90 disabled:opacity-50"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => deleteItem(item.id)}
+                      disabled={isDeletingBarcode[item.id] || isFilterMode}
+                      className="p-2 text-slate-300 hover:text-red-500 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {isDeletingBarcode[item.id] ? <Loader size={16} className="animate-spin" /> : <Trash2 size={18} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* SESSION DETAIL MODAL */}
       {showDetailModal && (
@@ -1765,8 +2463,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   <button
                     onClick={toggleSessionStatus}
                     className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm ${sessionStatus === 'completed'
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-amber-500 text-white'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-amber-500 text-white'
                       }`}
                   >
                     <span>{sessionStatus === 'completed' ? '✅ ນັບສຳເລັດແລ້ວ (Completed)' : '⏳ ກຳລັງນັບ... (In Progress)'}</span>
