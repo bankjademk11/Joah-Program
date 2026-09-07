@@ -5,17 +5,17 @@ const ODOO_URL = "https://lod.kokkokm.com";
 
 // ── Branch definitions ────────────────────────────────────────
 // Add or remove branches here. Each entry is synced in sequence.
-const BRANCHES: { odoo_id: number | number[]; branch_id: string }[] = [
+const BRANCHES: { odoo_id: number; branch_id: string }[] = [
     { odoo_id: 249, branch_id: 'ຕະຫຼາດລາວ' },
     { odoo_id: 248, branch_id: 'ສີວິໄລ' },
     { odoo_id: 273, branch_id: 'ເມກ້າມໍ' },
-    { odoo_id: [173, 247], branch_id: 'ໂພນສີນວນ' },
-    { odoo_id: [8, 261], branch_id: 'ວັງຊາຍ' },
+    { odoo_id: 173, branch_id: 'ໂພນສີນວນ' },
+    { odoo_id: 8, branch_id: 'ວັງຊາຍ' },
 ];
 
 // ── Shared helpers ────────────────────────────────────────────
 async function syncBranch(
-    branch: { odoo_id: number | number[]; branch_id: string },
+    branch: { odoo_id: number; branch_id: string },
     supabase: ReturnType<typeof createClient>,
     odooHeaders: Record<string, string>
 ) {
@@ -45,6 +45,10 @@ async function syncBranch(
 
     const domain: any[] = [
         companyCondition,
+        ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+        '|',
+        ['product_id.product_brand_id', '=', 4],
+        ['product_id.product_bu_id', '=', 9126],
         ['order_id.date_order', '>=', startOfToday]
     ];
     if (lastProcessedId) {

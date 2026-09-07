@@ -80,6 +80,12 @@ const apps = [
         name: 'ອັບໂຫຼດຮູບພາບສິນຄ້າ (Bulk Image Uploader)',
         icon: HQIcon,
         step: 'image-uploader'
+    },
+    {
+        id: 'joah-bot-room',
+        name: 'ຫ້ອງຈຳລອງ JOAH BOT 3D (Bot Room)',
+        icon: SaleViewIcon,
+        step: 'joah-bot-room'
     }
 ];
 

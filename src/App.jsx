@@ -76,6 +76,7 @@ import AIChatBotFull from './components/ui/AIChatBotFull';
 import JoiWidget from './components/ui/JoiWidget';
 import BigDigitalClock from './components/ui/BigDigitalClock';
 import RefillAlertModal from './components/ui/RefillAlertModal';
+import JoahBotRoom from './components/Fun/JoahBotRoom';
 
 function AppContent() {
   const { t } = useLanguage();
@@ -1811,6 +1812,29 @@ function AppContent() {
                 </button>
               </div>
               <InventoryOverviewDashboard mockData={null} />
+            </div>
+          )}
+
+          {step === 'joah-bot-room' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in">
+              <div className="w-full max-w-6xl h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between pb-3 text-slate-300">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep('upload')}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all shadow cursor-pointer text-sm flex items-center gap-2"
+                    >
+                      ← ກັບຄືນ (Back)
+                    </button>
+                    <span className="font-bold text-lg text-white">🤖 JOAH BOT WORKSTATION</span>
+                  </div>
+                  <span className="text-xs text-slate-400">Low-Poly 3D Diorama (Three.js)</span>
+                </div>
+                <div className="flex-1 w-full min-h-0 relative">
+                  <JoahBotRoom onBack={() => setStep('upload')} />
+                </div>
+              </div>
             </div>
           )}
 
