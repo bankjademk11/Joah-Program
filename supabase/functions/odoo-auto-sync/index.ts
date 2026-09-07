@@ -5,19 +5,21 @@ const ODOO_URL = "https://lod.kokkokm.com";
 
 // ── Branch definitions ────────────────────────────────────────
 // Add or remove branches here. Each entry is synced in sequence.
-const BRANCHES = [
+const BRANCHES: { odoo_id: number | number[]; branch_id: string }[] = [
     { odoo_id: 249, branch_id: 'ຕະຫຼາດລາວ' },
     { odoo_id: 248, branch_id: 'ສີວິໄລ' },
     { odoo_id: 273, branch_id: 'ເມກ້າມໍ' },
+    { odoo_id: [173, 247], branch_id: 'ໂພນສີນວນ' },
+    { odoo_id: [8, 261], branch_id: 'ວັງຊາຍ' },
 ];
 
 // ── Shared helpers ────────────────────────────────────────────
 async function syncBranch(
-    branch: { odoo_id: number; branch_id: string },
+    branch: { odoo_id: number | number[]; branch_id: string },
     supabase: ReturnType<typeof createClient>,
     odooHeaders: Record<string, string>
 ) {
-    console.log(`\n=== Syncing branch: ${branch.branch_id} (Odoo ID: ${branch.odoo_id}) ===`);
+    console.log(`\n=== Syncing branch: ${branch.branch_id} (Odoo ID: ${JSON.stringify(branch.odoo_id)}) ===`);
 
     // 1. Get last processed ID
     const { data: logs } = await supabase
@@ -37,8 +39,12 @@ async function syncBranch(
     const todayStr = new Date().toISOString().split('T')[0];
     const startOfToday = `${todayStr} 00:00:00`;
 
+    const companyCondition = Array.isArray(branch.odoo_id)
+        ? ['company_id', 'in', branch.odoo_id]
+        : ['company_id', '=', branch.odoo_id];
+
     const domain: any[] = [
-        ['company_id', '=', branch.odoo_id],
+        companyCondition,
         ['order_id.date_order', '>=', startOfToday]
     ];
     if (lastProcessedId) {
@@ -220,6 +226,23 @@ async function syncBranch(
 // ── Main handler ──────────────────────────────────────────────
 serve(async (_req) => {
     try {
+        // ── 🌙 Sleep Mode Check: Skip if store is closed (00:00 - 06:00 Lao Time, UTC+7) ──
+        const now = new Date();
+        const utcHours = now.getUTCHours();
+        const laoHours = (utcHours + 7) % 24;
+        const laoMinutes = now.getUTCMinutes();
+        const laoTimeFormatted = `${String(laoHours).padStart(2, '0')}:${String(laoMinutes).padStart(2, '0')}`;
+
+        if (laoHours >= 0 && laoHours < 6) {
+            console.log(`🌙 Store is closed (Lao Time: ${laoTimeFormatted}). Skipping Odoo sync to protect server.`);
+            return new Response(JSON.stringify({
+                message: "Store closed (00:00 - 06:00). Sync skipped.",
+                lao_time: laoTimeFormatted
+            }), {
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+
         const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
         const ODOO_DB = Deno.env.get("ODOO_DB") ?? "";
