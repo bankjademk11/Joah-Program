@@ -2302,6 +2302,7 @@ const StoreResultTable = ({
                     setIsFoundInMaster={setIsFoundInMaster}
                     isSaving={isSavingQuickAdd}
                     onSave={async () => {
+                        if (isSavingQuickAdd) return;
                         setIsSavingQuickAdd(true);
                         try {
                             const latestForm = quickAddFormRef.current;
@@ -2317,7 +2318,13 @@ const StoreResultTable = ({
                             }));
                             if (onRefresh) onRefresh();
                         } catch (err) {
-                            showError('Error saving product: ' + err.message);
+                            console.error('Error saving product:', err);
+                            const errMsg = err?.message || '';
+                            if (errMsg.includes('unique') || errMsg.includes('duplicate') || errMsg.includes('23505')) {
+                                showError('ສິນຄ້ານີ້ຢູ່ໃນໂລເຄຊັ້ນນີ້ແລ້ວ (ລະບົບໄດ້ອັບເດດແຖວເດີມໃຫ້ແລ້ວ)');
+                            } else {
+                                showError('Error saving product: ' + errMsg);
+                            }
                         } finally {
                             setIsSavingQuickAdd(false);
                         }

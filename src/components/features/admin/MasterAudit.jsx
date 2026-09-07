@@ -354,6 +354,7 @@ const MasterAudit = ({ onBack, currentUser, activeBranch, isAdmin }) => {
                                 <option value="ສີວິໄລ">ສີວິໄລ</option>
                                 <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                                 <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
+                                <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                             </select>
                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                         </div>

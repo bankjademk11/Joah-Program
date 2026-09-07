@@ -355,6 +355,25 @@ const BRANCH_RACK_RULES = {
         });
 
         return mgmMap;
+    })(),
+
+    'ເທຣນນິ້ງ (Training)': (() => {
+        const trMap = {};
+        const rule = [
+            { zones: ['TR-A01', 'TR-A02', 'TR-A03', 'TR-B01', 'TR-B02', 'TR-B03'], maxLevel: 4, format: 'tll_new' },
+            { zones: ['ໂລພື້ນ TR01', 'ໂລພື້ນ TR02', 'ໂລຝາກ TR'], maxLevel: 0, format: 'tll_floor' }
+        ];
+
+        const categories = [
+            'KITCHEN', 'STATIONERY', 'STORAGE', 'INTERIOR', 'TOY', 'TOYS',
+            'FASHION', 'BEAUTY', 'SPORT', 'SPORTS', 'CLEANING', 'TOOL/DIGITAL'
+        ];
+
+        categories.forEach(cat => {
+            trMap[cat] = rule;
+        });
+
+        return trMap;
     })()
 };
 
@@ -367,6 +386,8 @@ const resolveBranchId = (branchId) => {
 
     // Direct match first
     if (BRANCH_RACK_RULES[branchId]) return branchId;
+
+    if (branchId.includes('ເທຣນ') || branchId.includes('ເທຮນ') || branchId.toLowerCase().includes('training')) return 'ເທຣນນິ້ງ (Training)';
 
     // Try matching by prefix (e.g. 'ໂພນສີນວນ A' → 'ໂພນສີນວນ')
     const keys = Object.keys(BRANCH_RACK_RULES);

@@ -172,6 +172,19 @@ export const STORE_BRANCH_RACK_RULES = {
         'CLEANING': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
         'TOOL/DIGITAL': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
         'EVENT': [{ zones: MEGAMALL_ALL_RACKS, maxLevel: 0, format: 'store_exact' }]
+    },
+    'ເທຣນນິ້ງ (Training)': {
+        'KITCHEN': [{ zones: ['TR-A01', 'TR-A02', 'TR-A03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'CLEANING': [{ zones: ['TR-B01', 'TR-B02', 'TR-B03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'STORAGE': [{ zones: ['TR-C01', 'TR-C02', 'TR-C03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'TOOL/DIGITAL': [{ zones: ['TR-D01', 'TR-D02', 'TR-D03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'BEAUTY': [{ zones: ['TR-E01', 'TR-E02', 'TR-E03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'TOYS': [{ zones: ['TR-F01', 'TR-F02', 'TR-F03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'STATIONERY': [{ zones: ['TR-G01', 'TR-G02', 'TR-G03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'FASHION': [{ zones: ['TR-H01', 'TR-H02', 'TR-H03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'INTERIOR': [{ zones: ['TR-I01', 'TR-I02', 'TR-I03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'SPORTS': [{ zones: ['TR-J01', 'TR-J02', 'TR-J03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
+        'EVENT': [{ zones: ['TR-Event-01', 'TR-Event-02'], maxLevel: 0, format: 'store_exact' }],
     }
 };
 
@@ -190,6 +203,7 @@ const resolveStoreBranchId = (branchId) => {
     if (normalizedId === 'VX' || normalizedId.includes('ວັງຊາຍ')) return 'ວັງຊາຍ';
     if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
     if (normalizedId === 'PTX' || normalizedId.includes('ປະຕູໄຊ')) return 'ປະຕູໄຊ';
+    if (normalizedId.includes('ເທຣນ') || normalizedId.includes('ເທຮນ') || normalizedId.includes('TRAINING')) return 'ເທຣນນິ້ງ (Training)';
 
     // Direct match first
     if (STORE_BRANCH_RACK_RULES[branchId]) return branchId;
@@ -243,6 +257,11 @@ export const validateStoreRack = (rack, category, branchId) => {
     if (!rack) return false;
     const resolved = resolveStoreBranchId(branchId);
     const cleanRack = String(rack).trim();
+
+    // ສຳລັບສາຂາ ເທຣນນິ້ງ: ອະນຸຍາດໃຫ້ທົດລອງໃສ່ຊັ້ນວາງໄດ້ທຸກຮູບແບບ
+    if (resolved === 'ເທຣນນິ້ງ (Training)') {
+        return true;
+    }
 
     // ສຳລັບສາຂາ ໂພນສີນວນ: ໂລພື້ນ PSN001-PSN045 ຖືກຕ້ອງສະເໝີກັບທຸກ Category
     if (resolved === 'ໂພນສີນວນ' && PSN_FLOOR_STORAGE_RACKS.includes(cleanRack)) {

@@ -7,7 +7,7 @@ import { useToast } from '../../ui/ToastProvider';
 import { getStoreRackSuggestions, validateStoreRack } from '../../../utils/storeRackUtils';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)'];
 const MEGAMALL = 'ເມກ້າມໍ';
 
 const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) => {
@@ -323,10 +323,43 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         last_updated: new Date().toISOString()
       };
 
-      const { error } = await supabase.from('store_inventory').insert(payload);
+      // Check if item already exists at this exact shelf_location and branch_id
+      const { data: existingRow } = await supabase
+        .from('store_inventory')
+        .select('id, store_qty')
+        .eq('barcode_no', payload.barcode_no)
+        .eq('shelf_location', payload.shelf_location)
+        .eq('branch_id', selectedBranch)
+        .maybeSingle();
+
+      let error = null;
+      if (existingRow) {
+        // If already exists on this shelf, update existing row instead of duplicating
+        const updatePayload = {
+          item_name: payload.item_name,
+          store_qty: payload.store_qty,
+          category_1_actual: payload.category_1_actual,
+          category_2_actual: payload.category_2_actual,
+          max_qty: payload.max_qty,
+          product_tag: payload.product_tag,
+          updated_by: payload.updated_by,
+          last_updated: payload.last_updated
+        };
+        const res = await supabase
+          .from('store_inventory')
+          .update(updatePayload)
+          .eq('id', existingRow.id);
+        error = res.error;
+      } else {
+        // Use upsert with onConflict to guarantee no duplicate rows even if clicked multiple times concurrently
+        const res = await supabase
+          .from('store_inventory')
+          .upsert(payload, { onConflict: 'barcode_no,shelf_location,branch_id' });
+        error = res.error;
+      }
 
       if (error) {
-        console.error('[StoreInventory.DEBUG] ❌ Supabase INSERT Error:', error);
+        console.error('[StoreInventory.DEBUG] ❌ Supabase UPSERT Error:', error);
         throw error;
       }
 

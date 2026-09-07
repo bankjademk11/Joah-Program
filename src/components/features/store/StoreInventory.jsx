@@ -11,7 +11,7 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import ExcelJS from 'exceljs';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)'];
 const ITEMS_PER_PAGE = 50;
 
 const MEGAMALL = 'ເມກ້າມໍ';

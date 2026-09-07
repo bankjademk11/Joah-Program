@@ -5,7 +5,7 @@ const isPSN = (branch) => branch === 'ໂພນສີນວນ';
 // ຕະຫຼາດລາວ becomes the Global Master Data source for all branches (Except specialized one if needed).
 // ວັງຊາຍ, ໂພນສີນວນ, ສີວິໄລ will all share master_data with ຕະຫຼາດລາວ.
 export const normalizeMasterBranch = (branch) => {
-    if (branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch?.startsWith('ໂພນສີນວນ') || branch === 'ສີວິໄລ') {
+    if (branch === 'ຕະຫຼາດລາວ' || branch === 'ວັງຊາຍ' || branch?.startsWith('ໂພນສີນວນ') || branch === 'ສີວິໄລ' || branch?.includes('ເທຣນ') || branch?.includes('ເທຮນ') || branch?.toLowerCase().includes('training')) {
         return 'ຕະຫຼາດລາວ';
     }
     return 'ສີວິໄລ';

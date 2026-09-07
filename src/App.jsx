@@ -1035,6 +1035,7 @@ function AppContent() {
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                         </div>
                         <div className="w-full mt-[-8px]">
@@ -1098,6 +1099,7 @@ function AppContent() {
                               {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
                               {isAdmin && <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>}
                               <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                              {isAdmin && <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>}
                             </select>
                           </div>
                         )}
@@ -1150,7 +1152,7 @@ function AppContent() {
                         {/* Branch Selector */}
                         {(() => {
                           const branches = isAdmin
-                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເມກ້າມໍtest']
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເມກ້າມໍtest', 'ເທຣນນິ້ງ (Training)']
                             : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;
@@ -1408,6 +1410,7 @@ function AppContent() {
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
+                            <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                         </div>
@@ -1443,6 +1446,7 @@ function AppContent() {
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
+                            <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-sky-500 pointer-events-none" size={16} />
                         </div>
@@ -1545,7 +1549,7 @@ function AppContent() {
                         {/* Branch Selector array for Store Request */}
                         {(() => {
                           const branches = isAdmin
-                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ']
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)']
                             : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;
@@ -1990,7 +1994,7 @@ function AppContent() {
           t={t}
           currentBranch={adminViewBranch || user?.branch_id}
           onSave={async () => {
-            if (!inboxQuickAddData) return;
+            if (!inboxQuickAddData || isSavingInboxQuickAdd) return;
             setIsSavingInboxQuickAdd(true);
             try {
               const { supabase: sb } = await import('./utils/supabaseClient');
@@ -2028,7 +2032,7 @@ function AppContent() {
                   .eq('id', existingRow.id);
                 if (updateErr) throw updateErr;
               } else {
-                // New record — safe to insert
+                // New record — safe to upsert with conflict handling
                 const payload = {
                   barcode_no: inboxQuickAddForm.barcode_no,
                   item_name: inboxQuickAddForm.item_name,
@@ -2041,7 +2045,7 @@ function AppContent() {
                   updated_by: activeUser,
                   branch_id: branchToSave,
                 };
-                const { error: insertErr } = await sb.from('store_inventory').insert([payload]);
+                const { error: insertErr } = await sb.from('store_inventory').upsert([payload], { onConflict: 'barcode_no,shelf_location,branch_id' });
                 if (insertErr) throw insertErr;
               }
 

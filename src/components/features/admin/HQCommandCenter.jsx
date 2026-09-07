@@ -17,7 +17,7 @@ import joahLogo from '../../../assets/Joah.jpeg';
 import imgMgm from '../../../assets/Joah.jpeg'; // Placeholder — replace with Megamall photo
 
 // ===================== CONSTANTS =====================
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)'];
 
 const BC = {
     'ຕະຫຼາດລາວ': { gr: 'bg-gradient-to-br from-orange-500 to-amber-500', grR: 'bg-gradient-to-r from-orange-500 to-amber-500', card: 'bg-orange-50 dark:bg-orange-900/20', bdr: 'border-orange-200 dark:border-orange-700', txt: 'text-orange-600 dark:text-orange-400' },
@@ -25,6 +25,7 @@ const BC = {
     'ໂພນສີນວນ': { gr: 'bg-gradient-to-br from-emerald-500 to-teal-600', grR: 'bg-gradient-to-r from-emerald-500 to-teal-600', card: 'bg-emerald-50 dark:bg-emerald-900/20', bdr: 'border-emerald-200 dark:border-emerald-700', txt: 'text-emerald-600 dark:text-emerald-400' },
     'ວັງຊາຍ': { gr: 'bg-gradient-to-br from-purple-500 to-violet-600', grR: 'bg-gradient-to-r from-purple-500 to-violet-600', card: 'bg-purple-50 dark:bg-purple-900/20', bdr: 'border-purple-200 dark:border-purple-700', txt: 'text-purple-600 dark:text-purple-400' },
     'ເມກ້າມໍ': { gr: 'bg-gradient-to-br from-rose-500 to-pink-600', grR: 'bg-gradient-to-r from-rose-500 to-pink-600', card: 'bg-rose-50 dark:bg-rose-900/20', bdr: 'border-rose-200 dark:border-rose-700', txt: 'text-rose-600 dark:text-rose-400' },
+    'ເທຣນນິ້ງ (Training)': { gr: 'bg-gradient-to-br from-cyan-500 to-blue-600', grR: 'bg-gradient-to-r from-cyan-500 to-blue-600', card: 'bg-cyan-50 dark:bg-cyan-900/20', bdr: 'border-cyan-200 dark:border-cyan-700', txt: 'text-cyan-600 dark:text-cyan-400' },
 };
 
 const TABS = [
