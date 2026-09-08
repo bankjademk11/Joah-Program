@@ -22,6 +22,16 @@ export const PSN_FLOOR_STORAGE_RACKS = [
     "PSN041", "PSN042", "PSN043", "PSN044", "PSN045"
 ];
 
+// ໂລໜ້າຮ້ານ JMPT ສຳລັບສາຂາ ໂພນຕ້ອງ (JMPT. A-1 ຮອດ F-8 ແລະ G-1 ຮອດ G-20)
+export const PHONTHONG_ALL_RACKS = [
+    // โซน A-F (โซนละ 8 ล็อค: JMPT. A-1 ถึง F-8)
+    ...['A', 'B', 'C', 'D', 'E', 'F'].flatMap(zone => 
+        Array.from({ length: 8 }, (_, i) => `JMPT. ${zone}-${i + 1}`)
+    ),
+    // โซน G (20 ล็อค: G-1 ถึง G-20 เฉยๆ)
+    ...Array.from({ length: 20 }, (_, i) => `G-${i + 1}`)
+];
+
 export const STORE_BRANCH_RACK_RULES = {
     'ຕະຫຼາດລາວ': {
         'INTERIOR': [
@@ -185,6 +195,19 @@ export const STORE_BRANCH_RACK_RULES = {
         'INTERIOR': [{ zones: ['TR-I01', 'TR-I02', 'TR-I03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
         'SPORTS': [{ zones: ['TR-J01', 'TR-J02', 'TR-J03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
         'EVENT': [{ zones: ['TR-Event-01', 'TR-Event-02'], maxLevel: 0, format: 'store_exact' }],
+    },
+    'ໂພນຕ້ອງ': {
+        'KITCHEN': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'STATIONERY': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'STORAGE': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'INTERIOR': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'TOYS': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'FASHION': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'BEAUTY': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'SPORTS': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'CLEANING': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'TOOL/DIGITAL': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
+        'EVENT': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }]
     }
 };
 
@@ -203,6 +226,7 @@ const resolveStoreBranchId = (branchId) => {
     if (normalizedId === 'VX' || normalizedId.includes('ວັງຊາຍ')) return 'ວັງຊາຍ';
     if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
     if (normalizedId === 'PTX' || normalizedId.includes('ປະຕູໄຊ')) return 'ປະຕູໄຊ';
+    if (normalizedId === 'JMPT' || normalizedId === 'PT' || normalizedId.includes('ໂພນຕ້ອງ') || normalizedId.includes('PHONTHONG')) return 'ໂພນຕ້ອງ';
     if (normalizedId.includes('ເທຣນ') || normalizedId.includes('ເທຮນ') || normalizedId.includes('TRAINING')) return 'ເທຣນນິ້ງ (Training)';
 
     // Direct match first

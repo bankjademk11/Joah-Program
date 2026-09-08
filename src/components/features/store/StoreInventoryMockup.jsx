@@ -7,7 +7,7 @@ import { useToast } from '../../ui/ToastProvider';
 import { getStoreRackSuggestions, validateStoreRack } from '../../../utils/storeRackUtils';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
 const MEGAMALL = 'ເມກ້າມໍ';
 
 const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) => {

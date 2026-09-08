@@ -1036,6 +1036,7 @@ function AppContent() {
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                             <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                            <option value="ໂພນຕ້ອງ">ໂພນຕ້ອງ</option>
                             <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                         </div>
@@ -1100,6 +1101,7 @@ function AppContent() {
                               {isAdmin && <option value="ວັງຊາຍ">ວັງຊາຍ</option>}
                               {isAdmin && <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>}
                               <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                              {isAdmin && <option value="ໂພນຕ້ອງ">ໂພນຕ້ອງ</option>}
                               {isAdmin && <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>}
                             </select>
                           </div>
@@ -1153,7 +1155,7 @@ function AppContent() {
                         {/* Branch Selector */}
                         {(() => {
                           const branches = isAdmin
-                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເມກ້າມໍtest', 'ເທຣນນິ້ງ (Training)']
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)']
                             : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;
@@ -1411,6 +1413,7 @@ function AppContent() {
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
+                            <option value="ໂພນຕ້ອງ">ໂພນຕ້ອງ</option>
                             <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
@@ -1447,6 +1450,7 @@ function AppContent() {
                             <option value="ສີວິໄລ">ສີວິໄລ</option>
                             <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                             <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
+                            <option value="ໂພນຕ້ອງ">ໂພນຕ້ອງ</option>
                             <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                           </select>
                           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-sky-500 pointer-events-none" size={16} />
@@ -1550,7 +1554,7 @@ function AppContent() {
                         {/* Branch Selector array for Store Request */}
                         {(() => {
                           const branches = isAdmin
-                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ເທຣນນິ້ງ (Training)']
+                            ? ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)']
                             : [user?.branch_id].filter(Boolean);
 
                           if (branches.length <= 1) return null;

@@ -96,6 +96,7 @@ async function syncBranch(
                 model: 'product.product',
                 method: 'search_read',
                 args: [[['id', 'in', productIds]]],
+
                 kwargs: { fields: ['id', 'barcode'] }
             }
         })

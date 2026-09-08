@@ -193,6 +193,7 @@ const Login = ({ onLogin }) => {
                                         <option value="ວັງຊາຍ">ວັງຊາຍ</option>
                                         <option value="ເມກ້າມໍ">ເມກ້າມໍ</option>
                                         <option value="ໂພນສີນວນ">ໂພນສີນວນ</option>
+                                        <option value="ໂພນຕ້ອງ">ໂພນຕ້ອງ</option>
                                         <option value="ເທຣນນິ້ງ (Training)">🎓 ເທຣນນິ້ງ (Training)</option>
                                     </select>
                                     {/* Custom Dropdown Arrow */}
