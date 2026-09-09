@@ -28,8 +28,8 @@ export const PHONTHONG_ALL_RACKS = [
     ...['A', 'B', 'C', 'D', 'E', 'F'].flatMap(zone => 
         Array.from({ length: 8 }, (_, i) => `JMPT. ${zone}-${i + 1}`)
     ),
-    // โซน G (20 ล็อค: G-1 ถึง G-20 เฉยๆ)
-    ...Array.from({ length: 20 }, (_, i) => `G-${i + 1}`)
+    // โซน G (20 ล็อค: JMPT. G-1 ถึง JMPT. G-20)
+    ...Array.from({ length: 20 }, (_, i) => `JMPT. G-${i + 1}`)
 ];
 
 export const STORE_BRANCH_RACK_RULES = {
