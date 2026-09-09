@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales } from '../../services/odooApi';
+import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales, fetchProductBarcodes } from '../../services/odooApi';
 import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
@@ -44,9 +44,11 @@ const formatDateRangeLao = (start, end) => {
 export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [sales, setSales] = useState([]);
     const [detailedSales, setDetailedSales] = useState([]);
+    const [trueBarcodes, setTrueBarcodes] = useState({});
     const [auditStates, setAuditStates] = useState([]);
     const [abnormalOrders, setAbnormalOrders] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('summary');
@@ -100,10 +102,19 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
             if (activeTab === 'summary') {
                 const data = await fetchBranchProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly);
-                setSales(data.sort((a, b) => b.qty - a.qty));
+                const sorted = data.sort((a, b) => b.qty - a.qty);
+                setSales(sorted);
+                const productIds = [...new Set(sorted.map(i => i.product_id?.[0]).filter(Boolean))];
+                if (productIds.length > 0) {
+                    fetchProductBarcodes(productIds).then(map => setTrueBarcodes(prev => ({ ...prev, ...map }))).catch(() => {});
+                }
             } else if (activeTab === 'history') {
                 const data = await fetchDetailedProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly);
                 setDetailedSales(data);
+                const productIds = [...new Set(data.map(i => i.product_id?.[0]).filter(Boolean))];
+                if (productIds.length > 0) {
+                    fetchProductBarcodes(productIds).then(map => setTrueBarcodes(prev => ({ ...prev, ...map }))).catch(() => {});
+                }
             } else if (activeTab === 'audit') {
                 const [stateData, abnormalData] = await Promise.all([
                     fetchOrderStateAudit(selectedBranchId, startDateTime, endDateTime),
@@ -112,7 +123,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setAuditStates(stateData);
                 setAbnormalOrders(abnormalData);
             } else if (activeTab === 'weekly' || activeTab === 'dashboard') {
-                +6
                 const today = new Date();
                 const pad = (n) => n.toString().padStart(2, '0');
 
@@ -263,15 +273,28 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
 
     const filteredSales = sales.filter(item => {
         if (!searchTerm) return true;
-        const name = item.product_id[1]?.toLowerCase() || '';
-        return name.includes(searchTerm.toLowerCase());
+        const term = searchTerm.toLowerCase();
+        const pId = item.product_id?.[0];
+        const { barcode: odooRef, name } = splitProduct(item.product_id?.[1]);
+        const ean13 = trueBarcodes[pId] || '';
+        return name.toLowerCase().includes(term) ||
+               odooRef.toLowerCase().includes(term) ||
+               ean13.toLowerCase().includes(term);
     });
 
     const filteredDetailedSales = detailedSales.filter(item => {
         if (!searchTerm) return true;
-        const name = item.product_id[1]?.toLowerCase() || '';
+        const term = searchTerm.toLowerCase();
+        const pId = item.product_id?.[0];
+        const { barcode: odooRef, name } = splitProduct(item.product_id?.[1]);
+        const ean13 = trueBarcodes[pId] || '';
         const orderName = item.order_id?.[1]?.toLowerCase() || '';
-        return name.includes(searchTerm.toLowerCase()) || orderName.includes(searchTerm.toLowerCase());
+        const customerName = item.partner_id?.[1]?.toLowerCase() || '';
+        return name.toLowerCase().includes(term) ||
+               odooRef.toLowerCase().includes(term) ||
+               ean13.toLowerCase().includes(term) ||
+               orderName.includes(term) ||
+               customerName.includes(term);
     });
 
     const totalQty = filteredSales.reduce((sum, i) => sum + (i.qty || 0), 0);
@@ -305,114 +328,180 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     };
 
     const handleExport = async () => {
-        const branchName = selectedBranchName;
-        const reportDate = `${dateStart.replace('T', ' ')} ຫາ ${dateEnd.replace('T', ' ')}`;
-
-        const workbook = new ExcelJS.Workbook();
-        const ws = workbook.addWorksheet(branchName);
-
-        const FONT = { name: 'Phetsarath OT', size: 11 };
-        const FONT_BOLD = { name: 'Phetsarath OT', size: 11, bold: true };
-        const FONT_TITLE = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FFE05C00' } };
-        const BORDER = { style: 'thin', color: { argb: 'FF888888' } };
-        const ALL_BORDERS = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
-        const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-        const TOTAL_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
-
+        setIsExporting(true);
         try {
-            const imgResp = await fetch(JoahLogo);
-            const imgBuf = await imgResp.arrayBuffer();
-            const imgId = workbook.addImage({ buffer: imgBuf, extension: 'jpeg' });
-            ws.addImage(imgId, { tl: { col: 0, row: 0 }, br: { col: 2, row: 4 } });
-        } catch (e) { /* image optional */ }
+            const branchName = selectedBranchName;
+            const reportDate = `${dateStart.replace('T', ' ')} ຫາ ${dateEnd.replace('T', ' ')}`;
 
-        ws.getRow(1).height = 25;
-        ws.getRow(2).height = 20;
-        ws.getRow(3).height = 20;
-        ws.getRow(4).height = 20;
+            // Ensure we have detailed sales data (with Order Ref & Barcode 13-digit)
+            let exportItems = detailedSales;
+            let currentBarcodes = { ...trueBarcodes };
 
-        const titleCell = ws.getCell('C1');
-        titleCell.value = 'JOAH - ລາຍງານຍອດຂາຍ';
-        titleCell.font = FONT_TITLE;
-        titleCell.alignment = { vertical: 'middle' };
+            if (!exportItems || exportItems.length === 0) {
+                await authenticate(
+                    import.meta.env.VITE_ODOO_DB,
+                    import.meta.env.VITE_ODOO_USER,
+                    import.meta.env.VITE_ODOO_PASSWORD
+                );
+                const toUTC = (dateStr, isEnd) => {
+                    if (!dateStr) return null;
+                    const d = new Date(`${dateStr}:00`);
+                    if (isEnd) d.setSeconds(59);
+                    return d.toISOString().replace('T', ' ').substring(0, 19);
+                };
+                const startUTC = toUTC(dateStart, false);
+                const endUTC = toUTC(dateEnd, true);
+                exportItems = await fetchDetailedProductSales(selectedBranchId, startUTC, endUTC, joahOnly);
+                setDetailedSales(exportItems);
 
-        ws.getCell('C2').value = `ສາຂາ: ${branchName}`;
-        ws.getCell('C2').font = { ...FONT_BOLD, size: 12 };
-        ws.getCell('C3').value = `ໄລຍະເວລາ: ${reportDate}`;
-        ws.getCell('C3').font = FONT;
-        ws.getCell('C4').value = `ຍອດລວມ: ₭ ${formatNumber(activeTab === 'summary' ? totalRevenue : totalDetailedRevenue)}`;
-        ws.getCell('C4').font = { ...FONT_BOLD, color: { argb: 'FF059669' } };
-
-        let headers, colWidths;
-        if (activeTab === 'summary') {
-            headers = ['#', 'ບາໂຄດ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນຂາຍ (Qty)', 'ຍອດຂາຍ (LAK)'];
-            colWidths = [6, 20, 55, 16, 20];
-        } else {
-            headers = ['#', 'ເວລາ (Time)', 'ເລກບິນ (Receipt)', 'ບາໂຄດ', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
-            colWidths = [6, 22, 28, 18, 55, 12, 20];
-        }
-        ws.columns = colWidths.map(w => ({ width: w }));
-
-        const headerRow = ws.getRow(6);
-        headerRow.height = 22;
-        headers.forEach((h, i) => {
-            const cell = headerRow.getCell(i + 1);
-            cell.value = h;
-            cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
-            cell.fill = HEADER_FILL;
-            cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            cell.border = ALL_BORDERS;
-        });
-
-        const dataList = activeTab === 'summary' ? filteredSales : filteredDetailedSales;
-        dataList.forEach((item, idx) => {
-            const { barcode, name } = splitProduct(item.product_id[1]);
-            const rowIdx = idx + 7;
-            const r = ws.getRow(rowIdx);
-            r.height = 18;
-            let values;
-            if (activeTab === 'summary') {
-                values = [idx + 1, barcode, name, item.qty || 0, item.price_subtotal_incl || 0];
-            } else {
-                values = [idx + 1, formatDateTime(item.create_date), item.order_id?.[1] || '', barcode, name, item.qty || 0, item.price_subtotal_incl || 0];
+                const pIds = [...new Set(exportItems.map(i => i.product_id?.[0]).filter(Boolean))];
+                if (pIds.length > 0) {
+                    const fetchedMap = await fetchProductBarcodes(pIds).catch(() => ({}));
+                    currentBarcodes = { ...currentBarcodes, ...fetchedMap };
+                    setTrueBarcodes(prev => ({ ...prev, ...fetchedMap }));
+                }
             }
-            values.forEach((v, ci) => {
-                const cell = r.getCell(ci + 1);
-                cell.value = v;
-                cell.font = FONT;
-                cell.border = ALL_BORDERS;
-                cell.alignment = { vertical: 'middle', horizontal: typeof v === 'number' ? 'right' : 'left' };
+
+            // Apply active search filter if user typed anything
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                exportItems = exportItems.filter(item => {
+                    const pId = item.product_id?.[0];
+                    const { barcode: odooRef, name } = splitProduct(item.product_id?.[1]);
+                    const ean13 = currentBarcodes[pId] || '';
+                    const orderName = item.order_id?.[1]?.toLowerCase() || '';
+                    const customerName = item.partner_id?.[1]?.toLowerCase() || '';
+                    return name.toLowerCase().includes(term) ||
+                           odooRef.toLowerCase().includes(term) ||
+                           ean13.toLowerCase().includes(term) ||
+                           orderName.includes(term) ||
+                           customerName.includes(term);
+                });
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const ws = workbook.addWorksheet(branchName);
+
+            const FONT = { name: 'Phetsarath OT', size: 11 };
+            const FONT_BOLD = { name: 'Phetsarath OT', size: 11, bold: true };
+            const FONT_TITLE = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FFE05C00' } };
+            const BORDER = { style: 'thin', color: { argb: 'FF888888' } };
+            const ALL_BORDERS = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+            const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+            const TOTAL_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+
+            try {
+                const imgResp = await fetch(JoahLogo);
+                const imgBuf = await imgResp.arrayBuffer();
+                const imgId = workbook.addImage({ buffer: imgBuf, extension: 'jpeg' });
+                ws.addImage(imgId, { tl: { col: 0, row: 0 }, br: { col: 2, row: 4 } });
+            } catch (e) { /* image optional */ }
+
+            ws.getRow(1).height = 25;
+            ws.getRow(2).height = 20;
+            ws.getRow(3).height = 20;
+            ws.getRow(4).height = 20;
+
+            const titleCell = ws.getCell('C1');
+            titleCell.value = 'JOAH - ລາຍງານຍອດຂາຍ';
+            titleCell.font = FONT_TITLE;
+            titleCell.alignment = { vertical: 'middle' };
+
+            const totalRev = exportItems.reduce((sum, i) => sum + (i.price_subtotal_incl || 0), 0);
+            const totalQ = exportItems.reduce((sum, i) => sum + (i.qty || 0), 0);
+
+            ws.getCell('C2').value = `ສາຂາ: ${branchName}`;
+            ws.getCell('C2').font = { ...FONT_BOLD, size: 12 };
+            ws.getCell('C3').value = `ໄລຍະເວລາ: ${reportDate}`;
+            ws.getCell('C3').font = FONT;
+            ws.getCell('C4').value = `ຍອດລວມ: ₭ ${formatNumber(totalRev)}`;
+            ws.getCell('C4').font = { ...FONT_BOLD, color: { argb: 'FF059669' } };
+
+            const headers = ['#', 'ເວລາ (Time)', 'Order Ref', 'ບາໂຄດ 13 ຫຼັກ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
+
+            // --- Auto-fit: track max char length per column ---
+            const colMaxLen = headers.map(h => h.length);
+
+            // Pre-scan data rows to find max length
+            exportItems.forEach((item) => {
+                const { name } = splitProduct(item.product_id[1]);
+                const pId = item.product_id?.[0];
+                const ean13 = currentBarcodes[pId] || '-';
+                const rowVals = [
+                    String(exportItems.indexOf(item) + 1),
+                    formatDateTime(item.create_date),
+                    item.order_id?.[1] || '',
+                    ean13,
+                    name,
+                    String(item.qty || 0),
+                    String(item.price_subtotal_incl || 0),
+                ];
+                rowVals.forEach((v, ci) => {
+                    colMaxLen[ci] = Math.max(colMaxLen[ci], String(v).length);
+                });
             });
-        });
 
-        const totalRowIdx = dataList.length + 7;
-        const tr = ws.getRow(totalRowIdx);
-        tr.height = 22;
-        const qtyCol = activeTab === 'summary' ? 4 : 6;
-        const amtCol = activeTab === 'summary' ? 5 : 7;
-        const totalQtyVal = activeTab === 'summary' ? totalQty : totalDetailedQty;
-        const totalAmt = activeTab === 'summary' ? totalRevenue : totalDetailedRevenue;
-        const labelCell = tr.getCell(activeTab === 'summary' ? 3 : 5);
-        labelCell.value = 'ລວມທັງໝົດ (TOTAL)';
-        labelCell.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
-        labelCell.fill = TOTAL_FILL;
-        tr.getCell(qtyCol).value = totalQtyVal;
-        tr.getCell(amtCol).value = totalAmt;
-        [1, 2, 3, 4, 5, 6, 7].slice(0, headers.length).forEach(ci => {
-            const cell = tr.getCell(ci);
-            cell.font = FONT_BOLD;
-            cell.fill = TOTAL_FILL;
-            cell.border = ALL_BORDERS;
-        });
+            // Apply widths: min 8, max 60, add small padding
+            ws.columns = colMaxLen.map(len => ({ width: Math.min(60, Math.max(8, len + 4)) }));
 
-        const buf = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `JOAH_Sales_${branchName}_${todayStr}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
+            const headerRow = ws.getRow(6);
+            headerRow.height = 22;
+            headers.forEach((h, i) => {
+                const cell = headerRow.getCell(i + 1);
+                cell.value = h;
+                cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
+                cell.fill = HEADER_FILL;
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = ALL_BORDERS;
+            });
+
+            exportItems.forEach((item, idx) => {
+                const { name } = splitProduct(item.product_id[1]);
+                const pId = item.product_id?.[0];
+                const ean13 = currentBarcodes[pId] || '-';
+                const rowIdx = idx + 7;
+                const r = ws.getRow(rowIdx);
+                r.height = 18;
+                const values = [idx + 1, formatDateTime(item.create_date), item.order_id?.[1] || '', ean13, name, item.qty || 0, item.price_subtotal_incl || 0];
+                values.forEach((v, ci) => {
+                    const cell = r.getCell(ci + 1);
+                    cell.value = v;
+                    cell.font = FONT;
+                    cell.border = ALL_BORDERS;
+                    cell.alignment = { vertical: 'middle', wrapText: false, horizontal: typeof v === 'number' ? 'right' : 'left' };
+                });
+            });
+
+            const totalRowIdx = exportItems.length + 7;
+            const tr = ws.getRow(totalRowIdx);
+            tr.height = 22;
+            const labelCell = tr.getCell(5);
+            labelCell.value = 'ລວມທັງໝົດ (TOTAL)';
+            labelCell.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
+            labelCell.fill = TOTAL_FILL;
+            tr.getCell(6).value = totalQ;
+            tr.getCell(7).value = totalRev;
+            [1, 2, 3, 4, 5, 6, 7].forEach(ci => {
+                const cell = tr.getCell(ci);
+                cell.font = FONT_BOLD;
+                cell.fill = TOTAL_FILL;
+                cell.border = ALL_BORDERS;
+            });
+
+            const buf = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `JOAH_Sales_${branchName}_${todayStr}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('ເກີດຂໍ້ຜິດພາດໃນການ Export: ' + err.message);
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     // ── Render DayDetailViewer if a day is selected ──────────────────────────
@@ -1072,6 +1161,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                         <tr>
                                             <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">ເວລາ</th>
                                             <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">ເລກບິນ</th>
+                                            <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">ລູກຄ້າ</th>
                                             <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider w-36">ບາໂຄດ</th>
                                             <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">ຊື່ສິນຄ້າ</th>
                                             <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider text-right">ຈຳນວນ</th>
@@ -1082,18 +1172,31 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                                     {((activeTab === 'summary' && filteredSales.length === 0) || (activeTab === 'history' && filteredDetailedSales.length === 0)) && !loading && !error ? (
                                         <tr>
-                                            <td colSpan="6" className="p-12 text-center text-slate-400">
+                                            <td colSpan="7" className="p-12 text-center text-slate-400">
                                                 <Package size={48} className="mx-auto opacity-20 mb-3" />
                                                 <p className="font-medium text-sm">ບໍ່ມີຂໍ້ມູນການຂາຍໃນຊ່ວງເວລານີ້</p>
                                             </td>
                                         </tr>
                                     ) : activeTab === 'summary' ? (
                                         filteredSales.map((item, index) => {
-                                            const { barcode, name } = splitProduct(item.product_id[1]);
+                                            const { barcode: odooRef, name } = splitProduct(item.product_id[1]);
+                                            const pId = item.product_id?.[0];
+                                            const ean13 = trueBarcodes[pId];
                                             return (
                                                 <tr key={item.product_id[0]} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                                                     <td className="p-4 text-sm text-slate-400 font-medium">{index + 1}</td>
-                                                    <td className="p-4"><span className="text-xs font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{barcode}</span></td>
+                                                    <td className="p-4">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit">
+                                                                {ean13 || '-'}
+                                                            </span>
+                                                            {odooRef && odooRef !== '-' && (
+                                                                <span className="text-[10px] font-mono text-slate-400">
+                                                                    Ref: {odooRef}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td className="p-4"><p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-joah-orange transition-colors">{name}</p></td>
                                                     <td className="p-4 text-right"><span className="inline-flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 px-3 py-1 rounded-lg text-base font-black">{formatNumber(item.qty)}</span></td>
                                                     <td className="p-4 text-right"><p className="text-sm font-bold text-slate-600 dark:text-slate-400">₭ {formatNumber(item.price_subtotal_incl)}</p></td>
@@ -1102,7 +1205,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                         })
                                     ) : (
                                         filteredDetailedSales.map((item, index) => {
-                                            const { barcode, name } = splitProduct(item.product_id[1]);
+                                            const { barcode: odooRef, name } = splitProduct(item.product_id[1]);
+                                            const pId = item.product_id?.[0];
+                                            const ean13 = trueBarcodes[pId];
+                                            const customerName = item.partner_id?.[1];
                                             const isRefund = item.qty < 0 || item.price_subtotal_incl < 0;
                                             return (
                                                 <tr key={item.id || index} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group ${isRefund ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
@@ -1111,7 +1217,30 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                         {item.order_id?.[1]}
                                                         {isRefund && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">REFUND</span>}
                                                     </td>
-                                                    <td className="p-4"><span className="text-xs font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{barcode}</span></td>
+                                                    <td className="p-4">
+                                                        {customerName ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Users size={14} className="text-joah-orange shrink-0" />
+                                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                                    {customerName}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-400 italic">ທົ່ວໄປ (Walk-in)</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit">
+                                                                {ean13 || '-'}
+                                                            </span>
+                                                            {odooRef && odooRef !== '-' && (
+                                                                <span className="text-[10px] font-mono text-slate-400">
+                                                                    Ref: {odooRef}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td className="p-4"><p className={`text-sm font-bold transition-colors ${isRefund ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200 group-hover:text-joah-orange'}`}>{name}</p></td>
                                                     <td className="p-4 text-right"><span className={`inline-flex items-center justify-center px-2 py-1 rounded text-sm font-black ${isRefund ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'}`}>{formatNumber(item.qty)}</span></td>
                                                     <td className="p-4 text-right"><p className={`text-sm font-bold ${isRefund ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>₭ {formatNumber(item.price_subtotal_incl)}</p></td>
@@ -1131,13 +1260,22 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     </div>
                                 ) : activeTab === 'summary' ? (
                                     filteredSales.map((item, index) => {
-                                        const { barcode, name } = splitProduct(item.product_id[1]);
+                                        const { barcode: odooRef, name } = splitProduct(item.product_id[1]);
+                                        const pId = item.product_id?.[0];
+                                        const ean13 = trueBarcodes[pId];
                                         return (
                                             <div key={item.product_id[0]} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 shadow-sm flex flex-col gap-2">
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-bold text-slate-400 w-5">{index + 1}.</span>
-                                                        <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">{barcode}</span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-[10px] font-bold text-slate-400">{index + 1}.</span>
+                                                        <span className="text-[11px] font-bold font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
+                                                            {ean13 || '-'}
+                                                        </span>
+                                                        {odooRef && odooRef !== '-' && (
+                                                            <span className="text-[9px] font-mono text-slate-400">
+                                                                Ref: {odooRef}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <span className="inline-flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 px-2 py-0.5 rounded-lg text-sm font-black whitespace-nowrap">
                                                         {formatNumber(item.qty)} ຊິ້ນ
@@ -1153,7 +1291,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     })
                                 ) : (
                                     filteredDetailedSales.map((item, index) => {
-                                        const { barcode, name } = splitProduct(item.product_id[1]);
+                                        const { barcode: odooRef, name } = splitProduct(item.product_id[1]);
+                                        const pId = item.product_id?.[0];
+                                        const ean13 = trueBarcodes[pId];
+                                        const customerName = item.partner_id?.[1];
                                         const isRefund = item.qty < 0 || item.price_subtotal_incl < 0;
                                         return (
                                             <div key={item.id || index} className={`bg-white dark:bg-slate-800 border ${isRefund ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-700'} rounded-xl p-3 shadow-sm flex flex-col gap-2`}>
@@ -1164,8 +1305,23 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                                         {isRefund && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-600 dark:bg-red-900/30">REFUND</span>}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">{barcode}</span>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                                        <span className="text-[11px] font-bold font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
+                                                            {ean13 || '-'}
+                                                        </span>
+                                                        {odooRef && odooRef !== '-' && (
+                                                            <span className="text-[9px] font-mono text-slate-400">
+                                                                Ref: {odooRef}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {customerName && (
+                                                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                                            <Users size={12} className="text-joah-orange shrink-0" />
+                                                            <span className="truncate max-w-[120px]">{customerName}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <p className={`text-sm font-bold ${isRefund ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'} line-clamp-2`}>{name}</p>
                                                 <div className={`flex justify-between items-center mt-1 border-t ${isRefund ? 'border-red-100 dark:border-red-900/50' : 'border-slate-100 dark:border-slate-700'} pt-2`}>

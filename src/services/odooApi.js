@@ -483,7 +483,55 @@ export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, fi
     throw new Error(json.error.data?.message || json.error.message || 'Odoo API error');
   }
 
-  return (json.result || []).filter(item => item.product_id);
+  const lines = (json.result || []).filter(item => item.product_id);
+
+  // Fetch customer (partner_id) for the unique orders
+  const orderIds = [...new Set(lines.map(l => l.order_id?.[0]).filter(Boolean))];
+  if (orderIds.length > 0) {
+    try {
+      const chunkSize = 1000;
+      const orderPartnerMap = {};
+      for (let i = 0; i < orderIds.length; i += chunkSize) {
+        const chunk = orderIds.slice(i, i + chunkSize);
+        const orderPayload = {
+          jsonrpc: '2.0',
+          method: 'call',
+          id: Date.now() + i,
+          params: {
+            model: 'pos.order',
+            method: 'search_read',
+            args: [[['id', 'in', chunk]]],
+            kwargs: {
+              fields: ['id', 'partner_id'],
+              limit: chunk.length,
+              context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS },
+            },
+          },
+        };
+        const oRes = await fetch(`${BASE}/web/dataset/call_kw`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(orderPayload),
+        });
+        if (oRes.ok) {
+          const oJson = await oRes.json();
+          (oJson.result || []).forEach(o => {
+            orderPartnerMap[o.id] = o.partner_id || null;
+          });
+        }
+      }
+
+      lines.forEach(l => {
+        const orderId = l.order_id?.[0];
+        l.partner_id = (orderId && orderPartnerMap[orderId]) ? orderPartnerMap[orderId] : null;
+      });
+    } catch (err) {
+      console.warn('Failed to fetch order customer partners:', err);
+    }
+  }
+
+  return lines;
 }
 
 /**
