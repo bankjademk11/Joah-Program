@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales, fetchProductBarcodes } from '../../services/odooApi';
-import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart, ChevronDown } from 'lucide-react';
+import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart, ChevronDown, ImageIcon, Check } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
 import JoahLogo from '../../assets/Joah.jpeg';
@@ -50,6 +50,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [abnormalOrders, setAbnormalOrders] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState('');
+    const [exportImageConfirm, setExportImageConfirm] = useState(null); // { limit: 100 } or null
     const [showExportMenu, setShowExportMenu] = useState(false);
     const exportMenuRef = useRef(null);
     const [error, setError] = useState(null);
@@ -74,14 +76,15 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         { id: 248, name: 'ສີວິໄລ', short: 'SVL' },
         { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
         { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
-        { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
+        { id: 273, name: 'ປະຕູໄຊ (ເມກ້າມໍ)', short: 'PTX' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(
         branches.find(b => b.name === userBranch)?.id || 273
     );
 
-    const selectedBranchName = branches.find(b => b.id === selectedBranchId)?.name || '';
+    const currentBranchObj = branches.find(b => b.id === selectedBranchId);
+    const selectedBranchName = currentBranchObj ? `${currentBranchObj.name} (${currentBranchObj.short})` : '';
 
     const loadSales = useCallback(async () => {
         setLoading(true);
@@ -758,9 +761,10 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     }, [showExportMenu]);
 
     // ── Export Top N Best Sellers ─────────────────────────────────────────────
-    const handleExportTopSales = async (limit) => {
+    const handleExportTopSales = async (limit, withImages = false) => {
         setShowExportMenu(false);
         setIsExporting(true);
+        setExportProgress(withImages ? 'ກຳລັງກຽມຂໍ້ມູນການຂາຍ...' : '');
         try {
             const branchName = selectedBranchName;
             const fmtDate = (dt) => {
@@ -870,7 +874,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             ws.getRow(4).height = 20;
 
             const titleCell = ws.getCell('C1');
-            titleCell.value = `JOAH - Top ${limit} ສິນຄ້າຂາຍດີ`;
+            titleCell.value = `JOAH - Top ${limit} ສິນຄ້າຂາຍດີ${withImages ? ' (ພ້ອມຮູບພາບ)' : ''}`;
             titleCell.font = FONT_TITLE;
             titleCell.alignment = { vertical: 'middle' };
 
@@ -884,63 +888,203 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             ws.getCell('C4').value = `ຍອດລວມ: ₭ ${totalRev.toLocaleString()}`;
             ws.getCell('C4').font = { ...FONT_BOLD, color: { argb: 'FF059669' } };
 
-            const headers = ['#', 'ບາໂຄດ 13 ຫຼັກ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
-            const colMaxLen = headers.map(h => h.length);
-            topList.forEach(row => {
-                const barcode = currentBarcodes[row.pId] || '-';
-                const vals = [String(topList.indexOf(row) + 1), barcode, row.name, String(row.qty), String(Math.round(row.revenue))];
-                vals.forEach((v, ci) => { colMaxLen[ci] = Math.max(colMaxLen[ci], String(v).length); });
-            });
-            ws.columns = colMaxLen.map(len => ({ width: Math.min(60, Math.max(8, len + 4)) }));
-
-            const headerRow = ws.getRow(6);
-            headerRow.height = 22;
-            headers.forEach((h, i) => {
-                const cell = headerRow.getCell(i + 1);
-                cell.value = h;
-                cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
-                cell.fill = HEADER_FILL;
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                cell.border = ALL_BORDERS;
-            });
-
-            topList.forEach((row, idx) => {
-                const barcode = currentBarcodes[row.pId] || '-';
-                const rowIdx = idx + 7;
-                const r = ws.getRow(rowIdx);
-                r.height = 18;
-                const values = [idx + 1, barcode, row.name, row.qty, Math.round(row.revenue)];
-                values.forEach((v, ci) => {
-                    const cell = r.getCell(ci + 1);
-                    cell.value = v;
-                    cell.font = FONT;
-                    cell.border = ALL_BORDERS;
-                    cell.alignment = { vertical: 'middle', wrapText: false, horizontal: typeof v === 'number' ? 'right' : 'left' };
+            if (!withImages) {
+                // ── Standard Template (Without Images) ──────────────────────────
+                const headers = ['#', 'ບາໂຄດ 13 ຫຼັກ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
+                const colMaxLen = headers.map(h => h.length);
+                topList.forEach(row => {
+                    const barcode = currentBarcodes[row.pId] || '-';
+                    const vals = [String(topList.indexOf(row) + 1), barcode, row.name, String(row.qty), String(Math.round(row.revenue))];
+                    vals.forEach((v, ci) => { colMaxLen[ci] = Math.max(colMaxLen[ci], String(v).length); });
                 });
-            });
+                ws.columns = colMaxLen.map(len => ({ width: Math.min(60, Math.max(8, len + 4)) }));
 
-            const totalRowIdx = topList.length + 7;
-            const tr = ws.getRow(totalRowIdx);
-            tr.height = 22;
-            const lc = tr.getCell(3);
-            lc.value = 'ລວມທັງໝົດ (TOTAL)';
-            lc.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
-            lc.fill = TOTAL_FILL;
-            tr.getCell(4).value = totalQty;
-            tr.getCell(5).value = totalRev;
-            [1, 2, 3, 4, 5].forEach(ci => {
-                const cell = tr.getCell(ci);
-                cell.font = FONT_BOLD;
-                cell.fill = TOTAL_FILL;
-                cell.border = ALL_BORDERS;
-            });
+                const headerRow = ws.getRow(6);
+                headerRow.height = 22;
+                headers.forEach((h, i) => {
+                    const cell = headerRow.getCell(i + 1);
+                    cell.value = h;
+                    cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = HEADER_FILL;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = ALL_BORDERS;
+                });
+
+                topList.forEach((row, idx) => {
+                    const barcode = currentBarcodes[row.pId] || '-';
+                    const rowIdx = idx + 7;
+                    const r = ws.getRow(rowIdx);
+                    r.height = 18;
+                    const values = [idx + 1, barcode, row.name, row.qty, Math.round(row.revenue)];
+                    values.forEach((v, ci) => {
+                        const cell = r.getCell(ci + 1);
+                        cell.value = v;
+                        cell.font = FONT;
+                        cell.border = ALL_BORDERS;
+                        cell.alignment = { vertical: 'middle', wrapText: false, horizontal: typeof v === 'number' ? 'right' : 'left' };
+                    });
+                });
+
+                const totalRowIdx = topList.length + 7;
+                const tr = ws.getRow(totalRowIdx);
+                tr.height = 22;
+                const lc = tr.getCell(3);
+                lc.value = 'ລວມທັງໝົດ (TOTAL)';
+                lc.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
+                lc.fill = TOTAL_FILL;
+                tr.getCell(4).value = totalQty;
+                tr.getCell(5).value = totalRev;
+                [1, 2, 3, 4, 5].forEach(ci => {
+                    const cell = tr.getCell(ci);
+                    cell.font = FONT_BOLD;
+                    cell.fill = TOTAL_FILL;
+                    cell.border = ALL_BORDERS;
+                });
+            } else {
+                // ── Thumbnail Image Template ────────────────────────────────────
+                const headers = ['#', 'ຮູບສິນຄ້າ (Thumbnail)', 'ບາໂຄດ 13 ຫຼັກ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
+                
+                // Column widths: # (6), Thumbnail (17), Barcode (22), Product Name (45), Qty (14), Revenue (20)
+                // Column B = 17 units × 7.5px/unit = 127.5px wide
+                ws.columns = [
+                    { width: 6 },
+                    { width: 17 },
+                    { width: 22 },
+                    { width: 45 },
+                    { width: 14 },
+                    { width: 20 },
+                ];
+
+                const headerRow = ws.getRow(6);
+                headerRow.height = 25;
+                headers.forEach((h, i) => {
+                    const cell = headerRow.getCell(i + 1);
+                    cell.value = h;
+                    cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = HEADER_FILL;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = ALL_BORDERS;
+                });
+
+                // Batch fetch images
+                setExportProgress(`ກຳລັງດຶງຮູບພາບທັງໝົດ ${topList.length} ລາຍການ...`);
+                const fetchImage = async (barcode) => {
+                    if (!barcode || barcode === '-') return null;
+                    try {
+                        const imgUrl = `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${encodeURIComponent(barcode)}.png`;
+                        const res = await fetch(imgUrl);
+                        if (!res.ok) return null;
+                        const buf = await res.arrayBuffer();
+                        return buf;
+                    } catch (e) {
+                        return null;
+                    }
+                };
+
+                // Fetch in chunks of 10 concurrent requests
+                const imageBuffers = [];
+                const CHUNK_SIZE = 10;
+                for (let i = 0; i < topList.length; i += CHUNK_SIZE) {
+                    const slice = topList.slice(i, i + CHUNK_SIZE);
+                    setExportProgress(`ກຳລັງດຶງຮູບພາບ ${Math.min(i + CHUNK_SIZE, topList.length)}/${topList.length}...`);
+                    const results = await Promise.all(
+                        slice.map(row => {
+                            const barcode = currentBarcodes[row.pId];
+                            return fetchImage(barcode);
+                        })
+                    );
+                    imageBuffers.push(...results);
+                }
+
+                setExportProgress('ກຳລັງສ້າງໄຟລ໌ Excel ພ້ອມຝັງຮູບພາບ...');
+
+                topList.forEach((row, idx) => {
+                    const barcode = currentBarcodes[row.pId] || '-';
+                    const rowIdx = idx + 7;
+                    const r = ws.getRow(rowIdx);
+                    // Row height 65pt ≈ 86.7px — image 55x55 → vertical padding = (86.7-55)/2 ≈ 15.85px
+                    r.height = 65;
+
+                    const values = [
+                        idx + 1,
+                        '', // Thumbnail column (image added via ws.addImage)
+                        barcode,
+                        row.name,
+                        row.qty,
+                        Math.round(row.revenue)
+                    ];
+
+                    values.forEach((v, ci) => {
+                        const cell = r.getCell(ci + 1);
+                        cell.value = v;
+                        cell.font = FONT;
+                        cell.border = ALL_BORDERS;
+                        cell.alignment = { 
+                            vertical: 'middle', 
+                            wrapText: ci === 3, // Wrap product name
+                            horizontal: ci === 0 || ci === 1 ? 'center' : (typeof v === 'number' ? 'right' : 'left') 
+                        };
+                    });
+
+                    // Add image to cell if buffer exists
+                    const imgBuffer = imageBuffers[idx];
+                    if (imgBuffer) {
+                        try {
+                            const imgId = workbook.addImage({
+                                buffer: imgBuffer,
+                                extension: 'png',
+                            });
+                            // Stretch image to fill Column B cell nicely without overflowing borders
+                            // Col B width = 17 units (≈ 124px) | Row height = 65pt (≈ 65-66px visible in Excel)
+                            // 5px horizontal padding, 4px vertical padding -> width = 114px, height = 57px
+                            ws.addImage(imgId, {
+                                tl: {
+                                    nativeCol: 1,                          // Column B (0-indexed: 0=A, 1=B)
+                                    nativeColOff: Math.floor(5 * 9525),     // 5px margin from left border
+                                    nativeRow: rowIdx - 1,                 // 0-indexed row
+                                    nativeRowOff: Math.floor(4 * 9525)     // 4px margin from top border
+                                },
+                                ext: {
+                                    width: 114,  // Fills Column B width leaving 5px padding on each side
+                                    height: 57   // Fits cleanly inside row height leaving 4px padding top & bottom (no overflow into next row)
+                                },
+                                editAs: 'oneCell'
+                            });
+                        } catch (err) {
+                            console.warn(`Could not add image for ${barcode}:`, err);
+                        }
+                    } else {
+                        // If no image, put a clean subtle placeholder text
+                        const thumbCell = r.getCell(2);
+                        thumbCell.value = '-';
+                        thumbCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                        thumbCell.font = { ...FONT, color: { argb: 'FF94A3B8' } };
+                    }
+                });
+
+                const totalRowIdx = topList.length + 7;
+                const tr = ws.getRow(totalRowIdx);
+                tr.height = 25;
+                const lc = tr.getCell(4);
+                lc.value = 'ລວມທັງໝົດ (TOTAL)';
+                lc.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
+                lc.fill = TOTAL_FILL;
+                tr.getCell(5).value = totalQty;
+                tr.getCell(6).value = totalRev;
+                [1, 2, 3, 4, 5, 6].forEach(ci => {
+                    const cell = tr.getCell(ci);
+                    cell.font = FONT_BOLD;
+                    cell.fill = TOTAL_FILL;
+                    cell.border = ALL_BORDERS;
+                });
+            }
 
             const buf = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `JOAH_Top${limit}_${branchName}_${todayStr}.xlsx`;
+            a.download = `JOAH_Top${limit}_${withImages ? 'Thumb_' : ''}${branchName}_${todayStr}.xlsx`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (err) {
@@ -948,6 +1092,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             alert('ເກີດຂໍ້ຜິດພາດ: ' + err.message);
         } finally {
             setIsExporting(false);
+            setExportProgress('');
         }
     };
 
@@ -1036,7 +1181,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             </div>
                                         </button>
                                         <button
-                                            onClick={() => handleExportTopSales(100)}
+                                            onClick={() => { setShowExportMenu(false); setExportImageConfirm({ limit: 100 }); }}
                                             className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-2.5"
                                         >
                                             <TrendingUp size={15} className="text-amber-400 shrink-0" />
@@ -1046,7 +1191,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                             </div>
                                         </button>
                                         <button
-                                            onClick={() => handleExportTopSales(150)}
+                                            onClick={() => { setShowExportMenu(false); setExportImageConfirm({ limit: 150 }); }}
                                             className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-2.5"
                                         >
                                             <TrendingUp size={15} className="text-orange-400 shrink-0" />
@@ -1921,6 +2066,69 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     </div>
                 )}
             </div>
+
+            {/* Confirm Thumbnail Export Modal */}
+            {exportImageConfirm && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl flex flex-col gap-5 text-white animate-scale-up relative">
+                        <div className="flex items-center gap-3.5">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-orange-500/30 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                                <ImageIcon size={26} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-white">Export Top {exportImageConfirm.limit} ສິນຄ້າ</h3>
+                                <p className="text-xs text-slate-300">ເລືອກ Template ທີ່ຕ້ອງການດາວໂຫຼດ</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+                            <p className="text-base font-bold text-amber-300">
+                                ຕ້ອງການຮູບ Thumbnail ນຳບໍ່?
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">
+                                ຖ້າເລືອກມີຮູບ ລະບົບຈະດຶงຮູບຈາກ Supabase Storage ມາຝັງລົງໃນໄຟລ໌ Excel ໃຫ້ໂດຍອັດຕະໂນມັດ
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                            <button
+                                onClick={() => {
+                                    const { limit } = exportImageConfirm;
+                                    setExportImageConfirm(null);
+                                    handleExportTopSales(limit, false);
+                                }}
+                                className="w-full py-3 px-4 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all hover:scale-[1.02]"
+                            >
+                                ບໍ່ຕ້ອງການຮູບ
+                                <span className="block text-[10px] text-slate-400 font-normal mt-0.5">(Template ເດີມ · ໄວ)</span>
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    const { limit } = exportImageConfirm;
+                                    setExportImageConfirm(null);
+                                    handleExportTopSales(limit, true);
+                                }}
+                                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs shadow-lg shadow-orange-500/30 transition-all hover:scale-[1.02] flex flex-col items-center justify-center"
+                            >
+                                <span>ຕ້ອງການຮູບພາບ</span>
+                                <span className="text-[10px] text-orange-100 font-normal mt-0.5">(Template ໃໝ່ + ຮູບ)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Export Progress Overlay */}
+            {isExporting && exportProgress && (
+                <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900/95 border border-white/20 rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center gap-3">
+                        <RefreshCw size={28} className="text-amber-400 animate-spin" />
+                        <p className="text-sm font-bold text-white">{exportProgress}</p>
+                        <p className="text-xs text-slate-400">ກະລຸນາລໍຖ້າສັກຄູ່...</p>
+                    </div>
+                </div>
+            )}
         </div>,
         document.body
     );
