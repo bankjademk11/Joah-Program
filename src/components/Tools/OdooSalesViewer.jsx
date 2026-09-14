@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales, fetchProductBarcodes } from '../../services/odooApi';
-import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart } from 'lucide-react';
+import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart, ChevronDown } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
 import JoahLogo from '../../assets/Joah.jpeg';
@@ -44,11 +44,14 @@ const formatDateRangeLao = (start, end) => {
 export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [sales, setSales] = useState([]);
     const [detailedSales, setDetailedSales] = useState([]);
+    const [detailedSalesKey, setDetailedSalesKey] = useState('');
     const [trueBarcodes, setTrueBarcodes] = useState({});
     const [auditStates, setAuditStates] = useState([]);
     const [abnormalOrders, setAbnormalOrders] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [showExportMenu, setShowExportMenu] = useState(false);
+    const exportMenuRef = useRef(null);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('summary');
@@ -83,6 +86,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const loadSales = useCallback(async () => {
         setLoading(true);
         setError(null);
+        setSales([]);
+        setDetailedSales([]);
+        setDetailedSalesKey('');
         try {
             await authenticate(
                 import.meta.env.VITE_ODOO_DB,
@@ -106,14 +112,173 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setSales(sorted);
                 const productIds = [...new Set(sorted.map(i => i.product_id?.[0]).filter(Boolean))];
                 if (productIds.length > 0) {
-                    fetchProductBarcodes(productIds).then(map => setTrueBarcodes(prev => ({ ...prev, ...map }))).catch(() => {});
+                    fetchProductBarcodes(productIds).then(async (map) => {
+                        setTrueBarcodes(prev => ({ ...prev, ...map }));
+                        // Find any products that did not get a barcode
+                        const missingProdIds = productIds.filter(id => !map[id]);
+                        if (missingProdIds.length > 0) {
+                            try {
+                                // Query product.product to get product_tmpl_id in chunks
+                                const CHUNK = 150;
+                                const prodToTmpl = {};
+                                const tmplIds = [];
+                                for (let c = 0; c < missingProdIds.length; c += CHUNK) {
+                                    const slice = missingProdIds.slice(c, c + CHUNK);
+                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({
+                                            jsonrpc: '2.0',
+                                            method: 'call',
+                                            id: Date.now() + c,
+                                            params: {
+                                                model: 'product.product',
+                                                method: 'search_read',
+                                                args: [[['id', 'in', slice]]],
+                                                kwargs: { fields: ['id', 'product_tmpl_id'] }
+                                            }
+                                        })
+                                    });
+                                    if (res.ok) {
+                                        const j = await res.json();
+                                        (j.result || []).forEach(p => {
+                                            if (p.product_tmpl_id?.[0]) {
+                                                prodToTmpl[p.id] = p.product_tmpl_id[0];
+                                                tmplIds.push(p.product_tmpl_id[0]);
+                                            }
+                                        });
+                                    }
+                                }
+
+                                const uniqueTmplIds = [...new Set(tmplIds)];
+                                if (uniqueTmplIds.length > 0) {
+                                    const tmplBarcodeMap = {};
+                                    for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
+                                        const slice = uniqueTmplIds.slice(c, c + CHUNK);
+                                        const res = await fetch(`/api/web/dataset/call_kw`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                            credentials: 'include',
+                                            body: JSON.stringify({
+                                                jsonrpc: '2.0',
+                                                method: 'call',
+                                                id: Date.now() + c + 500,
+                                                params: {
+                                                    model: 'product.template',
+                                                    method: 'search_read',
+                                                    args: [[['id', 'in', slice]]],
+                                                    kwargs: { fields: ['id', 'barcode'] }
+                                                }
+                                            })
+                                        });
+                                        if (res.ok) {
+                                            const j = await res.json();
+                                            (j.result || []).forEach(t => {
+                                                if (t.barcode) tmplBarcodeMap[t.id] = t.barcode;
+                                            });
+                                        }
+                                    }
+
+                                    const fallbackMap = {};
+                                    Object.entries(prodToTmpl).forEach(([pId, tId]) => {
+                                        if (tmplBarcodeMap[tId]) fallbackMap[pId] = tmplBarcodeMap[tId];
+                                    });
+                                    if (Object.keys(fallbackMap).length > 0) {
+                                        setTrueBarcodes(prev => ({ ...prev, ...fallbackMap }));
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('Template barcode fallback error:', e);
+                            }
+                        }
+                    }).catch((err) => console.warn('Barcode fetch error:', err));
                 }
             } else if (activeTab === 'history') {
                 const data = await fetchDetailedProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly);
                 setDetailedSales(data);
+                setDetailedSalesKey(`${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`);
                 const productIds = [...new Set(data.map(i => i.product_id?.[0]).filter(Boolean))];
                 if (productIds.length > 0) {
-                    fetchProductBarcodes(productIds).then(map => setTrueBarcodes(prev => ({ ...prev, ...map }))).catch(() => {});
+                    fetchProductBarcodes(productIds).then(async (map) => {
+                        setTrueBarcodes(prev => ({ ...prev, ...map }));
+                        const missingProdIds = productIds.filter(id => !map[id]);
+                        if (missingProdIds.length > 0) {
+                            try {
+                                const CHUNK = 150;
+                                const prodToTmpl = {};
+                                const tmplIds = [];
+                                for (let c = 0; c < missingProdIds.length; c += CHUNK) {
+                                    const slice = missingProdIds.slice(c, c + CHUNK);
+                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({
+                                            jsonrpc: '2.0',
+                                            method: 'call',
+                                            id: Date.now() + c,
+                                            params: {
+                                                model: 'product.product',
+                                                method: 'search_read',
+                                                args: [[['id', 'in', slice]]],
+                                                kwargs: { fields: ['id', 'product_tmpl_id'] }
+                                            }
+                                        })
+                                    });
+                                    if (res.ok) {
+                                        const j = await res.json();
+                                        (j.result || []).forEach(p => {
+                                            if (p.product_tmpl_id?.[0]) {
+                                                prodToTmpl[p.id] = p.product_tmpl_id[0];
+                                                tmplIds.push(p.product_tmpl_id[0]);
+                                            }
+                                        });
+                                    }
+                                }
+
+                                const uniqueTmplIds = [...new Set(tmplIds)];
+                                if (uniqueTmplIds.length > 0) {
+                                    const tmplBarcodeMap = {};
+                                    for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
+                                        const slice = uniqueTmplIds.slice(c, c + CHUNK);
+                                        const res = await fetch(`/api/web/dataset/call_kw`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                            credentials: 'include',
+                                            body: JSON.stringify({
+                                                jsonrpc: '2.0',
+                                                method: 'call',
+                                                id: Date.now() + c + 500,
+                                                params: {
+                                                    model: 'product.template',
+                                                    method: 'search_read',
+                                                    args: [[['id', 'in', slice]]],
+                                                    kwargs: { fields: ['id', 'barcode'] }
+                                                }
+                                            })
+                                        });
+                                        if (res.ok) {
+                                            const j = await res.json();
+                                            (j.result || []).forEach(t => {
+                                                if (t.barcode) tmplBarcodeMap[t.id] = t.barcode;
+                                            });
+                                        }
+                                    }
+
+                                    const fallbackMap = {};
+                                    Object.entries(prodToTmpl).forEach(([pId, tId]) => {
+                                        if (tmplBarcodeMap[tId]) fallbackMap[pId] = tmplBarcodeMap[tId];
+                                    });
+                                    if (Object.keys(fallbackMap).length > 0) {
+                                        setTrueBarcodes(prev => ({ ...prev, ...fallbackMap }));
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('Template barcode fallback error:', e);
+                            }
+                        }
+                    }).catch((err) => console.warn('Barcode fetch error:', err));
                 }
             } else if (activeTab === 'audit') {
                 const [stateData, abnormalData] = await Promise.all([
@@ -333,8 +498,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             const branchName = selectedBranchName;
             const reportDate = `${dateStart.replace('T', ' ')} ຫາ ${dateEnd.replace('T', ' ')}`;
 
-            // Ensure we have detailed sales data (with Order Ref & Barcode 13-digit)
-            let exportItems = detailedSales;
+            // Ensure we have detailed sales data matching the current branch and dates
+            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`;
+            let exportItems = (detailedSalesKey === currentKey && detailedSales.length > 0) ? detailedSales : [];
             let currentBarcodes = { ...trueBarcodes };
 
             if (!exportItems || exportItems.length === 0) {
@@ -353,12 +519,87 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 const endUTC = toUTC(dateEnd, true);
                 exportItems = await fetchDetailedProductSales(selectedBranchId, startUTC, endUTC, joahOnly);
                 setDetailedSales(exportItems);
+                setDetailedSalesKey(currentKey);
 
                 const pIds = [...new Set(exportItems.map(i => i.product_id?.[0]).filter(Boolean))];
                 if (pIds.length > 0) {
                     const fetchedMap = await fetchProductBarcodes(pIds).catch(() => ({}));
                     currentBarcodes = { ...currentBarcodes, ...fetchedMap };
                     setTrueBarcodes(prev => ({ ...prev, ...fetchedMap }));
+
+                    const missingProdIds = pIds.filter(id => !currentBarcodes[id]);
+                    if (missingProdIds.length > 0) {
+                        try {
+                            const CHUNK = 150;
+                            const prodToTmpl = {};
+                            const tmplIds = [];
+                            for (let c = 0; c < missingProdIds.length; c += CHUNK) {
+                                const slice = missingProdIds.slice(c, c + CHUNK);
+                                const res = await fetch(`${import.meta.env.VITE_ODOO_BASE_URL || 'https://lod.kokkokm.com'}/web/dataset/call_kw`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({
+                                        jsonrpc: '2.0',
+                                        method: 'call',
+                                        id: Date.now() + c,
+                                        params: {
+                                            model: 'product.product',
+                                            method: 'search_read',
+                                            args: [[['id', 'in', slice]]],
+                                            kwargs: { fields: ['id', 'product_tmpl_id'] }
+                                        }
+                                    })
+                                });
+                                if (res.ok) {
+                                    const j = await res.json();
+                                    (j.result || []).forEach(p => {
+                                        if (p.product_tmpl_id?.[0]) {
+                                            prodToTmpl[p.id] = p.product_tmpl_id[0];
+                                            tmplIds.push(p.product_tmpl_id[0]);
+                                        }
+                                    });
+                                }
+                            }
+                            const uniqueTmplIds = [...new Set(tmplIds)];
+                            if (uniqueTmplIds.length > 0) {
+                                const tmplBarcodeMap = {};
+                                for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
+                                    const slice = uniqueTmplIds.slice(c, c + CHUNK);
+                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({
+                                            jsonrpc: '2.0',
+                                            method: 'call',
+                                            id: Date.now() + c + 500,
+                                            params: {
+                                                model: 'product.template',
+                                                method: 'search_read',
+                                                args: [[['id', 'in', slice]]],
+                                                kwargs: { fields: ['id', 'barcode'] }
+                                            }
+                                        })
+                                    });
+                                    if (res.ok) {
+                                        const j = await res.json();
+                                        (j.result || []).forEach(t => {
+                                            if (t.barcode) tmplBarcodeMap[t.id] = t.barcode;
+                                        });
+                                    }
+                                }
+                                Object.entries(prodToTmpl).forEach(([pId, tId]) => {
+                                    if (tmplBarcodeMap[tId]) {
+                                        currentBarcodes[pId] = tmplBarcodeMap[tId];
+                                    }
+                                });
+                                setTrueBarcodes(prev => ({ ...prev, ...currentBarcodes }));
+                            }
+                        } catch (e) {
+                            console.warn('Export template barcode fallback error:', e);
+                        }
+                    }
                 }
             }
 
@@ -504,6 +745,212 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         }
     };
 
+    // ── Close export menu on outside click ───────────────────────────────────
+    useEffect(() => {
+        if (!showExportMenu) return;
+        const handleClickOutside = (e) => {
+            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+                setShowExportMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showExportMenu]);
+
+    // ── Export Top N Best Sellers ─────────────────────────────────────────────
+    const handleExportTopSales = async (limit) => {
+        setShowExportMenu(false);
+        setIsExporting(true);
+        try {
+            const branchName = selectedBranchName;
+            const fmtDate = (dt) => {
+                if (!dt) return '';
+                const [datePart] = dt.split('T');
+                const [y, m, d] = datePart.split('-');
+                return `${d}/${m}/${y}`;
+            };
+            const reportDate = `${fmtDate(dateStart)} ຫາ ${fmtDate(dateEnd)}`;
+
+            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`;
+            let exportItems = (detailedSalesKey === currentKey && detailedSales.length > 0) ? detailedSales : [];
+            let currentBarcodes = { ...trueBarcodes };
+
+            if (!exportItems || exportItems.length === 0) {
+                await authenticate(
+                    import.meta.env.VITE_ODOO_DB,
+                    import.meta.env.VITE_ODOO_USER,
+                    import.meta.env.VITE_ODOO_PASSWORD
+                );
+                const toUTC = (dateStr, isEnd) => {
+                    if (!dateStr) return null;
+                    const d = new Date(`${dateStr}:00`);
+                    if (isEnd) d.setSeconds(59);
+                    return d.toISOString().replace('T', ' ').substring(0, 19);
+                };
+                exportItems = await fetchDetailedProductSales(selectedBranchId, toUTC(dateStart, false), toUTC(dateEnd, true), joahOnly);
+                setDetailedSales(exportItems);
+                setDetailedSalesKey(currentKey);
+
+                const pIds = [...new Set(exportItems.map(i => i.product_id?.[0]).filter(Boolean))];
+                if (pIds.length > 0) {
+                    const bmap = await fetchProductBarcodes(pIds);
+                    currentBarcodes = { ...trueBarcodes, ...bmap };
+                    const missingIds = pIds.filter(id => !currentBarcodes[id]);
+                    if (missingIds.length > 0) {
+                        try {
+                            const CHUNK = 150;
+                            const prodToTmpl = {};
+                            const tmplIds = [];
+                            for (let c = 0; c < missingIds.length; c += CHUNK) {
+                                const slice = missingIds.slice(c, c + CHUNK);
+                                const r = await fetch('/api/web/dataset/call_kw', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                    body: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: Date.now() + c, params: { model: 'product.product', method: 'search_read', args: [[['id', 'in', slice]]], kwargs: { fields: ['id', 'product_tmpl_id'] } } })
+                                });
+                                if (r.ok) { const j = await r.json(); (j.result || []).forEach(p => { if (p.product_tmpl_id?.[0]) { prodToTmpl[p.id] = p.product_tmpl_id[0]; tmplIds.push(p.product_tmpl_id[0]); } }); }
+                            }
+                            const uniqTmpl = [...new Set(tmplIds)];
+                            if (uniqTmpl.length > 0) {
+                                const tmplMap = {};
+                                for (let c = 0; c < uniqTmpl.length; c += CHUNK) {
+                                    const slice = uniqTmpl.slice(c, c + CHUNK);
+                                    const r = await fetch('/api/web/dataset/call_kw', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                        body: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: Date.now() + c + 999, params: { model: 'product.template', method: 'search_read', args: [[['id', 'in', slice]]], kwargs: { fields: ['id', 'barcode'] } } })
+                                    });
+                                    if (r.ok) { const j = await r.json(); (j.result || []).forEach(t => { if (t.barcode) tmplMap[t.id] = t.barcode; }); }
+                                }
+                                Object.entries(prodToTmpl).forEach(([pId, tId]) => { if (tmplMap[tId]) currentBarcodes[Number(pId)] = tmplMap[tId]; });
+                            }
+                        } catch (e) { console.warn('TopSales barcode fallback error:', e); }
+                    }
+                    setTrueBarcodes(currentBarcodes);
+                }
+            }
+
+            if (!exportItems || exportItems.length === 0) { alert('ບໍ່ມີຂໍ້ມູນການຂາຍ'); return; }
+
+            // Aggregate by product_id
+            const aggMap = {};
+            exportItems.forEach(item => {
+                const pId = item.product_id?.[0];
+                if (!pId) return;
+                const { name } = splitProduct(item.product_id?.[1] || '');
+                if (!aggMap[pId]) aggMap[pId] = { pId, name, qty: 0, revenue: 0 };
+                aggMap[pId].qty += (item.qty || 0);
+                aggMap[pId].revenue += (item.price_subtotal_incl || 0);
+            });
+
+            const topList = Object.values(aggMap)
+                .sort((a, b) => b.qty - a.qty)
+                .slice(0, limit);
+
+            // ── Excel ─────────────────────────────────────────────────────────
+            const workbook = new ExcelJS.Workbook();
+            const ws = workbook.addWorksheet(`Top ${limit}`);
+
+            const FONT = { name: 'Phetsarath OT', size: 11 };
+            const FONT_BOLD = { name: 'Phetsarath OT', size: 11, bold: true };
+            const FONT_TITLE = { name: 'Phetsarath OT', size: 16, bold: true, color: { argb: 'FFE05C00' } };
+            const BORDER = { style: 'thin', color: { argb: 'FF888888' } };
+            const ALL_BORDERS = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+            const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+            const TOTAL_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+
+            try {
+                const imgResp = await fetch(JoahLogo);
+                const imgBuf = await imgResp.arrayBuffer();
+                const imgId = workbook.addImage({ buffer: imgBuf, extension: 'jpeg' });
+                ws.addImage(imgId, { tl: { col: 0, row: 0 }, br: { col: 2, row: 4 } });
+            } catch (e) { /* image optional */ }
+
+            ws.getRow(1).height = 25;
+            ws.getRow(2).height = 20;
+            ws.getRow(3).height = 20;
+            ws.getRow(4).height = 20;
+
+            const titleCell = ws.getCell('C1');
+            titleCell.value = `JOAH - Top ${limit} ສິນຄ້າຂາຍດີ`;
+            titleCell.font = FONT_TITLE;
+            titleCell.alignment = { vertical: 'middle' };
+
+            const totalQty = topList.reduce((s, i) => s + i.qty, 0);
+            const totalRev = topList.reduce((s, i) => s + i.revenue, 0);
+
+            ws.getCell('C2').value = `ສາຂາ: ${branchName}`;
+            ws.getCell('C2').font = { ...FONT_BOLD, size: 12 };
+            ws.getCell('C3').value = `ໄລຍະເວລາ: ${reportDate}`;
+            ws.getCell('C3').font = FONT;
+            ws.getCell('C4').value = `ຍອດລວມ: ₭ ${totalRev.toLocaleString()}`;
+            ws.getCell('C4').font = { ...FONT_BOLD, color: { argb: 'FF059669' } };
+
+            const headers = ['#', 'ບາໂຄດ 13 ຫຼັກ (Barcode)', 'ຊື່ສິນຄ້າ (Product Name)', 'ຈຳນວນ (Qty)', 'ຍອດ (LAK)'];
+            const colMaxLen = headers.map(h => h.length);
+            topList.forEach(row => {
+                const barcode = currentBarcodes[row.pId] || '-';
+                const vals = [String(topList.indexOf(row) + 1), barcode, row.name, String(row.qty), String(Math.round(row.revenue))];
+                vals.forEach((v, ci) => { colMaxLen[ci] = Math.max(colMaxLen[ci], String(v).length); });
+            });
+            ws.columns = colMaxLen.map(len => ({ width: Math.min(60, Math.max(8, len + 4)) }));
+
+            const headerRow = ws.getRow(6);
+            headerRow.height = 22;
+            headers.forEach((h, i) => {
+                const cell = headerRow.getCell(i + 1);
+                cell.value = h;
+                cell.font = { ...FONT_BOLD, color: { argb: 'FFFFFFFF' } };
+                cell.fill = HEADER_FILL;
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = ALL_BORDERS;
+            });
+
+            topList.forEach((row, idx) => {
+                const barcode = currentBarcodes[row.pId] || '-';
+                const rowIdx = idx + 7;
+                const r = ws.getRow(rowIdx);
+                r.height = 18;
+                const values = [idx + 1, barcode, row.name, row.qty, Math.round(row.revenue)];
+                values.forEach((v, ci) => {
+                    const cell = r.getCell(ci + 1);
+                    cell.value = v;
+                    cell.font = FONT;
+                    cell.border = ALL_BORDERS;
+                    cell.alignment = { vertical: 'middle', wrapText: false, horizontal: typeof v === 'number' ? 'right' : 'left' };
+                });
+            });
+
+            const totalRowIdx = topList.length + 7;
+            const tr = ws.getRow(totalRowIdx);
+            tr.height = 22;
+            const lc = tr.getCell(3);
+            lc.value = 'ລວມທັງໝົດ (TOTAL)';
+            lc.font = { ...FONT_BOLD, color: { argb: 'FFE05C00' } };
+            lc.fill = TOTAL_FILL;
+            tr.getCell(4).value = totalQty;
+            tr.getCell(5).value = totalRev;
+            [1, 2, 3, 4, 5].forEach(ci => {
+                const cell = tr.getCell(ci);
+                cell.font = FONT_BOLD;
+                cell.fill = TOTAL_FILL;
+                cell.border = ALL_BORDERS;
+            });
+
+            const buf = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `JOAH_Top${limit}_${branchName}_${todayStr}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export TopSales error:', err);
+            alert('ເກີດຂໍ້ຜິດພາດ: ' + err.message);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // ── Render DayDetailViewer if a day is selected ──────────────────────────
     if (selectedDay) {
         return (
@@ -545,7 +992,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             <MapPin size={14} className="sm:w-4 sm:h-4 text-white/80 mr-1 sm:mr-2" />
                             <select
                                 value={selectedBranchId}
-                                onChange={(e) => setSelectedBranchId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const newBranch = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                                    setSelectedBranchId(newBranch);
+                                    setSales([]);
+                                    setDetailedSales([]);
+                                    setDetailedSalesKey('');
+                                }}
                                 className="bg-transparent text-xs sm:text-sm font-bold text-white outline-none cursor-pointer [&>option]:text-slate-800"
                                 disabled={!isAdmin && userBranch !== 'ເມກ້າມໍ'}
                             >
@@ -554,14 +1007,58 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             </select>
                         </div>
 
-                        <button
-                            onClick={handleExport}
-                            disabled={loading || activeTab === 'weekly'}
-                            className="flex items-center gap-1.5 sm:gap-2 bg-emerald-600/90 backdrop-blur hover:bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:shadow-[0_0_15px_rgba(5,150,105,0.5)] border border-emerald-500/50 hover:-translate-y-0.5 transition-all disabled:opacity-50"
-                        >
-                            <Download size={14} className="sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">Export</span>
-                        </button>
+                        {/* Export Dropdown */}
+                        <div className="relative" ref={exportMenuRef}>
+                            <button
+                                onClick={() => setShowExportMenu(prev => !prev)}
+                                disabled={loading || activeTab === 'weekly' || isExporting}
+                                className="flex items-center gap-1.5 sm:gap-2 bg-emerald-600/90 backdrop-blur hover:bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:shadow-[0_0_15px_rgba(5,150,105,0.5)] border border-emerald-500/50 hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                            >
+                                <Download size={14} className="sm:w-4 sm:h-4" />
+                                <span className="hidden sm:inline">{isExporting ? 'ກຳລັງ Export...' : 'Export'}</span>
+                                <ChevronDown size={12} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {showExportMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
+                                    <div className="px-4 py-2.5 border-b border-white/10">
+                                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">ເລືອກ Template Export</p>
+                                    </div>
+                                    <div className="p-1.5 flex flex-col gap-0.5">
+                                        <button
+                                            onClick={() => { setShowExportMenu(false); handleExport(); }}
+                                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-2.5"
+                                        >
+                                            <ClipboardList size={15} className="text-emerald-400 shrink-0" />
+                                            <div>
+                                                <p className="font-bold">ປະຫວັດການຂາຍ</p>
+                                                <p className="text-[10px] text-slate-400">ທຸກ Line Item · Barcode · ຍອດ</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportTopSales(100)}
+                                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-2.5"
+                                        >
+                                            <TrendingUp size={15} className="text-amber-400 shrink-0" />
+                                            <div>
+                                                <p className="font-bold">Top 100 ສິນຄ້າຂາຍດີ</p>
+                                                <p className="text-[10px] text-slate-400">ສຸດຍອດ 100 ລາຍການ ຈັດຕາມ Qty</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => handleExportTopSales(150)}
+                                            className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-2.5"
+                                        >
+                                            <TrendingUp size={15} className="text-orange-400 shrink-0" />
+                                            <div>
+                                                <p className="font-bold">Top 150 ສິນຄ້າຂາຍດີ</p>
+                                                <p className="text-[10px] text-slate-400">ສຸດຍອດ 150 ລາຍການ ຈັດຕາມ Qty</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         <button
                             onClick={loadSales}
