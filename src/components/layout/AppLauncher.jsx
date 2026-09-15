@@ -7,7 +7,6 @@ import HQIcon from '../../assets/Icons_AppJoah/HQicon.png';
 import SaleViewIcon from '../../assets/Icons_AppJoah/SaleView.png';
 import CheckPriceIcon from '../../assets/Icons_AppJoah/checkpirce.webp';
 import BgImage from '../../assets/Icons_AppJoah/web_background.jpg';
-import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
 
 const apps = [
     {
@@ -87,13 +86,7 @@ const apps = [
         name: 'ຫ້ອງຈຳລອງ JOAH BOT 3D (Bot Room)',
         icon: SaleViewIcon,
         step: 'joah-bot-room'
-    },
-    {
-        id: 'it-tools-ps5',
-        name: 'IT Operations Hub (Routine Tools)',
-        icon: ITOpIcon,
-        step: 'it-tools-ps5'
-    },
+    }
 ];
 
 const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
