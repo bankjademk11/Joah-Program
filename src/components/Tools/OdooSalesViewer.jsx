@@ -8,6 +8,7 @@ import JoahLogo from '../../assets/Joah.jpeg';
 import dataImageBG from '../../assets/dataImageBG.png';
 import JoahLoadingGif from '../../assets/joah_web_small.gif';
 import ExcelJS from 'exceljs';
+import { getProductImageFallbacks } from '../../utils/productImageUtils';
 
 const parseOdooDate = (dateStr) => {
     if (!dateStr) return null;
@@ -970,15 +971,22 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 setExportProgress(`ກຳລັງດຶງຮູບພາບທັງໝົດ ${topList.length} ລາຍການ...`);
                 const fetchImage = async (barcode) => {
                     if (!barcode || barcode === '-') return null;
-                    try {
-                        const imgUrl = `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${encodeURIComponent(barcode)}.png`;
-                        const res = await fetch(imgUrl);
-                        if (!res.ok) return null;
-                        const buf = await res.arrayBuffer();
-                        return buf;
-                    } catch (e) {
-                        return null;
+                    // Try all extensions: png, jpeg, jpg, webp
+                    const urls = getProductImageFallbacks(barcode);
+                    for (const imgUrl of urls) {
+                        try {
+                            const res = await fetch(imgUrl);
+                            if (res.ok) {
+                                const buf = await res.arrayBuffer();
+                                // Extract extension from URL
+                                const ext = imgUrl.split('.').pop().split('?')[0] || 'png';
+                                // ExcelJS only supports 'png' or 'jpeg'
+                                const excelExt = (ext === 'jpg' || ext === 'jpeg') ? 'jpeg' : 'png';
+                                return { buf, ext: excelExt };
+                            }
+                        } catch (e) { /* try next */ }
                     }
+                    return null;
                 };
 
                 // Fetch in chunks of 10 concurrent requests
@@ -1031,8 +1039,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     if (imgBuffer) {
                         try {
                             const imgId = workbook.addImage({
-                                buffer: imgBuffer,
-                                extension: 'png',
+                                buffer: imgBuffer.buf,
+                                extension: imgBuffer.ext,
                             });
                             // Stretch image to fill Column B cell nicely without overflowing borders
                             // Col B width = 17 units (≈ 124px) | Row height = 65pt (≈ 65-66px visible in Excel)

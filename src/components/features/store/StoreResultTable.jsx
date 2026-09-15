@@ -21,6 +21,7 @@ import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
 import { useLowStock } from '../../../contexts/LowStockContext';
+import { buildImageUrl } from '../../../utils/productImageUtils';
 
 // Feature Components
 import StoreEditPanel from './StoreEditPanel';
@@ -81,7 +82,7 @@ const StoreResultTable = ({
             barcode: barcode,
             product_name: row.itemName || row.masterItemName || 'ສິນຄ້າບໍ່ມີຊື່',
             price: row.price || row.list_price || 0,
-            image_url: `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${barcode}.png`,
+            image_url: buildImageUrl(barcode),
             rackLocation: row.racks && row.racks.length > 0 ? row.racks.map(r => r.rackLocation).join(', ') : (row.rackLocation || '-'),
             category1: row.category1 || '-',
             category2: row.category2 || '-',

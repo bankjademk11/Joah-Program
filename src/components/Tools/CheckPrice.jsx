@@ -6,6 +6,7 @@ import joahLogo from '../../assets/Joah.jpeg';
 import BarcodeScannerModal from '../ui/BarcodeScannerModal';
 import sfxOK from '../../assets/RequestOK.mp3';
 import sfxError from '../../assets/RequestEror.mp3';
+import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 
 const CheckPrice = ({ onBack }) => {
     const [scanState, setScanState] = useState('idle'); // idle, loading, success, error
@@ -209,12 +210,9 @@ const CheckPrice = ({ onBack }) => {
                             <div className="px-5 py-6 sm:px-8 sm:py-10 flex flex-col items-center text-center gap-4">
                                 <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-slate-950/80 border border-white/20 p-2 overflow-hidden flex items-center justify-center shadow-lg">
                                     <img
-                                        src={productData.image_url || `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${productData.barcode}.png`}
+                                        src={productData.image_url || getProductImageUrl(productData.barcode)}
                                         alt={productData.product_name}
-                                        onError={(e) => {
-                                            e.target.style.display = 'none';
-                                            e.target.nextSibling.style.display = 'flex';
-                                        }}
+                                        onError={(e) => handleImageError(e, productData.barcode)}
                                         className="w-full h-full object-contain"
                                     />
                                     <div className="hidden flex-col items-center justify-center text-slate-500">

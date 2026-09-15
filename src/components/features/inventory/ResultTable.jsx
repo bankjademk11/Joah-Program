@@ -24,6 +24,7 @@ import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
 import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
+import { buildImageUrl } from '../../../utils/productImageUtils';
 
 const ResultTable = ({
     results, allResults = [], locationFilter, onLocationFilterChange, masterData, rawFile, locationSheetName, filterStatus,
@@ -129,7 +130,7 @@ const ResultTable = ({
             barcode: barcode,
             product_name: row.itemName || row.masterItemName || 'ສິນຄ້າບໍ່ມີຊື່',
             price: row.price || row.list_price || 0,
-            image_url: `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${barcode}.png`,
+            image_url: buildImageUrl(barcode),
             rackLocation: row.rackLocation || '-',
             category1: row.category1 || '-',
             category2: row.category2 || '-',

@@ -12,6 +12,7 @@ import sfxOK from '../../assets/RequestOK.mp3';
 import sfxError from '../../assets/RequestEror.mp3';
 import { fetchProductUltimate } from '../../services/odooApi';
 import { supabase } from '../../utils/supabaseClient';
+import { getProductImageUrl as buildImgUrl, handleImageError } from '../../utils/productImageUtils';
 
 const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
     const [scanState, setScanState] = useState('idle'); // idle, loading, success, error
@@ -152,7 +153,7 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
         if (item.image_512) return `data:image/png;base64,${item.image_512}`;
         if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
         if (item.image_128) return `data:image/png;base64,${item.image_128}`;
-        if (item.barcode) return `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${item.barcode}.png`;
+        if (item.barcode) return buildImgUrl(item.barcode);
         if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_512`;
         return null;
     };
@@ -162,7 +163,7 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
         if (item.image_url) return item.image_url;
         if (item.image_1920) return `data:image/png;base64,${item.image_1920}`;
         if (item.image_512) return `data:image/png;base64,${item.image_512}`;
-        if (item.barcode) return `https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images/${item.barcode}.png`;
+        if (item.barcode) return buildImgUrl(item.barcode);
         if (item.id) return `/api/web/image?model=product.template&id=${item.id}&field=image_1920`;
         return null;
     };
@@ -396,7 +397,13 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
                                                 <img
                                                     src={imageUrl}
                                                     alt={productData.displayLaoName}
-                                                    onError={() => setImageError(true)}
+                                                    onError={(e) => {
+                                                        if (productData?.barcode) {
+                                                            handleImageError(e, productData.barcode);
+                                                        } else {
+                                                            setImageError(true);
+                                                        }
+                                                    }}
                                                     className="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-300 drop-shadow-[0_0_20px_rgba(192,132,252,0.5)]"
                                                 />
                                                 <button
