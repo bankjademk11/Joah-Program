@@ -77,7 +77,10 @@ import JoiWidget from './components/ui/JoiWidget';
 import BigDigitalClock from './components/ui/BigDigitalClock';
 import RefillAlertModal from './components/ui/RefillAlertModal';
 import JoahBotRoom from './components/Fun/JoahBotRoom';
-
+import ITToolsDashboard from './components/Tools/ITToolsDashboard';
+import BarcodeIntegrityInspector from './components/Tools/BarcodeIntegrityInspector';
+import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
+import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import { Gamepad2 } from 'lucide-react';
 
 function AppContent() {
@@ -1368,7 +1371,39 @@ function AppContent() {
                     </div>
                   )}
 
+                  {/* IT Operations Hub */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
+                    {/* Header Banner */}
+                    <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
+                      <img
+                        src={ITOperationsHubImg}
+                        alt="IT Operations Hub"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        IT Tools
+                      </span>
+                    </div>
 
+                    {/* Content */}
+                    <div className="p-6 flex flex-col gap-4 w-full">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">IT Operations Hub</h3>
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">ສູນລວມເຄື່ອງມືບຳລຸງຮັກສາລະບົບ ແລະ ວຽກ Routine</p>
+                      </div>
+
+                      <button
+                        onClick={() => setStep('it-tools-ps5')}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <Wrench size={16} />
+                        <span>Open IT Tools Hub</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
                   {showAdminMenu && (
@@ -1842,6 +1877,36 @@ function AppContent() {
                 </div>
               </div>
             </div>
+          )}
+
+          {step === 'it-tools-ps5' && (
+            <div className="fixed inset-0 z-[9999] bg-[#07090e] flex flex-col animate-fade-in overflow-y-auto">
+              <ITToolsDashboard
+                onBack={() => setStep('upload')}
+                onLaunchTool={(toolId) => {
+                  if (toolId === 'barcode-inspector') {
+                    setStep('barcode-integrity-inspector');
+                  } else if (toolId === 'employee-activity') {
+                    setStep('hq-command-center-v2');
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {step === 'barcode-integrity-inspector' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <BarcodeIntegrityInspector
+                onBack={() => setStep('it-tools-ps5')}
+                defaultBranch={user?.branch_id || 'ໂພນສີນວນ'}
+              />
+            </div>
+          )}
+
+          {step === 'hq-command-center-v2' && (
+            <HQCommandCenterV2
+              onBack={() => setStep('it-tools-ps5')}
+            />
           )}
 
 

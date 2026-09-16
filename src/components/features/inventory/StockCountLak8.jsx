@@ -95,7 +95,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [boPageSize, setBoPageSize] = useState(50); // ทีละ 50 รายการ
   const [boLoadProgress, setBoLoadProgress] = useState({ loaded: 0, isChunking: false });
 
-  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8'];
+  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8', 'JMPT'];
 
   // Floating Toast Notification State
   const [toast, setToast] = useState(null);
@@ -1744,8 +1744,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 }
               }}
               className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer border ${viewMode === 'backoffice'
-                  ? 'bg-amber-400 hover:bg-amber-300 text-amber-950 border-amber-300 ring-2 ring-amber-300/50'
-                  : 'bg-white/20 hover:bg-white/30 text-white border-white/30 active:scale-95'
+                ? 'bg-amber-400 hover:bg-amber-300 text-amber-950 border-amber-300 ring-2 ring-amber-300/50'
+                : 'bg-white/20 hover:bg-white/30 text-white border-white/30 active:scale-95'
                 }`}
               title="ສຳລັບພະນັກງານຫຼັງບ້ານ"
             >

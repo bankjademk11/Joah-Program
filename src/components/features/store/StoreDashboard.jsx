@@ -1,7 +1,7 @@
-import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen, Eye, EyeOff, Layers } from 'lucide-react';
+import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen, Eye, EyeOff, Layers, ListChecks } from 'lucide-react';
 import { useState } from 'react';
 
-const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHideZeroQtyChange }) => {
+const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHideZeroQtyChange, onOpenRackAuditor }) => {
     const [isZeroMode, setIsZeroMode] = useState(true);
 
     const cards = [
@@ -86,8 +86,24 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                     </div>
                 </div>
 
-                {/* Status Toggle Button (Compact on Mobile, Full on Desktop) */}
+                {/* Action Buttons (Compact on Mobile, Full on Desktop) */}
                 <div className="flex items-center gap-2 sm:gap-4 shrink-0 w-full sm:w-auto justify-end">
+                    {onOpenRackAuditor && (
+                        <button
+                            onClick={onOpenRackAuditor}
+                            className="flex items-center gap-1.5 sm:gap-3 px-3 sm:px-6 py-1.5 sm:py-4 rounded-xl sm:rounded-[1.75rem] border transition-all duration-300 hover:scale-105 active:scale-95 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md sm:shadow-xl sm:shadow-violet-500/20 border-violet-400/40"
+                            title="ກວດສອບສິນຄ້າໃນໂລ (ໂພນຕ້ອງ)"
+                        >
+                            <div className="p-1 sm:p-2 rounded-md sm:rounded-xl bg-white/20 text-white">
+                                <ListChecks size={12} className="sm:w-[18px] sm:h-[18px] animate-pulse" />
+                            </div>
+                            <div className="text-left">
+                                <p className="hidden sm:block text-[10px] font-black uppercase tracking-widest opacity-80">Audit</p>
+                                <p className="text-[9px] sm:text-xs font-black uppercase tracking-wider whitespace-nowrap">ກວດສອບໂລ (Check)</p>
+                            </div>
+                        </button>
+                    )}
+
                     {onHideZeroQtyChange && (
                         <button
                             onClick={() => onHideZeroQtyChange(!hideZeroQty)}

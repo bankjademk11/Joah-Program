@@ -3,13 +3,14 @@ import {
   ArrowLeft, Search, Download, Database, MapPin,
   Filter, ChevronDown, ArrowUpDown, Package,
   RotateCw, ScanLine, FileSpreadsheet, Eye, EyeOff,
-  ChevronLeft, ChevronRight, CheckCircle, AlertCircle, BarChart3
+  ChevronLeft, ChevronRight, CheckCircle, AlertCircle, BarChart3, ListChecks, CheckCircle2
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 import { useToast } from '../../ui/ToastProvider';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import ExcelJS from 'exceljs';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
+import PhonthongRackAuditorModal from './PhonthongRackAuditorModal';
 
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
 const ITEMS_PER_PAGE = 50;
@@ -34,6 +35,10 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [showRackAuditor, setShowRackAuditor] = useState(false);
+
+  // Check if branch is Phonthong (ໂພນຕ້ອງ)
+  const isPhonthong = selectedBranch === 'ໂພນຕ້ອງ' || (selectedBranch && selectedBranch.includes('ໂພນຕ້ອງ'));
 
   // ---- Cooldown Timer ----
   useEffect(() => {
@@ -256,6 +261,18 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
 
           {/* Right Buttons */}
           <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 w-full xl:w-auto xl:border-l-2 border-slate-100 dark:border-slate-800 pt-4 sm:pt-6 xl:pt-0 xl:pl-8">
+            {/* ໂພນຕ້ອງ ເທົ່ານັ້ນ: ປຸ່ມກວດສອບໂລ (Rack Location Check) */}
+            {isPhonthong && (
+              <button
+                onClick={() => setShowRackAuditor(true)}
+                className="flex-1 sm:flex-none bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:via-purple-500 hover:to-indigo-500 text-white shadow-[0_10px_25px_-5px_rgba(139,92,246,0.5)] transition-all hover:-translate-y-1 py-3 sm:py-4 px-5 sm:px-7 rounded-[2rem] text-[11px] sm:text-xs flex items-center justify-center gap-2 sm:gap-3 font-black tracking-widest uppercase active:translate-y-0 min-w-0 border border-violet-400/30"
+                title="ກວດສອບສິນຄ້າໃນໂລ ສຳລັບສາຂາໂພນຕ້ອງ"
+              >
+                <ListChecks size={16} className="shrink-0 animate-pulse" />
+                <span className="truncate">ກວດສອບໂລ (Check)</span>
+              </button>
+            )}
+
             <button
               onClick={handleExport}
               disabled={isExporting}
@@ -433,6 +450,16 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
             setShowScanner(false);
           }}
           onClose={() => setShowScanner(false)}
+        />
+      )}
+
+      {/* ໂພນຕ້ອງ ເທົ່ານັ້ນ: Rack Location Auditor Modal */}
+      {showRackAuditor && (
+        <PhonthongRackAuditorModal
+          isOpen={showRackAuditor}
+          onClose={() => setShowRackAuditor(false)}
+          inventoryData={inventoryData}
+          branchName={selectedBranch}
         />
       )}
     </>
