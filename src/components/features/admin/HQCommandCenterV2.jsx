@@ -31,10 +31,11 @@ const BC = {
 };
 
 const TABS = [
+
     { id: 'requests', label: 'ລາຍການສາງຕອບຮັບ Request', icon: GitBranch, color: 'from-orange-500 to-amber-500' },
+    { id: 'store_edits', label: 'ໜ້າຮ້ານValidate', icon: Store, color: 'from-blue-500 to-cyan-500' },
     { id: 'edits', label: 'ປະຫວັດການເເກ້ໄຂStockຫຼັງສາງ', icon: Edit3, color: 'from-indigo-500 to-purple-500' },
     // { id: 'new', label: 'ສິນຄ້າເຂົ້າໃໝ່', icon: PlusCircle, color: 'from-emerald-500 to-teal-500' },
-    { id: 'store_edits', label: 'ປະຫວັດການເຕີມເຄືອງຫຼັງ Request', icon: Store, color: 'from-blue-500 to-cyan-500' },
     { id: 'store_manual_edits', label: 'ປະຫວັດແກ້ໄຂໜ້າຮ້ານ', icon: Edit3, color: 'from-violet-500 to-purple-600' },
     { id: 'import_dc', label: 'ປະຫວັດການນຳເຂົ້າ DC', icon: FileSpreadsheet, color: 'from-pink-500 to-rose-500' },
     { id: 'import_sales', label: 'ປະຫວັດການນຳເຂົ້າ Sale', icon: FileSpreadsheet, color: 'from-fuchsia-500 to-pink-500' },
@@ -275,6 +276,8 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
             const batchStartedAt = billInfo.batch_started_at || r.batch_started_at;
             const batchEndedAt = billInfo.batch_ended_at || r.batch_ended_at;
 
+            const isPendingStore = !r.store_confirmed_at;
+            const auditStatus = isPendingStore ? `⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ (${r.delay_str || ''})` : (r.is_backdated ? `🚨 ຮັບຍ້ອນຫຼັງ (${r.delay_str || ''})` : (r.delay_str ? `⚡ ປົກກະຕິ (${r.delay_str})` : 'ເຕີມສຳເລັດ'));
             const row = ws.addRow({
                 bill_id: r.bill_id || '-',
                 branch_id: r.branch_id,
@@ -285,7 +288,7 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
                 qty_text: `${r.old_qty ?? '-'} -> ${r.new_qty ?? '-'}`,
                 tag_text: r.old_tag === r.new_tag ? (r.new_tag || '-') : `${r.old_tag || '-'} -> ${r.new_tag || '-'}`,
                 shelf_text: r.old_shelf === r.new_shelf ? (r.new_shelf || '-') : `${r.old_shelf || '-'} -> ${r.new_shelf || '-'}`,
-                audit_status: r.is_backdated ? `🚨 ຮັບຍ້ອນຫຼັງ (${r.delay_str || ''})` : (r.delay_str ? `⚡ ປົກກະຕິ (${r.delay_str})` : 'ເຕີມສຳເລັດ'),
+                audit_status: auditStatus,
                 max_text: String(r.old_max) === String(r.new_max) ? (r.new_max ?? '-') : `${r.old_max ?? '-'} -> ${r.new_max ?? '-'}`,
                 details: r.details || r.change_reason || 'Manual Update',
                 updated_at: fmtExcel(r.updated_at || r.created_at),
@@ -485,8 +488,8 @@ const RequestLifecycleBadge = ({ item }) => {
         return (
             <div className="inline-flex flex-col gap-0.5">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border ${isVeryLate
-                        ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
-                        : 'bg-orange-100 text-orange-700 border-orange-200'
+                    ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+                    : 'bg-orange-100 text-orange-700 border-orange-200'
                     }`}>
                     <AlertTriangle size={12} className={isVeryLate ? 'text-rose-600 animate-bounce' : 'text-orange-500'} />
                     <span>⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ</span>
@@ -524,16 +527,20 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
         {BRANCHES.map(branch => {
             const c = BC[branch];
             const rows = data.filter(r => r.branch_id === branch);
-            let mainVal, mainLabel, subA, subB, subC;
+            let mainVal, mainLabel, subA, subB, subC, subD;
 
             if (activeTab === 'requests') {
                 mainVal = rows.length; mainLabel = 'ຄຳຂໍທັງໝົດ';
                 const pendingWH = rows.filter(r => r.status === 'pending').length;
                 const pendingStore = rows.filter(r => (r.status === 'accepted' || r.status === 'approved') && !r.store_confirmed_at).length;
                 const completed = rows.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length;
+                const rejected = rows.filter(r => r.status === 'rejected').length;
                 subA = { val: pendingWH, label: 'ລໍຖ້າສາງ', color: 'text-amber-500', filterKey: 'pending' };
-                subB = { val: pendingStore, label: '⚠️ ຄ້າງຮັບ', color: pendingStore > 0 ? 'text-rose-500 font-black' : 'text-orange-500', filterKey: 'pending_store' };
+                subB = { val: pendingStore, label: '⚠️ ຄ້າງໜ້າຮ້ານ', color: pendingStore > 0 ? 'text-rose-500 font-black' : 'text-orange-500', filterKey: 'pending_store' };
                 subC = { val: completed, label: '✅ ສຳເລັດ', color: 'text-emerald-600', filterKey: 'completed' };
+                if (rejected > 0) {
+                    subD = { val: rejected, label: '❌ ປະຕິເສດ', color: 'text-rose-500 font-black', filterKey: 'rejected' };
+                }
             } else if (activeTab === 'edits') {
                 mainVal = rows.length; mainLabel = 'ການແກ້ໄຂຄລັງ';
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-indigo-500' };
@@ -541,11 +548,13 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subC = null;
             } else if (activeTab === 'store_edits') {
                 mainVal = rows.length; mainLabel = 'ການເຕີມເຄື່ອງ';
-                const backdatedCount = rows.filter(r => r.is_backdated).length;
-                const normalCount = rows.length - backdatedCount;
+                const pendingStoreCount = rows.filter(r => !r.store_confirmed_at).length;
+                const backdatedCount = rows.filter(r => r.is_backdated && r.store_confirmed_at).length;
+                const normalCount = rows.filter(r => !r.is_backdated && r.store_confirmed_at).length;
                 subA = { val: normalCount, label: '⚡ ປົກກະຕິ', color: 'text-emerald-600', filterKey: 'on_time' };
                 subB = { val: backdatedCount, label: '🚨 ຮັບຍ້ອນຫຼັງ', color: backdatedCount > 0 ? 'text-rose-500 font-black' : 'text-purple-500', filterKey: 'backdated' };
-                subC = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ພະນັກງານ', color: 'text-blue-500' };
+                subC = { val: pendingStoreCount, label: '⚠️ ຄ້າງຮັບ', color: pendingStoreCount > 0 ? 'text-rose-500 font-black' : 'text-orange-500', filterKey: 'pending_store' };
+                subD = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ພະນັກງານ', color: 'text-blue-500' };
             } else if (activeTab === 'store_manual_edits') {
                 mainVal = rows.length; mainLabel = 'ການແກ້ໄຂ Panel';
                 const negativeCount = rows.filter(r => (r.old_qty ?? 0) < 0).length;
@@ -612,50 +621,23 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                         <p className={`text-7xl font-black leading-none ${hasImg ? 'text-white' : c.txt} drop-shadow-xl tracking-tighter`}>{mainVal}</p>
                         <p className={`text-base font-bold ${hasImg ? 'text-white/90' : 'text-slate-500'} mt-1 drop-shadow-md`}>{mainLabel}</p>
 
-                        <div className={`flex gap-3 pt-4 mt-4 border-t ${hasImg ? 'border-white/30' : 'border-slate-200 dark:border-slate-700'}`}>
-                            <div
-                                onClick={(e) => {
-                                    if (subA.filterKey) {
-                                        e.stopPropagation();
-                                        onSelectBranch(branch, subA.filterKey);
-                                    }
-                                }}
-                                className={`rounded-xl p-1.5 -m-1.5 transition-all ${subA.filterKey ? 'hover:bg-white/20 hover:scale-105 active:scale-95 cursor-pointer' : ''}`}
-                                title={subA.filterKey ? `ກົດເພື່ອເບິ່ງ: ${subA.label}` : undefined}
-                            >
-                                <p className={`text-2xl font-black ${hasImg ? 'text-white' : subA.color} drop-shadow-md`}>{subA.val}</p>
-                                <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subA.label}</p>
-                            </div>
-                            {subB && (
+                        <div className={`inline-flex flex-wrap gap-x-4 gap-y-2 mt-4 px-3 py-2 rounded-xl max-w-full ${hasImg ? 'bg-black/40 border border-white/20 backdrop-blur-md shadow-sm' : 'bg-white/60 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700'}`}>
+                            {[subA, subB, subC, subD].filter(Boolean).map((sub, idx) => (
                                 <div
+                                    key={idx}
                                     onClick={(e) => {
-                                        if (subB.filterKey) {
+                                        if (sub.filterKey) {
                                             e.stopPropagation();
-                                            onSelectBranch(branch, subB.filterKey);
+                                            onSelectBranch(branch, sub.filterKey);
                                         }
                                     }}
-                                    className={`rounded-xl p-1.5 -m-1.5 transition-all ${subB.filterKey ? 'hover:bg-white/20 hover:scale-105 active:scale-95 cursor-pointer' : ''}`}
-                                    title={subB.filterKey ? `ກົດເພື່ອເບິ່ງ: ${subB.label}` : undefined}
+                                    className={`rounded-xl p-1.5 -m-1.5 transition-all ${sub.filterKey ? (hasImg ? 'hover:bg-white/20' : 'hover:bg-white dark:hover:bg-slate-700') + ' hover:scale-105 active:scale-95 cursor-pointer shadow-sm hover:shadow' : ''}`}
+                                    title={sub.filterKey ? `ກົດເພື່ອເບິ່ງ: ${sub.label}` : undefined}
                                 >
-                                    <p className={`text-2xl font-black ${hasImg ? 'text-white' : subB.color} drop-shadow-md`}>{subB.val}</p>
-                                    <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subB.label}</p>
+                                    <p className={`text-2xl font-black ${hasImg ? (sub.color.includes('rose') ? 'text-rose-400' : sub.color.includes('amber') || sub.color.includes('orange') ? 'text-amber-400' : sub.color.includes('emerald') ? 'text-emerald-400' : 'text-white') : sub.color} drop-shadow-sm leading-none`}>{sub.val}</p>
+                                    <p className={`text-[10px] font-bold ${hasImg ? 'text-white/90' : 'text-slate-500'} mt-1.5 uppercase tracking-wider`}>{sub.label}</p>
                                 </div>
-                            )}
-                            {subC && (
-                                <div
-                                    onClick={(e) => {
-                                        if (subC.filterKey) {
-                                            e.stopPropagation();
-                                            onSelectBranch(branch, subC.filterKey);
-                                        }
-                                    }}
-                                    className={`rounded-xl p-1.5 -m-1.5 transition-all ${subC.filterKey ? 'hover:bg-white/20 hover:scale-105 active:scale-95 cursor-pointer' : ''}`}
-                                    title={subC.filterKey ? `ກົດເພື່ອເບິ່ງ: ${subC.label}` : undefined}
-                                >
-                                    <p className={`text-2xl font-black ${hasImg ? 'text-rose-300' : subC.color} drop-shadow-md`}>{subC.val}</p>
-                                    <p className={`text-[10px] font-bold ${hasImg ? 'text-white/80' : 'text-slate-400'} uppercase tracking-wider`}>{subC.label}</p>
-                                </div>
-                            )}
+                            ))}
                         </div>
                         <p className={`text-sm font-bold mt-4 transition-colors ${hasImg ? 'text-white/70 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
                             👆 ກົດເພື່ອເບິ່ງລາຍລະອຽດ
@@ -712,23 +694,24 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
             const hasConfirmed = Boolean(r.store_confirmed_at);
             let lifecycleStr = 'ລໍຖ້າສາງ';
             if (isRej) lifecycleStr = 'ສາງປະຕິເສດ';
-            else if (isAcc && hasConfirmed) lifecycleStr = 'ສຳເລັດສົມບູນ';
-            else if (isAcc && !hasConfirmed) lifecycleStr = 'ຄ້າງໜ້າຮ້ານກົດຮັບ';
+            else if (isAcc && hasConfirmed) lifecycleStr = '✅ ສຳເລັດສົມບູນ';
+            else if (isAcc && !hasConfirmed) lifecycleStr = '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ';
 
             result = [
                 '',
                 r.batch_id && r.batch_id.startsWith('REQ') ? r.batch_id : 'N/A',
                 (r.product_name || r.item_name || '') + ' ' + (r.barcode || ''),
+                String(r.qty ?? 0),
+                String(r.stock_at_request ?? '-'),
+                r.stock_at_request != null ? String(r.stock_at_request - (r.qty ?? 0)) : '-',
                 r.request_by || '',
-                String(r.qty || 0),
-                String(r.stock_at_request ?? ''),
-                String((r.stock_at_request ?? 0) - (r.qty || 0)),
-                lifecycleStr,
                 r.accepted_by || '',
-                r.store_confirmed_by || ''
+                r.store_confirmed_by || (hasConfirmed ? 'ໜ້າຮ້ານຮັບແລ້ວ' : (isAcc ? '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ' : '-')),
+                lifecycleStr
             ];
         } else if (activeTab === 'store_edits') {
-            const auditText = r.is_backdated ? `🚨 ຮັບຍ້ອນຫຼັງ (${r.delay_str || ''})` : (r.delay_str ? `⚡ ປົກກະຕິ (${r.delay_str})` : 'ເຕີມສຳເລັດ');
+            const isPendingStore = !r.store_confirmed_at;
+            const auditText = isPendingStore ? `⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ (${r.delay_str || ''})` : (r.is_backdated ? `🚨 ຮັບຍ້ອນຫຼັງ (${r.delay_str || ''})` : (r.delay_str ? `⚡ ປົກກະຕິ (${r.delay_str})` : 'ເຕີມສຳເລັດ'));
             result = [
                 '',
                 r.bill_id || '-',
@@ -737,17 +720,18 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                 String((r.old_qty ?? 0) + ' ' + (r.new_qty ?? 0)),
                 String(r.old_shelf || '-'),
                 auditText,
+                r.details || r.change_reason || 'Manual Update',
                 ...(showDetailedTime ? [
                     r.process_started_at ? fmt(r.process_started_at) : '',
+                    fmt(r.updated_at || r.created_at),
                     String(r.process_time_seconds || ''),
-                    r.batch_started_at ? fmt(r.batch_started_at) : ''
-                ] : []),
-                fmt(r.updated_at),
-                String(r.batch_total_seconds || ''),
-                ...(showDetailedTime ? [
-                    r.batch_ended_at ? fmt(r.batch_ended_at) : ''
-                ] : []),
-                r.details || r.change_reason || 'Manual Update'
+                    r.batch_started_at ? fmt(r.batch_started_at) : '',
+                    r.batch_ended_at ? fmt(r.batch_ended_at) : '',
+                    String(r.batch_total_seconds || '')
+                ] : [
+                    fmt(r.updated_at || r.created_at),
+                    String(r.batch_total_seconds || '')
+                ])
             ];
         } else if (activeTab === 'store_manual_edits') {
             result = [
@@ -849,17 +833,32 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     }, [branchData]);
 
     const filtered = branchData.filter(r => {
-        // Status filter (requests tab only)
+        // Status filter (requests tab)
         if (activeTab === 'requests' && statusFilter !== 'all') {
             const isAcc = r.status === 'accepted' || r.status === 'approved';
             const isRej = r.status === 'rejected';
             const isPend = r.status === 'pending';
             const hasConfirmed = Boolean(r.store_confirmed_at);
 
-            if (statusFilter === 'pending_wh' && !isPend) return false;
+            if ((statusFilter === 'pending' || statusFilter === 'pending_wh') && !isPend) return false;
             if (statusFilter === 'pending_store' && (!isAcc || hasConfirmed)) return false;
             if (statusFilter === 'completed' && (!isAcc || !hasConfirmed)) return false;
             if (statusFilter === 'rejected' && !isRej) return false;
+        }
+
+        // Status filter (store_edits tab)
+        if (activeTab === 'store_edits' && statusFilter !== 'all') {
+            const isPendingStore = !r.store_confirmed_at;
+            if (statusFilter === 'pending_store' && !isPendingStore) return false;
+            if (statusFilter === 'on_time' && (isPendingStore || r.is_backdated)) return false;
+            if (statusFilter === 'backdated' && (isPendingStore || !r.is_backdated)) return false;
+        }
+
+        // Status filter (store_manual_edits tab)
+        if (activeTab === 'store_manual_edits' && statusFilter !== 'all') {
+            const isNegative = (r.old_qty ?? 0) < 0;
+            if (statusFilter === 'negative_stock' && !isNegative) return false;
+            if (statusFilter === 'normal_stock' && isNegative) return false;
         }
 
         // Column filters (Excel-like Checkboxes)
@@ -886,6 +885,17 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
 
         return true;
     });
+    if (activeTab === 'requests' || activeTab === 'store_edits') {
+        filtered.sort((a, b) => {
+            const aIsPendingStore = (activeTab === 'store_edits' || a.status === 'accepted' || a.status === 'approved') && !a.store_confirmed_at;
+            const bIsPendingStore = (activeTab === 'store_edits' || b.status === 'accepted' || b.status === 'approved') && !b.store_confirmed_at;
+            if (aIsPendingStore && !bIsPendingStore) return 1;
+            if (!aIsPendingStore && bIsPendingStore) return -1;
+            const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+            const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+            return timeB - timeA;
+        });
+    }
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paginatedData = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -901,12 +911,11 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
         ] :
             activeTab === 'store_edits' ? [
                 '#', 'ເລກບິນ', 'ສິນຄ້າ', 'ພະນັກງານກົດຮັບ', 'ຈຳນວນ(ເກົ່າ→ໃໝ່)',
-                'Shelf (ບ່ອນເກັບ)', 'ກວດສອບການຮັບ (Audit)',
+                'Shelf (ບ່ອນເກັບ)', 'ກວດສອບການຮັບ (Audit)', 'ເຫດຜົນ',
                 ...(showDetailedTime ? [
                     'ເວລາກົດຮັບ SKU', 'ບັນທຶກการສຳເລັດແຕ່ລະ SKU', 'ເວລາທີ່ໃຊ້ຂອງແຕ່ລະ SKU',
                     'ເວລາເລີ່ມບິນ', 'ເວລາສຳເລັດບິນ', 'ເວລາທັງບິນ'
-                ] : ['ເວລາບັນທຶກ', 'ເວລາທັງບິນ']),
-                'ເຫດຜົນ'
+                ] : ['ເວລາບັນທຶກ', 'ເວລາທັງບິນ'])
             ] :
                 activeTab === 'store_manual_edits' ? [
                     '#', 'ເລກບິນ', 'ສິນຄ້າ', 'ພະນັກງານ', 'ຈຳນວນ(ເກົ່າ→ໃໝ່)',
@@ -927,8 +936,9 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     const completedCount = branchData.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length;
     const rejectedCount = branchData.filter(r => r.status === 'rejected').length;
 
-    const backdatedCount = branchData.filter(r => r.is_backdated).length;
-    const onTimeCount = branchData.length - backdatedCount;
+    const pendingStoreEditCount = branchData.filter(r => !r.store_confirmed_at).length;
+    const backdatedCount = branchData.filter(r => r.is_backdated && r.store_confirmed_at).length;
+    const onTimeCount = branchData.filter(r => !r.is_backdated && r.store_confirmed_at).length;
 
     const negativeStockEdits = branchData.filter(r => (r.old_qty ?? 0) < 0).length;
     const normalStockEdits = branchData.length - negativeStockEdits;
@@ -936,13 +946,14 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: 'ລໍຖ້າສາງ', val: pendingWHCount, key: 'pending', cls: 'bg-amber-400/30', active: 'bg-amber-400/60 ring-2 ring-amber-300' },
-        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: pendingStoreCount, key: 'pending_store', cls: pendingStoreCount > 0 ? 'bg-rose-500/40 animate-pulse' : 'bg-orange-400/30', active: 'bg-rose-500/70 ring-2 ring-rose-300' },
+        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: pendingStoreCount, key: 'pending_store', cls: pendingStoreCount > 0 ? 'bg-orange-400/50 animate-pulse' : 'bg-orange-400/30', active: 'bg-orange-500/70 ring-2 ring-orange-300' },
         { label: '✅ ຮັບເຄື່ອງແລ້ວ', val: completedCount, key: 'completed', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
         { label: 'ປະຕິເສດ', val: rejectedCount, key: 'rejected', cls: 'bg-rose-400/30', active: 'bg-rose-400/60 ring-2 ring-rose-300' },
     ] : activeTab === 'store_edits' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: '⚡ ຮັບປົກກະຕິ', val: onTimeCount, key: 'on_time', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
         { label: '🚨 ຮັບຍ້ອນຫຼັງ (>12ຊມ)', val: backdatedCount, key: 'backdated', cls: backdatedCount > 0 ? 'bg-rose-500/40 animate-pulse' : 'bg-purple-400/30', active: 'bg-rose-500/70 ring-2 ring-rose-300' },
+        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: pendingStoreEditCount, key: 'pending_store', cls: pendingStoreEditCount > 0 ? 'bg-orange-400/50 animate-pulse' : 'bg-orange-400/30', active: 'bg-orange-500/70 ring-2 ring-orange-300' },
     ] : activeTab === 'store_manual_edits' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: 'ສະຕ໋ອກປົກກະຕິ', val: normalStockEdits, key: 'normal_stock', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
@@ -994,8 +1005,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
 
             return (
                 <tr key={i} className={`transition-colors ${isAccepted && hasConfirmed ? 'bg-emerald-50/30 dark:bg-emerald-950/20' :
-                        isAccepted && !hasConfirmed ? 'bg-amber-50/40 dark:bg-amber-950/20' :
-                            isRejected ? 'bg-rose-50/30 dark:bg-rose-950/20' : 'hover:bg-slate-50/40 dark:hover:bg-slate-800/40'
+                    isAccepted && !hasConfirmed ? 'bg-amber-50/40 dark:bg-amber-950/20' :
+                        isRejected ? 'bg-rose-50/30 dark:bg-rose-950/20' : 'hover:bg-slate-50/40 dark:hover:bg-slate-800/40'
                     }`}>
                     <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
 
@@ -1118,13 +1129,13 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                             const isVeryLate = diffMs > 3600 * 1000 * 4;
                             return (
                                 <div className={`flex flex-col gap-1 p-2.5 rounded-xl border ${isVeryLate
-                                        ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800'
-                                        : 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800'
+                                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800'
+                                    : 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800'
                                     }`}>
                                     <div className="flex items-center gap-1.5">
                                         <AlertTriangle size={14} className={isVeryLate ? 'text-rose-600 animate-bounce' : 'text-orange-500'} />
                                         <span className={`text-xs font-black ${isVeryLate ? 'text-rose-700 dark:text-rose-300' : 'text-orange-700 dark:text-orange-300'}`}>
-                                            {isVeryLate ? '🚨 ຄ້າງຮັບດ່ວນ!' : '⚠️ ລໍຖ້າໜ້າຮ້ານກວດຮັບ'}
+                                            {isVeryLate ? '🚨 ຄ້າງຮັບດ່ວນ!' : '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ'}
                                         </span>
                                     </div>
                                     <span className="text-[11px] font-mono text-slate-500">
@@ -1235,37 +1246,52 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                     </td>
 
                     {/* 🌟 ກວດສອບການຮັບ (Audit Status) for store_edits only */}
-                    {activeTab === 'store_edits' && (
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                            {r.is_backdated ? (
-                                <div className="inline-flex flex-col items-center gap-0.5 p-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase">
-                                        <AlertTriangle size={11} className="text-rose-500 animate-pulse" />
-                                        <span>🚨 ຮັບຍ້ອນຫຼັງ</span>
-                                    </span>
-                                    {r.delay_str && (
-                                        <span className="text-[9px] font-mono text-rose-600 dark:text-rose-400 font-bold">
-                                            ຊ້າໄປ {r.delay_str}
+                    {activeTab === 'store_edits' && (() => {
+                        const isPendingStore = !r.store_confirmed_at;
+                        return (
+                            <td className="px-4 py-3 text-center whitespace-nowrap">
+                                {isPendingStore ? (
+                                    <div className="inline-flex flex-col items-center gap-0.5 p-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 animate-pulse">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase">
+                                            <AlertTriangle size={11} className="text-orange-500" />
+                                            <span>⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ</span>
                                         </span>
-                                    )}
-                                </div>
-                            ) : r.delay_str ? (
-                                <div className="inline-flex flex-col items-center gap-0.5 p-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase">
-                                        <CheckCircle2 size={11} className="text-emerald-500" />
-                                        <span>⚡ ຮັບປົກກະຕິ</span>
+                                        {r.delay_str && (
+                                            <span className="text-[9px] font-mono text-orange-600 dark:text-orange-400 font-bold">
+                                                ຄ້າງມາ {r.delay_str}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : r.is_backdated ? (
+                                    <div className="inline-flex flex-col items-center gap-0.5 p-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase">
+                                            <AlertTriangle size={11} className="text-rose-500 animate-pulse" />
+                                            <span>🚨 ຮັບຍ້ອນຫຼັງ</span>
+                                        </span>
+                                        {r.delay_str && (
+                                            <span className="text-[9px] font-mono text-rose-600 dark:text-rose-400 font-bold">
+                                                ຊ້າໄປ {r.delay_str}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : r.delay_str ? (
+                                    <div className="inline-flex flex-col items-center gap-0.5 p-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase">
+                                            <CheckCircle2 size={11} className="text-emerald-500" />
+                                            <span>⚡ ຮັບປົກກະຕິ</span>
+                                        </span>
+                                        <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">
+                                            ໃຊ້ເວລາ {r.delay_str}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                        <span>📦 ເຕີມສຳເລັດ</span>
                                     </span>
-                                    <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">
-                                        ໃຊ້ເວລາ {r.delay_str}
-                                    </span>
-                                </div>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
-                                    <span>📦 ເຕີມສຳເລັດ</span>
-                                </span>
-                            )}
-                        </td>
-                    )}
+                                )}
+                            </td>
+                        );
+                    })()}
 
                     {/* TAG for manual edits only */}
                     {activeTab === 'store_manual_edits' && (
@@ -1551,8 +1577,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                                 onClick={() => setShowDetailedTime(v => !v)}
                                 title={showDetailedTime ? '຋່ອນເວລາລະເອີຍດ' : 'ແສດເວລາລະເອີຍດ'}
                                 className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border text-xs font-black transition-all whitespace-nowrap ${showDetailedTime
-                                        ? 'bg-violet-500 border-violet-400 text-white shadow-lg shadow-violet-500/30'
-                                        : 'bg-white/20 border-white/30 text-white hover:bg-white/30'
+                                    ? 'bg-violet-500 border-violet-400 text-white shadow-lg shadow-violet-500/30'
+                                    : 'bg-white/20 border-white/30 text-white hover:bg-white/30'
                                     }`}
                             >
                                 <Clock size={14} />
@@ -1794,17 +1820,20 @@ const HQCommandCenterV2 = ({ onBack }) => {
                 );
 
             } else if (activeTab === 'store_edits') {
-                // 🌟 ดึงจาก store_requests ที่ store_confirmed_at แล้ว เพื่อให้ครบทุก SKU (ทั้งที่ผ่าน Inbox ปกติ และ QuickAdd)
+                // 🌟 ດຶງ store_requests ທັງໝົດທີ່ສາງຕອບຮັບແລ້ວ (ທັງທີ່ກົດຮັບແລ້ວ ແລະ ຄ້າງໜ້າຮ້ານກົດຮັບ)
                 let q = supabase.from('store_requests')
                     .select('id, branch_id, status, created_at, updated_at, request_by, accepted_by, product_name, barcode, qty, batch_id, stock_at_request, store_confirmed_at, store_confirmed_by')
-                    .not('store_confirmed_at', 'is', null)
-                    .order('store_confirmed_at', { ascending: false });
-                if (startDate) q = q.gte('store_confirmed_at', `${startDate}T00:00:00`);
-                if (endDate) q = q.lte('store_confirmed_at', `${endDate}T23:59:59`);
-                const confirmedRequests = await fetchAllChunks(q);
+                    .in('status', ['accepted', 'approved'])
+                    .order('created_at', { ascending: false });
+
+                // กรองวันที่: ถ้า confirmed ให้ดู store_confirmed_at หรือถ้ายังไม่ confirmed ให้ดู updated_at / created_at
+                // เพื่อให้ครอบคลุมช่วงวันที่เลือก ดึงตาม created_at หรือ updated_at
+                if (startDate) q = q.gte('created_at', `${startDate}T00:00:00`);
+                if (endDate) q = q.lte('created_at', `${endDate}T23:59:59`);
+                const storeRequestsList = await fetchAllChunks(q);
 
                 // พยายามดึง store_inventory_history มาจับคู่เพื่อเอาข้อมูล shelf, tags, process_time ถ้ามี
-                const batchIds = [...new Set((confirmedRequests || []).map(r => r.batch_id).filter(Boolean))];
+                const batchIds = [...new Set((storeRequestsList || []).map(r => r.batch_id).filter(Boolean))];
                 let historyMap = {};
                 if (batchIds.length > 0) {
                     for (let i = 0; i < batchIds.length; i += 100) {
@@ -1824,10 +1853,11 @@ const HQCommandCenterV2 = ({ onBack }) => {
                     }
                 }
 
-                rows = (confirmedRequests || []).map(r => {
+                rows = (storeRequestsList || []).map(r => {
                     const hInfo = (r.batch_id && (historyMap[`${r.batch_id}_${r.barcode}`] || historyMap[r.batch_id])) || null;
                     const reqSentAt = r.updated_at || r.created_at;
                     const actualReceivedAt = r.store_confirmed_at;
+                    const isPendingStore = !actualReceivedAt;
 
                     // Calculate delay from when WH sent/accepted to store confirmed
                     let delayMs = 0;
@@ -1839,6 +1869,8 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             isBackdated = true;
                         }
                         delayStr = calcDuration(reqSentAt, actualReceivedAt);
+                    } else if (isPendingStore && reqSentAt) {
+                        delayStr = calcElapsedFromNow(reqSentAt);
                     }
 
                     return {
@@ -1847,18 +1879,18 @@ const HQCommandCenterV2 = ({ onBack }) => {
                         item_name: r.product_name,
                         barcode: r.barcode,
                         old_qty: hInfo?.old_store_qty ?? r.stock_at_request ?? '-',
-                        new_qty: hInfo?.new_store_qty ?? r.qty,
+                        new_qty: hInfo?.new_store_qty ?? (isPendingStore ? '-' : r.qty),
                         old_tag: hInfo?.old_product_tag || null,
                         new_tag: hInfo?.new_product_tag || null,
                         old_shelf: hInfo?.old_shelf_location || null,
                         new_shelf: hInfo?.new_shelf_location || null,
                         old_max: hInfo?.old_max_qty || null,
                         new_max: hInfo?.new_max_qty || null,
-                        updated_by: r.store_confirmed_by || hInfo?.updated_by || r.request_by,
+                        updated_by: r.store_confirmed_by || (isPendingStore ? r.request_by : (hInfo?.updated_by || r.request_by)),
                         store_confirmed_by: r.store_confirmed_by,
-                        updated_at: actualReceivedAt,
+                        updated_at: actualReceivedAt || reqSentAt,
                         created_at: r.created_at,
-                        details: hInfo?.change_reason || `ຮັບຈາກ Request (${r.batch_id || 'N/A'})`,
+                        details: isPendingStore ? '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ' : (hInfo?.change_reason || `ຮັບຈາກ Request (${r.batch_id || 'N/A'})`),
                         process_time_seconds: hInfo?.process_time_seconds || 0,
                         process_started_at: hInfo?.process_started_at || null,
                         batch_started_at: hInfo?.batch_started_at || null,
@@ -2058,9 +2090,10 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             {activeTab === 'requests' && (
                                 <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
                                     {[
+                                        { label: 'ທັງໝົດ', val: data.length, icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
                                         { label: 'ລໍຖ້າສາງ', val: data.filter(r => r.status === 'pending').length, icon: '⏳', key: 'pending', cls: 'hover:bg-amber-400/30' },
-                                        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && !r.store_confirmed_at).length, icon: '🚨', key: 'pending_store', cls: 'hover:bg-rose-500/30' },
-                                        { label: '✅ ຮັບເຄື່ອງແລ້ວ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length, icon: '📦', key: 'completed', cls: 'hover:bg-emerald-400/30' },
+                                        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && !r.store_confirmed_at).length, icon: '⚠️', key: 'pending_store', cls: 'hover:bg-orange-500/30' },
+                                        { label: '✅ ຮັບເຄື່ອງແລ້ວ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length, icon: '✅', key: 'completed', cls: 'hover:bg-emerald-400/30' },
                                         { label: 'ປະຕິເສດ', val: data.filter(r => r.status === 'rejected').length, icon: '❌', key: 'rejected', cls: 'hover:bg-rose-400/30' },
                                     ].map(s => (
                                         <button
@@ -2078,16 +2111,16 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             {activeTab === 'store_edits' && (
                                 <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
                                     {[
-                                        { label: 'ທັງໝົດ', val: data.length, icon: '📦', key: 'all' },
-                                        { label: '⚡ ຮັບປົກກະຕິ', val: data.filter(r => !r.is_backdated).length, icon: '✅', key: 'on_time' },
-                                        { label: '🚨 ຮັບຍ້ອນຫຼັງ (>12ຊມ)', val: data.filter(r => r.is_backdated).length, icon: '⚠️', key: 'backdated' },
-                                        { label: 'ພະນັກງານທັງໝົດ', val: new Set(data.map(r => r.updated_by)).size, icon: '👤', key: null },
+                                        { label: 'ທັງໝົດ', val: data.length, icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
+                                        { label: '⚡ ຮັບປົກກະຕິ', val: data.filter(r => !r.is_backdated && r.store_confirmed_at).length, icon: '⚡', key: 'on_time', cls: 'hover:bg-emerald-400/30' },
+                                        { label: '🚨 ຮັບຍ້ອນຫຼັງ (>12ຊມ)', val: data.filter(r => r.is_backdated && r.store_confirmed_at).length, icon: '🚨', key: 'backdated', cls: 'hover:bg-rose-500/30' },
+                                        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: data.filter(r => !r.store_confirmed_at).length, icon: '⚠️', key: 'pending_store', cls: 'hover:bg-orange-500/30' },
                                     ].map(s => (
                                         <button
                                             key={s.label}
                                             onClick={() => s.key && handleSelectBranch('ທັງໝົດ', s.key)}
                                             disabled={!s.key}
-                                            className={`text-left p-3 rounded-2xl bg-white/10 ${s.key ? 'hover:bg-white/20 hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'} transition-all border border-white/20`}
+                                            className={`text-left p-3 rounded-2xl bg-white/10 ${s.cls || (s.key ? 'hover:bg-white/20' : '')} ${s.key ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'} transition-all border border-white/20`}
                                             title={s.key ? `ກົດເພື່ອເບິ່ງ: ${s.label}` : undefined}
                                         >
                                             <p className="text-3xl font-black">{s.icon} {s.val}</p>
