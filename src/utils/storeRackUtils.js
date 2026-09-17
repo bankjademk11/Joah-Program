@@ -195,20 +195,62 @@ export const STORE_BRANCH_RACK_RULES = {
         'INTERIOR': [{ zones: ['TR-I01', 'TR-I02', 'TR-I03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
         'SPORTS': [{ zones: ['TR-J01', 'TR-J02', 'TR-J03', 'TR-Floor'], maxLevel: 0, format: 'store_exact' }],
         'EVENT': [{ zones: ['TR-Event-01', 'TR-Event-02'], maxLevel: 0, format: 'store_exact' }],
-    },
-    'ໂພນຕ້ອງ': {
-        'KITCHEN': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'STATIONERY': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'STORAGE': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'INTERIOR': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'TOYS': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'FASHION': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'BEAUTY': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'SPORTS': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'CLEANING': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'TOOL/DIGITAL': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }],
-        'EVENT': [{ zones: PHONTHONG_ALL_RACKS, maxLevel: 0, format: 'store_exact' }]
     }
+};
+
+// ໂຄງສ້າງ Rack ຕາມ Category ສຳລັບສາຂາ ໂພນຕ້ອງ (ອ້າງອີງຕາມ phonthong_rack_category_rules.md)
+export const PHONTHONG_RACKS_BY_CATEGORY = {
+    'KITCHEN': [
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. A-${i + 1}`),
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. B-${i + 1}`)
+    ],
+    'CLEANING': [
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. C-${i + 1}`),
+        'JMPT. G-18', 'JMPT. G-19', 'JMPT. G-20'
+    ],
+    'TOOL/DIGITAL': [
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. D-${i + 1}`)
+    ],
+    'STATIONERY': [
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. E-${i + 1}`),
+        ...Array.from({ length: 8 }, (_, i) => `JMPT. F-${i + 1}`)
+    ],
+    'TOYS': [
+        'JMPT. G-1', 'JMPT. G-2', 'JMPT. G-3'
+    ],
+    'STORAGE': [
+        'JMPT. G-4', 'JMPT. G-5', 'JMPT. G-6', 'JMPT. G-7', 'JMPT. G-8', 'JMPT. G-9', 'JMPT. G-10', 'JMPT. G-11'
+    ],
+    'FASHION': [
+        'JMPT. G-12', 'JMPT. G-13', 'JMPT. G-14'
+    ],
+    'INTERIOR': [
+        'JMPT. G-15', 'JMPT. G-16', 'JMPT. G-17'
+    ],
+    'BEAUTY': [
+        ...PHONTHONG_ALL_RACKS
+    ],
+    'SPORTS': [
+        ...PHONTHONG_ALL_RACKS
+    ],
+    'EVENT': [
+        ...PHONTHONG_ALL_RACKS
+    ]
+};
+
+// เติมกฎ Phonthong ลงใน STORE_BRANCH_RACK_RULES
+STORE_BRANCH_RACK_RULES['ໂພນຕ້ອງ'] = {
+    'KITCHEN': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['KITCHEN'], maxLevel: 0, format: 'store_exact' }],
+    'STATIONERY': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['STATIONERY'], maxLevel: 0, format: 'store_exact' }],
+    'STORAGE': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['STORAGE'], maxLevel: 0, format: 'store_exact' }],
+    'INTERIOR': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['INTERIOR'], maxLevel: 0, format: 'store_exact' }],
+    'TOYS': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['TOYS'], maxLevel: 0, format: 'store_exact' }],
+    'FASHION': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['FASHION'], maxLevel: 0, format: 'store_exact' }],
+    'BEAUTY': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['BEAUTY'], maxLevel: 0, format: 'store_exact' }],
+    'SPORTS': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['SPORTS'], maxLevel: 0, format: 'store_exact' }],
+    'CLEANING': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['CLEANING'], maxLevel: 0, format: 'store_exact' }],
+    'TOOL/DIGITAL': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['TOOL/DIGITAL'], maxLevel: 0, format: 'store_exact' }],
+    'EVENT': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['EVENT'], maxLevel: 0, format: 'store_exact' }]
 };
 
 /**
@@ -251,7 +293,13 @@ export const getStoreBranchCategories = (branchId) => {
 export const getStoreRackSuggestions = (category, branchId) => {
     const resolved = resolveStoreBranchId(branchId);
     const branchRules = STORE_BRANCH_RACK_RULES[resolved];
-    const rules = branchRules?.[String(category).toUpperCase()];
+    
+    // Alias / Normalization map for category 1
+    let catKey = String(category || '').toUpperCase().trim();
+    if (catKey === 'CLEANING/BATH' || catKey.includes('CLEANING')) catKey = 'CLEANING';
+    if (catKey.includes('TOOL') || catKey.includes('DIGITAL')) catKey = 'TOOL/DIGITAL';
+
+    const rules = branchRules?.[catKey];
 
     const suggestions = [];
     if (rules) {
@@ -278,9 +326,10 @@ export const getStoreRackSuggestions = (category, branchId) => {
  * Validate if a rack is correct for a given category
  */
 export const validateStoreRack = (rack, category, branchId) => {
-    if (!rack) return false;
+    const cleanRack = String(rack || '').trim();
+    if (!cleanRack || cleanRack === '—' || cleanRack.toLowerCase() === 'null') return false;
+
     const resolved = resolveStoreBranchId(branchId);
-    const cleanRack = String(rack).trim();
 
     // ສຳລັບສາຂາ ເທຣນນິ້ງ: ອະນຸຍາດໃຫ້ທົດລອງໃສ່ຊັ້ນວາງໄດ້ທຸກຮູບແບບ
     if (resolved === 'ເທຣນນິ້ງ (Training)') {
@@ -295,4 +344,57 @@ export const validateStoreRack = (rack, category, branchId) => {
     if (!category) return false;
     const suggestions = getStoreRackSuggestions(category, branchId);
     return suggestions.includes(cleanRack);
+};
+
+/**
+ * Auto map exact Phonthong Rack Location from Category 1 & Category 2
+ * Based strictly on rules defined in phonthong_rack_category_rules.md
+ */
+export const mapPhonthongRackLocation = ({ category1, category2, branchId = 'ໂພນຕ້ອງ' }) => {
+    const resolved = resolveStoreBranchId(branchId);
+    if (resolved !== 'ໂພນຕ້ອງ') return null;
+    if (!category1 || !category2 || String(category2).trim() === "0") return null;
+
+    const c1 = String(category1).toUpperCase().trim();
+    const c2 = String(category2).toLowerCase().trim();
+
+    // KITCHEN
+    if (c1 === 'KITCHEN') {
+        if (c2.includes('food storage') || c2.includes('lunch box')) return 'JMPT. A-1';
+        if (c2.includes('kitchen cleaning')) return 'JMPT. A-2';
+        if (c2.includes('cooking utensils')) return 'JMPT. A-3';
+        if (c2.includes('cookware')) return 'JMPT. A-4';
+        if (c2.includes('glasses') || c2.includes('cups') || c2.includes('water bottles')) return 'JMPT. A-5';
+        if (c2.includes('disposables')) return 'JMPT. A-6';
+        if (c2.includes('paper towels') || c2.includes('wraps')) return 'JMPT. A-7';
+        if (c2.includes('cutlery')) return 'JMPT. A-8';
+        if (c2.includes('tableware') || c2.includes('bowls') || c2.includes('trays')) return 'JMPT. B-5';
+        return null; // Multi-rack or ambiguous Category 2 returns null
+    }
+
+    // CLEANING
+    if (c1 === 'CLEANING') {
+        if (c2.includes('towel')) return 'JMPT. C-6';
+        if (c2.includes('trash bin') || c2.includes('plastic bag')) return 'JMPT. C-7';
+        return null;
+    }
+
+    // TOOL/DIGITAL
+    if (c1 === 'TOOL/DIGITAL' || c1 === 'TOOLS') {
+        if (c2.includes('gardening')) return 'JMPT. D-1';
+        if (c2.includes('small tools')) return 'JMPT. D-5';
+        if (c2.includes('computer')) return 'JMPT. D-6';
+        return null;
+    }
+
+    // STATIONERY
+    if (c1 === 'STATIONERY') {
+        if (c2.includes('art supplies')) return 'JMPT. E-1';
+        if (c2.includes('letter envelope') || c2.includes('letters/envelopes')) return 'JMPT. E-4';
+        if (c2.includes('tape')) return 'JMPT. E-8';
+        if (c2.includes('school supplies')) return 'JMPT. F-8';
+        return null;
+    }
+
+    return null;
 };

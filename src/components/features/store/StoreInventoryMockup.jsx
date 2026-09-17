@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Database, Filter, ListChecks } from 'lucide-react';
+import { ArrowLeft, Database, Filter, ListChecks, Wand2 } from 'lucide-react';
 import StoreDashboard from './StoreDashboard';
 import StoreResultTable from './StoreResultTable';
 import PhonthongRackAuditorModal from './PhonthongRackAuditorModal';
 import { supabase } from '../../../utils/supabaseClient';
 import { useToast } from '../../ui/ToastProvider';
-import { getStoreRackSuggestions, validateStoreRack } from '../../../utils/storeRackUtils';
+import { getStoreRackSuggestions, validateStoreRack, mapPhonthongRackLocation } from '../../../utils/storeRackUtils';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
+import { PHONTHONG_BRANCH, getPhonthongRackDecision } from '../../../utils/phonthongRackRules';
 
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
 const MEGAMALL = 'ເມກ້າມໍ';
@@ -23,6 +24,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   const [results, setResults] = useState([]);
   const [masterDataList, setMasterDataList] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showRackAuditor, setShowRackAuditor] = useState(false);
 
@@ -37,87 +39,108 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   };
 
   // ============================================================
-  // Fetch MASTER DATA ทั้งหมด
-  // อ่านทีละ 1,000 รายการจนกว่าจะครบทุก record
+  // Fetch MASTER DATA ตามลำดับความสำคัญ:
+  // 1. สาขาปัจจุบันที่เลือก (เช่น ໂພນຕ້ອງ หรือ สาขาอื่น)
+  // 2. สาขาหลัก 'ໂພນສີນວນ' (เป็น Master Fallback หลักของทุกสาขา)
+  // 3. Master Data ทั่วไป
   // ============================================================
   useEffect(() => {
+    if (!selectedBranch) return;
+
     const fetchMasterData = async () => {
       try {
         const PAGE_SIZE = 1000;
-        let allData = [];
+        const DEFAULT_MASTER_BRANCH = 'ໂພນສີນວນ';
+
+        // 1. ดึง master_data ของ branch ปัจจุบันที่เลือก
+        let selectedBranchData = [];
         let from = 0;
+        while (true) {
+          const { data: pageData, error } = await supabase
+            .from('master_data')
+            .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
+            .eq('branch_id', selectedBranch)
+            .range(from, from + PAGE_SIZE - 1);
 
-        console.log('[StoreInventory] 🔄 Loading ALL master_data...');
+          if (error || !pageData || pageData.length === 0) break;
+          selectedBranchData = [...selectedBranchData, ...pageData];
+          if (pageData.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
 
+        // 2. ดึง master_data ของสาขาหลัก 'ໂພນສີນວນ' (เป็น Fallback หลักสำหรับสาขาอื่น)
+        let phonsinuanData = [];
+        if (selectedBranch !== DEFAULT_MASTER_BRANCH) {
+          from = 0;
+          while (true) {
+            const { data: pageData, error } = await supabase
+              .from('master_data')
+              .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
+              .eq('branch_id', DEFAULT_MASTER_BRANCH)
+              .range(from, from + PAGE_SIZE - 1);
+
+            if (error || !pageData || pageData.length === 0) break;
+            phonsinuanData = [...phonsinuanData, ...pageData];
+            if (pageData.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
+          }
+        }
+
+        // 3. ดึง master_data ทั้งหมดเพื่อเป็น Fallback สำรองสุดท้าย
+        let allFallbackData = [];
+        from = 0;
         while (true) {
           const { data: pageData, error } = await supabase
             .from('master_data')
             .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
             .range(from, from + PAGE_SIZE - 1);
 
-          if (error) {
-            console.error(
-              '[StoreInventory] ❌ Error fetching master_data:',
-              error
-            );
-            return;
-          }
-
-          // ไม่มีข้อมูลแล้ว = โหลดครบแล้ว
-          if (!pageData || pageData.length === 0) {
-            break;
-          }
-
-          allData = [...allData, ...pageData];
-
-          console.log(
-            `[StoreInventory] 📦 Master Data loaded: ${allData.length} records`
-          );
-
-          // ถ้าได้ข้อมูลน้อยกว่า PAGE_SIZE
-          // แสดงว่าเป็นหน้าสุดท้าย
-          if (pageData.length < PAGE_SIZE) {
-            break;
-          }
-
+          if (error || !pageData || pageData.length === 0) break;
+          allFallbackData = [...allFallbackData, ...pageData];
+          if (pageData.length < PAGE_SIZE) break;
           from += PAGE_SIZE;
         }
 
-        // ========================================================
-        // Deduplicate ด้วย barcode
-        // ========================================================
+        // 4. ผสานข้อมูลตามลำดับความสำคัญ (Priority Order):
+        // ลำดับ 3: master_data ทั่วไป -> ลำดับ 2: ໂພນສີນວນ -> ลำดับ 1 (สูงสุด): สาขาที่เลือกปัจจุบัน
         const dedupMap = new Map();
 
-        allData.forEach(row => {
+        allFallbackData.forEach(row => {
           const barcode = String(row.barcode || '').trim();
-
           if (barcode && !dedupMap.has(barcode)) {
             dedupMap.set(barcode, row);
           }
         });
 
-        const deduped = Array.from(dedupMap.values());
+        phonsinuanData.forEach(row => {
+          const barcode = String(row.barcode || '').trim();
+          if (barcode) {
+            dedupMap.set(barcode, row);
+          }
+        });
 
+        selectedBranchData.forEach(row => {
+          const barcode = String(row.barcode || '').trim();
+          if (barcode) {
+            dedupMap.set(barcode, row);
+          }
+        });
+
+        const deduped = Array.from(dedupMap.values());
         setMasterDataList(deduped);
 
         console.log(
-          '[StoreInventory] ✅ Master Data loaded:',
-          allData.length,
-          'total records,',
+          `[StoreInventory] ✅ Master Data Loaded (Selected: ${selectedBranch}, Primary Fallback: ${DEFAULT_MASTER_BRANCH}):`,
           deduped.length,
-          'unique SKUs'
+          `unique SKUs`
         );
-
       } catch (err) {
-        console.warn(
-          '[StoreInventory] ⚠️ Could not load master_data:',
-          err.message
-        );
+        console.warn('[StoreInventory] ⚠️ Could not load master_data:', err.message);
       }
     };
 
     fetchMasterData();
-  }, []);
+  }, [selectedBranch]);
 
   // Helper: find master_data row by barcode
   const getMasterRow = (barcode) => {
@@ -145,22 +168,31 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
     // PRIORITIZE:
     // 1. category_1_actual ที่บันทึกใน DB
-    // 2. category จาก master_data
+    // 2. category_1 จาก master_data
     const masterCategory =
       row.category_1_actual ||
       masterRow?.category_1 ||
       masterRow?.category_2 ||
       '';
 
+    const resolvedCategory2 =
+      row.category_2_actual ||
+      masterRow?.category_2 ||
+      '';
+
     // Determine status based on Rules
     let status = 'passed';
+    const cleanRackStr = String(rack || '').trim();
+    const isRackEmpty = !cleanRackStr || cleanRackStr === '—' || cleanRackStr.toLowerCase() === 'null';
 
     if (qty === 0) {
       status = 'missing';
     } else if (!masterCategory) {
-      status = 'incomplete';
+      status = 'incomplete'; // ไม่มี Category 1
+    } else if (isRackEmpty) {
+      status = 'incomplete'; // ยังไม่ได้จัดลงชั้น Rack (Unassigned Location)
     } else if (!validateStoreRack(rack, masterCategory, selectedBranch)) {
-      status = 'mismatch';
+      status = 'mismatch'; // มี Rack แต่ Rack ไม่ตรงตามหมวดหมู่
     }
 
     return {
@@ -181,7 +213,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
       dcQty: dcMap[bc] ?? 0,
       salesQty: row.sales_qty ?? null,
       category1: masterCategory,
-      category2: row.category_2_actual || '',
+      category2: resolvedCategory2,
       status: status,
       branch_id: row.branch_id,
     };
@@ -353,6 +385,89 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // ============================================================
+  // Auto Auto-Assign Rack Location (เฉพาะสาขา ໂພນຕ້ອງ)
+  // ============================================================
+  const handleAutoAssignPhonthongRacks = async () => {
+    if (selectedBranch !== PHONTHONG_BRANCH) {
+      toast.error('ຟັງຊັ່ນນີ້ຮອງຮັບສະເພາະສາຂາ ໂພນຕ້ອງ ເທົ່ານັ້ນ');
+      return;
+    }
+
+    setIsAutoAssigning(true);
+    let assignedCount = 0;
+    let skippedCount = 0;
+
+    try {
+      // คัดเลือกรายการของสาขา ໂພນຕ້ອງ ที่ยังไม่มี shelf_location (หรือเป็นค่าว่าง/—/null)
+      const unassignedItems = results.filter(r => {
+        const itemBranch = r.branch_id || selectedBranch;
+        if (itemBranch !== PHONTHONG_BRANCH) return false;
+
+        const loc = r.shelf_location ?? r.rackLocation ?? r.rack_location ?? '';
+        return !loc || loc === '—' || loc.toLowerCase() === 'null' || loc.trim() === '';
+      });
+
+      if (unassignedItems.length === 0) {
+        toast.info('ສິນຄ້າທັງໝົດໃນສາຂາ ໂພນຕ້ອງ ມີຕຳແໜ່ງ Rack ຮຽບຮ້ອຍແລ້ວ');
+        setIsAutoAssigning(false);
+        return;
+      }
+
+      const updatePromises = [];
+
+      for (const item of unassignedItems) {
+        const branchId = item.branch_id || selectedBranch;
+        if (branchId !== PHONTHONG_BRANCH) {
+          skippedCount++;
+          continue;
+        }
+
+        const decision = getPhonthongRackDecision({
+          branchId: PHONTHONG_BRANCH,
+          category1: item.category1 ?? item.category_1,
+          category2: item.category2 ?? item.category_2,
+        });
+
+        if (decision.status === "ASSIGNED") {
+          assignedCount++;
+          updatePromises.push(
+            supabase
+              .from('store_inventory')
+              .update({
+                shelf_location: decision.rackLocation, // ชื่อคอลัมน์จริงใน DB store_inventory คือ shelf_location
+                updated_by: currentUser?.name || 'Auto-Assign Bot',
+                last_updated: new Date().toISOString()
+              })
+              .eq('id', item.id)
+              .eq('branch_id', PHONTHONG_BRANCH)
+          );
+        } else {
+          skippedCount++;
+        }
+      }
+
+      if (updatePromises.length > 0) {
+        const responses = await Promise.all(updatePromises);
+        const errors = responses.filter(res => res.error);
+
+        if (errors.length > 0) {
+          console.error('[AutoAssign] ❌ Partial update error:', errors);
+        }
+
+        toast.success(`ຈັດຕຳແໜ່ງ Rack ອັດໂນມັດສຳເລັດ ${assignedCount} ລາຍການ!`);
+        await fetchData();
+      } else {
+        toast.warn(`ບໍ່ພົບລາຍການສິນຄ້າທີ່ກົງຕາມເງື່ອນໄຂ Rack (ຂ້າມ ${skippedCount} ລາຍການ)`);
+      }
+    } catch (err) {
+      console.error('[AutoAssign] ❌ Exception:', err);
+      toast.error('ເກີດຂໍ້ຜິດພາດໃນການ Auto-Assign Rack: ' + err.message);
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  };
 
   // ============================================================
   // Realtime
@@ -935,6 +1050,18 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
           </p>
 
         </div>
+
+        {isPhonthong && (
+          <button
+            onClick={handleAutoAssignPhonthongRacks}
+            disabled={isAutoAssigning}
+            className="flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50"
+            title="Auto-Assign Rack Location (ໂພນຕ້ອງ)"
+          >
+            <Wand2 className={`w-4 h-4 ${isAutoAssigning ? 'animate-spin' : ''}`} />
+            <span>{isAutoAssigning ? 'ກຳລັງ Auto Assign...' : 'Auto-Assign Racks (ໂພນຕ້ອງ)'}</span>
+          </button>
+        )}
 
       </div>
 

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   X,
   Search,
+  Database,
 } from 'lucide-react';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
 
@@ -46,6 +47,24 @@ const IT_SERVICES = [
     ],
     tags: ['updated_by Tracking', 'Branch Filter', 'Staff Audit', 'Change History'],
     isReady: true
+  },
+  {
+    id: 'master-data-import',
+    title: 'Master Data Excel Importer',
+    category: 'DATA MANAGEMENT',
+    badge: 'ACTIVE TOOL',
+    badgeColor: 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+    icon: Database,
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    iconBg: 'bg-teal-100 dark:bg-teal-950/60',
+    desc: 'ອັບໂຫຼດຂໍ້ມູນສິນຄ້າ Master Data ຈາກໄຟລ໌ Excel/CSV ເຂົ້າສູ່ຖານຂໍ້ມູນ Supabase (ຕາຕະລາງ master_data) ແຍກຕາມສາຂາ ພ້ອມກວດສອບ Barcode ຊ້ຳຊ້ອນ ແລະ Auto Upsert.',
+    metrics: [
+      { label: 'Target', val: 'master_data' },
+      { label: 'Key', val: 'barcode + branch' },
+      { label: 'Format', val: '.xlsx / .csv' }
+    ],
+    tags: ['Master Data', 'Excel Import', 'Upsert', 'Branch Filter'],
+    isReady: true
   }
 ];
 
@@ -53,7 +72,7 @@ export default function ITToolsDashboard({ onBack, onLaunchTool }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const categories = ['ALL', 'DATA AUDIT', 'MONITORING'];
+  const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT'];
 
   const filteredServices = IT_SERVICES.filter(service => {
     if (selectedCategory !== 'ALL' && service.category !== selectedCategory) return false;

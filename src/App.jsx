@@ -80,6 +80,7 @@ import JoahBotRoom from './components/Fun/JoahBotRoom';
 import ITToolsDashboard from './components/Tools/ITToolsDashboard';
 import BarcodeIntegrityInspector from './components/Tools/BarcodeIntegrityInspector';
 import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
+import MasterDataImport from './components/Tools/MasterDataImport';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import { Gamepad2 } from 'lucide-react';
 
@@ -1888,6 +1889,8 @@ function AppContent() {
                     setStep('barcode-integrity-inspector');
                   } else if (toolId === 'employee-activity') {
                     setStep('hq-command-center-v2');
+                  } else if (toolId === 'master-data-import') {
+                    setStep('master-data-import');
                   }
                 }}
               />
@@ -1909,7 +1912,13 @@ function AppContent() {
             />
           )}
 
-
+          {step === 'master-data-import' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <MasterDataImport
+                onBack={() => setStep('it-tools-ps5')}
+              />
+            </div>
+          )}
 
           {step === 'results' && (
             <div className="w-full h-full space-y-8 animate-fade-in-up">

@@ -94,6 +94,12 @@ const apps = [
         icon: ITOpIcon,
         step: 'it-tools-ps5'
     },
+    {
+        id: 'master-data-import',
+        name: 'ນຳເຂົ້າ Master Data (Master Data Importer)',
+        icon: InventoryIcon,
+        step: 'master-data-import'
+    },
 ];
 
 const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
