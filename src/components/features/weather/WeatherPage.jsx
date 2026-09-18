@@ -70,7 +70,7 @@ const WeatherPage = ({ onBack }) => {
     setTimeout(() => setIsRefreshing(false), 800);
   };
 
-  const isRain = weather.isRaining || weather.precipitation > 0;
+  const isRain = Boolean(weather.isRaining);
   const temp = weather.temperature ?? 26;
   const apparentTemp = weather.apparentTemperature ?? 30;
   const precip = weather.precipitation ?? 0;

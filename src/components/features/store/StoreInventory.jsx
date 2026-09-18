@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   ArrowLeft, Search, Download, Database, MapPin,
   Filter, ChevronDown, ArrowUpDown, Package,
@@ -99,22 +99,24 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
   };
 
   // ---- Filter + Sort + Search ----
-  const filteredResults = inventoryData
-    .filter(row => {
+  const filteredResults = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    const filtered = inventoryData.filter(row => {
       const qty = row.store_qty ?? 0;
-      const matchSearch =
-        (row.barcode_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (row.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (row.shelf_location || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch = !keyword ||
+        String(row.barcode_no || '').toLowerCase().includes(keyword) ||
+        String(row.item_name || '').toLowerCase().includes(keyword) ||
+        String(row.shelf_location || '').toLowerCase().includes(keyword);
       const matchFilter =
         filterStatus === 'all' ||
         (filterStatus === 'has_stock' && qty > 0) ||
         (filterStatus === 'out_of_stock' && qty === 0) ||
         (filterStatus === 'low_stock' && qty > 0 && qty <= 5);
       return matchSearch && matchFilter;
-    })
-    .sort((a, b) => {
-      if (!sortConfig.key) return 0;
+    });
+
+    if (!sortConfig.key) return filtered;
+    return filtered.sort((a, b) => {
       let valA = a[sortConfig.key];
       let valB = b[sortConfig.key];
       if (sortConfig.key === 'store_qty') {
@@ -128,18 +130,30 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
       if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
+  }, [inventoryData, searchTerm, filterStatus, sortConfig]);
 
   const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentResults = filteredResults.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   // ---- Stats ----
-  const stats = {
-    total: inventoryData.length,
-    hasStock: inventoryData.filter(r => (r.store_qty ?? 0) > 0).length,
-    outOfStock: inventoryData.filter(r => (r.store_qty ?? 0) === 0).length,
-    lowStock: inventoryData.filter(r => (r.store_qty ?? 0) > 0 && (r.store_qty ?? 0) <= 5).length,
-  };
+  const stats = useMemo(() => {
+    let hasStock = 0;
+    let outOfStock = 0;
+    let lowStock = 0;
+
+    for (const row of inventoryData) {
+      const qty = Number(row.store_qty ?? 0);
+      if (qty > 0) {
+        hasStock++;
+        if (qty <= 5) lowStock++;
+      } else {
+        outOfStock++;
+      }
+    }
+
+    return { total: inventoryData.length, hasStock, outOfStock, lowStock };
+  }, [inventoryData]);
 
   // ---- Export ----
   const handleExport = async () => {

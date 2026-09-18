@@ -34,6 +34,7 @@ const BigDigitalClock = ({ onNavigateWeather }) => {
 
   // Weather Live State via shared cache
   const [weather, setWeather] = useState({
+    temperature: 28,
     precipitation: 0,
     weatherCode: 0,
     isRaining: false
@@ -94,14 +95,20 @@ const BigDigitalClock = ({ onNavigateWeather }) => {
               🌧️ ຝົນ Km8:
             </span>
             <span className="text-[11px] font-mono font-extrabold text-amber-400">
-              {weather.precipitation} mm/h
+              {weather.temperature !== undefined ? `${weather.temperature}°C` : ''} · {weather.precipitation} mm/h
             </span>
           </>
         ) : (
           <>
             <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
             <span className="text-[11px] font-bold tracking-wider uppercase text-emerald-300 group-hover:text-emerald-200">
-              ☀️ ຝົນເຊົາຕົກແລ້ວ (Km8)
+              ☀️ Km8
+            </span>
+            <span className="text-[12px] font-black text-white font-mono bg-white/10 px-1.5 py-0.5 rounded-md">
+              {weather.temperature ?? 28}°C
+            </span>
+            <span className="text-[11px] font-medium text-slate-300">
+              ປອດໂປ່ງ
             </span>
           </>
         )}

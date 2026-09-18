@@ -30,7 +30,7 @@ const WeatherAppModal = ({ isOpen, onClose, weatherData, onRefresh }) => {
   if (!isOpen) return null;
 
   const data = weatherData || {};
-  const isRain = data.isRaining || data.precipitation > 0;
+  const isRain = Boolean(data.isRaining);
   const temp = data.temperature ?? 26;
   const apparentTemp = data.apparentTemperature ?? 30;
   const precip = data.precipitation ?? 0;

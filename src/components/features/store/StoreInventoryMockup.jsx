@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, Database, Filter, ListChecks, Wand2 } from 'lucide-react';
 import StoreDashboard from './StoreDashboard';
 import StoreResultTable from './StoreResultTable';
@@ -31,121 +31,30 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   // Check if branch is Phonthong (ໂພນຕ້ອງ)
   const isPhonthong = selectedBranch === 'ໂພນຕ້ອງ' || (selectedBranch && selectedBranch.includes('ໂພນຕ້ອງ'));
 
+  // O(1) barcode lookup instead of scanning masterDataList for every row.
+  const masterDataMap = useMemo(() => {
+    const map = new Map();
+    for (const row of masterDataList) {
+      const barcode = String(row.barcode || '').trim();
+      if (barcode) map.set(barcode, row);
+    }
+    return map;
+  }, [masterDataList]);
+
   // Helper to find category from masterDataList
   const getCategoryFromMaster = (barcode) => {
     const bc = String(barcode).trim();
-    const match = masterDataList.find(m => String(m.barcode).trim() === bc);
+    const match = masterDataMap.get(bc);
     return match?.category_1 || match?.category_2 || '';
   };
 
-  // ============================================================
-  // Fetch MASTER DATA ตามลำดับความสำคัญ:
-  // 1. สาขาปัจจุบันที่เลือก (เช่น ໂພນຕ້ອງ หรือ สาขาอื่น)
-  // 2. สาขาหลัก 'ໂພນສີນວນ' (เป็น Master Fallback หลักของทุกสาขา)
-  // 3. Master Data ทั่วไป
-  // ============================================================
-  useEffect(() => {
-    if (!selectedBranch) return;
-
-    const fetchMasterData = async () => {
-      try {
-        const PAGE_SIZE = 1000;
-        const DEFAULT_MASTER_BRANCH = 'ໂພນສີນວນ';
-
-        // 1. ดึง master_data ของ branch ปัจจุบันที่เลือก
-        let selectedBranchData = [];
-        let from = 0;
-        while (true) {
-          const { data: pageData, error } = await supabase
-            .from('master_data')
-            .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
-            .eq('branch_id', selectedBranch)
-            .range(from, from + PAGE_SIZE - 1);
-
-          if (error || !pageData || pageData.length === 0) break;
-          selectedBranchData = [...selectedBranchData, ...pageData];
-          if (pageData.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-
-        // 2. ดึง master_data ของสาขาหลัก 'ໂພນສີນວນ' (เป็น Fallback หลักสำหรับสาขาอื่น)
-        let phonsinuanData = [];
-        if (selectedBranch !== DEFAULT_MASTER_BRANCH) {
-          from = 0;
-          while (true) {
-            const { data: pageData, error } = await supabase
-              .from('master_data')
-              .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
-              .eq('branch_id', DEFAULT_MASTER_BRANCH)
-              .range(from, from + PAGE_SIZE - 1);
-
-            if (error || !pageData || pageData.length === 0) break;
-            phonsinuanData = [...phonsinuanData, ...pageData];
-            if (pageData.length < PAGE_SIZE) break;
-            from += PAGE_SIZE;
-          }
-        }
-
-        // 3. ดึง master_data ทั้งหมดเพื่อเป็น Fallback สำรองสุดท้าย
-        let allFallbackData = [];
-        from = 0;
-        while (true) {
-          const { data: pageData, error } = await supabase
-            .from('master_data')
-            .select('barcode, product_name_la, item_name, category_1, category_2, branch_id')
-            .range(from, from + PAGE_SIZE - 1);
-
-          if (error || !pageData || pageData.length === 0) break;
-          allFallbackData = [...allFallbackData, ...pageData];
-          if (pageData.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-
-        // 4. ผสานข้อมูลตามลำดับความสำคัญ (Priority Order):
-        // ลำดับ 3: master_data ทั่วไป -> ลำดับ 2: ໂພນສີນວນ -> ลำดับ 1 (สูงสุด): สาขาที่เลือกปัจจุบัน
-        const dedupMap = new Map();
-
-        allFallbackData.forEach(row => {
-          const barcode = String(row.barcode || '').trim();
-          if (barcode && !dedupMap.has(barcode)) {
-            dedupMap.set(barcode, row);
-          }
-        });
-
-        phonsinuanData.forEach(row => {
-          const barcode = String(row.barcode || '').trim();
-          if (barcode) {
-            dedupMap.set(barcode, row);
-          }
-        });
-
-        selectedBranchData.forEach(row => {
-          const barcode = String(row.barcode || '').trim();
-          if (barcode) {
-            dedupMap.set(barcode, row);
-          }
-        });
-
-        const deduped = Array.from(dedupMap.values());
-        setMasterDataList(deduped);
-
-        console.log(
-          `[StoreInventory] ✅ Master Data Loaded (Selected: ${selectedBranch}, Primary Fallback: ${DEFAULT_MASTER_BRANCH}):`,
-          deduped.length,
-          `unique SKUs`
-        );
-      } catch (err) {
-        console.warn('[StoreInventory] ⚠️ Could not load master_data:', err.message);
-      }
-    };
-
-    fetchMasterData();
-  }, [selectedBranch]);
+  // หน้าร้านไม่ดึง master_data แล้ว เพื่อลด network, memory และเวลาโหลดบนมือถือ
+  // ข้อมูลชื่อสินค้า/หมวดหมู่จะใช้จาก store_inventory โดยตรง
 
   // Helper: find master_data row by barcode
   const getMasterRow = (barcode) => {
     const bc = String(barcode || '').trim();
-    return masterDataList.find(m => String(m.barcode || '').trim() === bc) || null;
+    return masterDataMap.get(bc) || null;
   };
 
   // Map store_inventory row → StoreResultTable row shape
@@ -250,7 +159,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         if (!pageData || pageData.length === 0) {
           storeHasMore = false;
         } else {
-          storeData = [...storeData, ...pageData];
+          storeData.push(...pageData);
 
           if (pageData.length < storePageSize) {
             storeHasMore = false;
@@ -308,14 +217,14 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         // Merge warehouse results
         whResponses.forEach(res => {
           if (!res.error && res.data) {
-            whData = [...whData, ...res.data];
+            whData.push(...res.data);
           }
         });
 
         // Merge DC results
         dcResponses.forEach(res => {
           if (!res.error && res.data) {
-            dcData = [...dcData, ...res.data];
+            dcData.push(...res.data);
           }
         });
       }
@@ -380,7 +289,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranch, masterDataList]);
+  }, [selectedBranch, masterDataMap]);
 
   useEffect(() => {
     fetchData();
@@ -990,40 +899,25 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   // ============================================================
   // Dashboard Stats
   // ============================================================
-  const stats = {
-    total:
-      results.length,
+  const stats = useMemo(() => {
+    const next = {
+      total: results.length,
+      passed: 0,
+      mismatch: 0,
+      incomplete: 0,
+      missing: 0,
+      zeroQty: 0,
+      hasQty: 0,
+    };
 
-    passed:
-      results.filter(
-        r => r.status === 'passed'
-      ).length,
+    for (const row of results) {
+      if (row.status in next) next[row.status]++;
+      if ((row.qty ?? 0) === 0) next.zeroQty++;
+      else next.hasQty++;
+    }
 
-    mismatch:
-      results.filter(
-        r => r.status === 'mismatch'
-      ).length,
-
-    incomplete:
-      results.filter(
-        r => r.status === 'incomplete'
-      ).length,
-
-    missing:
-      results.filter(
-        r => r.status === 'missing'
-      ).length,
-
-    zeroQty:
-      results.filter(
-        r => (r.qty ?? 0) === 0
-      ).length,
-
-    hasQty:
-      results.filter(
-        r => (r.qty ?? 0) > 0
-      ).length,
-  };
+    return next;
+  }, [results]);
 
   return (
     <div className="w-full h-full space-y-4 sm:space-y-8 animate-fade-in-up">
