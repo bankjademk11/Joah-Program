@@ -9,6 +9,8 @@ export default {
     extend: {
       fontFamily: {
         joah: ['Outfit', 'Noto Sans Lao', 'sans-serif'],
+        weather: ['Plus Jakarta Sans', 'Outfit', 'Noto Sans Lao Looped', 'Noto Sans Lao', 'sans-serif'],
+        lao: ['Noto Sans Lao Looped', 'Noto Sans Lao', 'sans-serif'],
       },
       colors: {
         joah: {

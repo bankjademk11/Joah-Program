@@ -95,10 +95,10 @@ const apps = [
         step: 'it-tools-ps5'
     },
     {
-        id: 'master-data-import',
-        name: 'ນຳເຂົ້າ Master Data (Master Data Importer)',
-        icon: InventoryIcon,
-        step: 'master-data-import'
+        id: 'weather',
+        name: 'ສະພາບອາກາດ Km8 (Weather App)',
+        icon: SaleViewIcon,
+        step: 'weather'
     },
 ];
 

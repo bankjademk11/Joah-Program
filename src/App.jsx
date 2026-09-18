@@ -45,7 +45,7 @@ import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
 import LandingPage from './components/layout/LandingPage';
 import AppLauncher from './components/layout/AppLauncher';
-import RubikNetworkParticles from './components/ui/RubikNetworkParticles';
+import RainParticles from './components/ui/RainParticles';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 import ExcelCompressor from './components/Tools/excel-compressor';
@@ -81,6 +81,7 @@ import ITToolsDashboard from './components/Tools/ITToolsDashboard';
 import BarcodeIntegrityInspector from './components/Tools/BarcodeIntegrityInspector';
 import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
 import MasterDataImport from './components/Tools/MasterDataImport';
+import WeatherPage from './components/features/weather/WeatherPage';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import { Gamepad2 } from 'lucide-react';
 
@@ -967,9 +968,9 @@ function AppContent() {
         <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center">
           {step === 'upload' && (
             <div className="max-w-7xl w-full animate-fade-in-up flex flex-col items-center relative">
-              {/* Rubik Network Particles Background */}
+              {/* Rain FX Background */}
               <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-                <RubikNetworkParticles />
+                <RainParticles />
               </div>
               <div className="relative w-full" style={{ zIndex: 1 }}>
 
@@ -978,7 +979,7 @@ function AppContent() {
 
                   {/* 🕒 Big Digital Clock (Desktop Only) */}
                   <div className="hidden lg:flex w-[280px] justify-start shrink-0 transform -translate-x-[10%]">
-                    <BigDigitalClock />
+                    <BigDigitalClock onNavigateWeather={() => setStep('weather')} />
                   </div>
 
                   {/* 🏷️ Main Title (Centered) */}
@@ -1916,6 +1917,14 @@ function AppContent() {
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <MasterDataImport
                 onBack={() => setStep('it-tools-ps5')}
+              />
+            </div>
+          )}
+
+          {step === 'weather' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <WeatherPage
+                onBack={() => setStep('upload')}
               />
             </div>
           )}
