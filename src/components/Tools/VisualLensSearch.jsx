@@ -139,54 +139,142 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     setIsSearching(true);
     setSearchResults([]);
     setErrorMsg('');
-    setSearchStatus('ກຳລັງວິເຄາະຮູບພາບ ແລະ ທຽບຄຽງສິນຄ້າ...');
+    setSearchStatus('ກຳລັງສົ່ງຮູບໃຫ້ AI (Gemini Vision) ວິເຄາະສິນຄ້າ...');
 
     try {
-      // 1. First, check barcodes from allImages
-      // Sample comparison / candidate retrieval
-      const sampleCandidates = allImages.slice(0, 50);
-      const barcodes = sampleCandidates.map(c => c.barcode);
+      const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+      
+      let base64Data = '';
+      let mimeType = 'image/jpeg';
+      
+      if (imgDataUrl.startsWith('data:')) {
+        const parts = imgDataUrl.split(',');
+        mimeType = parts[0].split(';')[0].split(':')[1] || 'image/jpeg';
+        base64Data = parts[1];
+      } else {
+        // If it's a URL, fetch and convert to base64
+        const resp = await fetch(imgDataUrl);
+        const blob = await resp.blob();
+        mimeType = blob.type || 'image/jpeg';
+        base64Data = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(blob);
+        });
+      }
 
-      // Query database for details of candidate products
-      let matchedProducts = [];
-      if (barcodes.length > 0) {
-        const { data: dbData } = await supabase
-          .from('master_data')
-          .select('barcode, item_name, product_name_la, category_1, category_2')
-          .in('barcode', barcodes)
-          .limit(30);
+      let detectedKeywords = [];
+      let detectedBarcode = null;
+      let aiDescription = '';
 
-        if (dbData && dbData.length > 0) {
-          // Score matches (simulate/compute visual confidence)
-          matchedProducts = dbData.map((prod, idx) => {
-            // Confidence simulation with deterministic falloff
-            const baseConfidence = Math.max(96 - idx * 7, 60);
-            return {
-              ...prod,
-              confidence: baseConfidence,
-              image_url: getProductImageUrl(prod.barcode),
-            };
+      if (geminiApiKey) {
+        // Call Gemini 2.5 Flash Vision API
+        const prompt = `You are a warehouse/retail product visual recognition assistant.
+Look closely at this product image.
+1. If there is any visible barcode numbers, text on packaging, brand name, model, size, or Lao/Thai/English product description, extract it.
+2. What exact type of product is this? (e.g. ruler, pen, cup, notebook, scissors, tape, etc. in Lao, Thai, and English)
+3. Return ONLY a valid JSON object without markdown formatting:
+{
+  "barcode": "numbers if visible else null",
+  "product_type": "short item name",
+  "keywords": ["keyword1", "keyword2", "brand_if_any", "size_if_any", "color_if_any", "thai_name", "lao_name"],
+  "description": "brief description in Lao"
+}`;
+
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: mimeType, data: base64Data } }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.1,
+                response_mime_type: "application/json"
+              }
+            })
           });
+
+          if (res.ok) {
+            const data = await res.json();
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textResponse) {
+              const parsed = JSON.parse(textResponse);
+              detectedBarcode = parsed.barcode;
+              detectedKeywords = parsed.keywords || [];
+              aiDescription = parsed.description || parsed.product_type || '';
+              if (parsed.product_type) detectedKeywords.unshift(parsed.product_type);
+            }
+          }
+        } catch (apiErr) {
+          console.warn('Gemini vision API error, falling back to barcode check:', apiErr);
         }
       }
 
-      // If database has records, sort by confidence
-      if (matchedProducts.length > 0) {
-        setSearchResults(matchedProducts.slice(0, 6));
-        setSearchStatus(`ພົບສິນຄ້າທີ່ຄ້າຍຄືກັນ ${matchedProducts.length} ລາຍການ`);
+      setSearchStatus(aiDescription ? `AI ວິເຄາະ: ${aiDescription} (ກຳລັງຄົ້ນຫາໃນຖານຂໍ້ມູນ...)` : 'ກຳລັງຄົ້ນຫາໃນຖານຂໍ້ມູນ...');
+
+      let results = [];
+
+      // 1. If Gemini found a barcode on the product packaging
+      if (detectedBarcode && detectedBarcode.length >= 4) {
+        const { data: directBarcodeMatch } = await supabase
+          .from('master_data')
+          .select('barcode, item_name, product_name_la, category_1, category_2')
+          .ilike('barcode', `%${detectedBarcode}%`)
+          .limit(5);
+
+        if (directBarcodeMatch && directBarcodeMatch.length > 0) {
+          results.push(...directBarcodeMatch.map(p => ({
+            ...p,
+            confidence: 99,
+            matchReason: `ກົງກັບບາໂຄ້ດທີ່ພົບໃນຮູບ: ${detectedBarcode}`,
+            image_url: getProductImageUrl(p.barcode)
+          })));
+        }
+      }
+
+      // 2. Search master_data using extracted visual keywords (Lao/English/Thai)
+      if (detectedKeywords.length > 0) {
+        for (const kw of detectedKeywords.slice(0, 5)) {
+          if (!kw || kw.length < 2) continue;
+          const { data: kwMatches } = await supabase
+            .from('master_data')
+            .select('barcode, item_name, product_name_la, category_1, category_2')
+            .or(`item_name.ilike.%${kw}%,product_name_la.ilike.%${kw}%,category_1.ilike.%${kw}%,category_2.ilike.%${kw}%`)
+            .limit(10);
+
+          if (kwMatches && kwMatches.length > 0) {
+            kwMatches.forEach((p, idx) => {
+              if (!results.some(r => r.barcode === p.barcode)) {
+                // If this product also has an image in our bucket, give higher confidence
+                const hasBucketImage = allImages.some(img => img.barcode === p.barcode);
+                const score = hasBucketImage ? Math.max(95 - idx * 5, 75) : Math.max(85 - idx * 5, 60);
+
+                results.push({
+                  ...p,
+                  confidence: score,
+                  matchReason: `ກົງກັບຄຳຄົ້ນຫາ: "${kw}"${hasBucketImage ? ' (ມີຮູບໃນ Bucket)' : ''}`,
+                  image_url: getProductImageUrl(p.barcode)
+                });
+              }
+            });
+          }
+          if (results.length >= 8) break;
+        }
+      }
+
+      // Sort results by confidence
+      results.sort((a, b) => b.confidence - a.confidence);
+
+      if (results.length > 0) {
+        setSearchResults(results.slice(0, 8));
+        setSearchStatus(`ພົບສິນຄ້າທີ່ກົງກັນ ${results.length} ລາຍການ ${aiDescription ? `[${aiDescription}]` : ''}`);
       } else {
-        // Fallback: If no direct master_data match, show bucket images
-        const fallbackResults = sampleCandidates.slice(0, 4).map((c, idx) => ({
-          barcode: c.barcode,
-          item_name: `ສິນຄ້າບາໂຄ້ດ ${c.barcode}`,
-          product_name_la: 'ຮູບພາບຈາກ Bucket',
-          category_1: 'Product Images',
-          category_2: '',
-          confidence: Math.max(92 - idx * 8, 65),
-          image_url: getProductImageUrl(c.barcode)
-        }));
-        setSearchResults(fallbackResults);
-        setSearchStatus('ພົບຮູບພາບທີ່ກົງກັນໃນ Bucket');
+        setSearchStatus(aiDescription ? `AI ວິເຄາະວ່າແມ່ນ: "${aiDescription}" ແຕ່ບໍ່ພົບສິນຄ້ານີ້ໃນຖານຂໍ້ມູນ` : 'ບໍ່ພົບສິນຄ້າທີ່ກົງກັນໃນຖານຂໍ້ມູນ');
       }
     } catch (err) {
       console.error('Visual search error:', err);
@@ -497,6 +585,11 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                           {item.product_name_la && (
                             <p className="text-xs text-slate-400 truncate mt-0.5">
                               {item.product_name_la}
+                            </p>
+                          )}
+                          {item.matchReason && (
+                            <p className="text-[11px] text-indigo-300 font-medium truncate mt-1">
+                              🔍 {item.matchReason}
                             </p>
                           )}
                           <div className="flex items-center gap-1.5 mt-2">
