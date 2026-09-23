@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.1",
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "canvas-confetti": "^1.9.4",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
