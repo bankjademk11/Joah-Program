@@ -82,6 +82,7 @@ import BarcodeIntegrityInspector from './components/Tools/BarcodeIntegrityInspec
 import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
 import MasterDataImport from './components/Tools/MasterDataImport';
 import WeatherPage from './components/features/weather/WeatherPage';
+import VisualLensSearch from './components/Tools/VisualLensSearch';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import { Gamepad2 } from 'lucide-react';
 
@@ -1407,6 +1408,37 @@ function AppContent() {
                     </div>
                   </div>
 
+                  {/* Joah Lens - Visual Product Search Card */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-full h-32 bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-radial-at-c from-white/10 to-transparent pointer-events-none" />
+                      <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-xl">
+                        <Sparkles size={32} />
+                      </div>
+                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20 text-white border border-white/30 backdrop-blur-sm">
+                        AI LENS
+                      </span>
+                    </div>
+
+                    <div className="p-6 flex flex-col gap-4 w-full">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Joah Lens Search</h3>
+                          <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens (product-images)</p>
+                      </div>
+
+                      <button
+                        onClick={() => setStep('visual-lens-search')}
+                        className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                      >
+                        <Sparkles size={16} />
+                        <span>ເປີດ Joah Lens (ຖ່າຍຮູບ)</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
                   {showAdminMenu && (
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
@@ -1892,6 +1924,8 @@ function AppContent() {
                     setStep('hq-command-center-v2');
                   } else if (toolId === 'master-data-import') {
                     setStep('master-data-import');
+                  } else if (toolId === 'visual-lens-search') {
+                    setStep('visual-lens-search');
                   }
                 }}
               />
@@ -1917,6 +1951,15 @@ function AppContent() {
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <MasterDataImport
                 onBack={() => setStep('it-tools-ps5')}
+              />
+            </div>
+          )}
+
+          {step === 'visual-lens-search' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <VisualLensSearch
+                onBack={() => setStep('it-tools-ps5')}
+                branchId={user?.branch_id || 'ໂພນຕ້ອງ'}
               />
             </div>
           )}

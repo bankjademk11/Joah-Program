@@ -378,18 +378,16 @@ const StoreInventory = ({ onBack, currentUser, isAdmin, initialBranch }) => {
                         </td>
                         <td className="px-4 sm:px-6 py-4 sm:py-6">
                           <div className="flex flex-col items-center">
-                            <span className={`text-xl sm:text-2xl font-black leading-none ${
-                              isZero ? 'text-rose-400 dark:text-rose-500'
+                            <span className={`text-xl sm:text-2xl font-black leading-none ${isZero ? 'text-rose-400 dark:text-rose-500'
                               : isLow ? 'text-amber-500 dark:text-amber-400'
-                              : 'text-slate-800 dark:text-white'
-                            }`}>
+                                : 'text-slate-800 dark:text-white'
+                              }`}>
                               {qty}
                             </span>
-                            <div className={`hidden sm:flex items-center gap-1 text-[9px] font-black uppercase tracking-widest mt-2 p-1 px-2 rounded-lg ${
-                              isZero ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-400'
+                            <div className={`hidden sm:flex items-center gap-1 text-[9px] font-black uppercase tracking-widest mt-2 p-1 px-2 rounded-lg ${isZero ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-400'
                               : isLow ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
-                              : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500'
-                            }`}>
+                                : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500'
+                              }`}>
                               {isZero ? '🔴 Out' : isLow ? '🟡 Low' : '🟢 OK'}
                             </div>
                           </div>

@@ -100,6 +100,12 @@ const apps = [
         icon: SaleViewIcon,
         step: 'weather'
     },
+    {
+        id: 'visual-lens-search',
+        name: 'ຄົ້ນຫາສິນຄ້າດ້ວຍພາບ (Joah Lens)',
+        icon: CheckPriceIcon,
+        step: 'visual-lens-search'
+    },
 ];
 
 const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];

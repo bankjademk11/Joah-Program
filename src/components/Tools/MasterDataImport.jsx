@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase as defaultSupabase } from "../../utils/supabaseClient";
 
 const DEFAULT_BRANCH = "ໂພນຕ້ອງ";
+const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "ວັງຊາຍ"];
 const BATCH_SIZE = 500;
 
 const aliases = {
@@ -202,7 +203,7 @@ export function parseStoreInventorySheet(sheet, branchId, source, updatedBy) {
 
 export default function MasterDataImport({
   supabase,
-  branchOptions = [DEFAULT_BRANCH],
+  branchOptions = BRANCH_OPTIONS,
   defaultBranch = DEFAULT_BRANCH,
   tableName = "master_data",
   updatedBy = "excel-import",
@@ -557,12 +558,26 @@ export default function MasterDataImport({
             .eq("branch_id", branchId)
             .in("barcode_no", barcodes);
 
+          // Fix: keep a full list of existing rows per barcode instead of
+          // letting a single "barcode-only" fallback key get silently
+          // overwritten. That old behaviour could point two different
+          // shelf_location rows in the same batch at the same existing
+          // `id`, which made Postgres reject the upsert with
+          // "ON CONFLICT DO UPDATE command cannot affect row a second
+          // time" (surfaced by PostgREST as a 500) and aborted the
+          // whole import partway through.
           const existingMap = new Map();
+          const existingByBarcode = new Map();
+
           if (existingRows) {
             existingRows.forEach((item) => {
               const k = `${item.barcode_no}::${item.shelf_location || ""}`;
               existingMap.set(k, item);
-              if (!existingMap.has(item.barcode_no)) existingMap.set(item.barcode_no, item);
+
+              if (!existingByBarcode.has(item.barcode_no)) {
+                existingByBarcode.set(item.barcode_no, []);
+              }
+              existingByBarcode.get(item.barcode_no).push(item);
             });
           }
 
@@ -572,7 +587,19 @@ export default function MasterDataImport({
           batch.forEach((row) => {
             const master = masterMap.get(row.barcode_no);
             const key = `${row.barcode_no}::${row.shelf_location || ""}`;
-            const existing = existingMap.get(key) || existingMap.get(row.barcode_no);
+
+            // Exact composite match first (barcode + shelf_location).
+            let existing = existingMap.get(key);
+
+            // Only fall back to a bare-barcode match when it's
+            // unambiguous: the incoming row has no shelf_location AND
+            // there is exactly one existing DB row for that barcode.
+            if (!existing && !row.shelf_location) {
+              const candidates = existingByBarcode.get(row.barcode_no) || [];
+              if (candidates.length === 1) {
+                existing = candidates[0];
+              }
+            }
 
             if (existing?.id) {
               existingUpdates.push({
@@ -602,10 +629,17 @@ export default function MasterDataImport({
             }
           });
 
-          if (existingUpdates.length > 0) {
+          // Safety net: never let the same `id` appear twice in one
+          // upsert batch, even if some future edge case slips past the
+          // matching logic above. Keeps the last occurrence.
+          const dedupedUpdates = [
+            ...new Map(existingUpdates.map((u) => [u.id, u])).values(),
+          ];
+
+          if (dedupedUpdates.length > 0) {
             const { error: err1 } = await client
               .from("store_inventory")
-              .upsert(existingUpdates, { onConflict: "id" });
+              .upsert(dedupedUpdates, { onConflict: "id" });
             if (err1) throw err1;
           }
 
@@ -996,13 +1030,12 @@ export default function MasterDataImport({
                       setParsed(null);
                       setNotice(null);
                     }}
-                    className={`rounded-2xl px-4 py-2.5 text-xs font-extrabold transition shadow-sm border ${
-                      importMode === "master_data"
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
+                    className={`rounded-2xl px-4 py-2.5 text-xs font-extrabold transition shadow-sm border ${importMode === "master_data"
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
                   >
-                    📦 1. อัปโหลด Master Data (master_data)
+                    📦 1. ອັບໂຫລດ Master Data (master_data)
                   </button>
                   <button
                     type="button"
@@ -1012,13 +1045,12 @@ export default function MasterDataImport({
                       setParsed(null);
                       setNotice(null);
                     }}
-                    className={`rounded-2xl px-4 py-2.5 text-xs font-extrabold transition shadow-sm border ${
-                      importMode === "store_inventory"
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
+                    className={`rounded-2xl px-4 py-2.5 text-xs font-extrabold transition shadow-sm border ${importMode === "store_inventory"
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
                   >
-                    🏬 2. อัปโหลด Store Inventory ({branchId})
+                    🏬 2. ອັບໂຫລດ Store Inventory ({branchId}) · shelf_location ✓
                   </button>
                 </div>
               </div>
@@ -1064,14 +1096,14 @@ export default function MasterDataImport({
               <div
                 key={step.no}
                 className={`relative flex items-center gap-3 px-4 py-4 sm:px-5 ${index < 3
-                    ? "border-b border-slate-100 sm:border-b-0 sm:border-r"
-                    : ""
+                  ? "border-b border-slate-100 sm:border-b-0 sm:border-r"
+                  : ""
                   }`}
               >
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold ${step.active
-                      ? "bg-emerald-500 text-white"
-                      : "bg-slate-100 text-slate-400"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-slate-100 text-slate-400"
                     }`}
                 >
                   {step.no}
@@ -1080,8 +1112,8 @@ export default function MasterDataImport({
                 <div>
                   <div
                     className={`text-sm font-bold ${step.active
-                        ? "text-slate-900"
-                        : "text-slate-400"
+                      ? "text-slate-900"
+                      : "text-slate-400"
                       }`}
                   >
                     {step.title}
@@ -1123,14 +1155,14 @@ export default function MasterDataImport({
         {notice && (
           <div
             className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-4 shadow-sm ${notice.ok
-                ? "border-emerald-200 bg-emerald-50"
-                : "border-rose-200 bg-rose-50"
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-rose-200 bg-rose-50"
               }`}
           >
             <div
               className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm font-black ${notice.ok
-                  ? "bg-emerald-500 text-white"
-                  : "bg-rose-500 text-white"
+                ? "bg-emerald-500 text-white"
+                : "bg-rose-500 text-white"
                 }`}
             >
               {notice.ok ? "✓" : "!"}
@@ -1139,8 +1171,8 @@ export default function MasterDataImport({
             <div>
               <div
                 className={`text-sm font-bold ${notice.ok
-                    ? "text-emerald-900"
-                    : "text-rose-900"
+                  ? "text-emerald-900"
+                  : "text-rose-900"
                   }`}
               >
                 {notice.ok
@@ -1150,8 +1182,8 @@ export default function MasterDataImport({
 
               <p
                 className={`mt-0.5 text-sm leading-6 ${notice.ok
-                    ? "text-emerald-700"
-                    : "text-rose-700"
+                  ? "text-emerald-700"
+                  : "text-rose-700"
                   }`}
               >
                 {notice.text}
@@ -1245,16 +1277,16 @@ export default function MasterDataImport({
             {/* Auto Sync */}
             <div
               className={`rounded-3xl border p-5 shadow-sm transition ${syncStore
-                  ? "border-emerald-200 bg-emerald-50/70"
-                  : "border-slate-200 bg-white"
+                ? "border-emerald-200 bg-emerald-50/70"
+                : "border-slate-200 bg-white"
                 }`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div
                     className={`flex h-11 w-11 items-center justify-center rounded-2xl ${syncStore
-                        ? "bg-emerald-500 text-white"
-                        : "bg-slate-100"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-100"
                       }`}
                   >
                     🔄
@@ -1277,14 +1309,14 @@ export default function MasterDataImport({
                   disabled={isWorking}
                   aria-label="ເປີດ ຫຼື ປິດ Sync"
                   className={`relative h-7 w-12 rounded-full transition ${syncStore
-                      ? "bg-emerald-500"
-                      : "bg-slate-300"
+                    ? "bg-emerald-500"
+                    : "bg-slate-300"
                     }`}
                 >
                   <span
                     className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${syncStore
-                        ? "left-6"
-                        : "left-1"
+                      ? "left-6"
+                      : "left-1"
                       }`}
                   />
                 </button>
@@ -1408,8 +1440,8 @@ export default function MasterDataImport({
 
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${inspectResult.needUpdateCount > 0
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-emerald-100 text-emerald-700"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-emerald-100 text-emerald-700"
                           }`}
                       >
                         {formatNumber(
@@ -1483,8 +1515,8 @@ export default function MasterDataImport({
                 );
               }}
               className={`relative overflow-hidden rounded-[28px] border-2 border-dashed bg-white shadow-sm transition ${dragging
-                  ? "border-emerald-500 bg-emerald-50/50"
-                  : "border-slate-200"
+                ? "border-emerald-500 bg-emerald-50/50"
+                : "border-slate-200"
                 }`}
             >
               <input
@@ -1501,8 +1533,8 @@ export default function MasterDataImport({
                 <div className="mx-auto max-w-2xl text-center">
                   <div
                     className={`mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] text-4xl shadow-sm transition ${dragging
-                        ? "bg-emerald-500 text-white"
-                        : "bg-slate-100"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-100"
                       }`}
                   >
                     {dragging ? "↓" : "↑"}

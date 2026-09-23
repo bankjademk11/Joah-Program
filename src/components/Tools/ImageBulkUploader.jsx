@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { 
-    UploadCloud, FolderOpen, CheckCircle2, AlertCircle, RefreshCw, 
+import {
+    UploadCloud, FolderOpen, CheckCircle2, AlertCircle, RefreshCw,
     X, Image as ImageIcon, Layers, FileCheck, ArrowRight, Play, Pause, Database, Table
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const BUCKET_NAME = 'product-images';
-const CONCURRENCY_LIMIT = 8; // อัปโหลดพร้อมกัน 8 ไฟล์ต่อรอบเพื่อให้เร็วและไม่สะดุด
+const CONCURRENCY_LIMIT = 8; // ອັບໂຫລດพร้อมกัน 8 ไฟล์ต่อรอบเพื่อให้เร็วและไม่สะดุด
 
 const ImageBulkUploader = ({ onClose }) => {
     const [files, setFiles] = useState([]);
@@ -19,7 +19,7 @@ const ImageBulkUploader = ({ onClose }) => {
     const excelInputRef = useRef(null);
 
     const handleFolderSelect = (e) => {
-        const selectedFiles = Array.from(e.target.files || []).filter(f => 
+        const selectedFiles = Array.from(e.target.files || []).filter(f =>
             /\.(png|jpe?g|webp|gif)$/i.test(f.name)
         );
 
@@ -96,12 +96,12 @@ const ImageBulkUploader = ({ onClose }) => {
             setFiles(extractedFiles);
             setProgress({ total: extractedFiles.length, completed: 0, failed: 0, currentFile: '' });
             setLogs([`✅ ດຶງຮູບພາບຈາກ Excel ສຳເລັດ ${extractedFiles.length.toLocaleString()} ຮູບ ພ້ອມອັບໂຫຼດແລ້ວ!`]);
-            
+
         } catch (error) {
             console.error(error);
             setLogs(prev => [`❌ ເກີດຂໍ້ຜິດພາດໃນການອ່ານ Excel: ${error.message}`, ...prev]);
         }
-        
+
         // Clear input so same file can be selected again
         if (excelInputRef.current) excelInputRef.current.value = '';
     };
@@ -205,7 +205,7 @@ const ImageBulkUploader = ({ onClose }) => {
     return (
         <div className="fixed inset-0 z-[2000] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 select-none font-lao">
             <div className="w-full max-w-2xl bg-slate-900 border border-purple-500/40 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(168,85,247,0.3)] flex flex-col max-h-[90vh]">
-                
+
                 {/* Header */}
                 <div className="px-6 py-5 bg-gradient-to-r from-purple-950/80 via-slate-900 to-slate-950 border-b border-purple-500/20 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -222,7 +222,7 @@ const ImageBulkUploader = ({ onClose }) => {
                         </div>
                     </div>
                     {onClose && (
-                        <button 
+                        <button
                             onClick={onClose}
                             disabled={isUploading}
                             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
@@ -314,9 +314,9 @@ const ImageBulkUploader = ({ onClose }) => {
                                     return (
                                         <div key={idx} className="flex flex-col items-center gap-1.5 group">
                                             <div className="w-16 h-16 rounded-xl bg-black border border-emerald-500/30 overflow-hidden flex items-center justify-center relative">
-                                                <img 
-                                                    src={objUrl} 
-                                                    alt={barcode} 
+                                                <img
+                                                    src={objUrl}
+                                                    alt={barcode}
                                                     className="w-full h-full object-cover"
                                                     onLoad={() => URL.revokeObjectURL(objUrl)}
                                                 />
@@ -331,7 +331,7 @@ const ImageBulkUploader = ({ onClose }) => {
                                     );
                                 })}
                             </div>
-                            
+
                             {/* File Size Summary */}
                             <div className="mt-3 p-3 rounded-xl bg-slate-900 border border-slate-700/50 flex flex-col gap-2">
                                 <div className="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -372,7 +372,7 @@ const ImageBulkUploader = ({ onClose }) => {
 
                             {/* Progress Bar */}
                             <div className="w-full h-3.5 rounded-full bg-slate-900 overflow-hidden border border-purple-500/30 relative">
-                                <div 
+                                <div
                                     className="h-full bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-500 rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(168,85,247,0.8)]"
                                     style={{ width: `${percent}%` }}
                                 />

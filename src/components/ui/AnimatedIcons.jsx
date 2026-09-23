@@ -1,6 +1,6 @@
 import React from 'react';
 
-// 1. ไอคอนอัปโหลด (กระดาษลอยขึ้นพร้อมลูกศร)
+// 1. ไอคอนອັບໂຫລດ (กระดาษลอยขึ้นพร้อมลูกศร)
 export const UploadFileIcon = ({ className }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
     <style>

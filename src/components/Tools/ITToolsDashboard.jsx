@@ -8,6 +8,8 @@ import {
   X,
   Search,
   Database,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
 
@@ -63,7 +65,23 @@ const IT_SERVICES = [
       { label: 'Key', val: 'barcode + branch' },
       { label: 'Format', val: '.xlsx / .csv' }
     ],
-    tags: ['Master Data', 'Excel Import', 'Upsert', 'Branch Filter'],
+  },
+  {
+    id: 'visual-lens-search',
+    title: 'Visual Product Search (Joah Lens)',
+    category: 'AI & SEARCH',
+    badge: 'AI LENS READY',
+    badgeColor: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+    icon: Camera,
+    iconColor: 'text-violet-600 dark:text-violet-400',
+    iconBg: 'bg-violet-100 dark:bg-violet-950/60',
+    desc: 'ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens: ຖ່າຍຮູບສິນຄ້າທີ່ບໍ່ມີບາໂຄ້ດ ຫຼື ເລືອກຮູບເພື່ອ Match ກັບຖານຂໍ້ມູນຮູບໃນ Supabase Bucket (product-images) ອັດຕະໂນມັດ.',
+    metrics: [
+      { label: 'Bucket', val: 'product-images' },
+      { label: 'Engine', val: 'Visual Match' },
+      { label: 'Input', val: 'Live Cam / Upload' }
+    ],
+    tags: ['Google Lens Style', 'Supabase Bucket', 'Live Camera', 'Visual Match'],
     isReady: true
   }
 ];
@@ -72,7 +90,7 @@ export default function ITToolsDashboard({ onBack, onLaunchTool }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT'];
+  const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT', 'AI & SEARCH'];
 
   const filteredServices = IT_SERVICES.filter(service => {
     if (selectedCategory !== 'ALL' && service.category !== selectedCategory) return false;
