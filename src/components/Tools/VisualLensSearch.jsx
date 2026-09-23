@@ -135,129 +135,144 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   };
 
   // Perform Visual AI / Lens matching
-  const performLensSearch = async (imgDataUrl) => {
+  // Perform Visual AI / Lens matching
+  // imgDataUrl can be:
+  //   A) a data: URI from camera / file upload → send to Gemini Vision
+  //   B) an https:// URL from the bucket → extract barcode from URL, search DB directly
+  const performLensSearch = async (imgDataUrl, knownBarcode = null) => {
     setIsSearching(true);
     setSearchResults([]);
     setErrorMsg('');
-    setSearchStatus('ກຳລັງສົ່ງຮູບໃຫ້ AI (Gemini Vision) ວິເຄາະສິນຄ້າ...');
 
     try {
       const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-      
-      let base64Data = '';
-      let mimeType = 'image/jpeg';
-      
-      if (imgDataUrl.startsWith('data:')) {
-        const parts = imgDataUrl.split(',');
-        mimeType = parts[0].split(';')[0].split(':')[1] || 'image/jpeg';
-        base64Data = parts[1];
-      } else {
-        // If it's a URL, fetch and convert to base64
-        const resp = await fetch(imgDataUrl);
-        const blob = await resp.blob();
-        mimeType = blob.type || 'image/jpeg';
-        base64Data = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result.split(',')[1]);
-          reader.readAsDataURL(blob);
-        });
-      }
 
       let detectedKeywords = [];
-      let detectedBarcode = null;
+      let detectedBarcode = knownBarcode || null;
       let aiDescription = '';
 
-      if (geminiApiKey) {
-        // Call Gemini 2.5 Flash Vision API
-        const prompt = `You are a warehouse/retail product visual recognition assistant.
-Look closely at this product image.
-1. If there is any visible barcode numbers, text on packaging, brand name, model, size, or Lao/Thai/English product description, extract it.
-2. What exact type of product is this? (e.g. ruler, pen, cup, notebook, scissors, tape, etc. in Lao, Thai, and English)
-3. Return ONLY a valid JSON object without markdown formatting:
-{
-  "barcode": "numbers if visible else null",
-  "product_type": "short item name",
-  "keywords": ["keyword1", "keyword2", "brand_if_any", "size_if_any", "color_if_any", "thai_name", "lao_name"],
-  "description": "brief description in Lao"
-}`;
-
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: prompt },
-                  { inline_data: { mime_type: mimeType, data: base64Data } }
-                ]
-              }],
-              generationConfig: {
-                temperature: 0.1,
-                response_mime_type: "application/json"
-              }
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (textResponse) {
-              const parsed = JSON.parse(textResponse);
-              detectedBarcode = parsed.barcode;
-              detectedKeywords = parsed.keywords || [];
-              aiDescription = parsed.description || parsed.product_type || '';
-              if (parsed.product_type) detectedKeywords.unshift(parsed.product_type);
-            }
-          }
-        } catch (apiErr) {
-          console.warn('Gemini vision API error, falling back to barcode check:', apiErr);
+      // ─── PATH A: bucket URL → barcode is in the URL filename, no CORS fetch ───
+      if (!imgDataUrl.startsWith('data:') && !knownBarcode) {
+        // Extract barcode from URL like …/product-images/1234560005867.png
+        const urlFilename = imgDataUrl.split('/').pop() || '';
+        const fromUrl = urlFilename.replace(/\.[^/.]+$/, '');
+        if (fromUrl.length >= 4) {
+          detectedBarcode = fromUrl;
         }
       }
 
-      setSearchStatus(aiDescription ? `AI ວິເຄາະ: ${aiDescription} (ກຳລັງຄົ້ນຫາໃນຖານຂໍ້ມູນ...)` : 'ກຳລັງຄົ້ນຫາໃນຖານຂໍ້ມູນ...');
+      // ─── PATH B: data: URI from camera / file upload → Gemini Vision ───
+      if (imgDataUrl.startsWith('data:') && geminiApiKey) {
+        setSearchStatus('ກຳລັງສົ່ງຮູບໃຫ້ Gemini Vision AI ວິເຄາະ...');
+        const parts = imgDataUrl.split(',');
+        const mimeType = parts[0].split(';')[0].split(':')[1] || 'image/jpeg';
+        const base64Data = parts[1];
+
+        if (base64Data) {
+          const prompt = `You are a warehouse/retail product visual recognition assistant.
+Look closely at this product image.
+1. If there is any visible barcode numbers, text on packaging, brand name, model, size, or Lao/Thai/English product description, extract it.
+2. What exact type of product is this? (e.g. ruler, pen, cup, notebook, scissors, tape, etc.)
+3. Return ONLY a valid JSON object, no markdown:
+{
+  "barcode": "numbers if visible else null",
+  "product_type": "short English item name",
+  "keywords": ["english_name", "thai_name", "lao_name", "brand_if_any", "size_if_any"],
+  "description": "brief description in Lao"
+}`;
+
+          try {
+            const res = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [
+                      { text: prompt },
+                      { inline_data: { mime_type: mimeType, data: base64Data } }
+                    ]
+                  }],
+                  generationConfig: { temperature: 0.1 }
+                })
+              }
+            );
+
+            if (res.ok) {
+              const data = await res.json();
+              let textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              // Strip markdown code fences if model adds them
+              textResponse = textResponse.replace(/```json?\n?|```/g, '').trim();
+              if (textResponse) {
+                const parsed = JSON.parse(textResponse);
+                if (parsed.barcode && String(parsed.barcode).length >= 4) {
+                  detectedBarcode = String(parsed.barcode);
+                }
+                detectedKeywords = parsed.keywords || [];
+                aiDescription = parsed.description || parsed.product_type || '';
+                if (parsed.product_type) detectedKeywords.unshift(parsed.product_type);
+              }
+            } else {
+              const errBody = await res.text();
+              console.warn('Gemini API error response:', res.status, errBody);
+            }
+          } catch (apiErr) {
+            console.warn('Gemini vision fetch error:', apiErr);
+          }
+        }
+      }
+
+      setSearchStatus(
+        detectedBarcode
+          ? `ກຳລັງຄົ້ນຫາດ້ວຍບາໂຄ້ດ: ${detectedBarcode}...`
+          : aiDescription
+          ? `AI ວິເຄາະ: "${aiDescription}" — ກຳລັງຄົ້ນຫາ...`
+          : 'ກຳລັງຄົ້ນຫາໃນຖານຂໍ້ມູນ...'
+      );
 
       let results = [];
 
-      // 1. If Gemini found a barcode on the product packaging
-      if (detectedBarcode && detectedBarcode.length >= 4) {
-        const { data: directBarcodeMatch } = await supabase
+      // ─── 1. Search by barcode (exact or partial) ───────────────────────────
+      if (detectedBarcode) {
+        const { data: barcodeMatch, error: bErr } = await supabase
           .from('master_data')
           .select('barcode, item_name, product_name_la, category_1, category_2')
           .ilike('barcode', `%${detectedBarcode}%`)
-          .limit(5);
+          .limit(8);
 
-        if (directBarcodeMatch && directBarcodeMatch.length > 0) {
-          results.push(...directBarcodeMatch.map(p => ({
+        if (bErr) console.error('Barcode DB error:', bErr);
+
+        if (barcodeMatch && barcodeMatch.length > 0) {
+          results.push(...barcodeMatch.map(p => ({
             ...p,
-            confidence: 99,
-            matchReason: `ກົງກັບບາໂຄ້ດທີ່ພົບໃນຮູບ: ${detectedBarcode}`,
+            confidence: detectedBarcode === p.barcode ? 100 : 95,
+            matchReason: `ກົງກັບບາໂຄ້ດ: ${p.barcode}`,
             image_url: getProductImageUrl(p.barcode)
           })));
         }
       }
 
-      // 2. Search master_data using extracted visual keywords (Lao/English/Thai)
-      if (detectedKeywords.length > 0) {
+      // ─── 2. Search by keywords from Gemini ──────────────────────────────
+      if (detectedKeywords.length > 0 && results.length < 8) {
         for (const kw of detectedKeywords.slice(0, 5)) {
           if (!kw || kw.length < 2) continue;
-          const { data: kwMatches } = await supabase
+          const { data: kwMatches, error: kErr } = await supabase
             .from('master_data')
             .select('barcode, item_name, product_name_la, category_1, category_2')
             .or(`item_name.ilike.%${kw}%,product_name_la.ilike.%${kw}%,category_1.ilike.%${kw}%,category_2.ilike.%${kw}%`)
             .limit(10);
 
+          if (kErr) console.error('Keyword DB error:', kErr);
+
           if (kwMatches && kwMatches.length > 0) {
             kwMatches.forEach((p, idx) => {
               if (!results.some(r => r.barcode === p.barcode)) {
-                // If this product also has an image in our bucket, give higher confidence
                 const hasBucketImage = allImages.some(img => img.barcode === p.barcode);
-                const score = hasBucketImage ? Math.max(95 - idx * 5, 75) : Math.max(85 - idx * 5, 60);
-
                 results.push({
                   ...p,
-                  confidence: score,
-                  matchReason: `ກົງກັບຄຳຄົ້ນຫາ: "${kw}"${hasBucketImage ? ' (ມີຮູບໃນ Bucket)' : ''}`,
+                  confidence: hasBucketImage ? Math.max(90 - idx * 5, 70) : Math.max(80 - idx * 5, 60),
+                  matchReason: `AI ພົບຄຳ: "${kw}"${hasBucketImage ? ' · ມີຮູບໃນ Bucket' : ''}`,
                   image_url: getProductImageUrl(p.barcode)
                 });
               }
@@ -267,18 +282,23 @@ Look closely at this product image.
         }
       }
 
-      // Sort results by confidence
       results.sort((a, b) => b.confidence - a.confidence);
 
       if (results.length > 0) {
         setSearchResults(results.slice(0, 8));
-        setSearchStatus(`ພົບສິນຄ້າທີ່ກົງກັນ ${results.length} ລາຍການ ${aiDescription ? `[${aiDescription}]` : ''}`);
+        setSearchStatus(`ພົບ ${results.length} ລາຍການ${aiDescription ? ` · AI: "${aiDescription}"` : ''}`);
       } else {
-        setSearchStatus(aiDescription ? `AI ວິເຄາະວ່າແມ່ນ: "${aiDescription}" ແຕ່ບໍ່ພົບສິນຄ້ານີ້ໃນຖານຂໍ້ມູນ` : 'ບໍ່ພົບສິນຄ້າທີ່ກົງກັນໃນຖານຂໍ້ມູນ');
+        setSearchStatus(
+          detectedBarcode
+            ? `ບໍ່ພົບສິນຄ້າທີ່ມີບາໂຄ້ດ ${detectedBarcode} ໃນ master_data`
+            : aiDescription
+            ? `AI ໄດ້: "${aiDescription}" ແຕ່ບໍ່ພົບໃນ master_data`
+            : 'ບໍ່ພົບສິນຄ້າ — ລອງຖ່າຍຮູບຊັດຂຶ້ນ ຫຼື ໃຫ້ເຫັນຕົວໜັງສືຊັດ'
+        );
       }
     } catch (err) {
       console.error('Visual search error:', err);
-      setErrorMsg('ເກີດຂໍ້ຜິດພາດຂະນະຄົ້ນຫາ: ' + err.message);
+      setErrorMsg('ເກີດຂໍ້ຜິດພາດ: ' + err.message);
     } finally {
       setIsSearching(false);
     }
@@ -485,7 +505,8 @@ Look closely at this product image.
                         const url = getProductImageUrl(img.barcode);
                         setImagePreview(url);
                         setSelectedImage(url);
-                        performLensSearch(url);
+                        // Pass knownBarcode so we skip CORS-blocked fetch
+                        performLensSearch(url, img.barcode);
                       }}
                       className="aspect-square rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500 p-1 overflow-hidden transition group relative"
                     >
