@@ -65,6 +65,8 @@ const IT_SERVICES = [
       { label: 'Key', val: 'barcode + branch' },
       { label: 'Format', val: '.xlsx / .csv' }
     ],
+    tags: ['Excel Import', 'Supabase Upsert', 'Branch Filter', 'Store Sync'],
+    isReady: true
   },
   {
     id: 'visual-lens-search',
@@ -233,7 +235,7 @@ export default function ITToolsDashboard({ onBack, onLaunchTool }) {
 
                   {/* Tags */}
                   <div className="flex flex-wrap gap-1.5">
-                    {service.tags.map((t, idx) => (
+                    {(Array.isArray(service.tags) ? service.tags : []).map((t, idx) => (
                       <span
                         key={idx}
                         className="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60"
