@@ -1374,70 +1374,74 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* IT Operations Hub */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
-                    {/* Header Banner */}
-                    <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
-                      <img
-                        src={ITOperationsHubImg}
-                        alt="IT Operations Hub"
-                        className="w-full h-full object-cover"
-                      />
-                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                        IT Tools
-                      </span>
-                    </div>
+                  {/* IT Operations Hub (HQ Only) */}
+                  {isAdmin && (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
+                      {/* Header Banner */}
+                      <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
+                        <img
+                          src={ITOperationsHubImg}
+                          alt="IT Operations Hub"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          IT Tools
+                        </span>
+                      </div>
 
-                    {/* Content */}
-                    <div className="p-6 flex flex-col gap-4 w-full">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">IT Operations Hub</h3>
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      {/* Content */}
+                      <div className="p-6 flex flex-col gap-4 w-full">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">IT Operations Hub</h3>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">ສູນລວມເຄື່ອງມືບຳລຸງຮັກສາລະບົບ ແລະ ວຽກ Routine</p>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">ສູນລວມເຄື່ອງມືບຳລຸງຮັກສາລະບົບ ແລະ ວຽກ Routine</p>
+
+                        <button
+                          onClick={() => setStep('it-tools-ps5')}
+                          className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        >
+                          <Wrench size={16} />
+                          <span>Open IT Tools Hub</span>
+                        </button>
                       </div>
-
-                      <button
-                        onClick={() => setStep('it-tools-ps5')}
-                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                      >
-                        <Wrench size={16} />
-                        <span>Open IT Tools Hub</span>
-                      </button>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Joah Lens - Visual Product Search Card */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
-                    <div className="w-full h-32 bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-radial-at-c from-white/10 to-transparent pointer-events-none" />
-                      <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-xl">
-                        <Sparkles size={32} />
-                      </div>
-                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20 text-white border border-white/30 backdrop-blur-sm">
-                        AI LENS
-                      </span>
-                    </div>
-
-                    <div className="p-6 flex flex-col gap-4 w-full">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Joah Lens Search</h3>
-                          <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                  {/* Joah Lens - Visual Product Search Card (HQ Only) */}
+                  {isAdmin && (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
+                      <div className="w-full h-32 bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-radial-at-c from-white/10 to-transparent pointer-events-none" />
+                        <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-xl">
+                          <Sparkles size={32} />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens (product-images)</p>
+                        <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20 text-white border border-white/30 backdrop-blur-sm">
+                          AI LENS
+                        </span>
                       </div>
 
-                      <button
-                        onClick={() => setStep('visual-lens-search')}
-                        className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
-                      >
-                        <Sparkles size={16} />
-                        <span>ເປີດ Joah Lens (ຖ່າຍຮູບ)</span>
-                      </button>
+                      <div className="p-6 flex flex-col gap-4 w-full">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Joah Lens Search</h3>
+                            <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens (product-images)</p>
+                        </div>
+
+                        <button
+                          onClick={() => setStep('visual-lens-search')}
+                          className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                        >
+                          <Sparkles size={16} />
+                          <span>ເປີດ Joah Lens (ຖ່າຍຮູບ)</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
                   {showAdminMenu && (
@@ -1913,9 +1917,10 @@ function AppContent() {
             </div>
           )}
 
-          {step === 'it-tools-ps5' && (
+          {step === 'it-tools-ps5' && isAdmin && (
             <div className="fixed inset-0 z-[9999] bg-[#07090e] flex flex-col animate-fade-in overflow-y-auto">
               <ITToolsDashboard
+                user={user}
                 onBack={() => setStep('upload')}
                 onLaunchTool={(toolId) => {
                   if (toolId === 'barcode-inspector') {
@@ -1924,7 +1929,7 @@ function AppContent() {
                     setStep('hq-command-center-v2');
                   } else if (toolId === 'master-data-import') {
                     setStep('master-data-import');
-                  } else if (toolId === 'visual-lens-search') {
+                  } else if (toolId === 'visual-lens-search' && isAdmin) {
                     setStep('visual-lens-search');
                   }
                 }}
@@ -1955,9 +1960,10 @@ function AppContent() {
             </div>
           )}
 
-          {step === 'visual-lens-search' && (
+          {step === 'visual-lens-search' && isAdmin && (
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <VisualLensSearch
+                user={user}
                 onBack={() => setStep('it-tools-ps5')}
                 branchId={user?.branch_id || 'ໂພນຕ້ອງ'}
               />

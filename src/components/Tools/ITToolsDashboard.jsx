@@ -88,13 +88,17 @@ const IT_SERVICES = [
   }
 ];
 
-export default function ITToolsDashboard({ onBack, onLaunchTool }) {
+export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const isHQ = user?.role === 'HQ';
   const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT', 'AI & SEARCH'];
 
   const filteredServices = IT_SERVICES.filter(service => {
+    // Hide Visual Lens Search from non-HQ users
+    if (service.id === 'visual-lens-search' && !isHQ) return false;
+
     if (selectedCategory !== 'ALL' && service.category !== selectedCategory) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();

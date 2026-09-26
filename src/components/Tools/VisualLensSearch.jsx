@@ -65,7 +65,9 @@ function loadImage(src) {
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function VisualLensSearch({ onBack, onSelectProduct, branchId = 'ໂພນຕ້ອງ' }) {
+export default function VisualLensSearch({ onBack, onSelectProduct, branchId = 'ໂພນຕ້ອງ', user }) {
+  const isHQ = user?.role === 'HQ';
+
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -94,9 +96,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
 
   // ── 1. Fetch bucket images list ──────────────────────────────────────────
   useEffect(() => {
+    if (!isHQ) return;
     fetchBucketImages();
     return () => stopCamera();
-  }, []);
+  }, [isHQ]);
 
   async function fetchBucketImages() {
     setIsLoadingImages(true);
@@ -302,6 +305,28 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
 
   const totalIndexed = Object.keys(embeddingCache).length;
   const indexingDone = modelReady && !modelLoading && totalIndexed > 0;
+
+  if (!isHQ) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-4 shadow-lg shadow-rose-500/10">
+          <AlertCircle size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2">ບໍ່ມີສິດເຂົ້າເຖິງ (HQ Only)</h2>
+        <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+          ຟັງຊັນ Joah Lens Search (ຄົ້ນຫາສິນຄ້າຈາກຮູບພາບ) ສະຫງວນໄວ້ສະເພາະພະນັກງານລະດັບ HQ ເທົ່ານັ້ນ.
+        </p>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition"
+          >
+            ກັບຄືນ
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
