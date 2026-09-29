@@ -53,8 +53,12 @@ export default defineConfig({
       }
     })
   ],
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+  },
   build: {
     target: 'es2015',
+    minify: 'esbuild',
   },
   assetsInclude: ['**/*.xlsx'], // บอก Vite ວ່າ .xlsx ແມ່ນ Asset file
   server: {

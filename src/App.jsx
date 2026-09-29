@@ -32,7 +32,7 @@ import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
 import StoreRequest from './components/features/store/StoreRequest';
 import StoreRequestManager from './components/features/store/StoreRequestManager';
-import StoreInventoryMockup from './components/features/store/StoreInventoryMockup';
+import StoreInventoryDashboard from './components/features/store/StoreInventoryDashboard';
 import StoreInventory from './components/features/store/StoreInventory';
 import StoreInboxPanel from './components/features/store/StoreInboxPanel';
 import StoreQuickAddPanel from './components/features/store/StoreQuickAddPanel';
@@ -93,6 +93,10 @@ function AppContent() {
 
   const [step, setStep] = useState(() => {
     const path = window.location.pathname.toLowerCase();
+    const urlParams = new URLSearchParams(window.location.search);
+    const stepParam = urlParams.get('step');
+    if (stepParam) return stepParam;
+    
     if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) return 'check-price-ultimate';
     if (path.startsWith('/checkprice')) return 'check-price';
     if (path.startsWith('/landing')) return 'landing';
@@ -101,11 +105,51 @@ function AppContent() {
 
   // Sync URL when step changes so user can bookmark or copy link
   useEffect(() => {
-    const newPath = step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
-    if (window.location.pathname !== newPath) {
-      window.history.pushState(null, '', newPath);
+    if (!window.history.state || window.history.state.step !== step) {
+      let newPath = step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
+      
+      // If it's a step that isn't mapped to a path, append it as a query param
+      if (newPath === '/' && step !== 'upload') {
+        newPath = `/?step=${step}`;
+      }
+
+      // If we are replacing the initial state, use replaceState, otherwise pushState
+      if (window.history.state === null) {
+        window.history.replaceState({ step }, '', newPath);
+      } else {
+        window.history.pushState({ step }, '', newPath);
+      }
     }
   }, [step]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.step) {
+        setStep(event.state.step);
+      } else {
+        // Fallback if no state in history
+        const path = window.location.pathname.toLowerCase();
+        const urlParams = new URLSearchParams(window.location.search);
+        const stepParam = urlParams.get('step');
+        
+        if (stepParam) {
+          setStep(stepParam);
+        } else if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) {
+          setStep('check-price-ultimate');
+        } else if (path.startsWith('/checkprice')) {
+          setStep('check-price');
+        } else if (path.startsWith('/landing')) {
+          setStep('landing');
+        } else {
+          setStep('upload');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [workbook, setWorkbook] = useState(null);
   const [rawFile, setRawFile] = useState(null);
@@ -1744,7 +1788,7 @@ function AppContent() {
           )}
 
           {step === 'store-inventory-mockup' && (
-            <StoreInventoryMockup
+            <StoreInventoryDashboard
               onBack={() => setStep('upload')}
               currentUser={user}
               isAdmin={isAdmin}

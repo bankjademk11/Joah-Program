@@ -12,7 +12,7 @@ import { PHONTHONG_BRANCH, getPhonthongRackDecision } from '../../../utils/phont
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
 const MEGAMALL = 'ເມກ້າມໍ';
 
-const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) => {
+const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }) => {
   const toast = useToast();
 
   const [filterStatus, setFilterStatus] = useState('all');
@@ -1015,4 +1015,4 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   );
 };
 
-export default StoreInventoryMockup;
+export default StoreInventoryDashboard;
