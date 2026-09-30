@@ -40,6 +40,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraFacing, setCameraFacing] = useState('environment');
   const [copiedBarcode, setCopiedBarcode] = useState(null);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -444,14 +445,24 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                     className="group bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-xl p-3.5 flex gap-3.5 transition cursor-pointer"
                     onClick={() => onSelectProduct?.(item)}
                   >
-                    {/* Product thumbnail */}
-                    <div className="shrink-0 w-14 h-14 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
+                    {/* Product thumbnail (Click to zoom) */}
+                    <div
+                      className="shrink-0 w-16 h-16 rounded-xl bg-slate-950 border border-slate-800 hover:border-violet-500 overflow-hidden flex items-center justify-center relative cursor-zoom-in group/img transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setZoomedImage(item);
+                      }}
+                      title="ກົດເພື່ອເບິ່ງຮູບໃຫຍ່"
+                    >
                       <img
                         src={item.image_url}
                         alt={item.barcode}
                         onError={(e) => handleImageError(e, item.barcode)}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain p-1 group-hover/img:scale-110 transition-transform duration-200"
                       />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
+                        <Scan size={16} className="text-white drop-shadow" />
+                      </div>
                     </div>
 
                     {/* Info */}
@@ -534,6 +545,103 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
           </div>
         </div>
       </div>
+
+      {/* ── Large Image Preview Modal ───────────────────────── */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="relative bg-slate-900 border border-slate-750 rounded-2xl max-w-lg w-full p-5 shadow-2xl flex flex-col items-center gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setZoomedImage(null)}
+              className="absolute top-3 right-3 p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+              title="ປິດ"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Product Image Large */}
+            <div className="w-full max-h-[380px] bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center p-4 overflow-hidden">
+              <img
+                src={zoomedImage.image_url}
+                alt={zoomedImage.item_name}
+                onError={(e) => handleImageError(e, zoomedImage.barcode)}
+                className="max-h-[340px] w-auto max-w-full object-contain drop-shadow-lg"
+              />
+            </div>
+
+            {/* Product Details Header in Modal */}
+            <div className="w-full text-left">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-base font-bold text-white leading-snug">
+                  {zoomedImage.item_name}
+                </h3>
+                <span className={`shrink-0 text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                  zoomedImage.confidence >= 80
+                    ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
+                    : zoomedImage.confidence >= 60
+                      ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  ຄວາມຖືກຕ້ອງ {zoomedImage.confidence}%
+                </span>
+              </div>
+
+              {zoomedImage.product_name_la && (
+                <p className="text-sm text-slate-400 mt-1">{zoomedImage.product_name_la}</p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-slate-800">
+                {zoomedImage.price !== null && zoomedImage.price !== undefined ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <Tag size={13} className="text-amber-400" />
+                    {formatPrice(zoomedImage.price)} ₭
+                  </span>
+                ) : null}
+
+                <div className="flex items-center gap-1.5 bg-slate-800/80 px-3 py-1 rounded-lg">
+                  <span className="text-xs font-mono text-slate-300">{zoomedImage.barcode}</span>
+                  <button
+                    onClick={() => copyBarcode(zoomedImage.barcode)}
+                    className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                    title="Copy Barcode"
+                  >
+                    {copiedBarcode === zoomedImage.barcode ? (
+                      <CheckCircle2 size={13} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={13} />
+                    )}
+                  </button>
+                </div>
+
+                {zoomedImage.category_1 && (
+                  <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 flex items-center gap-1">
+                    <Layers size={11} /> {zoomedImage.category_1}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Select product button inside modal */}
+            {onSelectProduct && (
+              <button
+                onClick={() => {
+                  onSelectProduct(zoomedImage);
+                  setZoomedImage(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition flex items-center justify-center gap-2 mt-1"
+              >
+                <ExternalLink size={16} /> ເລືອກສິນຄ້ານີ້
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
