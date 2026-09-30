@@ -98,8 +98,6 @@ export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
   const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT', 'AI & SEARCH'];
 
   const filteredServices = IT_SERVICES.filter(service => {
-    // Hide Visual Lens Search from non-HQ users
-    if (service.id === 'visual-lens-search' && !isHQ) return false;
 
     if (selectedCategory !== 'ALL' && service.category !== selectedCategory) return false;
     if (searchQuery.trim()) {

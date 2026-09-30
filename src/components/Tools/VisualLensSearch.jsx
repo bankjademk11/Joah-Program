@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Camera, Upload, X, CheckCircle2, AlertCircle,
+  Camera, Upload, X, CheckCircle2,
   Copy, Scan, Layers, ExternalLink, SwitchCamera, RefreshCw, Tag
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
@@ -48,10 +48,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const streamRef = useRef(null);
 
   useEffect(() => {
-    if (!isHQ) return;
     checkService();
     return () => stopCamera();
-  }, [isHQ]);
+  }, []);
+
 
   async function checkService() {
     try {
@@ -193,28 +193,6 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     setErrorMsg('');
   };
 
-  // ── Access denied ──────────────────────────────────────────────────────────
-  if (!isHQ) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-5">
-          <AlertCircle size={26} className="text-slate-400" />
-        </div>
-        <h2 className="text-lg font-semibold text-white mb-2">ບໍ່ມີສິດເຂົ້າໃຊ້</h2>
-        <p className="text-sm text-slate-400 max-w-xs mb-6 leading-relaxed">
-          ຟັງຊັນຄົ້ນຫາດ້ວຍຮູບພາບໃຊ້ໄດ້ສະເພາະພະນັກງານ HQ ເທົ່ານັ້ນ
-        </p>
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium transition"
-          >
-            ກັບຄືນ
-          </button>
-        )}
-      </div>
-    );
-  }
 
   // ── Main UI ────────────────────────────────────────────────────────────────
   return (

@@ -125,7 +125,6 @@ const AppLauncher = ({ isOpen, onClose, onNavigate, user }) => {
         ? apps.filter(app => app.id === 'check-price')
         : apps.filter(app => {
             if (app.id === 'check-price-ultimate' && !isHQ) return false;
-            if (app.id === 'visual-lens-search' && !isHQ) return false;
             if (app.id === 'it-tools-ps5' && !isHQ) return false;
             return true;
         });

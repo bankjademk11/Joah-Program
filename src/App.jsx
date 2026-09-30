@@ -1455,40 +1455,38 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Joah Lens - Visual Product Search Card (HQ Only) */}
-                  {isAdmin && (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-xl hover:border-violet-500/30 transition-all group">
-                      <div className="w-full h-36 bg-slate-900 relative overflow-hidden">
-                        <img
-                          src={VisualLensCardImg}
-                          alt="Joah Lens Visual Search"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-                        <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-violet-600/90 text-white shadow-lg backdrop-blur-md border border-violet-400/30">
-                          AI LENS
-                        </span>
-                      </div>
-
-                      <div className="p-6 flex flex-col gap-4 w-full">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Joah Lens Search</h3>
-                            <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບອັດສະລິຍະ (AI Visual Match)</p>
-                        </div>
-
-                        <button
-                          onClick={() => setStep('visual-lens-search')}
-                          className="w-full py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-600/25 cursor-pointer active:scale-[0.98]"
-                        >
-                          <Sparkles size={16} />
-                          <span>ເປີດ Joah Lens (ຄົ້ນຫາດ້ວຍຮູບ)</span>
-                        </button>
-                      </div>
+                  {/* Joah Lens - Visual Product Search Card */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-xl hover:border-violet-500/30 transition-all group">
+                    <div className="w-full h-36 bg-slate-900 relative overflow-hidden">
+                      <img
+                        src={VisualLensCardImg}
+                        alt="Joah Lens Visual Search"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-violet-600/90 text-white shadow-lg backdrop-blur-md border border-violet-400/30">
+                        AI LENS
+                      </span>
                     </div>
-                  )}
+
+                    <div className="p-6 flex flex-col gap-4 w-full">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Joah Lens Search</h3>
+                          <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບອັດສະລິຍະ (AI Visual Match)</p>
+                      </div>
+
+                      <button
+                        onClick={() => setStep('visual-lens-search')}
+                        className="w-full py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-600/25 cursor-pointer active:scale-[0.98]"
+                      >
+                        <Sparkles size={16} />
+                        <span>ເປີດ Joah Lens (ຄົ້ນຫາດ້ວຍຮູບ)</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
                   {showAdminMenu && (
@@ -1976,7 +1974,7 @@ function AppContent() {
                     setStep('hq-command-center-v2');
                   } else if (toolId === 'master-data-import') {
                     setStep('master-data-import');
-                  } else if (toolId === 'visual-lens-search' && isAdmin) {
+                  } else if (toolId === 'visual-lens-search') {
                     setStep('visual-lens-search');
                   }
                 }}
@@ -2007,11 +2005,11 @@ function AppContent() {
             </div>
           )}
 
-          {step === 'visual-lens-search' && isAdmin && (
+          {step === 'visual-lens-search' && (
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <VisualLensSearch
                 user={user}
-                onBack={() => setStep('it-tools-ps5')}
+                onBack={() => setStep('upload')}
                 branchId={user?.branch_id || 'ໂພນຕ້ອງ'}
               />
             </div>
