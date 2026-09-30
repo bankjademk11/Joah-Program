@@ -30,21 +30,21 @@ async function searchByImageAPI(imageDataUrl, tta = false, topk = 10) {
 export default function VisualLensSearch({ onBack, onSelectProduct, branchId = 'ໂພນຕ້ອງ', user }) {
   const isHQ = user?.role === 'HQ';
 
-  const [imagePreview, setImagePreview]       = useState(null);
-  const [isSearching, setIsSearching]         = useState(false);
-  const [searchResults, setSearchResults]     = useState([]);
-  const [searchDone, setSearchDone]           = useState(false);
-  const [errorMsg, setErrorMsg]               = useState('');
-  const [highAccuracy, setHighAccuracy]       = useState(false);
-  const [serviceOnline, setServiceOnline]     = useState(null);
-  const [cameraActive, setCameraActive]       = useState(false);
-  const [cameraFacing, setCameraFacing]       = useState('environment');
-  const [copiedBarcode, setCopiedBarcode]     = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchDone, setSearchDone] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [highAccuracy, setHighAccuracy] = useState(false);
+  const [serviceOnline, setServiceOnline] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState('environment');
+  const [copiedBarcode, setCopiedBarcode] = useState(null);
 
-  const videoRef    = useRef(null);
-  const canvasRef   = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
-  const streamRef   = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     if (!isHQ) return;
@@ -95,7 +95,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const capturePhoto = () => {
     if (!videoRef.current) return;
     const canvas = canvasRef.current || document.createElement('canvas');
-    canvas.width  = videoRef.current.videoWidth  || 640;
+    canvas.width = videoRef.current.videoWidth || 640;
     canvas.height = videoRef.current.videoHeight || 480;
     canvas.getContext('2d').drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
@@ -147,26 +147,26 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
       (productsRes.data || []).forEach(p => { productMap[p.barcode] = p; });
 
       const priceMap = {};
-      (priceRes.data || []).forEach(p => { 
+      (priceRes.data || []).forEach(p => {
         if (p.barcode && p.price !== undefined && p.price !== null) {
           priceMap[p.barcode] = p.price;
         }
       });
 
       const results = apiResults.map(r => {
-        const p   = productMap[r.barcode] || {};
+        const p = productMap[r.barcode] || {};
         const pct = Math.min(Math.max(Math.round(r.similarity * 100), 5), 99);
         const price = priceMap[r.barcode];
         return {
-          barcode:        r.barcode,
-          item_name:      p.item_name || r.barcode,
+          barcode: r.barcode,
+          item_name: p.item_name || r.barcode,
           product_name_la: p.product_name_la || '',
-          category_1:     p.category_1 || '',
-          category_2:     p.category_2 || '',
-          price:          price !== undefined ? price : null,
-          confidence:     pct,
-          image_url:      r.image_url || getProductImageUrl(r.barcode),
-          inMasterData:   !!p.barcode,
+          category_1: p.category_1 || '',
+          category_2: p.category_2 || '',
+          price: price !== undefined ? price : null,
+          confidence: pct,
+          image_url: r.image_url || getProductImageUrl(r.barcode),
+          inMasterData: !!p.barcode,
         };
       });
 
@@ -240,14 +240,12 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
         </div>
 
         {/* Service indicator */}
-        <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border ${
-          serviceOnline === true  ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
-          serviceOnline === false ? 'border-red-800 bg-red-950 text-red-400' :
-          'border-slate-700 bg-slate-800 text-slate-500'
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            serviceOnline === true ? 'bg-emerald-400' : serviceOnline === false ? 'bg-red-400' : 'bg-slate-500 animate-pulse'
-          }`} />
+        <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border ${serviceOnline === true ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
+            serviceOnline === false ? 'border-red-800 bg-red-950 text-red-400' :
+              'border-slate-700 bg-slate-800 text-slate-500'
+          }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${serviceOnline === true ? 'bg-emerald-400' : serviceOnline === false ? 'bg-red-400' : 'bg-slate-500 animate-pulse'
+            }`} />
           {serviceOnline === true ? 'ພ້ອມໃຊ້ງານ' : serviceOnline === false ? 'ບໍ່ສາມາດເຊື່ອມຕໍ່ໄດ້' : 'ກຳລັງກວດສອບ...'}
         </div>
       </header>
@@ -339,7 +337,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                     className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 group-hover:opacity-75 transition-all duration-700"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
-                  
+
                   <div className="relative z-10 p-5 space-y-1">
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/20 border border-violet-400/30 text-violet-300 text-[10px] font-semibold backdrop-blur-md">
                       <Scan size={12} />
@@ -461,13 +459,12 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-semibold text-white text-sm leading-snug truncate">{item.item_name}</p>
                         {/* Confidence badge */}
-                        <span className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                          item.confidence >= 80
+                        <span className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md ${item.confidence >= 80
                             ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
                             : item.confidence >= 60
-                            ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
-                            : 'bg-slate-800 text-slate-500 border border-slate-700'
-                        }`}>
+                              ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
+                              : 'bg-slate-800 text-slate-500 border border-slate-700'
+                          }`}>
                           {item.confidence}%
                         </span>
                       </div>

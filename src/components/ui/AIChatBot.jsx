@@ -9,10 +9,10 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext';
 import { readExcelFile, sheetToJSON } from '../../utils/excelProcessor';
 import { supabase } from '../../utils/supabaseClient';
+import { askJoi, ZeroGPUQuotaError, isZeroGPUQuotaError } from '../../services/joiApi';
 
 const BOT_NAME = 'Joi';
 const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MB
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-14413bf76ea64927854417be978a7a9b';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // ── Markdown Components (Claude-style) ──────────────────────
@@ -202,7 +202,7 @@ const AIChatBot = ({ onBack, currentUser, isWidget, onClose }) => {
     if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
   }, [input]);
 
-  // ── Send Message ──────────────────────────────────────────
+  // ── Send Message (Joi AI via Hugging Face) ───────────────
   const handleSend = async () => {
     const inputMsg = input.trim();
     if (!inputMsg && !attachedFile) return;
@@ -211,12 +211,122 @@ const AIChatBot = ({ onBack, currentUser, isWidget, onClose }) => {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setAttachedFile(null);
+    const capturedImagePreview = imagePreview;
     setImagePreview(null);
     setIsLoading(true);
 
+    // ── Image path: use Gemini for vision ───────────────────
+    if (capturedImagePreview && GEMINI_API_KEY) {
+      try {
+        const base64Data = capturedImagePreview.split(',')[1] || '';
+        const mimeType = capturedImagePreview.split(';')[0].split(':')[1] || 'image/png';
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [
+              { text: `You are Joi, a helpful assistant for Joy of a Home inventory system. Answer in the same language as the user. Question: ${inputMsg}` },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]}]
+          })
+        });
+        const data = await res.json();
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          const aiMsg = { role: 'assistant', content: data.candidates[0].content.parts[0].text };
+          setMessages(prev => [...prev, aiMsg]);
+          if (isTTSEnabled) speakText(aiMsg.content);
+        } else {
+          throw new Error(data.error?.message || 'Gemini image failed');
+        }
+      } catch (err) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `❌ ບໍ່ສາມາດວິເຄາະຮູບພາບໄດ້: ${err.message}` }]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // ── Text path: Joi AI via Hugging Face Space ─────────────
+    // Insert a streaming placeholder for assistant message
+    const placeholderId = `streaming-${Date.now()}`;
+    setMessages(prev => [...prev, { role: 'assistant', content: '...', _id: placeholderId, _streaming: true }]);
+
     try {
-      // --- TOOL FUNCTIONS DEFINITIONS ---
-      const fetchStockData = async (barcode) => {
+      // Build message text (include extracted file content if present)
+      const messageText = fileContent
+        ? `[File: ${userMsg.fileName}]\n${fileContent}\n\n${inputMsg}`
+        : inputMsg;
+
+      setFileContent('');
+
+      // Call Joi AI with streaming
+      const finalText = await askJoi({
+        message: messageText,
+        messages: messages, // full history for context
+        systemPrompt: '',   // HF Space already has Joi's system prompt
+        maxTokens: 768,
+        temperature: 0.7,
+        deepThinking: false,
+        onToken: (streamedText) => {
+          // Update the placeholder with streamed content
+          setMessages(prev => {
+            const next = [...prev];
+            const lastIdx = next.length - 1;
+            if (lastIdx >= 0 && next[lastIdx]._id === placeholderId) {
+              next[lastIdx] = { ...next[lastIdx], content: streamedText };
+            }
+            return next;
+          });
+        },
+      });
+
+      // Finalize the message (remove streaming flag)
+      setMessages(prev => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        if (lastIdx >= 0 && next[lastIdx]._id === placeholderId) {
+          next[lastIdx] = { role: 'assistant', content: finalText || next[lastIdx].content };
+        }
+        return next;
+      });
+
+      if (isTTSEnabled && finalText) speakText(finalText);
+
+    } catch (err) {
+      let errorContent;
+
+      if (err instanceof ZeroGPUQuotaError || isZeroGPUQuotaError(err)) {
+        // Friendly ZeroGPU quota error
+        errorContent = language === 'la'
+          ? `⚠️ **Joi AI ໃຊ້ GPU ບໍ່ໄດ້ຊົ່ວຄາວ**\n\nZeroGPU quota ຂອງ Hugging Face ໝົດແລ້ວ ກະລຸນາລໍຖ້າຈົນຮອດ quota ຕໍ່ໄປ ຫຼື ລອງໃໝ່ໃນພາຍຫຼັງ 🙏`
+          : `⚠️ **Joi AI ใช้ GPU ชั่วคราวไม่ได้**\n\nZeroGPU quota ของ Hugging Face หมดแล้วค่ะ กรุณารอจนกว่า quota จะรีเซ็ต หรือลองใหม่ในภายหลัง 🙏`;
+      } else if (String(err.message).includes('Failed to fetch') || String(err.message).includes('NetworkError')) {
+        errorContent = language === 'la'
+          ? `❌ ບໍ່ສາມາດເຊື່ອມຕໍ່ Joi ໄດ້ໃນຂະນະນີ້ ກະລຸນາກວດເບິ່ງການເຊື່ອມຕໍ່ອິນເຕີເນັດ`
+          : `❌ ไม่สามารถเชื่อมต่อ Joi ได้ในขณะนี้ค่ะ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต`;
+      } else {
+        errorContent = `❌ ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ: ${err.message}`;
+      }
+
+      // Replace placeholder with error message
+      setMessages(prev => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        if (lastIdx >= 0 && next[lastIdx]._id === placeholderId) {
+          next[lastIdx] = { role: 'assistant', content: errorContent };
+        } else {
+          next.push({ role: 'assistant', content: errorContent });
+        }
+        return next;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── [Phase B placeholder] Supabase tool functions ─────────
+  // These are preserved for future secure backend integration.
+  // In Phase B, these will be orchestrated server-side by Joi.
+  const _fetchStockData = async (barcode) => {
         const [{ data: storeData }, { data: dcData }, { data: locData }] = await Promise.all([
           supabase.from('store_inventory').select('*').eq('barcode_no', barcode),
           supabase.from('table_dc_stock').select('*').eq('barcode_no', barcode),
@@ -230,517 +340,13 @@ const AIChatBot = ({ onBack, currentUser, isWidget, onClose }) => {
         if (dcData?.length) dcData.forEach(r => res += `- DC ${r.branch_id}: Qty=${r.qty || 0}\n`);
         if (!storeData?.length && !locData?.length && !dcData?.length) res = 'No data found.';
         return res;
-      };
+  }; // end _fetchStockData
 
-      const searchProductByName = async (keyword) => {
-        const { data: storeData } = await supabase.from('store_inventory')
-          .select('barcode_no, item_name')
-          .ilike('item_name', `%${keyword}%`)
-          .limit(10);
-        
-        if (!storeData || storeData.length === 0) return `No products found matching '${keyword}'.`;
-        
-        const uniqueProducts = [];
-        const seen = new Set();
-        storeData.forEach(p => {
-          if (!seen.has(p.barcode_no)) {
-            seen.add(p.barcode_no);
-            uniqueProducts.push(p);
-          }
-        });
+  // Phase B placeholder: Supabase tool functions will be moved to secure backend.
+  // eslint-disable-next-line no-unused-vars
+  const _phaseB = true;
 
-        let res = `Found ${uniqueProducts.length} products matching '${keyword}':\n`;
-        uniqueProducts.forEach((p, i) => {
-          res += `${i + 1}. Barcode: ${p.barcode_no} | Name: ${p.item_name}\n`;
-        });
-        res += `\nIMPORTANT: Use one of these barcodes to call check_stock_by_barcode or get_request_history_by_barcode.`;
-        return res;
-      };
 
-      const fetchDailyRequests = async (branchId = null) => {
-        const d = new Date();
-        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        let query = supabase.from('store_requests')
-          .select('*')
-          .gte('created_at', `${today}T00:00:00+07:00`)
-          .lte('created_at', `${today}T23:59:59+07:00`);
-        
-        if (branchId) {
-          query = query.eq('branch_id', branchId);
-        }
-
-        const { data: requests } = await query.order('created_at', { ascending: false });
-
-        if (!requests?.length) return `No requests found for today (${today})${branchId ? ` at branch ${branchId}` : ''}.`;
-
-        let details = `REAL DATA ONLY - Requests for ${today}. Show this data EXACTLY as given. DO NOT rename, translate, or substitute any product names.\n`;
-        details += `Total: ${requests.length} requests\n\n`;
-        requests.slice(0, 50).forEach((r, i) => {
-          const stockBefore = r.stock_at_request ?? '-';
-          const remaining = (r.stock_at_request != null && r.qty != null) ? r.stock_at_request - r.qty : '-';
-          details += `${i + 1}. DocNo: ${r.doc_no || '-'} | Branch: ${r.branch_id} | Barcode: ${r.barcode || 'N/A'} | Product: ${r.product_name || r.barcode || 'N/A'} | Requested: ${r.qty} | Stock@Request: ${stockBefore} | Remaining: ${remaining} | Status: ${r.status} | RequestBy: ${r.request_by} | ApprovedBy: ${r.accepted_by || '-'}\n`;
-        });
-        return details;
-      };
-
-      const fetchRequestHistoryByBarcode = async (barcode, fromDate, toDate) => {
-        const d = new Date();
-        const defaultTo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const defaultFrom = new Date(d.getTime() - 90 * 24 * 60 * 60 * 1000);
-        const defaultFromStr = `${defaultFrom.getFullYear()}-${String(defaultFrom.getMonth() + 1).padStart(2, '0')}-${String(defaultFrom.getDate()).padStart(2, '0')}`;
-        const from = fromDate || defaultFromStr;
-        const to = toDate || defaultTo;
-
-        const { data: records, error } = await supabase.from('store_requests')
-          .select('*')
-          .eq('barcode', barcode)
-          .gte('created_at', `${from}T00:00:00+07:00`)
-          .lte('created_at', `${to}T23:59:59+07:00`)
-          .order('created_at', { ascending: false });
-
-        if (error) return `Error fetching history: ${error.message}`;
-        if (!records?.length) return `No request history found for barcode ${barcode} between ${from} and ${to}.`;
-
-        let out = `Request history for barcode ${barcode} (${from} to ${to}): ${records.length} records found.\n\n`;
-        records.forEach((r, i) => {
-          const stockBefore = r.stock_at_request ?? '-';
-          const remaining = (r.stock_at_request != null && r.qty != null) ? r.stock_at_request - r.qty : '-';
-          const date = new Date(r.created_at).toLocaleDateString('en-GB');
-          out += `${i + 1}. Date: ${date} | DocNo: ${r.doc_no || '-'} | Branch: ${r.branch_id} | Product: ${r.product_name || r.barcode} | Requested: ${r.qty} | Stock@Request: ${stockBefore} | Remaining: ${remaining} | Status: ${r.status} | By: ${r.request_by}\n`;
-        });
-        return out;
-      };
-
-      const fetchLowStockAlerts = async (branchId, threshold = 5) => {
-        try {
-          let query = supabase
-            .from('location_inventory')
-            .select('barcode_no, qty, branch_id, rack_location')
-            .lte('qty', threshold);
-          
-          if (branchId) {
-            query = query.eq('branch_id', branchId);
-          }
-          
-          const { data: invRows, error: invErr } = await query.order('qty', { ascending: true });
-          if (invErr) throw invErr;
-          if (!invRows || invRows.length === 0) {
-            return `ບໍ່ພົບສິນຄ້າທີ່ມີສະຕັອກຕ່ຳກວ່າ ຫຼື ເທົ່າກັບ ${threshold} ໜ່ວຍ.`;
-          }
-
-          const barcodes = [...new Set(invRows.map(r => r.barcode_no).filter(Boolean))];
-          let namesMap = {};
-          if (barcodes.length > 0) {
-            const { data: storeRows } = await supabase
-               .from('store_inventory')
-              .select('barcode_no, item_name')
-              .in('barcode_no', barcodes.slice(0, 100));
-            if (storeRows) {
-              storeRows.forEach(r => {
-                namesMap[r.barcode_no] = r.item_name;
-              });
-            }
-          }
-
-          let out = `[LOW STOCK REPORT] (Threshold <= ${threshold}): ${invRows.length} rows found.\n\n`;
-          invRows.forEach((r, idx) => {
-            const name = namesMap[r.barcode_no] || 'Unknown Product';
-            out += `${idx + 1}. สาขา: ${r.branch_id} | Barcode: ${r.barcode_no} | Product: ${name} | Qty: ${r.qty} | Rack: ${r.rack_location || '-'}\n`;
-          });
-          return out;
-        } catch (err) {
-          return `Error in get_low_stock_alerts: ${err.message}`;
-        }
-      };
-
-      const suggestStockTransfers = async () => {
-        try {
-          const { data: allInv, error: invErr } = await supabase
-            .from('location_inventory')
-            .select('barcode_no, qty, branch_id, rack_location');
-          if (invErr) throw invErr;
-          if (!allInv || allInv.length === 0) return "ບໍ່ມີຂໍ້ມູນສະຕັອກໃນລະບົບ.";
-
-          const stockByBarcode = {};
-          allInv.forEach(r => {
-            if (!r.barcode_no) return;
-            if (!stockByBarcode[r.barcode_no]) stockByBarcode[r.barcode_no] = {};
-            stockByBarcode[r.barcode_no][r.branch_id] = { qty: r.qty || 0, rack: r.rack_location || '-' };
-          });
-
-          const branches = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
-          const suggestions = [];
-
-          for (const barcode of Object.keys(stockByBarcode)) {
-            const branchesStock = stockByBarcode[barcode];
-            for (const targetBranch of branches) {
-              const targetQty = branchesStock[targetBranch]?.qty || 0;
-              if (targetQty === 0) {
-                for (const sourceBranch of branches) {
-                  if (sourceBranch === targetBranch) continue;
-                  const sourceQty = branchesStock[sourceBranch]?.qty || 0;
-                  if (sourceQty >= 10) {
-                    const sourceRack = branchesStock[sourceBranch]?.rack || '-';
-                    suggestions.push({
-                      barcode,
-                      sourceBranch,
-                      sourceQty,
-                      sourceRack,
-                      targetBranch,
-                      suggestedQty: Math.floor(sourceQty / 2)
-                    });
-                  }
-                }
-              }
-            }
-          }
-
-          if (suggestions.length === 0) {
-            return "ບໍ່ພົບຄວາມບໍ່ສົມດຸນຂອງສະຕັອກລະຫວ່າງສາຂา (ບໍ່ມີການແນະນຳການໂອນຍ້າຍໃນເວລານີ້).";
-          }
-
-          const barcodes = [...new Set(suggestions.map(s => s.barcode))];
-          let namesMap = {};
-          if (barcodes.length > 0) {
-            const { data: storeRows } = await supabase
-              .from('store_inventory')
-              .select('barcode_no, item_name')
-              .in('barcode_no', barcodes.slice(0, 50));
-            if (storeRows) {
-              storeRows.forEach(r => {
-                namesMap[r.barcode_no] = r.item_name;
-              });
-            }
-          }
-
-          let out = `[STOCK TRANSFER RECOMMENDATIONS] Suggestions based on stock imbalance:\n\n`;
-          suggestions.slice(0, 30).forEach((s, idx) => {
-            const name = namesMap[s.barcode] || 'Unknown Product';
-            out += `${idx + 1}. Suggest transferring **${s.suggestedQty}** units of "${name}" (Barcode: ${s.barcode})\n`;
-            out += `   - FROM: ${s.sourceBranch} (Available: ${s.sourceQty} at Rack ${s.sourceRack})\n`;
-            out += `   - TO: ${s.targetBranch} (Current Stock: 0 - Out of Stock!)\n\n`;
-          });
-          return out;
-        } catch (err) {
-          return `Error in suggest_stock_transfers: ${err.message}`;
-        }
-      };
-
-      const getStoreAnalytics = async (days = 30) => {
-        try {
-          const d = new Date();
-          const sinceDate = new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
-          const sinceStr = `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}T00:00:00`;
-
-          const { data: requests, error } = await supabase
-            .from('store_requests')
-            .select('status, branch_id, barcode, product_name, qty')
-            .gte('created_at', sinceStr);
-
-          if (error) throw error;
-          if (!requests || requests.length === 0) {
-            return `ບໍ່ພົບຂໍ້ມູນຄຳຮ້ອງຂໍພາຍໃນ ${days} ວັນທີ່ຜ່ານມາ.`;
-          }
-
-          let accepted = 0;
-          let rejected = 0;
-          let pending = 0;
-          const branchCounts = {};
-          const productCounts = {};
-
-          requests.forEach(r => {
-            if (r.status === 'accepted') accepted++;
-            else if (r.status === 'rejected') rejected++;
-            else pending++;
-
-            branchCounts[r.branch_id] = (branchCounts[r.branch_id] || 0) + 1;
-
-            const key = `${r.product_name || r.barcode} (${r.barcode})`;
-            productCounts[key] = (productCounts[key] || 0) + (r.qty || 1);
-          });
-
-          const topProducts = Object.entries(productCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-
-          const topBranches = Object.entries(branchCounts)
-            .sort((a, b) => b[1] - a[1]);
-
-          let out = `[HQ OPERATION ANALYTICS] (Past ${days} Days):\n`;
-          out += `- Total requests: ${requests.length}\n`;
-          out += `- Accepted: ${accepted} (${Math.round((accepted / requests.length) * 100)}%)\n`;
-          out += `- Rejected: ${rejected} (${Math.round((rejected / requests.length) * 100)}%)\n`;
-          out += `- Pending: ${pending} (${Math.round((pending / requests.length) * 100)}%)\n\n`;
-
-          out += `Top 5 Requested Products (by Qty):\n`;
-          topProducts.forEach((p, idx) => {
-            out += `${idx + 1}. ${p[0]} - Total Qty: ${p[1]}\n`;
-          });
-
-          out += `\nRequests by Branch:\n`;
-          topBranches.forEach((b, idx) => {
-            out += `${idx + 1}. สาขา ${b[0]}: ${b[1]} requests\n`;
-          });
-
-          return out;
-        } catch (err) {
-          return `Error in get_store_analytics: ${err.message}`;
-        }
-      };
-
-      const getSalesAndImportSummary = async (days = 7) => {
-        try {
-          const d = new Date();
-          const sinceDate = new Date(d.getTime() - days * 24 * 60 * 60 * 1000);
-          const sinceStr = `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}T00:00:00`;
-
-          const [{ data: salesData, error: salesErr }, { data: dcData, error: dcErr }] = await Promise.all([
-            supabase.from('store_sales_log').select('sales_qty, branch_id').gte('import_date', sinceStr),
-            supabase.from('store_dc_log').select('imported_qty, branch_id').gte('import_date', sinceStr)
-          ]);
-
-          if (salesErr) throw salesErr;
-          if (dcErr) throw dcErr;
-
-          const branchSales = {};
-          const branchImports = {};
-
-          (salesData || []).forEach(s => {
-            branchSales[s.branch_id] = (branchSales[s.branch_id] || 0) + (s.sales_qty || 0);
-          });
-
-          (dcData || []).forEach(dc => {
-            branchImports[dc.branch_id] = (branchImports[dc.branch_id] || 0) + (dc.imported_qty || 0);
-          });
-
-          const allBranches = new Set([...Object.keys(branchSales), ...Object.keys(branchImports)]);
-
-          let out = `[AUDIT: SALES VS DC IMPORTS SUMMARY] (Past ${days} Days):\n\n`;
-          out += `| ສາຂາ (Branch) | ຍອດນຳເຂົ້າ DC (DC Imported Qty) | ຍອດຂາຍ (Sold Qty) | ຄວາມຕ່າງ (Discrepancy) |\n`;
-          out += `| --- | --- | --- | --- |\n`;
-          allBranches.forEach(b => {
-            const imported = branchImports[b] || 0;
-            const sold = branchSales[b] || 0;
-            const diff = imported - sold;
-            out += `| ${b} | ${imported} | ${sold} | ${diff > 0 ? '+' : ''}${diff} |\n`;
-          });
-
-          return out;
-        } catch (err) {
-          return `Error in get_sales_and_import_summary: ${err.message}`;
-        }
-      };
-
-      const tools = [
-        {
-          type: "function",
-          function: {
-            name: "search_product_by_name",
-            description: "Search for a product's barcode by its name. Use this FIRST when the user asks about a product by name but doesn't provide a barcode. You can then use the returned barcode in other tools.",
-            parameters: { type: "object", properties: { keyword: { type: "string", description: "The product name or keyword to search for" } }, required: ["keyword"] }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "check_stock_by_barcode",
-            description: "Check real-time stock balance for a product barcode across all branches.",
-            parameters: { type: "object", properties: { barcode: { type: "string" } }, required: ["barcode"] }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "get_daily_requests",
-            description: "Get today's store requests. Use when user asks about today's requests. If user mentions a specific branch name (e.g. ສີວິໄລ, ຕະຫຼາດລາວ, ໂພນສີນວນ, ວັງຊາຍ), pass it as branch_id to filter precisely.",
-            parameters: {
-              type: "object",
-              properties: {
-                branch_id: { type: "string", description: "Branch name to filter (optional). Use exact Lao name: ຕະຫຼາດລາວ, ສີວິໄລ, ໂພນສີນວນ, ວັງຊາຍ, or ເມກ້າມໍ. Omit to get all branches." }
-              }
-            }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "get_request_history_by_barcode",
-            description: "Get historical request records for a specific barcode over a date range. Use when user asks about past requests, history, or how many times an item was requested. If no dates given, default to last 90 days.",
-            parameters: {
-              type: "object",
-              properties: {
-                barcode: { type: "string", description: "The product barcode" },
-                from_date: { type: "string", description: "Start date in YYYY-MM-DD format (optional)" },
-                to_date: { type: "string", description: "End date in YYYY-MM-DD format (optional)" }
-              },
-              required: ["barcode"]
-            }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "get_low_stock_alerts",
-            description: "Check for products with low stock levels (below a threshold) in location_inventory. Can be filtered by branch.",
-            parameters: {
-              type: "object",
-              properties: {
-                branch_id: { type: "string", description: "Branch name to check (optional)." },
-                threshold: { type: "integer", description: "Low stock threshold. Default is 5." }
-              }
-            }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "suggest_stock_transfers",
-            description: "Identify stock imbalances across branches (e.g. 0 qty in one branch but high qty in another) and suggest transfer actions.",
-            parameters: { type: "object", properties: {} }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "get_store_analytics",
-            description: "Get request trends and statistics over the last X days. Useful to analyze accepted/rejected/pending stats and top requested items.",
-            parameters: {
-              type: "object",
-              properties: {
-                days: { type: "integer", description: "Number of past days to analyze. Default is 30." }
-              }
-            }
-          }
-        },
-        {
-          type: "function",
-          function: {
-            name: "get_sales_and_import_summary",
-            description: "Get sales and DC import summary by branch over the last X days. Useful for auditing performance.",
-            parameters: {
-              type: "object",
-              properties: {
-                days: { type: "integer", description: "Number of past days to check. Default is 7." }
-              }
-            }
-          }
-        }
-      ];
-
-      const techSpecExtra = isTechToSpec ? `\n\nTECH MODE: Respond as a technical specification.` : '';
-      const VALID_BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'];
-      const systemPrompt = `You are ${BOT_NAME}, an autonomous, highly-intelligent Inventory Consultant and AI Assistant for Joah Inventory System.
-Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
-Branches: ${VALID_BRANCHES.join(', ')}.
-
-== STRICT ANTI-HALLUCINATION RULES (CRITICAL) ==
-1. ZERO HALLUCINATION / NO FAKE DATA: You are STRICTLY FORBIDDEN from inventing any requests, stock quantities, product names, dates, names, or barcode info.
-2. ONLY USE TOOL OUTPUTS: If you do not have data from a tool response, say "ບໍ່ພົບຂໍ້ມູນ" or "I do not have this data". Never guess, approximate, or fabricate.
-3. 0 IS 0: If a tool returns 0 records, you must say there are no records. Never generate mock list items or placeholders to satisfy a user query.
-4. EXACT COPYING: Copy all numbers, barcodes, names, and statuses EXACTLY as returned by the tools.
-5. NO SPECTACLE/NO ASSUMPTION: Do not assume or extrapolate info. If the user asks about an unknown barcode, you must run 'search_product_by_name' or state that it doesn't exist in the database. Never guess.
-6. SHOW ALL RECORDS: When listing results from a tool call (such as daily requests, history, or stock), you MUST list every single record returned. Do not select, skip, group, or filter rows (e.g. showing only remaining=0) unless the user explicitly requested such a filter.
-
-== PERSONALITY & STYLE ==
-- Speak politely, naturally, and warmly in ${detectedLang} (like Gemini).
-- You can greet the user, summarize findings nicely, and offer smart strategic recommendations.
-- Present reports with elegant Markdown formatting, tables, bold text, and highlights.
-- Avoid sounding robotic. Be helpful and professional.
-
-== AGENTIC THINKING LOOP ==
-- You possess advanced tools: stock checks, low stock alerts, stock transfer suggestions, request analytics, and sales audit summaries.
-- When the user asks for a summary, reports, health checks, or advice, you should proactively call multiple tools to cross-reference data.
-- E.g., if a branch has low stock, check if other branches have surplus using 'check_stock_by_barcode' or 'suggest_stock_transfers' to recommend a smart transfer.
-
-== UI ELEMENTS TO USE ==
-- Use GitHub-style highlights/alerts:
-  > [!WARNING]
-  > For critical warnings like out of stock or negative discrepancies.
-  > [!TIP]
-  > For actionable recommendations (e.g. transfer suggestions).
-  > [!NOTE]
-  > For general summaries.
-
-== DATA RULES (STRICT ACCURACY) ==
-1. ONLY use data returned by tool calls. Never fabricate, guess, or use training data for product names, quantities, or statuses.
-2. If a tool returns no records, state "ບໍ່ພົບຂໍ້ມູນ" (data not found) politely.
-3. Copy product names, barcodes, and quantities EXACTLY as returned.
-4. When listing daily requests or history, ALWAYS output every single record returned by the tool as a detailed row. You are FORBIDDEN from omitting, truncating, grouping, or selectively filtering rows. Print the entire table. Always include all available columns from the tool data to provide full context:
-   - ລຳດັບ (No.)
-   - ເວລາ (Time/Date)
-   - Barcode
-   - ຊື່ສິນຄ້າ (Product Name)
-   - ຈຳນວນ (Qty)
-   - ສະຖານະ (Status)
-   - ຜູ້ຮ້ອງຂໍ (Requester - from 'By' field)
-   - ຜູ້ອະນຸມັດ (Approver - from 'Approved' field)
-5. Never mention DeepSeek, GPT, Gemini, or any AI model name.${techSpecExtra}`;
-
-      let finalAiMsg;
-
-      if (userMsg.imagePreview && GEMINI_API_KEY) {
-        // --- Gemini (Images) ---
-        const base64Data = userMsg.imagePreview.split(',')[1] || '';
-        const mimeType = userMsg.imagePreview.split(';')[0].split(':')[1] || 'image/png';
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\nQuestion: ${inputMsg}` }, { inline_data: { mime_type: mimeType, data: base64Data } }] }] })
-        });
-        const data = await res.json();
-        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          finalAiMsg = { role: 'assistant', content: data.candidates[0].content.parts[0].text };
-        } else throw new Error('Gemini failed');
-      } else {
-        // --- DeepSeek (Text + Tools) ---
-        const apiHistory = messages.slice(-10).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
-        let apiMessages = [{ role: 'system', content: systemPrompt }, ...apiHistory, { role: 'user', content: fileContent ? `[File: ${userMsg.fileName}]\n${fileContent}\n\n${inputMsg}` : inputMsg }];
-
-        let isDone = false;
-        let iters = 0;
-        while (!isDone && iters < 5) {
-          iters++;
-          const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
-            body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, tools: tools, temperature: 0.0, max_tokens: 8000 })
-          });
-          const data = await res.json();
-          if (!data.choices?.[0]) throw new Error(data.error?.message || 'DeepSeek error');
-          const msg = data.choices[0].message;
-          apiMessages.push(msg);
-
-          if (msg.tool_calls) {
-            for (const toolCall of msg.tool_calls) {
-              const fn = toolCall.function.name;
-              const args = JSON.parse(toolCall.function.arguments || '{}');
-              let content;
-              if (fn === "search_product_by_name") content = await searchProductByName(args.keyword);
-              else if (fn === "check_stock_by_barcode") content = await fetchStockData(args.barcode);
-              else if (fn === "get_daily_requests") content = await fetchDailyRequests(args.branch_id || null);
-              else if (fn === "get_request_history_by_barcode") content = await fetchRequestHistoryByBarcode(args.barcode, args.from_date, args.to_date);
-              else if (fn === "get_low_stock_alerts") content = await fetchLowStockAlerts(args.branch_id || null, args.threshold || 5);
-              else if (fn === "suggest_stock_transfers") content = await suggestStockTransfers();
-              else if (fn === "get_store_analytics") content = await getStoreAnalytics(args.days || 30);
-              else if (fn === "get_sales_and_import_summary") content = await getSalesAndImportSummary(args.days || 7);
-              else content = `Unknown function: ${fn}`;
-              apiMessages.push({ role: "tool", tool_call_id: toolCall.id, name: fn, content });
-            }
-          } else {
-            isDone = true;
-            finalAiMsg = msg;
-          }
-        }
-      }
-
-      if (finalAiMsg) {
-        setMessages(prev => [...prev, finalAiMsg]);
-        if (isTTSEnabled) speakText(finalAiMsg.content);
-      }
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `❌ ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ: ${err.message}` }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className={isWidget ? "flex flex-col h-full bg-transparent w-full" : "w-full h-[calc(100vh-120px)] flex gap-4 animate-in fade-in duration-300"} style={{ fontFamily: "'Phetsarath OT', 'Noto Sans Lao', 'IBM Plex Sans', sans-serif" }}>
