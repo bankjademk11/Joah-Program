@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@gradio/client':
+        specifier: ^2.7.1
+        version: 2.7.1
       '@supabase/supabase-js':
         specifier: ^2.91.1
         version: 2.112.4
@@ -821,6 +824,10 @@ packages:
 
   '@fast-csv/parse@4.3.6':
     resolution: {integrity: sha512-uRsLYksqpbDmWaSmzvJcuApSEe38+6NQZBUsuAyMZKqHxH0g1wcJgsKUvN3WC8tewaqFjBMMGrkHmC+T7k8LvA==}
+
+  '@gradio/client@2.7.1':
+    resolution: {integrity: sha512-NdxHhkWKE+p+6NLgDrGKMoyF1Ldcl+tRKDyy2x9HKExqHUj/LpsR0UY46x6lLAM+QHAspHa2E6cFjkJMCVb6gQ==}
+    engines: {node: '>=18.0.0'}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1919,6 +1926,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fetch-event-stream@0.1.6:
+    resolution: {integrity: sha512-GREtJ5HNikdU2AXtZ6E/5bk+aslMU6ie5mPG6H9nvsdDkkHQ6m5lHwmmmDTOBexok9hApQ7EprsXCdmz9ZC68w==}
 
   fflate@0.3.11:
     resolution: {integrity: sha512-Rr5QlUeGN1mbOHlaqcSYMKVpPbgLy0AWT/W0EHxA6NGI12yO1jpoui2zBBvU2G824ltM6Ut8BFgfHSBGfkmS0A==}
@@ -4347,6 +4357,10 @@ snapshots:
       lodash.isundefined: 3.0.1
       lodash.uniq: 4.5.0
 
+  '@gradio/client@2.7.1':
+    dependencies:
+      fetch-event-stream: 0.1.6
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -5518,6 +5532,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fetch-event-stream@0.1.6: {}
 
   fflate@0.3.11: {}
 
