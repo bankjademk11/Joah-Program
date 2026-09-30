@@ -287,6 +287,7 @@ export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
                   )}
                 </div>
               </div>
+            </div>
             );
           })}
         </div>
