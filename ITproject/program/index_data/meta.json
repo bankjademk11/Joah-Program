@@ -1,0 +1,5 @@
+{
+  "model": "dinov2-large",
+  "remove_bg": false,
+  "dim": 1024
+}
