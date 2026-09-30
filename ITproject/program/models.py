@@ -13,6 +13,7 @@ Presets:
 เพื่อให้ build_index.py / search_image.py เรียกใช้แบบเดียวกันได้หมด
 """
 
+import os
 import torch
 import torch.nn.functional as F
 from PIL import Image
@@ -20,6 +21,9 @@ from torchvision import transforms
 
 
 def get_device():
+    # If explicitly forced to CPU via environment variable
+    if os.getenv("FORCE_CPU", "").lower() in ("1", "true", "yes"):
+        return "cpu"
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
@@ -38,7 +42,21 @@ class ModelBundle:
     @torch.no_grad()
     def embed_batch(self, pil_images):
         """pil_images: list[PIL.Image] -> np.ndarray [N, dim], L2-normalized"""
-        tensors = torch.stack([self.preprocess(im.convert("RGB")) for im in pil_images]).to(self.device)
+        # Determine current available device dynamically
+        dev = self.device
+        if torch.cuda.is_available():
+            try:
+                # If CUDA is genuinely ready in this thread/context (e.g. inside @spaces.GPU)
+                dev = torch.device("cuda")
+                self.model.to(dev)
+            except Exception:
+                dev = torch.device("cpu")
+                self.model.to(dev)
+        else:
+            dev = torch.device("cpu")
+            self.model.to(dev)
+
+        tensors = torch.stack([self.preprocess(im.convert("RGB")) for im in pil_images]).to(dev)
         if self.name.startswith("clip"):
             feats = self.model.encode_image(tensors)
         else:  # dinov2
@@ -75,8 +93,14 @@ def load_model(preset="clip-fast"):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+    model.eval()
+    try:
+        # If running in regular GPU environment, move to device; if on ZeroGPU, stay on CPU until request
+        if device == "cuda" and not os.getenv("SPACES_ZERO_GPU"):
+            model.to(device)
+        else:
+            model.to("cpu")
+    except Exception:
+        model.to("cpu")
 
-    model.eval().to(device)
     return ModelBundle(preset, model, preprocess, dim, device)

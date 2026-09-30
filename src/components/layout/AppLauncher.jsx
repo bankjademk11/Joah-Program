@@ -8,6 +8,7 @@ import SaleViewIcon from '../../assets/Icons_AppJoah/SaleView.png';
 import CheckPriceIcon from '../../assets/Icons_AppJoah/checkpirce.webp';
 import BgImage from '../../assets/Icons_AppJoah/web_background.jpg';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
+import VisualLensCardImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
 const apps = [
     {
@@ -103,7 +104,7 @@ const apps = [
     {
         id: 'visual-lens-search',
         name: 'ຄົ້ນຫາສິນຄ້າດ້ວຍພາບ (Joah Lens)',
-        icon: CheckPriceIcon,
+        icon: VisualLensCardImg,
         step: 'visual-lens-search'
     },
 ];

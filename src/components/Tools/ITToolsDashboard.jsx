@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
+import VisualLensCardImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
 const IT_SERVICES = [
   {
@@ -74,10 +75,11 @@ const IT_SERVICES = [
     category: 'AI & SEARCH',
     badge: 'AI LENS READY',
     badgeColor: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+    coverImage: VisualLensCardImg,
     icon: Camera,
     iconColor: 'text-violet-600 dark:text-violet-400',
     iconBg: 'bg-violet-100 dark:bg-violet-950/60',
-    desc: 'ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens: ຖ່າຍຮູບສິນຄ້າທີ່ບໍ່ມີບາໂຄ້ດ ຫຼື ເລືອກຮູບເພື່ອ Match ກັບຖານຂໍ້ມູນຮູບໃນ Supabase Bucket (product-images) ອັດຕະໂນມັດ.',
+    desc: 'ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບອັດສະລິຍະ: ຖ່າຍຮູບສິນຄ້າ ຫຼື ເລືອກຮູບເພື່ອ Match ກັບຖານຂໍ້ມູນສິນຄ້າໃນລະບົບອັດຕະໂນມັດ ໂດຍບໍ່ຕ້ອງສະແກນບາໂຄ້ດ.',
     metrics: [
       { label: 'Bucket', val: 'product-images' },
       { label: 'Engine', val: 'Visual Match' },
@@ -198,11 +200,24 @@ export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
             return (
               <div
                 key={service.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
               >
-                {/* Card Top */}
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
+                {/* Optional Cover Banner */}
+                {service.coverImage && (
+                  <div className="w-full h-32 relative overflow-hidden bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+                    <img
+                      src={service.coverImage}
+                      alt={service.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                  </div>
+                )}
+
+                {/* Card Body */}
+                <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.iconBg} ${service.iconColor} border border-slate-200/50 dark:border-slate-800`}>
                       <IconComponent size={24} />
                     </div>

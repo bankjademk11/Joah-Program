@@ -8,8 +8,6 @@ fastapi[standard]>=0.112.0
 uvicorn>=0.23.0
 pydantic>=2.0.0
 tqdm>=4.66.0
-
-# ---- optional, เฉพาะถ้าต้องการฟีเจอร์เพิ่มความแม่นยำ ----
-# ตัดพื้นหลัง (--remove_bg):
+huggingface_hub==0.23.4
 rembg>=2.0.57
 onnxruntime>=1.17.0

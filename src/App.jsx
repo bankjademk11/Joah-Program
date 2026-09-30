@@ -84,6 +84,7 @@ import MasterDataImport from './components/Tools/MasterDataImport';
 import WeatherPage from './components/features/weather/WeatherPage';
 import VisualLensSearch from './components/Tools/VisualLensSearch';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
+import VisualLensCardImg from './assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 import { Gamepad2 } from 'lucide-react';
 
 function AppContent() {
@@ -1456,13 +1457,15 @@ function AppContent() {
 
                   {/* Joah Lens - Visual Product Search Card (HQ Only) */}
                   {isAdmin && (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-md transition-shadow">
-                      <div className="w-full h-32 bg-gradient-to-tr from-violet-600 via-indigo-600 to-purple-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-radial-at-c from-white/10 to-transparent pointer-events-none" />
-                        <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-xl">
-                          <Sparkles size={32} />
-                        </div>
-                        <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20 text-white border border-white/30 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-xl hover:border-violet-500/30 transition-all group">
+                      <div className="w-full h-36 bg-slate-900 relative overflow-hidden">
+                        <img
+                          src={VisualLensCardImg}
+                          alt="Joah Lens Visual Search"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                        <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-violet-600/90 text-white shadow-lg backdrop-blur-md border border-violet-400/30">
                           AI LENS
                         </span>
                       </div>
@@ -1470,18 +1473,18 @@ function AppContent() {
                       <div className="p-6 flex flex-col gap-4 w-full">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Joah Lens Search</h3>
-                            <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Joah Lens Search</h3>
+                            <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບ ຄ້າຍ Google Lens (product-images)</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບອັດສະລິຍະ (AI Visual Match)</p>
                         </div>
 
                         <button
                           onClick={() => setStep('visual-lens-search')}
-                          className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                          className="w-full py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-600/25 cursor-pointer active:scale-[0.98]"
                         >
                           <Sparkles size={16} />
-                          <span>ເປີດ Joah Lens (ຖ່າຍຮູບ)</span>
+                          <span>ເປີດ Joah Lens (ຄົ້ນຫາດ້ວຍຮູບ)</span>
                         </button>
                       </div>
                     </div>
