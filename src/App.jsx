@@ -190,7 +190,10 @@ function AppContent() {
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
   const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
-  const [adminViewBranch, setAdminViewBranch] = useState('ຕະຫຼາດລາວ'); // Branch Admin เลือกดูใน Cloud (Default to TLL)
+  const [adminViewBranch, setAdminViewBranch] = useState(() => {
+    // Read saved branch from localStorage on first load to avoid wrong-branch jump after refresh
+    return localStorage.getItem('joah_admin_view_branch') || 'ຕະຫຼາດລາວ';
+  }); // Branch Admin เลือกดูใน Cloud
   const [autoSyncMaster, setAutoSyncMaster] = useState(false); // Checkbox for Master Data Sync
 
   // --- Realtime State ---
@@ -257,10 +260,36 @@ function AppContent() {
       };
       setUser(currentUserObj);
       setImportBranch(branch);
-      setAdminViewBranch(branch);
+      
+      // Restore the previously selected admin view branch if available
+      const storedAdminView = localStorage.getItem('joah_admin_view_branch');
+      setAdminViewBranch(storedAdminView || branch);
+      
       setIsLoggedIn(true);
     }
   }, []);
+
+  // Save adminViewBranch to localStorage whenever it changes (only when logged in to avoid overwriting before auto-login reads it)
+  useEffect(() => {
+    if (isLoggedIn && adminViewBranch) {
+      localStorage.setItem('joah_admin_view_branch', adminViewBranch);
+    }
+  }, [isLoggedIn, adminViewBranch]);
+
+  const hasAttemptedInitialCloudLoadRef = useRef(false);
+
+  // 🔄 Auto-Load Cloud Data on Refresh if in 'results' step
+  useEffect(() => {
+    if (isLoggedIn && step === 'results' && !hasAttemptedInitialCloudLoadRef.current && validationResults.length === 0) {
+      hasAttemptedInitialCloudLoadRef.current = true;
+      setDbSource('supabase');
+      setDataSourceLabel('Cloud Mode (Supabase)');
+      // Use set timeout to ensure state like user branch_id is fully propagated
+      setTimeout(() => {
+        handleValidate({ locationSheet: 'Cloud Database', pSource: 'supabase' });
+      }, 100);
+    }
+  }, [isLoggedIn, step, validationResults.length]);
 
   const handleLogout = () => {
     // 1. Clear LocalStorage
@@ -521,6 +550,10 @@ function AppContent() {
         dcRows = cloudDc || [];
         storeRows = cloudStore || [];
 
+        if (cloudLocation) {
+          setRawLocationRows(cloudLocation);
+          setLastLocationSyncTime(new Date().toISOString());
+        }
       } else {
         if (!workbook) throw new Error("ກະລຸນາເລືອກໄຟລ໌ Excel ກ່ອນ.");
 
@@ -543,9 +576,19 @@ function AppContent() {
       }
 
       const { results, stats } = validateData(locationRows, dataRows, odooRows, branchToLoad, dcRows, storeRows);
-      setValidationResults(results);
-      setMasterData(dataRows);
-      setStats(stats);
+      if (results && results.length > 0) {
+        setValidationResults(results);
+        setMasterData(dataRows);
+        setStats(stats);
+      } else if (activeSource !== 'supabase' || !results) {
+        setValidationResults(results || []);
+        setMasterData(dataRows);
+        setStats(stats || { total: 0, passed: 0, mismatch: 0, missing: 0 });
+      } else {
+        setValidationResults(results);
+        setMasterData(dataRows);
+        setStats(stats);
+      }
       setStep('results');
     } catch (err) {
       alert('Error: ' + err.message);
@@ -636,7 +679,7 @@ function AppContent() {
 
       // Update master data state if we fetched it
       let activeMasterData = masterData;
-      if (shouldFetchMaster && cloudMaster) {
+      if (shouldFetchMaster && cloudMaster && cloudMaster.length > 0) {
         const mappedMaster = cloudMaster.map(d => ({
           'CATEGORIES 1': d.category_1,
           'CATEGORIES 2': d.category_2,
@@ -652,6 +695,25 @@ function AppContent() {
         activeMasterData = mappedMaster;
       }
 
+      // If activeMasterData is still empty, try fetching it fallback
+      if (!activeMasterData || activeMasterData.length === 0) {
+        const fallbackMaster = await fetchMasterFromSupabase(branchToLoad);
+        if (fallbackMaster && fallbackMaster.length > 0) {
+          activeMasterData = fallbackMaster.map(d => ({
+            'CATEGORIES 1': d.category_1,
+            'CATEGORIES 2': d.category_2,
+            'Barcode': d.barcode,
+            'product_name_la': d.product_name_la,
+            'item_name': d.item_name,
+            'Item Name': d.product_name_la || d.item_name,
+            'Qty': d.qty,
+            'updated_at': d.updated_at,
+            'updated_by': d.updated_by
+          }));
+          setMasterData(activeMasterData);
+        }
+      }
+
       // 🧩 Merge Data if Delta Sync
       let finalLocationData = cloudLocation || [];
       if (isDeltaSync) {
@@ -665,17 +727,6 @@ function AppContent() {
         console.table(deltaRows); // 🧪 DEBUG: Show full payload in console
         console.log(`🧩 Delta Sync: Received ${numUpdates} updated row(s), Size: ~${approxKB} KB`);
 
-        // 🧪 DEBUG: Build detailed message text
-        let detailString = '';
-        if (numUpdates > 0 && numUpdates <= 20) {
-          detailString = '\n\n📋 ລາຍລະອຽດ:\n' + deltaRows.map(r => `• ${r.barcode_no} (ສາຂາ: ${r.branch_id || 'N/A'})`).join('\n');
-        } else if (numUpdates > 20) {
-          detailString = '\n\n📋 ລາຍລະອຽດ: ຫຼາຍກວ່າ 20 ລາຍການ... (ສາມາດເບິ່ງເພີ່ມເຕີມໃນ Console F12)';
-        }
-
-        // Show an explicit alert to the user so they can verify the efficiency
-        alert(`🚨 [DEBUG] Delta Sync\n\nໂໝດ: ປະຢັດ Egress Data 🚀\nພົບການປ່ຽນແປງ: ${numUpdates} ແຖວ\nໃຊ້ Data ໄປພຽງ: ~${approxKB} KB${detailString}`);
-
         const deltaMap = new Map(deltaRows.map(row => [row.id, row]));
 
         // Replace updated rows
@@ -686,6 +737,11 @@ function AppContent() {
         deltaRows.forEach(row => {
           if (!existingIds.has(row.id)) finalLocationData.push(row);
         });
+      }
+
+      // Guard: do not overwrite with empty array if cloudLocation returned null/empty unintentionally
+      if ((!finalLocationData || finalLocationData.length === 0) && rawLocationRows.length > 0) {
+        finalLocationData = rawLocationRows;
       }
 
       setRawLocationRows(finalLocationData);
@@ -710,8 +766,13 @@ function AppContent() {
       }));
 
       const { results: validatedResults, stats: validatedStats } = validateData(locationRows, activeMasterData, odooRows, branchToLoad, cloudDc || [], cloudStore || []);
-      setValidationResults(validatedResults);
-      setStats(validatedStats);
+      if (validatedResults && validatedResults.length > 0) {
+        setValidationResults(validatedResults);
+        setStats(validatedStats);
+      } else if (validationResults.length === 0) {
+        setValidationResults(validatedResults);
+        setStats(validatedStats);
+      }
       setRefreshTrigger(Date.now());
 
       setPendingChanges(0);
