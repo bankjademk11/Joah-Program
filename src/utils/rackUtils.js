@@ -180,7 +180,7 @@ const BRANCH_RACK_RULES = {
         addModule('FASHION', 'B5', 1, 7);
 
         // 7. Tool & Tool/Digital
-        addShelf('TOOL', ['A10'], ['A10-B1-L1']); // Skips A10-B1-L1-1 to 4
+        addShelf('TOOL', ['A10']); // A10-B1-L1 through A10-B3-L4 (all levels included)
         addModule('TOOL/DIGITAL', 'B5', 8, 14);
         addModule('TOOL/DIGITAL', 'A015', 1, 8);
 
