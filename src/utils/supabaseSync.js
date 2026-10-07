@@ -78,14 +78,15 @@ export const fetchMasterFromSupabase = async (branchId) => {
         const branch = normalizeMasterBranch(branchId || 'ສີວິໄລ');
         let allData = [];
         let curPage = 0;
-        const pageSize = 1000;
+        const pageSize = 1000; // ⚠️ Supabase default API limit is 1000. Using >1000 causes it to skip rows!
         let hasMore = true;
+        const t0 = performance.now();
 
         while (hasMore) {
-            // ใช้ .eq() ตรงๆ ไม่ผ่าน applyBranchFilter เพราะ branch ถูก normalize แล้ว
             const { data, error } = await supabase
                 .from('master_data')
-                .select('*')
+                // Only columns used by app
+                .select('barcode, branch_id, category_1, category_2, product_name_la, item_name, qty, updated_at, updated_by')
                 .eq('branch_id', branch)
                 .order('barcode', { ascending: true })
                 .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
@@ -102,6 +103,7 @@ export const fetchMasterFromSupabase = async (branchId) => {
             if (curPage > 100) break;
         }
 
+        console.log(`⏱️ fetchMaster [${branch}]: ${allData.length} rows in ${(performance.now()-t0).toFixed(0)}ms (${curPage} pages)`);
         return allData;
     } catch (error) {
         console.error('Fetch Master Error:', error);
@@ -281,13 +283,16 @@ export const fetchLocationFromSupabase = async (branchId, lastSyncTime = null) =
         const branch = branchId || 'ຕະຫຼາດລາວ';
         let allData = [];
         let curPage = 0;
-        const pageSize = 1000;
+        const pageSize = 1000; // ⚠️ Supabase default API limit is 1000. Using >1000 causes it to skip rows!
         let hasMore = true;
+        const t0 = performance.now();
+        const isDelta = !!lastSyncTime;
 
         while (hasMore) {
             let query = supabase
                 .from('location_inventory')
-                .select('*')
+                // Only fetch columns actually used by the app (reduces payload ~40-50%)
+                .select('id, branch_id, barcode_no, item_name, rack_location, category_1_actual, category_2_actual, qty, uploaded_by, updated_at, created_at')
                 .order('id', { ascending: true })
                 .range(curPage * pageSize, (curPage + 1) * pageSize - 1);
 
@@ -296,8 +301,7 @@ export const fetchLocationFromSupabase = async (branchId, lastSyncTime = null) =
                 query = query.eq('branch_id', branch);
             }
 
-            // 🚀 DELTA SYNC FILTER: Now fully active
-            // Will efficiently query only rows that changed.
+            // 🚀 DELTA SYNC FILTER
             if (lastSyncTime) {
                 query = query.gt('updated_at', lastSyncTime);
             }
@@ -316,6 +320,7 @@ export const fetchLocationFromSupabase = async (branchId, lastSyncTime = null) =
             if (curPage > 100) break;
         }
 
+        console.log(`⏱️ fetchLocation [${branch}]${isDelta ? ' DELTA' : ''}: ${allData.length} rows in ${(performance.now()-t0).toFixed(0)}ms (${curPage} pages)`);
         return allData;
     } catch (error) {
         console.error('Fetch Location Error:', error);

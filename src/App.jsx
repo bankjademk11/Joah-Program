@@ -97,7 +97,7 @@ function AppContent() {
     const urlParams = new URLSearchParams(window.location.search);
     const stepParam = urlParams.get('step');
     if (stepParam) return stepParam;
-    
+
     if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) return 'check-price-ultimate';
     if (path.startsWith('/checkprice')) return 'check-price';
     if (path.startsWith('/landing')) return 'landing';
@@ -108,7 +108,7 @@ function AppContent() {
   useEffect(() => {
     if (!window.history.state || window.history.state.step !== step) {
       let newPath = step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
-      
+
       // If it's a step that isn't mapped to a path, append it as a query param
       if (newPath === '/' && step !== 'upload') {
         newPath = `/?step=${step}`;
@@ -133,7 +133,7 @@ function AppContent() {
         const path = window.location.pathname.toLowerCase();
         const urlParams = new URLSearchParams(window.location.search);
         const stepParam = urlParams.get('step');
-        
+
         if (stepParam) {
           setStep(stepParam);
         } else if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) {
@@ -190,10 +190,7 @@ function AppContent() {
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
   const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
-  const [adminViewBranch, setAdminViewBranch] = useState(() => {
-    // Read saved branch from localStorage on first load to avoid wrong-branch jump after refresh
-    return localStorage.getItem('joah_admin_view_branch') || 'ຕະຫຼາດລາວ';
-  }); // Branch Admin เลือกดูใน Cloud
+  const [adminViewBranch, setAdminViewBranch] = useState('ຕະຫຼາດລາວ'); // Branch Admin เลือกดูใน Cloud (Default to TLL)
   const [autoSyncMaster, setAutoSyncMaster] = useState(false); // Checkbox for Master Data Sync
 
   // --- Realtime State ---
@@ -260,21 +257,21 @@ function AppContent() {
       };
       setUser(currentUserObj);
       setImportBranch(branch);
-      
+
       // Restore the previously selected admin view branch if available
       const storedAdminView = localStorage.getItem('joah_admin_view_branch');
       setAdminViewBranch(storedAdminView || branch);
-      
+
       setIsLoggedIn(true);
     }
   }, []);
 
-  // Save adminViewBranch to localStorage whenever it changes (only when logged in to avoid overwriting before auto-login reads it)
+  // Save adminViewBranch to localStorage whenever it changes
   useEffect(() => {
-    if (isLoggedIn && adminViewBranch) {
+    if (adminViewBranch) {
       localStorage.setItem('joah_admin_view_branch', adminViewBranch);
     }
-  }, [isLoggedIn, adminViewBranch]);
+  }, [adminViewBranch]);
 
   const hasAttemptedInitialCloudLoadRef = useRef(false);
 
@@ -373,7 +370,7 @@ function AppContent() {
   // 🔒 Lock Cashier users to Check Price Terminal
   useEffect(() => {
     const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
-    const isCashier = user?.role === 'cashier' || 
+    const isCashier = user?.role === 'cashier' ||
       (user?.id && CASHIER_EMPLOYEE_IDS.includes(String(user.id).toUpperCase()));
     if (isLoggedIn && isCashier && step !== 'check-price') {
       setStep('check-price');
@@ -420,26 +417,25 @@ function AppContent() {
     const progressInterval = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 90) return prev;
-        // Slow down as it gets higher
         const increment = prev < 50 ? 5 : prev < 80 ? 2 : 1;
         return prev + increment;
       });
     }, 100);
 
-    // Add artificial delay to show the mascot (min 4 seconds)
-    const mascotDelay = new Promise(resolve => setTimeout(resolve, 4000));
+    // Minimum delay to show mascot (reduced from 4s → 2s)
+    const mascotDelay = new Promise(resolve => setTimeout(resolve, 2000));
 
     try {
-      // literal branch for locations and odoo.
       const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
-      // normalized branch for master data
-      const masterBranch = branchToLoad;
 
-      const [[cloudMaster, cloudLocation, cloudOdoo]] = await Promise.all([
+      // Fetch all 5 sources in parallel (previously only fetched 3, then re-fetched 5 again in handleValidate)
+      const [[cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore]] = await Promise.all([
         Promise.all([
-          fetchMasterFromSupabase(masterBranch),
+          fetchMasterFromSupabase(branchToLoad),
           fetchLocationFromSupabase(branchToLoad),
-          fetchOdooFromSupabase(branchToLoad)
+          fetchOdooFromSupabase(branchToLoad),
+          fetchDcFromSupabase(branchToLoad),
+          fetchStoreInventoryFromSupabase(branchToLoad)
         ]),
         mascotDelay
       ]);
@@ -449,14 +445,17 @@ function AppContent() {
       setLoadingProgress(100);
 
       // Small delay to let user see 100%
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       if ((cloudMaster && cloudMaster.length > 0) || (cloudLocation && cloudLocation.length > 0)) {
         setDbSource('supabase');
         setDataSourceLabel('Cloud Mode (Supabase)');
+
+        // ✅ Pass pre-fetched data directly — no need to re-fetch in handleValidate
         await handleValidate({
           locationSheet: 'Cloud Database',
-          pSource: 'supabase'
+          pSource: 'supabase',
+          prefetchedData: { cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore }
         });
         return;
       } else {
@@ -486,11 +485,11 @@ function AppContent() {
     } finally {
       setIsProcessing(false);
       setLoadingProgress(0);
-      clearInterval(progressInterval); // Ensure interval is cleared on error
+      clearInterval(progressInterval);
     }
   };
 
-  const handleValidate = async ({ locationSheet, dataSheet, pSource }) => {
+  const handleValidate = async ({ locationSheet, dataSheet, pSource, prefetchedData }) => {
     setIsProcessing(true);
     const activeSource = pSource || dbSource;
     setLocationSheetName(locationSheet || 'Cloud Database');
@@ -503,15 +502,21 @@ function AppContent() {
       const branchToLoad = (isAdmin || isPSNUser) ? (adminViewBranch || user?.branch_id) : user?.branch_id;
 
       if (activeSource === 'supabase') {
-        const masterBranch = branchToLoad;
+        let cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore;
 
-        const [cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore] = await Promise.all([
-          fetchMasterFromSupabase(masterBranch),
-          fetchLocationFromSupabase(branchToLoad),
-          fetchOdooFromSupabase(branchToLoad),
-          fetchDcFromSupabase(branchToLoad),
-          fetchStoreInventoryFromSupabase(branchToLoad)
-        ]);
+        if (prefetchedData) {
+          // ✅ Use data already fetched by handleDatabaseLoad — skip re-fetching
+          ({ cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore } = prefetchedData);
+        } else {
+          // Normal path (called from refresh, auto-load on refresh, etc.)
+          [cloudMaster, cloudLocation, cloudOdoo, cloudDc, cloudStore] = await Promise.all([
+            fetchMasterFromSupabase(branchToLoad),
+            fetchLocationFromSupabase(branchToLoad),
+            fetchOdooFromSupabase(branchToLoad),
+            fetchDcFromSupabase(branchToLoad),
+            fetchStoreInventoryFromSupabase(branchToLoad)
+          ]);
+        }
 
         if (!cloudMaster || cloudMaster.length === 0) {
           console.warn("ບໍ່ພົບຂໍ້ມູນ Master Data ໃນ Cloud.");
@@ -1006,7 +1011,7 @@ function AppContent() {
     }
   };
 
-    // Public landing route: render before the authentication gate.
+  // Public landing route: render before the authentication gate.
   if (step === 'landing') {
     return <LandingPage onBack={() => setStep('upload')} />;
   }
@@ -1030,7 +1035,7 @@ function AppContent() {
         showProgressBar={showProgressBar}
       />
 
-      
+
 
       <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots overflow-x-hidden">
         {/* Navigation */}
@@ -1064,10 +1069,10 @@ function AppContent() {
           onLogout={handleLogout}
           onOpenAppLauncher={() => setShowAppLauncher(true)}
         />
-        <AppLauncher 
-          isOpen={showAppLauncher} 
-          onClose={() => setShowAppLauncher(false)} 
-          onNavigate={(newStep) => setStep(newStep)} 
+        <AppLauncher
+          isOpen={showAppLauncher}
+          onClose={() => setShowAppLauncher(false)}
+          onNavigate={(newStep) => setStep(newStep)}
           user={user}
         />
 
@@ -1405,49 +1410,49 @@ function AppContent() {
                         </div>
                       </div>
 
-                       {/* Test Taladlao Importer */}
-                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                         <div className="w-full h-44 overflow-hidden bg-emerald-50 dark:bg-slate-800 relative flex items-center justify-center">
-                           <div className="p-8 rounded-[2rem] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
-                             <Database size={64} strokeWidth={2.5} />
-                           </div>
-                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
-                         </div>
-                         <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
-                           <div className="space-y-1.5 text-center">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">🧪 TEST MODE</span>
-                             <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Test Store Importer</h3>
-                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Sandbox — test_taladlao_store</p>
-                           </div>
-                           <button onClick={() => setStep('test-taladlao-importer')}
-                             className="w-full btn-primary mt-1 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-white border-none">
-                             <Database size={18} />
-                             <span>Open Tool</span>
-                           </button>
-                         </div>
-                       </div>
+                      {/* Test Taladlao Importer */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-emerald-500 hover:shadow-emerald-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-emerald-50 dark:bg-slate-800 relative flex items-center justify-center">
+                          <div className="p-8 rounded-[2rem] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                            <Database size={64} strokeWidth={2.5} />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                        </div>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">🧪 TEST MODE</span>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Test Store Importer</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Sandbox — test_taladlao_store</p>
+                          </div>
+                          <button onClick={() => setStep('test-taladlao-importer')}
+                            className="w-full btn-primary mt-1 group py-4 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-white border-none">
+                            <Database size={18} />
+                            <span>Open Tool</span>
+                          </button>
+                        </div>
+                      </div>
 
-                       {/* Odoo Sync Engine */}
-                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-teal-500 hover:shadow-teal-500/10 transition-all duration-500 w-full sm:w-[340px]">
-                         <div className="w-full h-44 overflow-hidden bg-teal-50 dark:bg-slate-800 relative flex items-center justify-center">
-                           <div className="p-8 rounded-[2rem] bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
-                             <RefreshCw size={64} strokeWidth={2.5} />
-                           </div>
-                           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
-                         </div>
-                         <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
-                           <div className="space-y-1.5 text-center">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-3 py-1 rounded-full">⚙️ AUTOMATION</span>
-                             <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Sync Engine</h3>
-                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Automated Stock Deduction</p>
-                           </div>
-                           <button onClick={() => setStep('odoo-sync-engine')}
-                             className="w-full btn-primary mt-1 group py-4 bg-teal-500 hover:bg-teal-600 shadow-teal-500/30 text-white border-none">
-                             <Play size={18} />
-                             <span>Run Sync</span>
-                           </button>
-                         </div>
-                       </div>
+                      {/* Odoo Sync Engine */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-teal-500 hover:shadow-teal-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                        <div className="w-full h-44 overflow-hidden bg-teal-50 dark:bg-slate-800 relative flex items-center justify-center">
+                          <div className="p-8 rounded-[2rem] bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 group-hover:rotate-6 group-hover:scale-110 transition-all duration-700">
+                            <RefreshCw size={64} strokeWidth={2.5} />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                        </div>
+                        <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                          <div className="space-y-1.5 text-center">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-3 py-1 rounded-full">⚙️ AUTOMATION</span>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Odoo Sync Engine</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Automated Stock Deduction</p>
+                          </div>
+                          <button onClick={() => setStep('odoo-sync-engine')}
+                            className="w-full btn-primary mt-1 group py-4 bg-teal-500 hover:bg-teal-600 shadow-teal-500/30 text-white border-none">
+                            <Play size={18} />
+                            <span>Run Sync</span>
+                          </button>
+                        </div>
+                      </div>
 
                     </>
                   )}
@@ -1872,13 +1877,13 @@ function AppContent() {
 
           {step === 'demo-plan' && (
             <div className="fixed inset-0 z-[9999] bg-white">
-               <button 
+              <button
                 onClick={() => setStep('upload')}
                 className="absolute top-4 left-4 z-[10000] p-3 bg-white/90 shadow-lg rounded-xl text-slate-700 hover:bg-slate-100 font-bold border border-slate-200"
-               >
-                 ← ກັບຄືນ
-               </button>
-               <DemoPlan />
+              >
+                ← ກັບຄືນ
+              </button>
+              <DemoPlan />
             </div>
           )}
 
@@ -1914,7 +1919,8 @@ function AppContent() {
           {step === 'store-request' && (
             <StoreRequest onBack={() => setStep('upload')} currentUser={user} activeBranch={adminViewBranch} />
           )}
-          {step === 'product-manager' && (
+
+          {step === 'product-manager' && (
             <ProductManager
               onBack={() => { setStep('upload'); setPreFilledBarcode(null); }}
               currentUser={user}
