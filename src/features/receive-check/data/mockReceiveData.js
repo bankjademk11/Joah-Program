@@ -12,11 +12,13 @@
  */
 
 export const allBranches = [
+  { tag: 'LAK8', name: 'LAK8 (ຫຼັກ 8)' },
   { tag: 'PSN', name: 'PSN (ໂພນສີນວນ)' },
   { tag: 'VX',  name: 'VX (ວັງຊາຍ)' },
   { tag: 'SVL', name: 'SVL (ສີວິໄລ)' },
   { tag: 'TLL', name: 'TLL (ຕະຫຼາດລາວ)' },
-  { tag: 'PTX', name: 'PTX (ໂພນຕ້ອງ)' }
+  { tag: 'PTX', name: 'PTX (ປະຕູໄຊ)' },
+  { tag: 'JMPT', name: 'JMPT (ໂພນຕ້ອງ)' }
 ];
 
 export const metadata = {

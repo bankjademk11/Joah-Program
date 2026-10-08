@@ -19,7 +19,7 @@ export function getReceiveItemStatus(roQty, received) {
       status: 'WAITING',
       difference: -safeRoQty,
       isDifference: safeRoQty > 0,
-      label: 'รอตรวจ',
+      label: 'Waiting',
       badgeColor: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
     };
   }
@@ -32,7 +32,7 @@ export function getReceiveItemStatus(roQty, received) {
       status: 'OK',
       difference: 0,
       isDifference: false,
-      label: 'ครบถ้วน (OK)',
+      label: 'Matched (OK)',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
     };
   } else if (diff < 0) {
@@ -40,7 +40,7 @@ export function getReceiveItemStatus(roQty, received) {
       status: 'SHORT',
       difference: diff,
       isDifference: true,
-      label: `ขาด ${Math.abs(diff)}`,
+      label: `Short ${Math.abs(diff)}`,
       badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800'
     };
   } else {
@@ -48,26 +48,20 @@ export function getReceiveItemStatus(roQty, received) {
       status: 'OVER',
       difference: diff,
       isDifference: true,
-      label: `เกิน +${diff}`,
+      label: `Over +${diff}`,
       badgeColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800'
     };
   }
 }
 
 /**
- * คำนวณภาพรวมของทั้ง RO
- * - ทุก item เป็น OK -> COMPLETED
- * - มี SHORT และไม่มี OVER -> SHORT
- * - มี OVER และไม่มี SHORT -> OVER
- * - มีทั้ง SHORT และ OVER -> DIFFERENCE
- * - กำลังตรวจ (บาง item กรอกแล้วแต่ยังไม่ครบ) -> CHECKING
- * - ยังไม่ได้เริ่มตรวจสัก item -> WAITING
+ * Calculate overall status of the RO
  */
 export function getROOverallStatus(items = []) {
   if (!items || items.length === 0) {
     return {
       status: 'WAITING',
-      label: 'รอรับของ',
+      label: 'Waiting',
       badgeClass: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
       totalRoQty: 0,
       totalReceived: 0,
@@ -106,34 +100,33 @@ export function getROOverallStatus(items = []) {
   });
 
   let status = 'WAITING';
-  let label = 'รอรับของ';
+  let label = 'Waiting';
   let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
 
   if (!hasAnyInput) {
     status = 'WAITING';
-    label = 'รอรับของ';
+    label = 'Waiting';
     badgeClass = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
   } else if (waitingCount > 0) {
     status = 'CHECKING';
-    label = 'กำลังตรวจสอบ';
+    label = 'Checking';
     badgeClass = 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800';
   } else {
-    // ตรวจครบทุกรายการแล้ว
     if (shortCount === 0 && overCount === 0) {
       status = 'COMPLETED';
-      label = 'เสร็จสิ้น (OK)';
+      label = 'Completed (OK)';
       badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800';
     } else if (shortCount > 0 && overCount === 0) {
       status = 'SHORT';
-      label = `ขาด ${shortCount} รายการ`;
+      label = `Short (${shortCount} items)`;
       badgeClass = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800';
     } else if (overCount > 0 && shortCount === 0) {
       status = 'OVER';
-      label = `เกิน ${overCount} รายการ`;
+      label = `Over (${overCount} items)`;
       badgeClass = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800';
     } else {
       status = 'DIFFERENCE';
-      label = `ไม่ตรง ขาด/เกิน`;
+      label = `Difference (Short/Over)`;
       badgeClass = 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800';
     }
   }

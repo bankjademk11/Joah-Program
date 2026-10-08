@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, Calendar, Building2, ArrowRight, Package } from 'lucide-react';
+import { Search, Filter, Calendar, Building2, ArrowRight, Package, UploadCloud, Trash2 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export default function ROList({
@@ -11,7 +11,9 @@ export default function ROList({
   storeFilter,
   onStoreFilterChange,
   availableStores,
-  onSelectRO
+  onSelectRO,
+  onOpenImport,
+  onDeleteRO
 }) {
   return (
     <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 xl:p-6 shadow-lg border border-blue-50 space-y-4">
@@ -23,7 +25,7 @@ export default function ROList({
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
             <div className="flex items-center gap-1.5 px-2 text-slate-600">
               <Calendar size={16} className="text-indigo-600" />
-              <span className="text-sm font-black text-slate-700 font-['Noto_Sans_Lao',sans-serif]">ວັນທີສົ່ງ:</span>
+              <span className="text-sm font-black text-slate-700">Date:</span>
             </div>
             <div className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 font-mono">
               18/09/2026
@@ -36,9 +38,9 @@ export default function ROList({
             <select
               value={storeFilter}
               onChange={(e) => onStoreFilterChange(e.target.value)}
-              className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[170px] font-['Noto_Sans_Lao',sans-serif]"
+              className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[170px]"
             >
-              <option value="ALL">🏢 ທຸກສາຂາ (All Stores)</option>
+              <option value="ALL">🏢 All Stores</option>
               {availableStores.map(st => (
                 <option key={st} value={st}>{st}</option>
               ))}
@@ -51,31 +53,42 @@ export default function ROList({
             <select
               value={statusFilter}
               onChange={(e) => onStatusFilterChange(e.target.value)}
-              className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[160px] font-['Noto_Sans_Lao',sans-serif]"
+              className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[160px]"
             >
-              <option value="ALL">ທຸກສະຖານະ (All Status)</option>
-              <option value="WAITING">⏳ ລໍຖ້າກວດ (Waiting)</option>
-              <option value="CHECKING">🔄 ກຳລັງກວດ (Checking)</option>
-              <option value="COMPLETED">✅ ສຳເລັດ (OK)</option>
-              <option value="SHORT">❌ ຂາດ (SHORT)</option>
-              <option value="OVER">⚠️ ເກີນ (OVER)</option>
-              <option value="DIFFERENCE">⚠️ ບໍ່ຕົງ (DIFF)</option>
+              <option value="ALL">All Status</option>
+              <option value="WAITING">⏳ Waiting</option>
+              <option value="CHECKING">🔄 Checking</option>
+              <option value="COMPLETED">✅ Completed (OK)</option>
+              <option value="SHORT">❌ Short</option>
+              <option value="OVER">⚠️ Over</option>
+              <option value="DIFFERENCE">⚠️ Difference</option>
             </select>
           </div>
         </div>
 
-        {/* RIGHT: SEARCH BAR */}
-        <div className="flex items-center gap-3">
-          <div className="relative w-full sm:w-80">
+        {/* RIGHT: SEARCH BAR + IMPORT BUTTON */}
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-72">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="ຄົ້ນຫາເລກບິນ RO, SO, ບາໂຄດ..."
+              placeholder="Search RO, SO, barcode..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 transition font-['Noto_Sans_Lao',sans-serif]"
+              className="w-full pl-10 pr-4 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 transition"
             />
           </div>
+
+          {onOpenImport && (
+            <button
+              onClick={onOpenImport}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md shadow-indigo-100 transition-all cursor-pointer active:scale-95 shrink-0"
+              title="Import RO Excel Picking List"
+            >
+              <UploadCloud size={15} />
+              <span>Import Excel</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -83,24 +96,24 @@ export default function ROList({
       <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-xs">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-black text-slate-600 uppercase tracking-wider font-['Noto_Sans_Lao',sans-serif]">
+            <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-black text-slate-600 uppercase tracking-wider">
               <th className="py-3.5 px-4 w-12 text-center">#</th>
-              <th className="py-3.5 px-4">ເລກບິນ RO / SO Reference</th>
-              <th className="py-3.5 px-4">ສາຂາປາຍທາງ (Store)</th>
-              <th className="py-3.5 px-4">ວັນທີສົ່ງ (Date)</th>
-              <th className="py-3.5 px-4 text-center">ຈຳນວນລາຍການ</th>
+              <th className="py-3.5 px-4">RO / SO Reference</th>
+              <th className="py-3.5 px-4">Store</th>
+              <th className="py-3.5 px-4">Delivery Date</th>
+              <th className="py-3.5 px-4 text-center">Total Items</th>
               <th className="py-3.5 px-4 text-center">RO Qty</th>
-              <th className="py-3.5 px-4 text-center">ຈຳນວນຮັບແລ້ວ</th>
-              <th className="py-3.5 px-4 text-center">ສະຖານະ</th>
+              <th className="py-3.5 px-4 text-center">Received</th>
+              <th className="py-3.5 px-4 text-center">Status</th>
               <th className="py-3.5 px-4 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
             {roListWithStats.length === 0 ? (
               <tr>
-                <td colSpan="9" className="py-12 text-center text-slate-400 font-['Noto_Sans_Lao',sans-serif]">
+                <td colSpan="9" className="py-12 text-center text-slate-400">
                   <Package className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                  <p className="font-bold">ບໍ່ພົບຂໍ້ມູນບິນ RO ທີ່ຕົງກັບເງື່ອນໄຂ</p>
+                  <p className="font-bold">No RO matching the filter</p>
                 </td>
               </tr>
             ) : (
@@ -127,13 +140,13 @@ export default function ROList({
                     </div>
                   </td>
                   <td className="py-3.5 px-4">
-                    <div className="font-bold text-slate-800 font-['Noto_Sans_Lao',sans-serif]">{ro.storeName}</div>
+                    <div className="font-bold text-slate-800">{ro.storeName}</div>
                     <div className="text-xs text-slate-400 font-mono">{ro.storeCode}</div>
                   </td>
                   <td className="py-3.5 px-4 text-xs text-slate-600 font-mono">
                     {ro.deliveryDate}
                   </td>
-                  <td className="py-3.5 px-4 text-center font-bold text-slate-700 font-['Noto_Sans_Lao',sans-serif]">
+                  <td className="py-3.5 px-4 text-center font-bold text-slate-700">
                     <span className="px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-600 font-sans">
                       {ro.totalItems} items
                     </span>
@@ -156,16 +169,30 @@ export default function ROList({
                     <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
                   </td>
                   <td className="py-3.5 px-4 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectRO(ro);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition shadow-xs font-['Noto_Sans_Lao',sans-serif]"
-                    >
-                      <span>ກວດຮັບເຄື່ອງ</span>
-                      <ArrowRight size={14} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectRO(ro);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition shadow-xs"
+                      >
+                        <span>Check Order</span>
+                        <ArrowRight size={14} />
+                      </button>
+                      {onDeleteRO && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteRO(ro.id);
+                          }}
+                          className="p-1.5 rounded-xl bg-rose-50 text-rose-400 hover:bg-rose-500 hover:text-white transition shadow-xs"
+                          title="Delete RO"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -177,9 +204,9 @@ export default function ROList({
       {/* MOBILE CARD VIEW */}
       <div className="md:hidden divide-y divide-slate-100">
         {roListWithStats.length === 0 ? (
-          <div className="py-10 text-center text-slate-400 font-['Noto_Sans_Lao',sans-serif]">
+          <div className="py-10 text-center text-slate-400">
             <Package className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-            <p className="font-bold text-sm">ບໍ່ພົບຂໍ້ມູນບິນ RO</p>
+            <p className="font-bold text-sm">No RO found</p>
           </div>
         ) : (
           roListWithStats.map((ro) => (
@@ -197,25 +224,39 @@ export default function ROList({
                     {ro.soNumber}
                   </div>
                 </div>
-                <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
+                  {onDeleteRO && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteRO(ro.id);
+                      }}
+                      className="p-1.5 rounded-xl bg-rose-50 text-rose-400 hover:bg-rose-500 hover:text-white transition"
+                      title="Delete RO"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-600 pt-1 font-bold font-['Noto_Sans_Lao',sans-serif]">
+              <div className="flex items-center justify-between text-xs text-slate-600 pt-1 font-bold">
                 <span>{ro.storeName}</span>
                 <span className="font-mono text-slate-400">{ro.deliveryDate}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 p-2 bg-slate-50 rounded-xl text-center text-xs">
                 <div>
-                  <div className="text-slate-400 text-[10px] font-bold font-['Noto_Sans_Lao',sans-serif]">ຈຳນວນລາຍການ</div>
+                  <div className="text-slate-400 text-[10px] font-bold">Total Items</div>
                   <div className="font-black text-slate-700">{ro.totalItems} items</div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[10px] font-bold font-['Noto_Sans_Lao',sans-serif]">RO QTY</div>
+                  <div className="text-slate-400 text-[10px] font-bold">RO QTY</div>
                   <div className="font-black text-slate-800 font-mono">{ro.totalRoQty}</div>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-[10px] font-bold font-['Noto_Sans_Lao',sans-serif]">RECEIVED</div>
+                  <div className="text-slate-400 text-[10px] font-bold">RECEIVED</div>
                   <div className="font-black text-indigo-600 font-mono">
                     {ro.stats.waitingCount === ro.totalItems ? '-' : ro.totalReceived}
                   </div>
