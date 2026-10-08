@@ -536,11 +536,9 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 const completed = rows.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length;
                 const rejected = rows.filter(r => r.status === 'rejected').length;
                 subA = { val: pendingWH, label: 'ລໍຖ້າສາງ', color: 'text-amber-500', filterKey: 'pending' };
-                subB = { val: pendingStore, label: '⚠️ ຄ້າງໜ້າຮ້ານ', color: pendingStore > 0 ? 'text-rose-500 font-black' : 'text-orange-500', filterKey: 'pending_store' };
+                subB = null;
                 subC = { val: completed, label: '✅ ສຳເລັດ', color: 'text-emerald-600', filterKey: 'completed' };
-                if (rejected > 0) {
-                    subD = { val: rejected, label: '❌ ປະຕິເສດ', color: 'text-rose-500 font-black', filterKey: 'rejected' };
-                }
+                subD = { val: rejected, label: '❌ ປະຕິເສດ', color: rejected > 0 ? 'text-rose-500 font-black' : 'text-slate-400', filterKey: 'rejected' };
             } else if (activeTab === 'edits') {
                 mainVal = rows.length; mainLabel = 'ການແກ້ໄຂຄລັງ';
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-indigo-500' };
@@ -554,7 +552,7 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subA = { val: normalCount, label: '⚡ ປົກກະຕິ', color: 'text-emerald-600', filterKey: 'on_time' };
                 subB = { val: backdatedCount, label: '🚨 ຮັບຍ້ອນຫຼັງ', color: backdatedCount > 0 ? 'text-rose-500 font-black' : 'text-purple-500', filterKey: 'backdated' };
                 subC = { val: pendingStoreCount, label: '⚠️ ຄ້າງຮັບ', color: pendingStoreCount > 0 ? 'text-rose-500 font-black' : 'text-orange-500', filterKey: 'pending_store' };
-                subD = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ພະນັກງານ', color: 'text-blue-500' };
+                subD = null;
             } else if (activeTab === 'store_manual_edits') {
                 mainVal = rows.length; mainLabel = 'ການແກ້ໄຂ Panel';
                 const negativeCount = rows.filter(r => (r.old_qty ?? 0) < 0).length;
@@ -946,9 +944,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: 'ລໍຖ້າສາງ', val: pendingWHCount, key: 'pending', cls: 'bg-amber-400/30', active: 'bg-amber-400/60 ring-2 ring-amber-300' },
-        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: pendingStoreCount, key: 'pending_store', cls: pendingStoreCount > 0 ? 'bg-orange-400/50 animate-pulse' : 'bg-orange-400/30', active: 'bg-orange-500/70 ring-2 ring-orange-300' },
         { label: '✅ ຮັບເຄື່ອງແລ້ວ', val: completedCount, key: 'completed', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
-        { label: 'ປະຕິເສດ', val: rejectedCount, key: 'rejected', cls: 'bg-rose-400/30', active: 'bg-rose-400/60 ring-2 ring-rose-300' },
+        { label: '❌ ປະຕິເສດ', val: rejectedCount, key: 'rejected', cls: 'bg-rose-400/30', active: 'bg-rose-400/60 ring-2 ring-rose-300' },
     ] : activeTab === 'store_edits' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: '⚡ ຮັບປົກກະຕິ', val: onTimeCount, key: 'on_time', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
@@ -2090,11 +2087,9 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             {activeTab === 'requests' && (
                                 <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
                                     {[
-                                        { label: 'ທັງໝົດ', val: data.length, icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
                                         { label: 'ລໍຖ້າສາງ', val: data.filter(r => r.status === 'pending').length, icon: '⏳', key: 'pending', cls: 'hover:bg-amber-400/30' },
-                                        { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && !r.store_confirmed_at).length, icon: '⚠️', key: 'pending_store', cls: 'hover:bg-orange-500/30' },
                                         { label: '✅ ຮັບເຄື່ອງແລ້ວ', val: data.filter(r => (r.status === 'accepted' || r.status === 'approved') && r.store_confirmed_at).length, icon: '✅', key: 'completed', cls: 'hover:bg-emerald-400/30' },
-                                        { label: 'ປະຕິເສດ', val: data.filter(r => r.status === 'rejected').length, icon: '❌', key: 'rejected', cls: 'hover:bg-rose-400/30' },
+                                        { label: '❌ ປະຕິເສດ', val: data.filter(r => r.status === 'rejected').length, icon: '❌', key: 'rejected', cls: 'hover:bg-rose-400/30' },
                                     ].map(s => (
                                         <button
                                             key={s.label}
@@ -2111,7 +2106,6 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             {activeTab === 'store_edits' && (
                                 <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
                                     {[
-                                        { label: 'ທັງໝົດ', val: data.length, icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
                                         { label: '⚡ ຮັບປົກກະຕິ', val: data.filter(r => !r.is_backdated && r.store_confirmed_at).length, icon: '⚡', key: 'on_time', cls: 'hover:bg-emerald-400/30' },
                                         { label: '🚨 ຮັບຍ້ອນຫຼັງ (>12ຊມ)', val: data.filter(r => r.is_backdated && r.store_confirmed_at).length, icon: '🚨', key: 'backdated', cls: 'hover:bg-rose-500/30' },
                                         { label: '⚠️ ຄ້າງໜ້າຮ້ານກົດຮັບ', val: data.filter(r => !r.store_confirmed_at).length, icon: '⚠️', key: 'pending_store', cls: 'hover:bg-orange-500/30' },

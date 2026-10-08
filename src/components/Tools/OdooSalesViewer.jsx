@@ -78,6 +78,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
         { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
         { id: 273, name: 'ປະຕູໄຊ (ເມກ້າມໍ)', short: 'PTX' },
+        { id: 5, name: 'ໂພນຕ້ອງ (Jmart)', short: 'JMT' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(

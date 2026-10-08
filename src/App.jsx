@@ -83,6 +83,8 @@ import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
 import MasterDataImport from './components/Tools/MasterDataImport';
 import WeatherPage from './components/features/weather/WeatherPage';
 import VisualLensSearch from './components/Tools/VisualLensSearch';
+import ReceiveCheckMockup from './components/Tools/ReceiveCheckMockup';
+import ReceiveCheckV0 from './features/receive-check/versions/ReceiveCheckV0';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import VisualLensCardImg from './assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 import { Gamepad2 } from 'lucide-react';
@@ -98,6 +100,7 @@ function AppContent() {
     const stepParam = urlParams.get('step');
     if (stepParam) return stepParam;
 
+    if (path.startsWith('/receive-check-v0')) return 'receive-check-v0';
     if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) return 'check-price-ultimate';
     if (path.startsWith('/checkprice')) return 'check-price';
     if (path.startsWith('/landing')) return 'landing';
@@ -107,7 +110,7 @@ function AppContent() {
   // Sync URL when step changes so user can bookmark or copy link
   useEffect(() => {
     if (!window.history.state || window.history.state.step !== step) {
-      let newPath = step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
+      let newPath = step === 'receive-check-v0' ? '/receive-check-v0' : step === 'check-price-ultimate' ? '/checkprice-ultimate' : step === 'check-price' ? '/checkprice' : step === 'landing' ? '/landing' : '/';
 
       // If it's a step that isn't mapped to a path, append it as a query param
       if (newPath === '/' && step !== 'upload') {
@@ -136,6 +139,8 @@ function AppContent() {
 
         if (stepParam) {
           setStep(stepParam);
+        } else if (path.startsWith('/receive-check-v0')) {
+          setStep('receive-check-v0');
         } else if (path.startsWith('/checkprice-ultimate') || path.startsWith('/checkprice_ultimate')) {
           setStep('check-price-ultimate');
         } else if (path.startsWith('/checkprice')) {
@@ -1454,6 +1459,39 @@ function AppContent() {
                         </div>
                       </div>
 
+                      {/* Receive Check V0 (DC to Store RO Receiving) */}
+                      <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-indigo-500 hover:shadow-indigo-500/20 transition-all duration-500 w-full sm:w-[340px] border-2 border-indigo-200/50">
+                        <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 dark:bg-slate-800 relative flex items-center justify-center">
+                          <div className="p-7 rounded-[2rem] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-inner">
+                            <span className="text-4xl">📦</span>
+                          </div>
+                          <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white shadow-sm font-mono">
+                            V0
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white/90 dark:from-slate-900/90 to-transparent" />
+                        </div>
+                        <div className="px-7 pb-7 pt-4 flex flex-col items-center gap-4 w-full">
+                          <div className="space-y-1 text-center">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-0.5 rounded-full font-['Noto_Sans_Lao',sans-serif]">
+                              ✨ ລະບົບໃໝ່ DC → Store
+                            </span>
+                            <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight font-['Noto_Sans_Lao',sans-serif]">
+                              ກວດຮັບສິນຄ້າ RO (V0)
+                            </h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider font-mono">
+                              DC RO TO STORE RECEIVE CHECK
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setStep('receive-check-v0')}
+                            className="w-full btn-primary mt-1 group py-3.5 bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-500 shadow-indigo-500/30 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2"
+                          >
+                            <Box size={18} />
+                            <span className="font-['Noto_Sans_Lao',sans-serif]">ກົດເຂົ້າໃຊ້ງານ V0</span>
+                          </button>
+                        </div>
+                      </div>
+
                     </>
                   )}
 
@@ -2086,6 +2124,20 @@ function AppContent() {
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
               <WeatherPage
                 onBack={() => setStep('upload')}
+              />
+            </div>
+          )}
+
+          {step === 'receive-check-v0' && (
+            <div className="fixed inset-0 z-[9999] bg-[#F8F9FD] flex flex-col animate-fade-in overflow-y-auto">
+              <ReceiveCheckV0 onBack={() => setStep('upload')} />
+            </div>
+          )}
+
+          {step === 'receive-check' && (
+            <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
+              <ReceiveCheckMockup 
+                onBack={() => setStep('upload')} 
               />
             </div>
           )}

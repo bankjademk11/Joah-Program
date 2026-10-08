@@ -208,7 +208,7 @@ export async function fetchJoahProducts(offset = 0, limit = 20, search = '', onl
  */
 export async function fetchBranchSales(dateStart, dateEnd) {
   // Joah branch company IDs based on the provided session info
-  const branchIds = [247, 248, 249, 261, 273];
+  const branchIds = [247, 248, 249, 261, 273, 5]; // 5 = Jmart Phonetong
 
   const domain = [
     ['company_id', 'in', branchIds],
@@ -369,7 +369,7 @@ export async function fetchOrderLines(lineIds) {
  * @returns {Promise<Object[]>}
  */
 // All Joah branch company IDs — passed in context so Odoo unlocks multi-company data
-const ALL_JOAH_COMPANY_IDS = [8, 173, 241, 247, 248, 249, 261, 273]; // 173 = Phonsinuan, 8 = Vangxaiy
+const ALL_JOAH_COMPANY_IDS = [5, 8, 173, 241, 247, 248, 249, 261, 273]; // 5 = Jmart Phonetong, 8 = Jmart Vangxaiy, 173 = Phonsinuan
 
 export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true) {
   const domain = [

@@ -107,6 +107,18 @@ const apps = [
         icon: VisualLensCardImg,
         step: 'visual-lens-search'
     },
+    {
+        id: 'receive-check-v0',
+        name: 'ກວດຮັບສິນຄ້າ V0 (Receive Check V0)',
+        icon: RequestIcon,
+        step: 'receive-check-v0'
+    },
+    {
+        id: 'receive-check',
+        name: 'ກວດຮັບສິນຄ້າ (Receive Check)',
+        icon: RequestIcon,
+        step: 'receive-check'
+    },
 ];
 
 const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
