@@ -92,8 +92,41 @@ import { Gamepad2 } from 'lucide-react';
 
 function AppContent() {
   const { t } = useLanguage();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    const storedId = localStorage.getItem('joah_employee_id');
+    const storedName = localStorage.getItem('joah_employee_name');
+    const storedRole = localStorage.getItem('joah_employee_role');
+    if (storedId && storedName) {
+      const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+      const isCashier = storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase());
+      return !isCashier;
+    }
+    return false;
+  });
+
+  const [user, setUser] = useState(() => {
+    const storedId = localStorage.getItem('joah_employee_id');
+    const storedName = localStorage.getItem('joah_employee_name');
+    const storedRole = localStorage.getItem('joah_employee_role');
+    const storedWorkplace = localStorage.getItem('joah_employee_workplace');
+    const storedBranch = localStorage.getItem('joah_branch_id');
+
+    if (storedId && storedName) {
+      const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
+      const isCashier = storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase());
+      if (isCashier) return null;
+
+      const branch = storedBranch || 'ຕະຫຼາດລາວ';
+      return {
+        id: storedId,
+        name: storedName,
+        role: storedRole || 'staff',
+        workplace: storedWorkplace || 'front',
+        branch_id: branch
+      };
+    }
+    return null;
+  });
 
   const [step, setStep] = useState(() => {
     const path = window.location.pathname.toLowerCase();
@@ -195,8 +228,18 @@ function AppContent() {
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [locationFilter, setLocationFilter] = useState(''); // New Location Filter State
   const [hideZeroQty, setHideZeroQty] = useState(false); // Filter to hide items with 0 Qty
-  const [importBranch, setImportBranch] = useState(''); // Branch target for import/sync
-  const [adminViewBranch, setAdminViewBranch] = useState('ຕະຫຼາດລາວ'); // Branch Admin เลือกดูใน Cloud (Default to TLL)
+  const [importBranch, setImportBranch] = useState(() => {
+    return localStorage.getItem('joah_branch_id') || '';
+  });
+  const [adminViewBranch, setAdminViewBranch] = useState(() => {
+    const storedRole = localStorage.getItem('joah_employee_role');
+    const storedBranch = localStorage.getItem('joah_branch_id') || 'ຕະຫຼາດລາວ';
+    const storedAdminView = localStorage.getItem('joah_admin_view_branch');
+    if (storedRole === 'HQ') {
+      return storedAdminView || storedBranch;
+    }
+    return storedBranch;
+  });
   const [autoSyncMaster, setAutoSyncMaster] = useState(false); // Checkbox for Master Data Sync
 
   // --- Realtime State ---
@@ -229,19 +272,13 @@ function AppContent() {
     hasQty: filteredResults.filter(r => Number(r.qty) > 0).length
   };
 
-  // 🔄 Auto-Login from LocalStorage
+  // 🔒 Cashier security: clear their localStorage on refresh (they must re-login every time)
   useEffect(() => {
     const storedId = localStorage.getItem('joah_employee_id');
-    const storedName = localStorage.getItem('joah_employee_name');
     const storedRole = localStorage.getItem('joah_employee_role');
-    const storedWorkplace = localStorage.getItem('joah_employee_workplace');
-    const storedBranch = localStorage.getItem('joah_branch_id');
-
-    if (storedId && storedName) {
+    if (storedId) {
       const CASHIER_EMPLOYEE_IDS = ['K2603252', 'K2603244', 'K2603249', 'K2603253', 'K2603251', 'K2605364', 'TEMP0001'];
       const isCashier = storedRole === 'cashier' || CASHIER_EMPLOYEE_IDS.includes(String(storedId).toUpperCase());
-
-      // 🔒 Cashier security: Do NOT auto-login on refresh. Force login prompt.
       if (isCashier) {
         localStorage.removeItem('joah_employee_id');
         localStorage.removeItem('joah_employee_name');
@@ -250,25 +287,7 @@ function AppContent() {
         localStorage.removeItem('joah_branch_id');
         setIsLoggedIn(false);
         setUser(null);
-        return;
       }
-
-      const branch = storedBranch || 'ຕະຫຼາດລາວ';
-      const currentUserObj = {
-        id: storedId,
-        name: storedName,
-        role: storedRole || 'staff',
-        workplace: storedWorkplace || 'front',
-        branch_id: branch
-      };
-      setUser(currentUserObj);
-      setImportBranch(branch);
-
-      // Restore the previously selected admin view branch if available
-      const storedAdminView = localStorage.getItem('joah_admin_view_branch');
-      setAdminViewBranch(storedAdminView || branch);
-
-      setIsLoggedIn(true);
     }
   }, []);
 

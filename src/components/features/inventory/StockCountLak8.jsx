@@ -32,7 +32,8 @@ import {
   ChevronLeft,
   Search,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 import * as XLSX from 'xlsx';
@@ -62,6 +63,9 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(!localStorage.getItem('lak8_branch'));
   const [selectedBrand, setSelectedBrand] = useState(localStorage.getItem('lak8_brand') || null); // null | 'joah' | 'technohub'
+  const [selectedRoRef, setSelectedRoRef] = useState(localStorage.getItem('lak8_ro_reference') || '');
+  const [availableRos, setAvailableRos] = useState([]);
+  const [isLoadingRos, setIsLoadingRos] = useState(false);
 
   // Event Log States
   const [events, setEvents] = useState([]);
@@ -507,6 +511,87 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     });
   };
 
+  // ─── RO / SO Reference Selection for Receive Check Linking ────────
+  const isDateMatching = (dbDate, inputDate) => {
+    if (!dbDate || !inputDate) return false;
+    const cleanDb = String(dbDate).trim();
+    const cleanIn = String(inputDate).trim();
+    if (cleanDb === cleanIn) return true;
+
+    // Convert inputDate (YYYY-MM-DD) to DD/MM/YYYY variations
+    if (cleanIn.includes('-')) {
+      const [y, m, d] = cleanIn.split('-');
+      const d1 = `${d}/${m}/${y}`;
+      const d2 = `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+      const d3 = `${parseInt(d, 10)}/${m}/${y}`;
+      const d4 = `${d}/${parseInt(m, 10)}/${y}`;
+      if (cleanDb === d1 || cleanDb === d2 || cleanDb === d3 || cleanDb === d4) return true;
+    }
+
+    // Convert dbDate (DD/MM/YYYY) to YYYY-MM-DD
+    if (cleanDb.includes('/')) {
+      const parts = cleanDb.split('/');
+      if (parts.length === 3) {
+        const [d, m, y] = parts;
+        const iso = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        if (iso === cleanIn) return true;
+      }
+    }
+
+    return false;
+  };
+
+  useEffect(() => {
+    if (!selectedBranch || !selectedDate) {
+      setAvailableRos([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchMatchingRos = async () => {
+      setIsLoadingRos(true);
+      try {
+        const { data, error } = await supabase
+          .from('receive_orders')
+          .select('id, ro_number, so_number, full_reference, delivery_date, store_code, store_name, total_items, total_ro_qty, status')
+          .ilike('store_code', selectedBranch.trim());
+
+        if (error) {
+          console.warn('[RO Fetch Notice]', error.message);
+          if (isMounted) setAvailableRos([]);
+          return;
+        }
+
+        if (isMounted && data) {
+          const matched = data.filter(order => isDateMatching(order.delivery_date, selectedDate));
+          setAvailableRos(matched);
+
+          // If current selectedRoRef is empty or not in matched, default to first or keep saved
+          if (matched.length > 0) {
+            setSelectedRoRef(prev => {
+              if (prev === 'NONE') return 'NONE';
+              const exists = matched.some(m => (m.full_reference || m.ro_number || m.id) === prev);
+              return exists ? prev : (matched[0].full_reference || matched[0].ro_number || matched[0].id);
+            });
+          } else {
+            setSelectedRoRef('');
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching RO orders:', err);
+        if (isMounted) setAvailableRos([]);
+      } finally {
+        if (isMounted) setIsLoadingRos(false);
+      }
+    };
+
+    fetchMatchingRos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBranch, selectedDate]);
+
   // ─── Setup Session ────────────────────────────────────────────────
   const handleConfirmSetup = () => {
     if (!selectedBranch || !selectedDate) {
@@ -524,6 +609,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     localStorage.setItem('lak8_date', selectedDate);
     localStorage.setItem('lak8_owner_branch', lak8OwnerBranch);
     localStorage.setItem('lak8_doc_nos', JSON.stringify(validDocNos));
+    if (selectedRoRef) {
+      localStorage.setItem('lak8_ro_reference', selectedRoRef);
+    } else {
+      localStorage.removeItem('lak8_ro_reference');
+    }
 
     const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
     const savedStatus = localStorage.getItem(statusKey) || 'in_progress';
@@ -541,10 +631,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       localStorage.removeItem('lak8_date');
       localStorage.removeItem('lak8_owner_branch');
       localStorage.removeItem('lak8_doc_nos');
+      localStorage.removeItem('lak8_ro_reference');
       setSelectedBranch('');
       setLak8OwnerBranch('');
       setDocNos([]);
       setHasDocNo(false);
+      setSelectedRoRef('');
+      setAvailableRos([]);
       setShowSetupModal(true);
     }
   };
@@ -1578,6 +1671,63 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     />
                   </div>
                 </div>
+
+                {/* RO / SO Reference Selector (Linked from DC to Store Receive Check) */}
+                {selectedBranch && selectedDate && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <FileText size={14} className="text-indigo-600" />
+                        <span>RO / SO Reference</span>
+                        {availableRos.length > 0 && (
+                          <span className="text-indigo-600 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px]">
+                            {availableRos.length} ພົບໃນລະບົບ
+                          </span>
+                        )}
+                      </label>
+                      {isLoadingRos && (
+                        <span className="text-[11px] font-bold text-indigo-500 flex items-center gap-1">
+                          <Loader size={12} className="animate-spin" /> ກຳລັງກວດສອບ...
+                        </span>
+                      )}
+                    </div>
+
+                    {availableRos.length > 0 ? (
+                      <div className="relative">
+                        <select
+                          value={selectedRoRef}
+                          onChange={(e) => setSelectedRoRef(e.target.value)}
+                          className="w-full px-3.5 py-3 border-2 border-indigo-200 bg-indigo-50/50 rounded-xl font-bold text-slate-700 focus:border-indigo-500 focus:bg-white outline-none transition-all cursor-pointer text-sm shadow-sm"
+                        >
+                          {availableRos.map(ro => {
+                            const refName = ro.full_reference || ro.ro_number || ro.so_number || `RO-${ro.id}`;
+                            const itemsCount = ro.total_items ? `${ro.total_items} ລາຍການ` : '';
+                            const qtyCount = ro.total_ro_qty ? `${Number(ro.total_ro_qty).toLocaleString()} pcs` : '';
+                            const meta = [itemsCount, qtyCount].filter(Boolean).join(', ');
+                            return (
+                              <option key={ro.id || refName} value={refName}>
+                                📄 {refName} {meta ? `(${meta})` : ''}
+                              </option>
+                            );
+                          })}
+                          <option value="NONE">⚙️ ນັບທົ່ວໄປ (ບໍ່ລະບຸ RO)</option>
+                        </select>
+                      </div>
+                    ) : (
+                      !isLoadingRos && (
+                        <div className="p-2.5 bg-slate-50 border border-dashed border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-500">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle size={14} className="text-slate-400" />
+                            ບໍ່ພົບ RO ສຳລັບສາຂາ ແລະ ວັນທີນີ້
+                          </span>
+                          <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md text-[11px]">
+                            ນັບທົ່ວໄປ
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
 
               <button
@@ -1698,6 +1848,11 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 <span className="text-[10px] text-white/80 font-medium">
                   {selectedDate || '...'}
                 </span>
+                {selectedRoRef && selectedRoRef !== 'NONE' && (
+                  <span className="bg-sky-400/30 text-sky-100 px-2 py-0.5 rounded-md text-[10px] font-bold border border-sky-300/40 flex items-center gap-1 shadow-sm">
+                    <FileText size={10} /> RO: {selectedRoRef}
+                  </span>
+                )}
 
                 {/* Status Toggle Button */}
                 <button
@@ -2486,6 +2641,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="font-bold text-slate-500 text-xs">ວັນທີນັບ (Date)</span>
                   <span className="font-bold text-slate-800 font-mono">{selectedDate}</span>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-500 text-xs">RO / SO Reference</span>
+                  <span className="font-bold text-indigo-600 text-xs font-mono">
+                    {selectedRoRef && selectedRoRef !== 'NONE' ? `📄 ${selectedRoRef}` : 'ບໍ່ໄດ້ລະບຸ (ນັບທົ່ວໄປ)'}
+                  </span>
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
