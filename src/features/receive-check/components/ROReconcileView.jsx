@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle2, AlertCircle, ArrowUpCircle, Clock, HelpCircle,
-  Loader2, RefreshCw, Filter, Search, BarChart3, Building2, Calendar
+  Loader2, RefreshCw, Filter, Search, BarChart3, Building2, Calendar,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { fetchStockCountForBranchDate, buildReconciliationRows } from '../services/reconcileService';
 
@@ -33,6 +34,8 @@ export default function ROReconcileView({ ro }) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [lastFetched, setLastFetched] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   // The branch = ro.storeCode, date = ro.deliveryDate
   const branch = ro?.storeCode;
@@ -88,6 +91,7 @@ export default function ROReconcileView({ ro }) {
 
   // ─── Filtered rows ──────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
+    setCurrentPage(1); // reset to page 1 when filter changes
     return rows.filter(r => {
       if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
       if (searchQuery.trim()) {
@@ -97,6 +101,10 @@ export default function ROReconcileView({ ro }) {
       return true;
     });
   }, [rows, statusFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   if (!ro) return null;
 
@@ -224,11 +232,10 @@ export default function ROReconcileView({ ro }) {
 
       {/* Loading */}
       {isLoading && (
-        <div className="bg-white/80 rounded-2xl p-12 text-center border border-slate-100">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-2" />
-          <p className="text-sm font-black text-slate-600">
-            Fetching Stock Count from Supabase...
-          </p>
+        <div className="bg-white/80 rounded-2xl p-12 text-center border border-slate-100 animate-in fade-in">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-3" />
+          <p className="text-sm font-black text-slate-600">Fetching Stock Count from Supabase...</p>
+          <p className="text-xs text-slate-400 mt-1">Collecting all pages of data, please wait</p>
         </div>
       )}
 
@@ -259,8 +266,10 @@ export default function ROReconcileView({ ro }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredRows.map((row, idx) => {
+              {filteredRows.length > 0 ? (
+                paginatedRows.map((row, idx) => {
                 const cfg = STATUS_CONFIG[row.status] || STATUS_CONFIG.NOT_COUNTED;
+                const globalIdx = (safePage - 1) * PAGE_SIZE + idx;
                 return (
                   <tr key={row.barcode + idx} className={`transition ${cfg.bg} hover:brightness-95`}>
                     <td className="py-2.5 px-4 text-center text-xs text-slate-400 font-bold">{idx + 1}</td>
@@ -286,11 +295,38 @@ export default function ROReconcileView({ ro }) {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              ) : (
+                <tr><td colSpan={7} className="py-8 text-center text-slate-400 text-xs font-bold">No matching items</td></tr>
+              )}
             </tbody>
           </table>
-          <div className="px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400">
-            Showing {filteredRows.length} of {rows.length} items
+          <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Showing {filteredRows.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length} items
+              {statusFilter !== 'ALL' || searchQuery ? (
+                <span className="ml-2 text-indigo-400 font-bold">(filtered — <button className="underline cursor-pointer" onClick={() => { setStatusFilter('ALL'); setSearchQuery(''); }}>Clear</button>)</span>
+              ) : null}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="px-3 py-1 text-xs font-black text-slate-700">
+                Page {safePage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       )}

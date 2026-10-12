@@ -9,6 +9,7 @@ import CheckPriceIcon from '../../assets/Icons_AppJoah/checkpirce.webp';
 import BgImage from '../../assets/Icons_AppJoah/web_background.jpg';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
 import VisualLensCardImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
+import DcStoreCardImg from '../../assets/Icons_AppJoah/dc-store-card.webp';
 
 const apps = [
     {
@@ -110,7 +111,7 @@ const apps = [
     {
         id: 'receive-check-v0',
         name: 'ກວດຮັບສິນຄ້າ V0 (Receive Check V0)',
-        icon: RequestIcon,
+        icon: DcStoreCardImg,
         step: 'receive-check-v0'
     },
     {

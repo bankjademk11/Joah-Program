@@ -87,6 +87,7 @@ import ReceiveCheckMockup from './components/Tools/ReceiveCheckMockup';
 import ReceiveCheckV0 from './features/receive-check/versions/ReceiveCheckV0';
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import VisualLensCardImg from './assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
+import DcStoreCardImg from './assets/Icons_AppJoah/dc-store-card.webp';
 import { Gamepad2 } from 'lucide-react';
 
 function AppContent() {
@@ -1461,14 +1462,16 @@ function AppContent() {
 
                       {/* Receive Check V0 (DC to Store RO Receiving) */}
                       <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-indigo-500 hover:shadow-indigo-500/20 transition-all duration-500 w-full sm:w-[340px] border-2 border-indigo-200/50">
-                        <div className="w-full h-44 overflow-hidden bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 dark:bg-slate-800 relative flex items-center justify-center">
-                          <div className="p-7 rounded-[2rem] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-inner">
-                            <span className="text-4xl">📦</span>
-                          </div>
-                          <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white shadow-sm font-mono">
+                        <div className="w-full h-44 overflow-hidden relative flex items-center justify-center bg-slate-900">
+                          <img
+                            src={DcStoreCardImg}
+                            alt="DC to Store Delivery Check"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                          />
+                          <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-600/90 text-white shadow-sm font-mono backdrop-blur-sm border border-white/20">
                             V0
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white/90 dark:from-slate-900/90 to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/90 dark:from-slate-900/90 to-transparent" />
                         </div>
                         <div className="px-7 pb-7 pt-4 flex flex-col items-center gap-4 w-full">
                           <div className="space-y-1 text-center">

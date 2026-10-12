@@ -9,14 +9,31 @@ import { supabase } from '../../../utils/supabaseClient';
 export async function fetchStockCountForBranchDate(branch, date) {
   if (!branch || !date) return [];
 
-  const { data, error } = await supabase
-    .from('stock_count_lak8')
-    .select('barcode, qty, branch, owner_branch, count_date')
-    .eq('branch', branch)
-    .eq('count_date', date);
+  // Supabase returns max 1000 rows by default — paginate to get ALL rows
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let from = 0;
+  let hasMore = true;
 
-  if (error) throw error;
-  return data || [];
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('stock_count_lak8')
+      .select('barcode, qty, branch, owner_branch, count_date')
+      .eq('branch', branch)
+      .eq('count_date', date)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+      from += PAGE_SIZE;
+      hasMore = data.length === PAGE_SIZE; // if less than PAGE_SIZE, no more pages
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
 }
 
 /**

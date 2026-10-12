@@ -21,12 +21,30 @@ export async function fetchAllReceiveOrders() {
     if (!orders || orders.length === 0) return [];
 
     const orderIds = orders.map(o => o.id);
-    const { data: items, error: itemsErr } = await supabase
-      .from('receive_order_items')
-      .select('*')
-      .in('receive_order_id', orderIds);
+    
+    // Supabase limits each select to 1000 rows by default — paginate to fetch ALL items
+    const PAGE_SIZE = 1000;
+    let items = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (itemsErr) throw itemsErr;
+    while (hasMore) {
+      const { data: chunk, error: itemsErr } = await supabase
+        .from('receive_order_items')
+        .select('*')
+        .in('receive_order_id', orderIds)
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (itemsErr) throw itemsErr;
+
+      if (chunk && chunk.length > 0) {
+        items = items.concat(chunk);
+        from += PAGE_SIZE;
+        hasMore = chunk.length === PAGE_SIZE;
+      } else {
+        hasMore = false;
+      }
+    }
 
     // Group items by receive_order_id
     const itemsByOrder = {};
