@@ -27,3 +27,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# AI Model Data / FAISS Indices (Large files tracked separately on Hugging Face)
+ITproject/program/index_data/
+*.faiss
+*.npy
