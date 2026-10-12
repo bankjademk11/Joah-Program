@@ -817,7 +817,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         target_date: selectedDate,
         p_owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
         p_doc_nos: selectedBranch === 'LAK8' && docNos.length > 0 ? docNos : null,
-        p_brand: selectedBrand || 'joah'
+        p_brand: selectedBrand || 'joah',
+        p_ro_reference: (selectedRoRef && selectedRoRef !== 'NONE') ? selectedRoRef : null
       });
 
       if (error) throw error;
@@ -1176,6 +1177,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         branch: item.branch,
         owner_branch: item.owner_branch,
         doc_nos: item.doc_nos,
+        ro_reference: item.ro_reference || null,
         countDate: item.count_date,
         timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA')
       }));
@@ -1217,6 +1219,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       item.branch?.toLowerCase().includes(term) ||
       item.owner_branch?.toLowerCase().includes(term) ||
       item.createdBy?.toLowerCase().includes(term) ||
+      item.ro_reference?.toLowerCase().includes(term) ||
       (Array.isArray(item.doc_nos) && item.doc_nos.some(d => d.toLowerCase().includes(term)))
     );
   }, [boItems, boSearchTerm]);
@@ -2210,6 +2213,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                           <th className="py-4 px-4 text-center min-w-[90px] font-black text-xs uppercase tracking-widest">ສາຂາ</th>
                           <th className="py-4 px-4 text-center min-w-[110px] font-black text-xs uppercase tracking-widest">ສາຂາເຈົ້າຂອງ</th>
                           <th className="py-4 px-4 text-center min-w-[140px] font-black text-xs uppercase tracking-widest">ເລກບິນ</th>
+                          <th className="py-4 px-4 text-center min-w-[160px] font-black text-xs uppercase tracking-widest">RO / SO Reference</th>
                           <th className="py-4 px-4 text-center min-w-[120px] font-black text-xs uppercase tracking-widest">ວັນທີນັບ</th>
                           <th className="py-4 px-4 min-w-[130px] font-black text-xs uppercase tracking-widest">ຜູ້ບັນທຶກ</th>
                           <th className="py-4 px-4 text-center min-w-[100px] font-black text-xs uppercase tracking-widest">ເວລາ</th>
@@ -2268,6 +2272,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                                   <span className="text-slate-300">—</span>
                                 )}
                               </td>
+                              <td className="py-3.5 px-4 text-center">
+                                {item.ro_reference ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg font-bold border border-blue-200 whitespace-nowrap">
+                                    📄 {item.ro_reference}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
                               <td className="py-3.5 px-4 text-center font-medium text-slate-600 font-mono">
                                 {item.countDate}
                               </td>
@@ -2292,7 +2305,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                           <td className="py-4 px-4 text-center font-black font-mono text-xl text-amber-300">
                             {boStats.totalQty.toLocaleString()}
                           </td>
-                          <td colSpan={6}></td>
+                          <td colSpan={7}></td>
                         </tr>
                       </tfoot>
                     </table>

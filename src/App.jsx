@@ -2158,8 +2158,8 @@ function AppContent() {
 
           {step === 'receive-check' && (
             <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in overflow-y-auto">
-              <ReceiveCheckMockup 
-                onBack={() => setStep('upload')} 
+              <ReceiveCheckMockup
+                onBack={() => setStep('upload')}
               />
             </div>
           )}
