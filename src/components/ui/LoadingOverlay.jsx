@@ -1,5 +1,5 @@
 import React from 'react';
-import elephantMascot from '../../assets/elephant_perfect_transparent_v2 (1).gif';
+import elephantMascot from '../../assets/elephant_loading_web.gif';
 
 const LoadingOverlay = ({
     message = 'ກຳລັງເຂົ້າສູ່ລະບົບ',
@@ -29,7 +29,7 @@ const LoadingOverlay = ({
                     <img
                         src={elephantMascot}
                         alt="Loading Mascot"
-                        className="w-44 h-44 md:w-56 md:h-56 object-contain"
+                        className="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 object-contain drop-shadow-2xl"
                     />
                 </div>
 

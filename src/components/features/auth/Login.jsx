@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import joahLogo from '../../../assets/Joah.jpeg';
 import joahWarehouseImg from '../../../assets/joah warehosue.png';
 import LoadingOverlay from '../../ui/LoadingOverlay';
-import elephantMascot from '../../../assets/elephant_perfect_transparent_v2 (1).gif';
+import elephantMascot from '../../../assets/elephant_loading_web.gif';
 import { User, ArrowRight, Loader2, Lock, MapPin, Phone } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
 
