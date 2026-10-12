@@ -635,11 +635,8 @@ const EditPanel = ({
                                                                 setEditLocation(filtered[0]);
                                                                 setDropdownOpen(false);
                                                                 setLocationSearch('');
-                                                            } else if (searchUpper.length > 0) {
-                                                                setEditLocation(searchUpper);
-                                                                setDropdownOpen(false);
-                                                                setLocationSearch('');
                                                             }
+                                                            // Removed manual creation: do not allow setting searchUpper if not in rack rules
                                                         }
                                                     }}
                                                     placeholder="🔍 ຄົ້ນຫາ Location..."

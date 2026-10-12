@@ -376,9 +376,8 @@ const EditPanel = ({
                                                                 if (locationSearch) {
                                                                     const allLocs = getAllLocations();
                                                                     const searchFilteredAll = allLocs.filter(loc => loc.toUpperCase().includes(locationSearch.toUpperCase()));
-                                                                    let picked = searchFilteredAll.length > 0 ? searchFilteredAll[0] : locationSearch.toUpperCase();
-                                                                    if (picked) {
-                                                                        setEditLocation(picked);
+                                                                    if (searchFilteredAll.length > 0) {
+                                                                        setEditLocation(searchFilteredAll[0]);
                                                                         setDropdownOpen(false);
                                                                         setLocationSearch('');
                                                                     }

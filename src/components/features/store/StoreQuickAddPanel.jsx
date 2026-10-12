@@ -103,7 +103,7 @@ const QuickAddPanel = ({
     useEffect(() => {
         const handleGlobalKeys = (e) => {
             if (!isOpen || isSaving) return;
-            
+
             // 1. ARROW KEYS (Only for Product Tag step)
             if (focusedStep === 'tag') {
                 if (e.key === 'ArrowLeft') {
@@ -119,7 +119,7 @@ const QuickAddPanel = ({
             if (e.key === 'Enter') {
                 // Ignore if user is typing in any input field (handled locally)
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-                
+
                 if (focusedStep === 'tag') {
                     e.preventDefault();
                     setFocusedStep('rack');
@@ -196,11 +196,11 @@ const QuickAddPanel = ({
     // 🆕 Auto-select Rack if search matches an existing location (for Barcode Scanners)
     useEffect(() => {
         if (!locationSearch || !dropdownOpen) return;
-        
+
         const searchUpper = locationSearch.trim().toUpperCase();
         const allPossible = getAllLocations();
         const match = allPossible.find(loc => loc.toUpperCase() === searchUpper);
-        
+
         if (match) {
             setQuickAddForm(prev => ({ ...prev, rack_location: match }));
             setDropdownOpen(false);
@@ -468,7 +468,7 @@ const QuickAddPanel = ({
                                     className="w-full p-2 bg-white dark:bg-slate-800 border-2 border-emerald-200 dark:border-emerald-900/50 rounded-xl text-2xl font-black text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-300 number-input-no-arrows"
                                 />
                                 <p className="text-[10px] text-slate-400 text-center">{t('quickAdd.identifyQty')}</p>
-                                
+
                                 {/* 🆕 DC hint — only when New Stock In OR First-time record */}
                                 {(selectedReasonOption === t('reasons.newStock') || selectedReasonOption === t('reasons.firstTimeRecord')) && (
                                     <p className="text-[10px] text-violet-500 font-bold mt-1 text-center animate-in fade-in duration-200">
@@ -524,8 +524,8 @@ const QuickAddPanel = ({
                                         setFocusedStep('tag');
                                     }}
                                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'hook'
-                                            ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-200 dark:shadow-violet-900/20'
-                                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-900/10'
+                                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-200 dark:shadow-violet-900/20'
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-900/10'
                                         } ${focusedStep === 'tag' && quickAddForm.product_tag === 'hook' ? 'ring-2 ring-violet-400 ring-offset-2 dark:ring-offset-slate-900' : ''}`}
                                 >
                                     <span className="text-base">🪝</span>
@@ -546,8 +546,8 @@ const QuickAddPanel = ({
                                         setFocusedStep('tag');
                                     }}
                                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${quickAddForm.product_tag === 'shelf'
-                                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-sm shadow-sky-200 dark:shadow-sky-900/20'
-                                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-sky-300 hover:bg-sky-50/50 dark:hover:bg-sky-900/10'
+                                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-sm shadow-sky-200 dark:shadow-sky-900/20'
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-sky-300 hover:bg-sky-50/50 dark:hover:bg-sky-900/10'
                                         } ${focusedStep === 'tag' && quickAddForm.product_tag === 'shelf' ? 'ring-2 ring-sky-400 ring-offset-2 dark:ring-offset-slate-900' : ''}`}
                                 >
                                     <span className="text-base">📦</span>
@@ -649,13 +649,8 @@ const QuickAddPanel = ({
                                                                         rules.forEach(rule => allPossibleRacks.push(...rule.zones));
                                                                     });
                                                                     const searchFilteredAll = allPossibleRacks.filter(loc => loc.toUpperCase().includes(locationSearch.toUpperCase()));
-                                                                    const canAddCustom = locationSearch.trim().length > 0 && !searchFilteredAll.some(f => f.toUpperCase() === locationSearch.toUpperCase());
-                                                                    
-                                                                    let picked = '';
-                                                                    if (canAddCustom) picked = locationSearch.toUpperCase();
-                                                                    else if (searchFilteredAll.length > 0) picked = searchFilteredAll[0];
-                                                                    
-                                                                    if (picked) {
+                                                                    if (searchFilteredAll.length > 0) {
+                                                                        const picked = searchFilteredAll[0];
                                                                         setQuickAddForm(prev => ({ ...prev, rack_location: picked }));
                                                                         setDropdownOpen(false);
                                                                         setLocationSearch('');
@@ -770,10 +765,6 @@ const QuickAddPanel = ({
                                                             const searchFilteredAll = allPossibleRacks.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
                                                             const searchFilteredRec = recommendedList.filter(loc => !locationSearch || loc.toUpperCase().includes(locationSearch.toUpperCase()));
 
-                                                            // For MEGAMALL or when search doesn't match suggestions, allow manual creation
-                                                            const isMegaMall = currentBranch === 'ເມກ້າມໍ';
-                                                            const canAddCustom = locationSearch.trim().length > 0 && !searchFilteredAll.some(f => f.toUpperCase() === locationSearch.toUpperCase());
-
                                                             // Header Helper
                                                             const renderHeader = (title, icon) => (
                                                                 <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-b border-t first:border-t-0 dark:border-slate-700 flex items-center gap-2">
@@ -783,22 +774,6 @@ const QuickAddPanel = ({
 
                                                             return (
                                                                 <>
-                                                                    {canAddCustom && (
-                                                                        <div
-                                                                            className="px-3 py-3 text-sm cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-100 dark:border-emerald-800 flex items-center justify-between group"
-                                                                            onClick={() => {
-                                                                                setQuickAddForm(prev => ({ ...prev, rack_location: locationSearch.toUpperCase() }));
-                                                                                setDropdownOpen(false);
-                                                                                setLocationSearch('');
-                                                                            }}
-                                                                        >
-                                                                            <div className="flex flex-col">
-                                                                                <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">✨ ສ້າງໂລເຄຊັ້ນໃໝ່ (Manual)</span>
-                                                                                <span className="font-black text-emerald-700 dark:text-emerald-300">{locationSearch.toUpperCase()}</span>
-                                                                            </div>
-                                                                            <Plus size={16} className="text-emerald-500 group-hover:scale-125 transition-transform" />
-                                                                        </div>
-                                                                    )}
 
                                                                     {/* 🌟 RECOMMENDED SECTION */}
                                                                     {searchFilteredRec.length > 0 && (
@@ -857,7 +832,7 @@ const QuickAddPanel = ({
                                                                                 );
                                                                             })}
                                                                         </>
-                                                                    ) : !canAddCustom && (
+                                                                    ) : (
                                                                         <div className="px-3 py-6 text-center text-sm text-slate-400 italic">
                                                                             {locationSearch ? `ບໍ່ພົບ "${locationSearch}"` : t('quickAdd.noLocationsFound')}
                                                                         </div>
