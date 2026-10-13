@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, Calendar, Building2, ArrowRight, Package, UploadCloud, Trash2 } from 'lucide-react';
+import { Search, Filter, Calendar, Building2, ArrowRight, Package, UploadCloud, Trash2, RefreshCw } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export default function ROList({
@@ -13,7 +13,9 @@ export default function ROList({
   availableStores,
   onSelectRO,
   onOpenImport,
-  onDeleteRO
+  onDeleteRO,
+  onRefreshOrders,
+  isRefreshing
 }) {
   return (
     <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 xl:p-6 shadow-lg border border-blue-50 space-y-4">
@@ -78,6 +80,17 @@ export default function ROList({
               className="w-full pl-10 pr-4 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 transition"
             />
           </div>
+
+          {onRefreshOrders && (
+            <button
+              onClick={onRefreshOrders}
+              disabled={isRefreshing}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer active:scale-95 shrink-0 border border-slate-200"
+              title="Refresh Orders list"
+            >
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-indigo-600' : ''} />
+            </button>
+          )}
 
           {onOpenImport && (
             <button

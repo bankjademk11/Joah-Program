@@ -44,12 +44,15 @@ export default function RODetail({
     return rawDate;
   }, [rawDate]);
 
-  // Fetch stock counts for this branch & date
+  // RO reference to filter counted items specifically for this order
+  const roReference = ro?.fullReference || ro?.roNumber || null;
+
+  // Fetch stock counts for this branch & date & RO reference
   const loadStockData = async () => {
     if (!branch || !formattedDate) return;
     setIsLoadingStock(true);
     try {
-      const counts = await fetchStockCountForBranchDate(branch, formattedDate);
+      const counts = await fetchStockCountForBranchDate(branch, formattedDate, roReference);
       setStockCounts(counts || []);
     } catch (err) {
       console.error('Failed to load stock count for RODetail:', err);
@@ -60,7 +63,7 @@ export default function RODetail({
 
   useEffect(() => {
     loadStockData();
-  }, [branch, formattedDate]);
+  }, [branch, formattedDate, roReference]);
 
   // Map barcodes to total counted qty from stock_count_lak8
   const stockCountMap = useMemo(() => {

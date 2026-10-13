@@ -1,12 +1,13 @@
 import { supabase } from '../../../utils/supabaseClient';
 
 /**
- * Fetch stock count data from stock_count_lak8 for a specific branch and date.
- * @param {string} branch  - e.g. 'PSN', 'VX', 'LAK8'
- * @param {string} date    - ISO date string 'YYYY-MM-DD'
- * @returns {Array}        - Array of { barcode, qty, branch, owner_branch }
+ * Fetch stock count data from stock_count_lak8 for a specific branch, date, and optional RO reference.
+ * @param {string} branch       - e.g. 'PSN', 'VX', 'LAK8'
+ * @param {string} date         - ISO date string 'YYYY-MM-DD'
+ * @param {string} [roReference]- e.g. 'test TLL 01' or fullReference
+ * @returns {Array}             - Array of { barcode, qty, branch, owner_branch, ro_reference }
  */
-export async function fetchStockCountForBranchDate(branch, date) {
+export async function fetchStockCountForBranchDate(branch, date, roReference = null) {
   if (!branch || !date) return [];
 
   // Supabase returns max 1000 rows by default — paginate to get ALL rows
@@ -16,12 +17,17 @@ export async function fetchStockCountForBranchDate(branch, date) {
   let hasMore = true;
 
   while (hasMore) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('stock_count_lak8')
-      .select('barcode, qty, branch, owner_branch, count_date')
+      .select('barcode, qty, branch, owner_branch, count_date, ro_reference')
       .eq('branch', branch)
-      .eq('count_date', date)
-      .range(from, from + PAGE_SIZE - 1);
+      .eq('count_date', date);
+
+    if (roReference && roReference.trim() !== '') {
+      query = query.ilike('ro_reference', roReference.trim());
+    }
+
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
 
     if (error) throw error;
     if (data && data.length > 0) {

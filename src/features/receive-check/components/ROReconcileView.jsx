@@ -54,12 +54,14 @@ export default function ROReconcileView({ ro }) {
     return rawDate; // already YYYY-MM-DD
   }, [rawDate]);
 
+  const roReference = ro?.fullReference || ro?.roNumber || null;
+
   const loadReconcile = async () => {
     if (!branch || !date || !ro?.items?.length) return;
     setIsLoading(true);
     setError('');
     try {
-      const stockCounts = await fetchStockCountForBranchDate(branch, date);
+      const stockCounts = await fetchStockCountForBranchDate(branch, date, roReference);
       const reconciled = buildReconciliationRows(ro.items, stockCounts);
       setRows(reconciled);
       setLastFetched(new Date());
@@ -75,7 +77,7 @@ export default function ROReconcileView({ ro }) {
     if (branch && date) {
       loadReconcile();
     }
-  }, [ro?.id, branch, date]);
+  }, [ro?.id, branch, date, roReference]);
 
   // ─── Summary stats ──────────────────────────────────────────────────────
   const stats = useMemo(() => {

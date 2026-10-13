@@ -443,6 +443,8 @@ export default function ReceiveCheckV0({ onBack }) {
               availableStores={availableStores}
               onOpenImport={() => setIsImportModalOpen(true)}
               onDeleteRO={handleDeleteRO}
+              onRefreshOrders={() => loadOrdersFromDb(false)}
+              isRefreshing={isRefreshing}
               onSelectRO={(ro) => {
                 setSelectedRoId(ro.id);
                 setCurrentView('detail');

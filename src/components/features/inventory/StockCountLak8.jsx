@@ -89,6 +89,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   });
   const [boEndDate, setBoEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [boBranch, setBoBranch] = useState('');
+  const [boRoFilter, setBoRoFilter] = useState('ALL');
   const [boSearchTerm, setBoSearchTerm] = useState('');
   const [boItems, setBoItems] = useState([]);
   const [boLoading, setBoLoading] = useState(false);
@@ -135,12 +136,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const barcodeInputRef = useRef('');
   const isProcessingRef = useRef(false);
   const fetchDebounceRef = useRef(null); // ⏱️ Debounce rapid-scan fetches
+  const selectedRoRefRef = useRef(selectedRoRef);
 
   // Keep refs in sync with state
   useEffect(() => { scanModeRef.current = scanMode; }, [scanMode]);
   useEffect(() => { manualQtyRef.current = manualQty; }, [manualQty]);
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { barcodeInputRef.current = barcodeInput; }, [barcodeInput]);
+  useEffect(() => { selectedRoRefRef.current = selectedRoRef; }, [selectedRoRef]);
 
   // Derived filtered items for search & view
   const filteredItems = useMemo(() => {
@@ -174,7 +177,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   }, [toast]);
 
   // ─── 1. FETCH REALTIME DATA FROM SUPABASE ─────────────────────────
-  const fetchLak8Stock = async (silent = false, overrideBranch = null, overrideDate = null, overrideOwner = null) => {
+  const fetchLak8Stock = async (silent = false, overrideBranch = null, overrideDate = null, overrideOwner = null, overrideRoRef = null) => {
     try {
       if (!silent) setIsLoading(true);
 
@@ -183,6 +186,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const targetBranch = overrideBranch ?? (isFilterMode ? filterBranch : selectedBranch);
       const targetDate = overrideDate ?? (isFilterMode ? filterDate : selectedDate);
       const targetOwner = overrideOwner ?? (isFilterMode ? null : lak8OwnerBranch);
+      const targetRoRef = overrideRoRef ?? (isFilterMode ? null : selectedRoRef);
 
       let query = supabase.from('stock_count_lak8').select('*');
 
@@ -193,6 +197,18 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       // Without this, selecting LAK8+VX fetches ALL LAK8 rows (TLL, PTX, etc.)
       if (targetBranch === 'LAK8' && targetOwner) {
         query = query.eq('owner_branch', targetOwner);
+      }
+
+      // 🏷️ Filter by RO Reference:
+      // If a specific RO is chosen: fetch ONLY that RO
+      // If NONE or not specified (General count): fetch ONLY records with NO RO (null or '')
+      if (!isFilterMode) {
+        if (targetRoRef && targetRoRef !== 'NONE' && targetRoRef.trim() !== '') {
+          query = query.ilike('ro_reference', targetRoRef.trim());
+        } else {
+          // General count session: Do NOT show items belonging to specific ROs
+          query = query.or('ro_reference.is.null,ro_reference.eq.');
+        }
       }
 
       // 🏷️ Brand Filter: If joah, include 'joah' and null (legacy records); if technohub, match 'technohub'
@@ -403,6 +419,17 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           const itemDate = payload.new?.count_date || payload.old?.count_date;
           if (targetDate && itemDate && itemDate !== targetDate) return;
 
+          // Client-side RO Reference check:
+          const activeRoRef = selectedRoRefRef.current;
+          const itemRoRef = (payload.new?.ro_reference || payload.old?.ro_reference || '').trim();
+          if (activeRoRef && activeRoRef !== 'NONE' && activeRoRef.trim() !== '') {
+            // If in a specific RO session: only accept items with matching RO
+            if (itemRoRef.toLowerCase() !== activeRoRef.toLowerCase().trim()) return;
+          } else {
+            // If in general count session: discard items that belong to a specific RO
+            if (itemRoRef !== '') return;
+          }
+
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newData = payload.new;
             setItems(prev => {
@@ -470,7 +497,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       supabase.removeChannel(stockChannel);
       if (statusChannel) supabase.removeChannel(statusChannel);
     };
-  }, [selectedBranch, selectedDate, isFilterMode, filterBranch, filterDate]);
+  }, [selectedBranch, selectedDate, selectedRoRef, isFilterMode, filterBranch, filterDate]);
 
   const toggleSessionStatus = async () => {
     const isConfirm = window.confirm(
@@ -609,7 +636,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     localStorage.setItem('lak8_date', selectedDate);
     localStorage.setItem('lak8_owner_branch', lak8OwnerBranch);
     localStorage.setItem('lak8_doc_nos', JSON.stringify(validDocNos));
-    if (selectedRoRef) {
+    if (selectedRoRef && selectedRoRef !== 'NONE') {
       localStorage.setItem('lak8_ro_reference', selectedRoRef);
     } else {
       localStorage.removeItem('lak8_ro_reference');
@@ -622,7 +649,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
     setShowSetupModal(false);
     // ✅ Pass values directly — React setState is async so closure still has old values
-    fetchLak8Stock(false, selectedBranch, selectedDate, lak8OwnerBranch);
+    fetchLak8Stock(false, selectedBranch, selectedDate, lak8OwnerBranch, selectedRoRef);
   };
 
   const handleLogoutSession = () => {
@@ -1209,11 +1236,33 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     }
   }, [selectedBrand]);
 
-  // Back-office derived items based on search term
+  // Extract unique RO references available in current loaded back-office data
+  const availableBoRos = useMemo(() => {
+    const refs = new Set();
+    boItems.forEach(item => {
+      if (item.ro_reference && item.ro_reference.trim() !== '') {
+        refs.add(item.ro_reference.trim());
+      }
+    });
+    return Array.from(refs);
+  }, [boItems]);
+
+  // Back-office derived items based on RO filter and search term
   const filteredBoItems = useMemo(() => {
-    if (!boSearchTerm.trim()) return boItems;
+    let result = boItems;
+
+    // Apply RO / SO Reference filter
+    if (boRoFilter !== 'ALL') {
+      if (boRoFilter === 'NONE') {
+        result = result.filter(item => !item.ro_reference || item.ro_reference.trim() === '');
+      } else {
+        result = result.filter(item => item.ro_reference && item.ro_reference.toLowerCase().trim() === boRoFilter.toLowerCase().trim());
+      }
+    }
+
+    if (!boSearchTerm.trim()) return result;
     const term = boSearchTerm.toLowerCase();
-    return boItems.filter(item =>
+    return result.filter(item =>
       item.barcode?.toLowerCase().includes(term) ||
       item.name?.toLowerCase().includes(term) ||
       item.branch?.toLowerCase().includes(term) ||
@@ -1222,7 +1271,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       item.ro_reference?.toLowerCase().includes(term) ||
       (Array.isArray(item.doc_nos) && item.doc_nos.some(d => d.toLowerCase().includes(term)))
     );
-  }, [boItems, boSearchTerm]);
+  }, [boItems, boRoFilter, boSearchTerm]);
 
   // Back-office summary stats
   const boStats = useMemo(() => {
@@ -2066,6 +2115,24 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       <option value="">🏢 ທຸກສາຂາ (All Branches)</option>
                       {branches.map(b => (
                         <option key={b} value={b}>ສາຂາ {b}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 📄 RO / SO REFERENCE FILTER */}
+                  <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                    <FileText size={16} className="text-indigo-600 ml-2" />
+                    <select
+                      value={boRoFilter}
+                      onChange={(e) => setBoRoFilter(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[210px]"
+                    >
+                      <option value="ALL">📄 ທຸກ RO / SO Reference</option>
+                      <option value="NONE">⚙️ ນັບທົ່ວໄປ (ບໍ່ມີ RO)</option>
+                      {availableBoRos.map(ref => (
+                        <option key={ref} value={ref}>
+                          📄 {ref}
+                        </option>
                       ))}
                     </select>
                   </div>

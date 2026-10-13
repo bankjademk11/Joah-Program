@@ -65,22 +65,83 @@ export async function fetchAllReceiveOrders() {
       });
     });
 
-    return orders.map(o => ({
-      id: o.id,
-      fullReference: o.full_reference || o.ro_number,
-      soNumber: o.so_number || '',
-      roNumber: o.ro_number,
-      rawStore: o.store_name,
-      storeCode: o.store_code,
-      storeName: o.store_name,
-      branchTag: o.branch_tag,
-      deliveryDate: o.delivery_date,
-      totalItems: o.total_items,
-      totalRoQty: o.total_ro_qty,
-      status: o.status,
-      createdAt: o.created_at,
-      items: itemsByOrder[o.id] || []
-    }));
+    // Fetch stock_count_lak8 to compute real live received quantities per RO
+    let allStockCounts = [];
+    try {
+      const branches = Array.from(new Set(orders.map(o => o.store_code).filter(Boolean)));
+      const dates = Array.from(new Set(orders.map(o => {
+        const rawDate = o.delivery_date;
+        if (!rawDate) return null;
+        if (rawDate.includes('/')) {
+          const parts = rawDate.split('/');
+          if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        return rawDate;
+      }).filter(Boolean)));
+
+      if (branches.length > 0 && dates.length > 0) {
+        const { data: scData } = await supabase
+          .from('stock_count_lak8')
+          .select('barcode, qty, branch, count_date, ro_reference')
+          .in('branch', branches)
+          .in('count_date', dates);
+        allStockCounts = scData || [];
+      }
+    } catch (e) {
+      console.warn('Failed to fetch live counts for receive_orders list:', e);
+    }
+
+    return orders.map(o => {
+      const roRef = (o.full_reference || o.ro_number || '').trim().toLowerCase();
+      let formattedOrderDate = o.delivery_date || '';
+      if (formattedOrderDate.includes('/')) {
+        const parts = formattedOrderDate.split('/');
+        if (parts.length === 3) formattedOrderDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+
+      // Map barcodes to counted qty specifically for this order
+      const countedMap = new Map();
+      allStockCounts.forEach(sc => {
+        const scBranch = (sc.branch || '').trim();
+        const scDate = sc.count_date;
+        const scRoRef = (sc.ro_reference || '').trim().toLowerCase();
+
+        if (scBranch.toLowerCase() === (o.store_code || '').trim().toLowerCase() && scDate === formattedOrderDate) {
+          if (!roRef || scRoRef === roRef) {
+            const prev = countedMap.get(sc.barcode) || 0;
+            countedMap.set(sc.barcode, prev + (Number(sc.qty) || 0));
+          }
+        }
+      });
+
+      const orderItems = (itemsByOrder[o.id] || []).map(it => {
+        let liveReceived = it.received;
+        if (countedMap.has(it.barcode)) {
+          liveReceived = countedMap.get(it.barcode);
+        }
+        return {
+          ...it,
+          received: liveReceived
+        };
+      });
+
+      return {
+        id: o.id,
+        fullReference: o.full_reference || o.ro_number,
+        soNumber: o.so_number || '',
+        roNumber: o.ro_number,
+        rawStore: o.store_name,
+        storeCode: o.store_code,
+        storeName: o.store_name,
+        branchTag: o.branch_tag,
+        deliveryDate: o.delivery_date,
+        totalItems: o.total_items,
+        totalRoQty: o.total_ro_qty,
+        status: o.status,
+        createdAt: o.created_at,
+        items: orderItems
+      };
+    });
   } catch (err) {
     console.error('Error fetching receive orders from Supabase:', err);
     throw err;
