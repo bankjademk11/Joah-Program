@@ -1077,7 +1077,7 @@ function AppContent() {
         )}
 
         {/* Navigation */}
-        <Navbar
+        {step !== 'stock-count-lak8' && <Navbar
           step={step}
           dbSource={dbSource}
           dataSourceLabel={dataSourceLabel}
@@ -1106,7 +1106,7 @@ function AppContent() {
           onOpenStoreInbox={() => setShowStoreInbox(true)}
           onLogout={handleLogout}
           onOpenAppLauncher={() => setShowAppLauncher(true)}
-        />
+        />}
         <AppLauncher
           isOpen={showAppLauncher}
           onClose={() => setShowAppLauncher(false)}
