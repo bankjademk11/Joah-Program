@@ -51,6 +51,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [countCurrentPage, setCountCurrentPage] = useState(1);
+  const countPageSize = 50;
 
   // New Branch & Date States
   const [selectedBranch, setSelectedBranch] = useState(localStorage.getItem('lak8_branch') || '');
@@ -157,6 +159,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     return result;
   }, [items, searchTerm]);
 
+  const countTotalPages = Math.max(1, Math.ceil(filteredItems.length / countPageSize));
+  const displayedCountPage = Math.min(countCurrentPage, countTotalPages);
+  const paginatedItems = useMemo(() => {
+    const start = (displayedCountPage - 1) * countPageSize;
+    return filteredItems.slice(start, start + countPageSize);
+  }, [filteredItems, displayedCountPage, countPageSize]);
+
   // ─── Memoized total QTY sum ──
   const totalQtySum = useMemo(() => {
     return items.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
@@ -219,9 +228,17 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         query = query.or('brand.eq.joah,brand.is.null');
       }
 
-      const { data, error } = await query.order('updated_at', { ascending: false });
-
-      if (error) throw error;
+      // Supabase returns at most 1,000 rows per request by default. Fetch in
+      // chunks so the displayed total and pagination include every matching row.
+      const orderedQuery = query.order('updated_at', { ascending: false });
+      const data = [];
+      const fetchChunkSize = 1000;
+      for (let offset = 0; ; offset += fetchChunkSize) {
+        const { data: chunk, error } = await orderedQuery.range(offset, offset + fetchChunkSize - 1);
+        if (error) throw error;
+        if (chunk?.length) data.push(...chunk);
+        if (!chunk || chunk.length < fetchChunkSize) break;
+      }
 
       if (data) {
         // ⚡ Auto-sync Doc Nos across staff: If any item in this session has doc_nos, sync it to current staff
@@ -252,6 +269,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
         }));
         setItems(formatted);
         itemsRef.current = formatted;
+        setCountCurrentPage(1);
       }
     } catch (err) {
       console.error('[Lak8 Fetch Error]', err);
@@ -2559,7 +2577,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   ລາຍການທີ່ນັບແລ້ວ
                 </h2>
                 <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-black">
-                  {filteredItems.length} ລາຍການ
+                  ທັງໝົດ {filteredItems.length.toLocaleString()} ລາຍການ
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -2567,7 +2585,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCountCurrentPage(1);
+                    }}
                     placeholder="ຄົ້ນຫາ..."
                     className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:border-indigo-500 w-32 sm:w-48 transition-all"
                   />
@@ -2596,7 +2617,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               </div>
             ) : (
               <div className="grid gap-3">
-                {filteredItems.map((item) => (
+                {paginatedItems.map((item) => (
                   <div key={item.id} className="group bg-white rounded-2xl p-4 shadow-sm border border-slate-200 hover:border-indigo-300 transition-all flex items-center gap-4 relative overflow-hidden">
                     <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors shrink-0">
                       <Barcode size={24} />
@@ -2666,6 +2687,32 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+            {!isLoading && filteredItems.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs sm:text-sm font-bold text-slate-500">
+                  ສະແດງ {((displayedCountPage - 1) * countPageSize + 1).toLocaleString()}–{Math.min(displayedCountPage * countPageSize, filteredItems.length).toLocaleString()} ຈາກທັງໝົດ {filteredItems.length.toLocaleString()} ລາຍການ
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCountCurrentPage(Math.max(1, displayedCountPage - 1))}
+                    disabled={displayedCountPage === 1}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft size={16} className="inline" /> ກ່ອນໜ້າ
+                  </button>
+                  <span className="px-3 py-2 bg-indigo-600 rounded-lg font-mono font-black text-sm text-white">
+                    {displayedCountPage} / {countTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setCountCurrentPage(Math.min(countTotalPages, displayedCountPage + 1))}
+                    disabled={displayedCountPage >= countTotalPages}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ຖັດໄປ <ChevronRight size={16} className="inline" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
