@@ -45,7 +45,10 @@ import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
 import LandingPage from './components/layout/LandingPage';
 import AppLauncher from './components/layout/AppLauncher';
-import RainParticles from './components/ui/RainParticles';
+import RainParticles, { getActiveTheme } from './components/ui/RainParticles';
+import SakuraCanopy from './components/ui/SakuraCanopy';
+import HalloweenCanopy from './components/ui/HalloweenCanopy';
+import SeasonalBackground from './components/ui/SeasonalBackground';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
 import ExcelCompressor from './components/Tools/excel-compressor';
@@ -1062,7 +1065,17 @@ function AppContent() {
 
 
 
-      <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots overflow-x-hidden">
+      <div className="min-h-screen flex flex-col transition-colors duration-500 bg-dots overflow-x-hidden relative">
+        {/* 🎃 / 🌸 Full-Screen Seasonal / Weather Particle FX Layer & Canopy */}
+        {step === 'upload' && (
+          <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+            <SeasonalBackground />
+            <RainParticles />
+            <HalloweenCanopy />
+            <SakuraCanopy />
+          </div>
+        )}
+
         {/* Navigation */}
         <Navbar
           step={step}
@@ -1102,13 +1115,9 @@ function AppContent() {
         />
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center">
+        <main className="flex-1 flex flex-col px-4 md:px-8 py-8 items-center justify-center relative z-10">
           {step === 'upload' && (
             <div className="max-w-7xl w-full animate-fade-in-up flex flex-col items-center relative">
-              {/* Rain FX Background */}
-              <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-                <RainParticles />
-              </div>
               <div className="relative w-full" style={{ zIndex: 1 }}>
 
                 {/* Header Layout: Clock (Left) - Title (Center) - Empty (Right) */}
@@ -1121,9 +1130,35 @@ function AppContent() {
 
                   {/* 🏷️ Main Title (Centered) */}
                   <div className="text-center max-w-2xl mx-auto shrink-0 flex flex-col items-center">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20 mb-6">
-                      <Sparkles size={14} className="animate-pulse" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
+                    <div className="flex items-center gap-2 mb-6 flex-wrap justify-center">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 text-joah-orange border border-orange-100 dark:border-orange-500/20">
+                        <Sparkles size={14} className="animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Inventory Excellence</span>
+                      </div>
+                      {/* 🎃 Seasonal Theme Toggle Badge */}
+                      {(() => {
+                        const theme = getActiveTheme();
+                        const isHalloween = theme === 'halloween';
+                        const isSakura = theme === 'sakura';
+                        return (
+                          <button
+                            onClick={() => {
+                              const next = isHalloween ? 'sakura' : isSakura ? 'cubes' : 'halloween';
+                              window.__setParticleTheme(next);
+                            }}
+                            title="คลิกเพื่อสลับธีม: Halloween / Sakura / Cubes"
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm ${isHalloween
+                                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20 shadow-purple-500/10'
+                                : isSakura
+                                  ? 'bg-pink-500/10 text-pink-600 dark:text-pink-300 border-pink-500/30 hover:bg-pink-500/20 shadow-pink-500/10'
+                                  : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 hover:bg-slate-500/20'
+                              }`}
+                          >
+                            <span>{isHalloween ? '🎃 Kawaii Halloween' : isSakura ? '🌸 Sakura Blossom' : '🧊 Rubik Cubes'}</span>
+                            <span className="text-[8px] opacity-75 border border-current rounded px-1 font-mono">ປ່ຽນທີມ</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                     <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
                       {t('home.title')} <br /><span className="text-joah-orange">{t('home.subtitle')}</span>
