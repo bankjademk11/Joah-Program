@@ -1077,7 +1077,7 @@ function AppContent() {
         )}
 
         {/* Navigation */}
-        {step !== 'stock-count-lak8' && <Navbar
+        {!['stock-count-lak8', 'visual-lens-search', 'it-tools-ps5', 'check-price', 'check-price-ultimate'].includes(step) && <Navbar
           step={step}
           dbSource={dbSource}
           dataSourceLabel={dataSourceLabel}

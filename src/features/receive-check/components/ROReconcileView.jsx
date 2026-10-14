@@ -8,11 +8,11 @@ import { fetchStockCountForBranchDate, buildReconciliationRows } from '../servic
 
 // ─── Status Config ─────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  OK:          { label: 'Matched (OK)',     icon: CheckCircle2,   color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800' },
-  SHORT:       { label: 'Short',            icon: AlertCircle,    color: 'text-rose-600',    bg: 'bg-rose-50',     border: 'border-rose-200',    badge: 'bg-rose-100 text-rose-700' },
-  OVER:        { label: 'Over',             icon: ArrowUpCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   badge: 'bg-amber-100 text-amber-700' },
-  NOT_COUNTED: { label: 'Not Counted',      icon: Clock,          color: 'text-slate-400',   bg: 'bg-slate-50',    border: 'border-slate-200',   badge: 'bg-slate-100 text-slate-500' },
-  EXTRA:       { label: 'Extra (Not in RO)',icon: HelpCircle,     color: 'text-purple-600',  bg: 'bg-purple-50',   border: 'border-purple-200',  badge: 'bg-purple-100 text-purple-700' },
+  OK: { label: 'Matched (OK)', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800' },
+  SHORT: { label: 'LESS', icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200', badge: 'bg-rose-100 text-rose-700' },
+  OVER: { label: 'OVER', icon: ArrowUpCircle, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700' },
+  NOT_COUNTED: { label: 'Not Counted', icon: Clock, color: 'text-slate-400', bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-slate-100 text-slate-500' },
+  EXTRA: { label: '(Not in RO)', icon: HelpCircle, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
 };
 
 function StatusBadge({ status }) {
@@ -261,43 +261,43 @@ export default function ROReconcileView({ ro }) {
                 <th className="py-3 px-4 w-10 text-center">#</th>
                 <th className="py-3 px-4">Barcode</th>
                 <th className="py-3 px-4">Product Name</th>
-                <th className="py-3 px-4 text-center">RO QTY<br/><span className="text-[9px] font-medium normal-case">(DC Sent)</span></th>
-                <th className="py-3 px-4 text-center">Counted<br/><span className="text-[9px] font-medium normal-case">(Stock Count)</span></th>
-                <th className="py-3 px-4 text-center">Diff<br/><span className="text-[9px] font-medium normal-case">(Variance)</span></th>
+                <th className="py-3 px-4 text-center">RO QTY<br /><span className="text-[9px] font-medium normal-case">(DC Sent)</span></th>
+                <th className="py-3 px-4 text-center">Counted<br /><span className="text-[9px] font-medium normal-case">(Stock Count)</span></th>
+                <th className="py-3 px-4 text-center">Diff<br /><span className="text-[9px] font-medium normal-case">(Variance)</span></th>
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredRows.length > 0 ? (
                 paginatedRows.map((row, idx) => {
-                const cfg = STATUS_CONFIG[row.status] || STATUS_CONFIG.NOT_COUNTED;
-                const globalIdx = (safePage - 1) * PAGE_SIZE + idx;
-                return (
-                  <tr key={row.barcode + idx} className={`transition ${cfg.bg} hover:brightness-95`}>
-                    <td className="py-2.5 px-4 text-center text-xs text-slate-400 font-bold">{idx + 1}</td>
-                    <td className="py-2.5 px-4 font-mono text-xs font-black text-slate-700">{row.barcode}</td>
-                    <td className="py-2.5 px-4 text-xs text-slate-600 font-['Noto_Sans_Lao',sans-serif]">
-                      {row.productName || <span className="text-slate-300 italic">—</span>}
-                    </td>
-                    <td className="py-2.5 px-4 text-center font-mono font-black text-slate-800">{row.roQty}</td>
-                    <td className="py-2.5 px-4 text-center font-mono font-black text-slate-800">
-                      {row.countedQty !== null ? row.countedQty : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2.5 px-4 text-center font-mono font-black">
-                      {row.diff !== null ? (
-                        <span className={row.diff === 0 ? 'text-emerald-600' : row.diff > 0 ? 'text-amber-600' : 'text-rose-600'}>
-                          {row.diff > 0 ? '+' : ''}{row.diff}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-4 text-center">
-                      <StatusBadge status={row.status} />
-                    </td>
-                  </tr>
-                );
-              })
+                  const cfg = STATUS_CONFIG[row.status] || STATUS_CONFIG.NOT_COUNTED;
+                  const globalIdx = (safePage - 1) * PAGE_SIZE + idx;
+                  return (
+                    <tr key={row.barcode + idx} className={`transition ${cfg.bg} hover:brightness-95`}>
+                      <td className="py-2.5 px-4 text-center text-xs text-slate-400 font-bold">{idx + 1}</td>
+                      <td className="py-2.5 px-4 font-mono text-xs font-black text-slate-700">{row.barcode}</td>
+                      <td className="py-2.5 px-4 text-xs text-slate-600 font-['Noto_Sans_Lao',sans-serif]">
+                        {row.productName || <span className="text-slate-300 italic">—</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-center font-mono font-black text-slate-800">{row.roQty}</td>
+                      <td className="py-2.5 px-4 text-center font-mono font-black text-slate-800">
+                        {row.countedQty !== null ? row.countedQty : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-center font-mono font-black">
+                        {row.diff !== null ? (
+                          <span className={row.diff === 0 ? 'text-emerald-600' : row.diff > 0 ? 'text-amber-600' : 'text-rose-600'}>
+                            {row.diff > 0 ? '+' : ''}{row.diff}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <StatusBadge status={row.status} />
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr><td colSpan={7} className="py-8 text-center text-slate-400 text-xs font-bold">No matching items</td></tr>
               )}
