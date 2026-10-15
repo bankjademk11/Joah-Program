@@ -608,11 +608,11 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subC = { val: negativeCount, label: '🚨 ແກ້ຕິດລົບ', color: negativeCount > 0 ? 'text-rose-500 font-black' : 'text-slate-400', filterKey: 'negative_stock' };
             } else if (activeTab === 'import_dc') {
                 const totalQty = rows.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
-                const roCount = rows.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length;
+                const roBills = new Set(rows.filter(r => r.ro_reference && r.ro_reference.trim() !== '').map(r => r.ro_reference.trim()));
                 mainVal = rows.length; mainLabel = 'ການນຳເຂົ້າ DC (SKU)';
-                subA = { val: totalQty.toLocaleString(), label: 'ຈຳນວນລວມ', color: 'text-pink-500' };
-                subB = { val: new Set(rows.map(r => r.created_by || r.updated_by)).size, label: 'ຜູ້ນຳເຂົ້າ', color: 'text-rose-500' };
-                subC = { val: roCount, label: 'ມີເລກ RO', color: 'text-indigo-500', filterKey: 'has_ro' };
+                subA = { val: totalQty.toLocaleString(), label: 'QTY', color: 'text-pink-500' };
+                subB = null; // ຜູ້ນຳເຂົ້າ (ຊ່ອນໄວ້ຕາມຄວາມຕ້ອງການ)
+                subC = { val: roBills.size, label: 'ມີເລກ RO', color: 'text-indigo-500', filterKey: 'has_ro' };
             } else if (activeTab === 'import_sales') {
                 mainVal = rows.length; mainLabel = 'ການນຳເຂົ້າ Sale';
                 subA = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-fuchsia-500' };
@@ -1014,8 +1014,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     const negativeStockEdits = branchData.filter(r => (r.old_qty ?? 0) < 0).length;
     const normalStockEdits = branchData.length - negativeStockEdits;
 
-    const dcRoCount = branchData.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length;
-    const dcNoRoCount = branchData.length - dcRoCount;
+    const dcRoBillsCount = new Set(branchData.filter(r => r.ro_reference && r.ro_reference.trim() !== '').map(r => r.ro_reference.trim())).size;
+    const dcNoRoCount = branchData.length - branchData.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length;
     const dcTotalQty = branchData.reduce((acc, r) => acc + (Number(r.qty) || 0), 0);
 
     const reqSummary = activeTab === 'requests' ? [
@@ -1034,8 +1034,8 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
         { label: '🚨 ແກ້ສະຕ໋ອກຕິດລົບ', val: negativeStockEdits, key: 'negative_stock', cls: negativeStockEdits > 0 ? 'bg-rose-500/40 animate-pulse' : 'bg-purple-400/30', active: 'bg-rose-500/70 ring-2 ring-rose-300' },
     ] : activeTab === 'import_dc' ? [
         { label: 'ທັງໝົດ (SKU)', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
-        { label: 'ຈຳນວນລວມ (Qty)', val: dcTotalQty.toLocaleString(), key: 'all', cls: 'bg-pink-400/30', active: 'bg-pink-400/60 ring-2 ring-pink-300' },
-        { label: '🏷️ ມີເລກ RO', val: dcRoCount, key: 'has_ro', cls: 'bg-indigo-400/30', active: 'bg-indigo-400/60 ring-2 ring-indigo-300' },
+        { label: 'QTY', val: dcTotalQty.toLocaleString(), key: 'all', cls: 'bg-pink-400/30', active: 'bg-pink-400/60 ring-2 ring-pink-300' },
+        { label: '🏷️ ມີເລກ RO', val: dcRoBillsCount, key: 'has_ro', cls: 'bg-indigo-400/30', active: 'bg-indigo-400/60 ring-2 ring-indigo-300' },
         { label: '📦 ທົ່ວໄປ (ບໍ່ມີ RO)', val: dcNoRoCount, key: 'no_ro', cls: 'bg-teal-400/30', active: 'bg-teal-400/60 ring-2 ring-teal-300' },
     ] : [];
 
@@ -2319,8 +2319,8 @@ const HQCommandCenterV2 = ({ onBack }) => {
                             {activeTab === 'import_dc' && (
                                 <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
                                     {[
-                                        { label: 'ຈຳນວນລວມ (Qty)', val: data.reduce((sum, r) => sum + (Number(r.qty) || 0), 0).toLocaleString(), icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
-                                        { label: '🏷️ ມີເລກ RO', val: data.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length, icon: '🏷️', key: 'has_ro', cls: 'hover:bg-indigo-400/30' },
+                                        { label: 'QTY', val: data.reduce((sum, r) => sum + (Number(r.qty) || 0), 0).toLocaleString(), icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
+                                        { label: '🏷️ ມີເລກ RO', val: new Set(data.filter(r => r.ro_reference && r.ro_reference.trim() !== '').map(r => r.ro_reference.trim())).size, icon: '🏷️', key: 'has_ro', cls: 'hover:bg-indigo-400/30' },
                                         { label: 'ທົ່ວໄປ (ບໍ່ມີ RO)', val: data.filter(r => !r.ro_reference || r.ro_reference.trim() === '').length, icon: '📋', key: 'no_ro', cls: 'hover:bg-teal-400/30' },
                                     ].map(s => (
                                         <button
