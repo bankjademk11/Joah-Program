@@ -226,6 +226,9 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
     const ghostsRef = useRef([]);
 
+    // Floating emoji reactions emitted when a ghost is tapped.
+    const ghostEmojisRef = useRef([]);
+
     const embersRef = useRef([]);
 
     const dropCountRef = useRef(30);
@@ -437,11 +440,12 @@ const SmartWeatherParticles = ({ className = '' }) => {
             tilt: (Math.random() - 0.5) * 0.18,
 
             // accessory: 0=plain, 1=witch hat, 2=bow
-
             variant: Math.floor(Math.random() * 3),
-
             glowRgb,
-
+            // Tap reactions: bounce, spin, squish, shake, happy, or surprised.
+            reaction: 'idle',
+            reactionTimer: 0,
+            reactionDuration: 42,
             opacity: Math.random() * 0.2 + 0.72,
 
         };
@@ -589,16 +593,64 @@ const SmartWeatherParticles = ({ className = '' }) => {
         };
 
         const handleMouseLeave = () => {
-
             mouseRef.current.x = -1000;
-
             mouseRef.current.y = -1000;
+        };
 
+        // Tap/click a visible ghost to play a random animation and emit emoji.
+        const handleGhostPointerDown = (event) => {
+            // Ghosts are only rendered in Halloween mode and are hidden while raining.
+            if (weatherData.isRaining || getActiveTheme() !== 'halloween') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const px = event.clientX - rect.left;
+            const py = event.clientY - rect.top;
+            let hitGhost = null;
+            let bestDistance = Infinity;
+
+            ghostsRef.current.forEach((ghost) => {
+                const dx = px - ghost.x;
+                const dy = py - ghost.y;
+                // Slightly generous hit area makes tapping on mobile easier.
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance <= ghost.size * 1.05 && distance < bestDistance) {
+                    hitGhost = ghost;
+                    bestDistance = distance;
+                }
+            });
+
+            if (!hitGhost) return;
+
+            const reactions = ['bounce', 'spin', 'squish', 'shake', 'happy', 'surprised'];
+            let nextReaction = reactions[Math.floor(Math.random() * reactions.length)];
+            if (reactions.length > 1 && nextReaction === hitGhost.reaction) {
+                nextReaction = reactions[(reactions.indexOf(nextReaction) + 1 + Math.floor(Math.random() * (reactions.length - 1))) % reactions.length];
+            }
+            hitGhost.reaction = nextReaction;
+            hitGhost.reactionTimer = 0;
+            hitGhost.reactionDuration = 42;
+
+            const emojiChoices = ['💖', '✨', '💕', '😆', '👻', '🎃', '🌸', '⭐', '💫', '🥰', '💗', '🫶', '😳', '💜', '🎉'];
+            const count = Math.random() < 0.3 ? 2 : 1;
+            for (let i = 0; i < count; i++) {
+                ghostEmojisRef.current.push({
+                    x: hitGhost.x + (Math.random() - 0.5) * hitGhost.size * 0.8,
+                    y: hitGhost.y - hitGhost.size * 0.7,
+                    emoji: emojiChoices[Math.floor(Math.random() * emojiChoices.length)],
+                    size: 18 + Math.random() * 12,
+                    vx: (Math.random() - 0.5) * 1.3,
+                    vy: -1.4 - Math.random() * 1.3,
+                    rotation: (Math.random() - 0.5) * 0.35,
+                    spin: (Math.random() - 0.5) * 0.025,
+                    life: 1,
+                    decay: 0.018 + Math.random() * 0.012,
+                });
+            }
         };
 
         window.addEventListener('mousemove', handleMouseMove);
-
         window.addEventListener('mouseleave', handleMouseLeave);
+        window.addEventListener('pointerdown', handleGhostPointerDown, { passive: true });
 
         window.addEventListener('touchmove', (e) => {
 
@@ -621,18 +673,44 @@ const SmartWeatherParticles = ({ className = '' }) => {
         // ========================================================
 
         const drawGhost = (g) => {
-
             const { x, y, size, tilt, wobble, variant, glowRgb, opacity } = g;
-
             const [r, gv, b] = glowRgb;
+            const progress = g.reaction === 'idle'
+                ? 0
+                : Math.min(1, g.reactionTimer / g.reactionDuration);
+            const pulse = Math.sin(Math.PI * progress);
+            let reactX = 0;
+            let reactY = 0;
+            let reactTilt = 0;
+            let scaleX = 1;
+            let scaleY = 1;
+
+            // Each tap picks a different little animation.
+            if (g.reaction === 'bounce') {
+                reactY = -size * 0.68 * pulse;
+                scaleY = 1 + 0.16 * pulse;
+                scaleX = 1 - 0.08 * pulse;
+            } else if (g.reaction === 'spin') {
+                reactTilt = (1 - progress) * Math.PI * 2;
+            } else if (g.reaction === 'squish') {
+                scaleX = 1 + 0.25 * pulse;
+                scaleY = 1 - 0.2 * pulse;
+            } else if (g.reaction === 'shake') {
+                reactX = Math.sin(g.reactionTimer * 1.8) * size * 0.2 * (1 - progress);
+                reactTilt = Math.sin(g.reactionTimer * 1.8) * 0.2 * (1 - progress);
+            } else if (g.reaction === 'happy') {
+                reactY = -size * 0.3 * pulse;
+                reactTilt = Math.sin(progress * Math.PI * 4) * 0.12;
+            } else if (g.reaction === 'surprised') {
+                scaleX = 1 + 0.23 * pulse;
+                scaleY = 1 + 0.28 * pulse;
+            }
 
             ctx.save();
-
             ctx.globalAlpha = opacity;
-
-            ctx.translate(x, y);
-
-            ctx.rotate(tilt + Math.sin(wobble) * 0.08);
+            ctx.translate(x + reactX, y + reactY);
+            ctx.rotate(tilt + Math.sin(wobble) * 0.08 + reactTilt);
+            ctx.scale(scaleX, scaleY);
 
             // ── Soft radial glow (no shadowBlur = smooth perf) ──────────────
 
@@ -696,7 +774,8 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
                 ctx.beginPath();
 
-                ctx.ellipse(cx, cy, er, er * 1.25, 0, 0, Math.PI * 2);
+                const eyeScale = g.reaction === 'surprised' ? 1.45 : 1;
+                ctx.ellipse(cx, cy, er * eyeScale, er * 1.25 * eyeScale, 0, 0, Math.PI * 2);
 
                 ctx.fillStyle = '#1e1b4b';
 
@@ -1185,7 +1264,13 @@ const SmartWeatherParticles = ({ className = '' }) => {
                     g.x += Math.sin(g.wobble) * g.wobbleAmp;
 
                     g.y += g.speedY; // negative = upward
-
+                    if (g.reaction !== 'idle') {
+                        g.reactionTimer += 1;
+                        if (g.reactionTimer >= g.reactionDuration) {
+                            g.reaction = 'idle';
+                            g.reactionTimer = 0;
+                        }
+                    }
                     // Soft mouse repel
 
                     const dx = mx - g.x;
@@ -1221,6 +1306,33 @@ const SmartWeatherParticles = ({ className = '' }) => {
                     drawGhost(g, isDark);
 
                 });
+
+                // Floating emoji feedback: rise, rotate gently, and fade away.
+                for (let i = ghostEmojisRef.current.length - 1; i >= 0; i--) {
+                    const emoji = ghostEmojisRef.current[i];
+                    emoji.x += emoji.vx;
+                    emoji.y += emoji.vy;
+                    emoji.vy -= 0.012;
+                    emoji.rotation += emoji.spin;
+                    emoji.life -= emoji.decay;
+
+                    if (emoji.life <= 0) {
+                        ghostEmojisRef.current.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, emoji.life);
+                    ctx.translate(emoji.x, emoji.y);
+                    ctx.rotate(emoji.rotation);
+                    ctx.font = `${emoji.size}px sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = 'rgba(168, 85, 247, 0.45)';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText(emoji.emoji, 0, 0);
+                    ctx.restore();
+                }
 
             } else if (currentTheme === 'sakura') {
 
@@ -1469,9 +1581,8 @@ const SmartWeatherParticles = ({ className = '' }) => {
             window.removeEventListener('resize', resize);
 
             window.removeEventListener('mousemove', handleMouseMove);
-
             window.removeEventListener('mouseleave', handleMouseLeave);
-
+            window.removeEventListener('pointerdown', handleGhostPointerDown);
             observer.disconnect();
 
         };

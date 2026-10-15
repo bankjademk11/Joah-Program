@@ -20,6 +20,21 @@ import imgMgm from '../../../assets/Joah.jpeg'; // Placeholder — replace with 
 // ===================== CONSTANTS =====================
 const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
 
+// Normalizes short codes or variants to standard Lao branch names
+const normalizeBranchName = (b) => {
+    if (!b) return 'ອື່ນໆ';
+    const s = String(b).trim().toUpperCase();
+    if (s === 'TLL' || s.includes('ຕະຫຼາດລາວ') || s.includes('TALADLAO')) return 'ຕະຫຼາດລາວ';
+    if (s === 'SVL' || s.includes('ສີວິໄລ') || s.includes('CIVILAI') || s.includes('SIVILAY')) return 'ສີວິໄລ';
+    if (s === 'PSN' || s.includes('ໂພນສີນວນ') || s.includes('PHONSINUAN') || s.includes('PHONSINOUANE')) return 'ໂພນສີນວນ';
+    if (s === 'VX' || s.includes('ວັງຊາຍ') || s.includes('VANGXAY') || s.includes('WANGXAY')) return 'ວັງຊາຍ';
+    if (s === 'PTX' || s.includes('ເມກ້າມໍ') || s.includes('ປະຕູໄຊ') || s.includes('MEGAMALL') || s.includes('PATUXAY')) return 'ເມກ້າມໍ';
+    if (s === 'PT' || s.includes('ໂພນຕ້ອງ') || s.includes('PHONTHONG')) return 'ໂພນຕ້ອງ';
+    if (s.includes('ເທຣນ') || s.includes('ເທຮນ') || s.includes('TRAINING') || s === 'JMPT') return 'ເທຣນນິ້ງ (Training)';
+    if (s === 'LAK8' || s.includes('ຫຼັກ 8') || s.includes('LAK 8')) return 'LAK8';
+    return b;
+};
+
 const BC = {
     'ຕະຫຼາດລາວ': { gr: 'bg-gradient-to-br from-orange-500 to-amber-500', grR: 'bg-gradient-to-r from-orange-500 to-amber-500', card: 'bg-orange-50 dark:bg-orange-900/20', bdr: 'border-orange-200 dark:border-orange-700', txt: 'text-orange-600 dark:text-orange-400' },
     'ສີວິໄລ': { gr: 'bg-gradient-to-br from-blue-500 to-indigo-600', grR: 'bg-gradient-to-r from-blue-500 to-indigo-600', card: 'bg-blue-50 dark:bg-blue-900/20', bdr: 'border-blue-200 dark:border-blue-700', txt: 'text-blue-600 dark:text-blue-400' },
@@ -28,6 +43,7 @@ const BC = {
     'ເມກ້າມໍ': { gr: 'bg-gradient-to-br from-rose-500 to-pink-600', grR: 'bg-gradient-to-r from-rose-500 to-pink-600', card: 'bg-rose-50 dark:bg-rose-900/20', bdr: 'border-rose-200 dark:border-rose-700', txt: 'text-rose-600 dark:text-rose-400' },
     'ໂພນຕ້ອງ': { gr: 'bg-gradient-to-br from-teal-500 to-cyan-600', grR: 'bg-gradient-to-r from-teal-500 to-cyan-600', card: 'bg-teal-50 dark:bg-teal-900/20', bdr: 'border-teal-200 dark:border-teal-700', txt: 'text-teal-600 dark:text-teal-400' },
     'ເທຣນນິ້ງ (Training)': { gr: 'bg-gradient-to-br from-cyan-500 to-blue-600', grR: 'bg-gradient-to-r from-cyan-500 to-blue-600', card: 'bg-cyan-50 dark:bg-cyan-900/20', bdr: 'border-cyan-200 dark:border-cyan-700', txt: 'text-cyan-600 dark:text-cyan-400' },
+    'LAK8': { gr: 'bg-gradient-to-br from-indigo-500 to-slate-700', grR: 'bg-gradient-to-r from-indigo-500 to-slate-700', card: 'bg-indigo-50 dark:bg-indigo-900/20', bdr: 'border-indigo-200 dark:border-indigo-700', txt: 'text-indigo-600 dark:text-indigo-400' },
 };
 
 const TABS = [
@@ -302,7 +318,38 @@ const exportToExcel = async (rows, activeTab, startDate, endDate, branchName, sh
             });
             row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFECFEFF' : 'FFFFFFFF' } }; });
         });
-    } else if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+    } else if (activeTab === 'import_dc') {
+        ws.columns = [
+            { header: 'ສາຂາ', key: 'branch_id', width: 18 },
+            { header: 'ສິນຄ້າ', key: 'item_name', width: 35 },
+            { header: 'Barcode', key: 'barcode', width: 18 },
+            { header: 'ຈຳນວນ', key: 'qty', width: 14 },
+            { header: 'RO Reference', key: 'ro_reference', width: 26 },
+            { header: 'ສາຂາເຈົ້າຂອງ (Owner)', key: 'owner_branch', width: 22 },
+            { header: 'Doc Nos', key: 'doc_nos', width: 22 },
+            { header: 'ຜູ້ນຳເຂົ້າ/ນັບ', key: 'updated_by_name', width: 24 },
+            { header: 'Employee ID', key: 'updated_by_id', width: 16 },
+            { header: 'ວັນທີນັບ', key: 'count_date', width: 16 },
+            { header: 'ເວລາບັນທຶກ', key: 'created_at', width: 24 },
+        ];
+        rows.forEach((r, i) => {
+            const { name: editName, empId: editId } = parseUser(r.updated_by || r.created_by);
+            const row = ws.addRow({
+                branch_id: r.branch_id,
+                item_name: r.item_name || r.barcode,
+                barcode: r.barcode,
+                qty: r.qty,
+                ro_reference: r.ro_reference || '-',
+                owner_branch: r.owner_branch || '-',
+                doc_nos: Array.isArray(r.doc_nos) ? r.doc_nos.join(', ') : (r.doc_nos ? JSON.stringify(r.doc_nos) : '-'),
+                updated_by_name: editName,
+                updated_by_id: editId || '-',
+                count_date: r.count_date || '-',
+                created_at: fmtExcel(r.created_at || r.updated_at)
+            });
+            row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FFFCE7F3' : 'FFFFFFFF' } }; });
+        });
+    } else if (activeTab === 'import_sales') {
         ws.columns = [
             { header: 'ສາຂາ', key: 'branch_id', width: 18 },
             { header: 'Barcode', key: 'barcode', width: 18 },
@@ -559,9 +606,16 @@ const BranchGrid = ({ data, activeTab, onSelectBranch }) => (
                 subA = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ແກ້ໄຂ', color: 'text-violet-500' };
                 subB = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-purple-600' };
                 subC = { val: negativeCount, label: '🚨 ແກ້ຕິດລົບ', color: negativeCount > 0 ? 'text-rose-500 font-black' : 'text-slate-400', filterKey: 'negative_stock' };
-            } else if (activeTab === 'import_dc' || activeTab === 'import_sales') {
-                mainVal = rows.length; mainLabel = activeTab === 'import_dc' ? 'ການນຳເຂົ້າ DC' : 'ການນຳເຂົ້າ Sale';
-                subA = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: activeTab === 'import_dc' ? 'text-pink-500' : 'text-fuchsia-500' };
+            } else if (activeTab === 'import_dc') {
+                const totalQty = rows.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+                const roCount = rows.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length;
+                mainVal = rows.length; mainLabel = 'ການນຳເຂົ້າ DC (SKU)';
+                subA = { val: totalQty.toLocaleString(), label: 'ຈຳນວນລວມ', color: 'text-pink-500' };
+                subB = { val: new Set(rows.map(r => r.created_by || r.updated_by)).size, label: 'ຜູ້ນຳເຂົ້າ', color: 'text-rose-500' };
+                subC = { val: roCount, label: 'ມີເລກ RO', color: 'text-indigo-500', filterKey: 'has_ro' };
+            } else if (activeTab === 'import_sales') {
+                mainVal = rows.length; mainLabel = 'ການນຳເຂົ້າ Sale';
+                subA = { val: new Set(rows.map(r => r.barcode)).size, label: 'ສິນຄ້າ', color: 'text-fuchsia-500' };
                 subB = { val: new Set(rows.map(r => r.updated_by)).size, label: 'ຜູ້ນຳເຂົ້າ', color: 'text-rose-500' };
                 subC = null;
             } else {
@@ -764,7 +818,18 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                 r.details || '',
                 fmt(r.updated_at)
             ];
-        } else if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+        } else if (activeTab === 'import_dc') {
+            result = [
+                '',
+                (r.item_name || '') + ' ' + (r.barcode || ''),
+                String(r.qty ?? 0),
+                r.ro_reference || '-',
+                r.owner_branch || '-',
+                Array.isArray(r.doc_nos) ? r.doc_nos.join(', ') : (r.doc_nos ? JSON.stringify(r.doc_nos) : '-'),
+                r.created_by || r.updated_by || '',
+                fmt(r.created_at || r.updated_at)
+            ];
+        } else if (activeTab === 'import_sales') {
             result = [
                 '',
                 r.barcode || '-',
@@ -859,6 +924,13 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
             if (statusFilter === 'normal_stock' && isNegative) return false;
         }
 
+        // Status filter (import_dc tab)
+        if (activeTab === 'import_dc' && statusFilter !== 'all') {
+            const hasRo = Boolean(r.ro_reference && r.ro_reference.trim() !== '');
+            if (statusFilter === 'has_ro' && !hasRo) return false;
+            if (statusFilter === 'no_ro' && hasRo) return false;
+        }
+
         // Column filters (Excel-like Checkboxes)
         if (Object.keys(columnFilters).length > 0) {
             const rowValues = getRowValues(r, activeTab, branch);
@@ -923,9 +995,10 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                         'ເວລາເລີ່ມບິນ', 'ເວລາສຳເລັດບິນ', 'ເວລາທັງບິນ'
                     ] : ['ເວລາບັນທຶກ', 'ເວລາທັງບິນ']),
                 ] :
-                    (activeTab === 'import_dc' || activeTab === 'import_sales') ? ['#', 'Barcode', 'ຜູ້ນຳເຂົ້າ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'] :
-                        activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
-                            ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
+                    activeTab === 'import_dc' ? ['#', 'ສິນຄ້າ / Barcode', 'ຈຳນວນ', 'RO Reference', 'Owner Branch', 'Doc Nos', 'ຜູ້ນຳເຂົ້າ/ນັບ', 'ເວລາ'] :
+                        activeTab === 'import_sales' ? ['#', 'Barcode', 'ຜູ້ນຳເຂົ້າ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'] :
+                            activeTab === 'edits' ? ['#', 'ສິນຄ້າ', 'ຜູ້ແກ້ໄຂ', 'ການປ່ຽນແປງ', 'ສະຕ໋ອກ (ກ່ອນ)', 'ຄົງເຫຼືອ (ຫຼັງ)', 'ເຫດຜົນ', 'ເວລາ'] :
+                                ['#', 'ສິນຄ້າ', 'ຜູ້ດຳເນີນ', 'ຈຳນວນ', 'ເຫດຜົນ', 'ເວລາ'];
 
     const headers = showBranchCol ? [baseHeaders[0], 'ສາຂາ', ...baseHeaders.slice(1)] : baseHeaders;
 
@@ -941,6 +1014,10 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
     const negativeStockEdits = branchData.filter(r => (r.old_qty ?? 0) < 0).length;
     const normalStockEdits = branchData.length - negativeStockEdits;
 
+    const dcRoCount = branchData.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length;
+    const dcNoRoCount = branchData.length - dcRoCount;
+    const dcTotalQty = branchData.reduce((acc, r) => acc + (Number(r.qty) || 0), 0);
+
     const reqSummary = activeTab === 'requests' ? [
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: 'ລໍຖ້າສາງ', val: pendingWHCount, key: 'pending', cls: 'bg-amber-400/30', active: 'bg-amber-400/60 ring-2 ring-amber-300' },
@@ -955,6 +1032,11 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
         { label: 'ທັງໝົດ', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
         { label: 'ສະຕ໋ອກປົກກະຕິ', val: normalStockEdits, key: 'normal_stock', cls: 'bg-emerald-400/30', active: 'bg-emerald-400/60 ring-2 ring-emerald-300' },
         { label: '🚨 ແກ້ສະຕ໋ອກຕິດລົບ', val: negativeStockEdits, key: 'negative_stock', cls: negativeStockEdits > 0 ? 'bg-rose-500/40 animate-pulse' : 'bg-purple-400/30', active: 'bg-rose-500/70 ring-2 ring-rose-300' },
+    ] : activeTab === 'import_dc' ? [
+        { label: 'ທັງໝົດ (SKU)', val: branchData.length, key: 'all', cls: 'bg-white/20', active: 'bg-white/40 ring-2 ring-white' },
+        { label: 'ຈຳນວນລວມ (Qty)', val: dcTotalQty.toLocaleString(), key: 'all', cls: 'bg-pink-400/30', active: 'bg-pink-400/60 ring-2 ring-pink-300' },
+        { label: '🏷️ ມີເລກ RO', val: dcRoCount, key: 'has_ro', cls: 'bg-indigo-400/30', active: 'bg-indigo-400/60 ring-2 ring-indigo-300' },
+        { label: '📦 ທົ່ວໄປ (ບໍ່ມີ RO)', val: dcNoRoCount, key: 'no_ro', cls: 'bg-teal-400/30', active: 'bg-teal-400/60 ring-2 ring-teal-300' },
     ] : [];
 
     // Export: 'dated' uses current filtered (date-filtered) data, 'all' uses all branch data
@@ -1444,7 +1526,84 @@ const BranchDetail = ({ branch, activeTab, data, onBack, startDate, endDate, ini
                 </tr>
             );
         }
-        if (activeTab === 'import_dc' || activeTab === 'import_sales') {
+        if (activeTab === 'import_dc') {
+            const hasRo = Boolean(r.ro_reference && r.ro_reference.trim() !== '');
+            const docList = Array.isArray(r.doc_nos) ? r.doc_nos : (r.doc_nos ? [r.doc_nos] : []);
+            return (
+                <tr key={i} className="hover:bg-pink-50/30 dark:hover:bg-pink-950/20 transition-colors">
+                    <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
+                    {showBranchCol && (
+                        <td className="px-4 py-4 whitespace-nowrap">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-orange-100 text-orange-700 border border-orange-200">
+                                {r.branch_id}
+                            </span>
+                        </td>
+                    )}
+                    {/* ສິນຄ້າ / Barcode */}
+                    <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                            <Box size={16} className="text-slate-400 shrink-0" />
+                            <span className="text-base font-bold text-slate-800 dark:text-slate-100">{r.item_name || r.barcode || '-'}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono ml-6">{r.barcode}</p>
+                    </td>
+
+                    {/* ຈຳນວນ */}
+                    <td className="px-4 py-4 text-center">
+                        <span className="text-2xl font-black text-pink-600 dark:text-pink-400">{Number(r.qty) || 0}</span>
+                    </td>
+
+                    {/* RO Reference */}
+                    <td className="px-4 py-4">
+                        {hasRo ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                🏷️ {r.ro_reference}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-slate-400 font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800">
+                                ທົ່ວໄປ (General)
+                            </span>
+                        )}
+                    </td>
+
+                    {/* Owner Branch */}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                        {r.owner_branch ? (
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-50 text-purple-700 border border-purple-200">
+                                🏢 {r.owner_branch}
+                            </span>
+                        ) : <span className="text-slate-300 text-sm">-</span>}
+                    </td>
+
+                    {/* Doc Nos */}
+                    <td className="px-4 py-4">
+                        {docList.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[180px]">
+                                {docList.map((doc, dIdx) => (
+                                    <span key={dIdx} className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                        {String(doc)}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : <span className="text-slate-300 text-sm">-</span>}
+                    </td>
+
+                    {/* ຜູ້ນຳເຂົ້າ / ນັບ */}
+                    <td className="px-5 py-4">
+                        <UserCell value={r.created_by || r.updated_by} iconColor="text-pink-500" />
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            📅 {r.count_date ? `ນັບ: ${r.count_date}` : ''}
+                        </p>
+                    </td>
+
+                    {/* ເວລາບັນທຶກ */}
+                    <td className="px-4 py-4 text-slate-400 text-xs whitespace-nowrap font-mono">
+                        {fmt(r.created_at || r.updated_at)}
+                    </td>
+                </tr>
+            );
+        }
+        if (activeTab === 'import_sales') {
             return (
                 <tr key={i} className={`transition-colors ${activeTab === 'import_sales' ? 'hover:bg-rose-50/30' : 'hover:bg-pink-50/30'}`}>
                     <td className="px-4 py-4 text-center text-sm font-black text-slate-400">{i + 1}</td>
@@ -1941,19 +2100,53 @@ const HQCommandCenterV2 = ({ onBack }) => {
                 }));
 
             } else if (activeTab === 'import_dc') {
-                let qDc = supabase.from('store_dc_log').select('*').order('import_date', { ascending: false });
-                if (startDate) qDc = qDc.gte('import_date', `${startDate}T00:00:00`);
-                if (endDate) qDc = qDc.lte('import_date', `${endDate}T23:59:59`);
-                const dcData = await fetchAllChunks(qDc);
+                let qDc = supabase.from('stock_count_lak8').select('*').order('created_at', { ascending: false });
+                if (startDate) {
+                    // Filter by count_date if matching format, or created_at
+                    qDc = qDc.gte('count_date', startDate);
+                }
+                if (endDate) {
+                    qDc = qDc.lte('count_date', endDate);
+                }
+                const lak8Data = await fetchAllChunks(qDc);
 
-                rows = (dcData || []).map(r => ({
+                // Fetch product names from master_data for barcodes
+                const uniqueBarcodes = [...new Set((lak8Data || []).map(r => r.barcode).filter(Boolean))];
+                let nameMap = {};
+                if (uniqueBarcodes.length > 0) {
+                    const BATCH = 300;
+                    for (let i = 0; i < uniqueBarcodes.length; i += BATCH) {
+                        const chunk = uniqueBarcodes.slice(i, i + BATCH);
+                        const { data: mList } = await supabase
+                            .from('master_data')
+                            .select('barcode, product_name_la, item_name')
+                            .in('barcode', chunk);
+                        (mList || []).forEach(m => {
+                            if (!nameMap[m.barcode]) {
+                                nameMap[m.barcode] = m.product_name_la || m.item_name || m.barcode;
+                            }
+                        });
+                    }
+                }
+
+                rows = (lak8Data || []).map(r => ({
                     ...r,
-                    _source: 'dc',
-                    barcode: r.barcode_no,
-                    qty: r.imported_qty,
-                    updated_by: r.imported_by,
-                    updated_at: r.import_date,
-                    details: 'ນຳເຂົ້າສິນຄ້າ DC'
+                    _source: 'stock_count_lak8',
+                    branch_id: normalizeBranchName(r.branch),
+                    raw_branch: r.branch,
+                    barcode: r.barcode,
+                    item_name: nameMap[r.barcode] || r.barcode,
+                    qty: Number(r.qty) || 0,
+                    owner_branch: r.owner_branch,
+                    ro_reference: r.ro_reference,
+                    doc_nos: r.doc_nos,
+                    brand: r.brand,
+                    count_date: r.count_date,
+                    updated_by: r.created_by,
+                    created_by: r.created_by,
+                    updated_at: r.updated_at || r.created_at,
+                    created_at: r.created_at,
+                    details: r.ro_reference ? `RO: ${r.ro_reference}` : 'ນັບສະຕ໋ອກ / ນຳເຂົ້າ DC'
                 }));
 
             } else if (activeTab === 'import_sales') {
@@ -2116,6 +2309,25 @@ const HQCommandCenterV2 = ({ onBack }) => {
                                             disabled={!s.key}
                                             className={`text-left p-3 rounded-2xl bg-white/10 ${s.cls || (s.key ? 'hover:bg-white/20' : '')} ${s.key ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'} transition-all border border-white/20`}
                                             title={s.key ? `ກົດເພື່ອເບິ່ງ: ${s.label}` : undefined}
+                                        >
+                                            <p className="text-3xl font-black">{s.icon} {s.val}</p>
+                                            <p className="text-white/80 font-bold text-xs sm:text-sm uppercase tracking-wider">{s.label}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {activeTab === 'import_dc' && (
+                                <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 pt-5 border-t border-white/20">
+                                    {[
+                                        { label: 'ຈຳນວນລວມ (Qty)', val: data.reduce((sum, r) => sum + (Number(r.qty) || 0), 0).toLocaleString(), icon: '📦', key: 'all', cls: 'hover:bg-white/20' },
+                                        { label: '🏷️ ມີເລກ RO', val: data.filter(r => r.ro_reference && r.ro_reference.trim() !== '').length, icon: '🏷️', key: 'has_ro', cls: 'hover:bg-indigo-400/30' },
+                                        { label: 'ທົ່ວໄປ (ບໍ່ມີ RO)', val: data.filter(r => !r.ro_reference || r.ro_reference.trim() === '').length, icon: '📋', key: 'no_ro', cls: 'hover:bg-teal-400/30' },
+                                    ].map(s => (
+                                        <button
+                                            key={s.label}
+                                            onClick={() => handleSelectBranch('ທັງໝົດ', s.key)}
+                                            className={`text-left p-3 rounded-2xl bg-white/10 ${s.cls} transition-all hover:scale-105 active:scale-95 border border-white/20`}
+                                            title={`ກົດເພື່ອເບິ່ງລາຍການ: ${s.label}`}
                                         >
                                             <p className="text-3xl font-black">{s.icon} {s.val}</p>
                                             <p className="text-white/80 font-bold text-xs sm:text-sm uppercase tracking-wider">{s.label}</p>
