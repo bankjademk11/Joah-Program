@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Camera, Upload, X, CheckCircle2,
-  Copy, Scan, Layers, ExternalLink, SwitchCamera, RefreshCw, Tag
+  Copy, Scan, Layers, ExternalLink, SwitchCamera, RefreshCw, Tag,
+  Code2, Sparkles
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
@@ -520,6 +521,25 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
               </div>
             )}
 
+          </div>
+        </div>
+
+        {/* ── Developer Credits Footer ────────────────────────── */}
+        <div className="max-w-5xl mx-auto mt-8 pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+            <span className="font-bold text-slate-400 flex items-center gap-1.5">
+              <Code2 size={13} className="text-violet-400" />
+              Developer by:
+            </span>
+            <span className="text-slate-300 font-medium">Mr.SANTISOUK LAXAYPHONE</span>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <span className="text-slate-300 font-medium">Mr.SOMPHONE XAYYACHIT</span>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <span className="text-slate-300 font-medium">Ms.INTHIDALINH VONGSOUTHI</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-600/15 border border-violet-500/30 text-violet-300 font-bold text-[11px] tracking-wider shrink-0">
+            <Sparkles size={11} className="text-violet-400" />
+            <span>Team IT JOAH</span>
           </div>
         </div>
       </div>

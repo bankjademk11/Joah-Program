@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Barcode,
   Plus,
@@ -48,6 +48,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [scanMode, setScanMode] = useState('count'); // 'manual' | 'count' | 'search'
   const [manualQty, setManualQty] = useState(1);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [allowAnyBarcode, setAllowAnyBarcode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -838,7 +839,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     const code = codeToScan.trim();
     if (!code) return;
 
-    if (!/^\d{13}$/.test(code)) {
+    if (!allowAnyBarcode && !/^\d{13}$/.test(code)) {
       if (clearInput) {
         showToast({
           type: 'error',
@@ -2458,10 +2459,20 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           {/* Only show scanner if NOT in filter mode (Staff mode) */}
           {!isFilterMode ? (
             <div className="bg-white rounded-2xl p-5 shadow-md border-2 border-slate-200 space-y-4">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
-                <ScanLine size={18} className="text-indigo-600" />
-                ເລືອກໂຫມດການສະແກນ
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-600 flex items-center gap-2">
+                  <ScanLine size={18} className="text-indigo-600" />
+                  ເລືອກໂຫມດການສະແກນ
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setAllowAnyBarcode(v => !v)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all cursor-pointer select-none ${allowAnyBarcode ? 'bg-amber-400 border-amber-500 text-amber-900 shadow-md' : 'bg-slate-100 border-slate-300 text-slate-500'}`}
+                >
+                  <span className={`inline-block w-3.5 h-3.5 rounded-full border-2 transition-all ${allowAnyBarcode ? 'bg-amber-700 border-amber-800' : 'bg-slate-300 border-slate-400'}`} />
+                  {allowAnyBarcode ? '🔓 ທຸກບາໂຄດ' : '🔒 EAN-13'}
+                </button>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -2500,7 +2511,9 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
               <form onSubmit={handleBarcodeSubmit} className="space-y-3">
                 <div className="relative">
-                  <label className="text-xs font-bold text-slate-600 block mb-2">ເລກບາໂຄດ (EAN-13)</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-2">
+                    ເລກບາໂຄດ {allowAnyBarcode ? <span className="text-amber-600">(ທຸກຮູບແບບ)</span> : '(EAN-13)'}
+                  </label>
                   <div className="relative flex items-center">
                     <Barcode size={20} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
                     <input
