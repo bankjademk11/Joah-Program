@@ -103,7 +103,7 @@ const LocationConfirmModal = ({ item, existingRecord, onConfirm, onCancel, isLoa
               <Sparkles size={16} />
             </div>
             <p className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-slate-300 leading-snug">
-              ຈຳນວນໃໝ່: <span className="text-blue-600 dark:text-blue-400 font-black">{(existingRecord.store_qty || 0) + item.qty}</span> 
+              ຈຳນວນໃໝ່: <span className="text-blue-600 dark:text-blue-400 font-black">{(existingRecord.store_qty || 0) + item.qty}</span>
               <span className="text-slate-400 ml-1.5 font-medium">(ເດີມ {existingRecord.store_qty || 0} + ຮັບ {item.qty})</span>
             </p>
           </div>
@@ -263,7 +263,7 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
   const saveBatchTimings = (updaterFn) => {
     setBatchTimings(prev => {
       const next = updaterFn(prev);
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { }
       return next;
     });
   };
@@ -277,13 +277,13 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
       const userName = currentUser?.name || 'Store Staff';
       const userId = currentUser?.id;
 
-        let query = supabase
-          .from('store_requests')
-          .select('*')
-          .eq('status', 'accepted')
-          .is('store_confirmed_at', null)
-          .gte('created_at', '2026-08-01T00:00:00.000Z')
-          .order('created_at', { ascending: false });
+      let query = supabase
+        .from('store_requests')
+        .select('*')
+        .eq('status', 'accepted')
+        .is('store_confirmed_at', null)
+        .gte('created_at', '2026-10-01T00:00:00.000Z')
+        .order('created_at', { ascending: false });
 
       // 🎯 Match request_by by name OR employee ID (handles "Name (ID)" and "Name (ID) [Rack: X]" formats)
       if (userId) {
@@ -553,15 +553,15 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
 
           {/* ── Clean Header with Brand Logo ──────────────────────── */}
           <div className="relative shrink-0 bg-white dark:bg-slate-900 px-5 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            
+
             {/* Logo and Titles */}
             <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-4">
               {/* Logo Box */}
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm shrink-0 flex items-center justify-center p-1">
-                <img 
-                  src={joahLogo} 
-                  alt="JOAH" 
-                  className="w-full h-full object-contain" 
+                <img
+                  src={joahLogo}
+                  alt="JOAH"
+                  className="w-full h-full object-contain"
                 />
               </div>
 
@@ -665,9 +665,9 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                   // Filter items by barcode search
                   const filteredItems = searchBarcode.trim()
                     ? batch.items.filter(item =>
-                        String(item.barcode || '').toLowerCase().includes(searchBarcode.trim().toLowerCase()) ||
-                        String(item.product_name || '').toLowerCase().includes(searchBarcode.trim().toLowerCase())
-                      )
+                      String(item.barcode || '').toLowerCase().includes(searchBarcode.trim().toLowerCase()) ||
+                      String(item.product_name || '').toLowerCase().includes(searchBarcode.trim().toLowerCase())
+                    )
                     : batch.items;
 
                   if (filteredItems.length === 0) return null; // Hide batch if no matching items
@@ -679,11 +679,10 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                   return (
                     <div
                       key={batch.batch_id}
-                      className={`group rounded-[2rem] border transition-all duration-300 overflow-hidden ${
-                        isExpanded 
-                          ? 'border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 shadow-xl ring-1 ring-emerald-500/10' 
+                      className={`group rounded-[2rem] border transition-all duration-300 overflow-hidden ${isExpanded
+                          ? 'border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 shadow-xl ring-1 ring-emerald-500/10'
                           : 'border-slate-200/60 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 hover:border-emerald-200 dark:hover:border-emerald-800 hover:shadow-md'
-                      }`}
+                        }`}
                     >
                       {/* Batch Header */}
                       <div
@@ -691,9 +690,8 @@ const StoreInboxPanel = ({ onClose, currentUser, activeBranch, onOpenQuickAdd })
                         onClick={() => setExpandedBatch(isExpanded ? null : batch.batch_id)}
                       >
                         <div className="flex items-start gap-4">
-                          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500 ${
-                            isExpanded ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-900/30 group-hover:text-emerald-500'
-                          }`}>
+                          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500 ${isExpanded ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-900/30 group-hover:text-emerald-500'
+                            }`}>
                             <Package size={24} className={isExpanded ? 'animate-bounce' : ''} />
                           </div>
 
