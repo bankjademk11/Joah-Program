@@ -10,11 +10,33 @@ import {
   Database,
   Camera,
   Sparkles,
+  Award,
 } from 'lucide-react';
 import ITOpIcon from '../../assets/Icons_AppJoah/it_oparationIcon.webp';
 import VisualLensCardImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
+import imgManagerEval from '../../assets/Icons_AppJoah/manager_evaluation_retail_lao.webp';
+import ManagerVoteSummaryModal from './ManagerVoteSummaryModal';
 
 const IT_SERVICES = [
+  {
+    id: 'manager-vote-summary',
+    title: 'ສະຫຼຸບຜົນໂຫວດ Manager & ລາຍລະອຽດຜູ້ໂຫວດ (GM / HQ)',
+    category: 'EVALUATION & HR',
+    badge: 'GM CONFIDENTIAL',
+    badgeColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    coverImage: imgManagerEval,
+    icon: Award,
+    iconColor: 'text-amber-500 dark:text-amber-400',
+    iconBg: 'bg-amber-100 dark:bg-amber-950/60',
+    desc: 'ໜ້າສະຫຼຸບຜົນການໂຫວດ ແລະ ປະເມີນຜູ້ຈັດການສາຂາທັງໝົດ: ເບິ່ງຄະແນນດາວສະເລ່ຍລວມແຕ່ລະສາຂາ, ຄະແນນຍ່ອຍ 6 ດ້ານ, ຂໍ້ສະເໜີແນະ/ຄຳເຫັນ ແລະ ກວດສອບລາຍລະອຽດຜູ້ໂຫວດ (Voter ID / Name) ຢ່າງລະອຽດ ສຳລັບ GM ແລະ ຜູ້ບໍລິຫານ.',
+    metrics: [
+      { label: 'Evaluation', val: '6 Criteria + Star' },
+      { label: 'Voter Check', val: 'ID & Role Match' },
+      { label: 'Access', val: 'GM & HQ Only' }
+    ],
+    tags: ['Manager Vote', 'GM Portal', 'Voter Identity', 'Branch Rating', 'Confidential'],
+    isReady: true
+  },
   {
     id: 'barcode-inspector',
     title: 'Barcode & Inventory Integrity Inspector',
@@ -93,9 +115,10 @@ const IT_SERVICES = [
 export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showManagerVoteSummary, setShowManagerVoteSummary] = useState(false);
 
   const isHQ = user?.role === 'HQ';
-  const categories = ['ALL', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT', 'AI & SEARCH'];
+  const categories = ['ALL', 'EVALUATION & HR', 'DATA AUDIT', 'MONITORING', 'DATA MANAGEMENT', 'AI & SEARCH'];
 
   const filteredServices = IT_SERVICES.filter(service => {
 
@@ -111,6 +134,10 @@ export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
   });
 
   const handleLaunch = (toolId) => {
+    if (toolId === 'manager-vote-summary') {
+      setShowManagerVoteSummary(true);
+      return;
+    }
     if (onLaunchTool) {
       onLaunchTool(toolId);
     }
@@ -290,6 +317,12 @@ export default function ITToolsDashboard({ onBack, onLaunchTool, user }) {
           })}
         </div>
       </main>
+
+      {/* GM Manager Vote Summary Modal */}
+      <ManagerVoteSummaryModal
+        isOpen={showManagerVoteSummary}
+        onClose={() => setShowManagerVoteSummary(false)}
+      />
     </div>
   );
 }

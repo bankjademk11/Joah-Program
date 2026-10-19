@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory, fetchDcFromSupabase, fetchStoreInventoryFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box, Tag, Terminal, Wrench } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box, Tag, Terminal, Wrench, UserCheck, Star } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -27,6 +27,7 @@ import imgStoreRequest from './assets/StoreRequest.png';
 import imgHQCenter from './assets/JoahHQcentercompressed.png';
 import imgStoreInventory from './assets/StoreInventory.png';
 import imgCheckPrice from './assets/Icons_AppJoah/checkpirce.webp';
+import imgManagerEval from './assets/Icons_AppJoah/manager_evaluation_retail_lao.webp';
 
 import Login from './components/features/auth/Login';
 import OdooMonitor from './components/features/admin/OdooMonitor';
@@ -51,6 +52,7 @@ import HalloweenCanopy from './components/ui/HalloweenCanopy';
 import SeasonalBackground from './components/ui/SeasonalBackground';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
+import ManagerEvaluation from './components/features/store/ManagerEvaluation';
 import ExcelCompressor from './components/Tools/excel-compressor';
 import SalesAggregator from './components/Tools/SalesAggregator';
 import DcStockImporter from './components/Tools/DcStockImporter';
@@ -1077,7 +1079,7 @@ function AppContent() {
         )}
 
         {/* Navigation */}
-        {!['stock-count-lak8', 'visual-lens-search', 'it-tools-ps5', 'check-price', 'check-price-ultimate'].includes(step) && <Navbar
+        {!['stock-count-lak8', 'visual-lens-search', 'it-tools-ps5', 'check-price', 'check-price-ultimate', 'manager-evaluation'].includes(step) && <Navbar
           step={step}
           dbSource={dbSource}
           dataSourceLabel={dataSourceLabel}
@@ -1288,6 +1290,27 @@ function AppContent() {
                         <button onClick={handleDatabaseLoad} disabled={isProcessing} className="w-full btn-primary group py-4">
                           {isProcessing ? <RefreshCw className="animate-spin" /> : <Database size={18} />}
                           <span>{t('home.continueWithCloud')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Manager Evaluation (Vote Manager Portal) */}
+                  {!showAdminMenu && (
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden flex flex-col group hover:border-slate-800 dark:hover:border-white hover:shadow-slate-500/10 transition-all duration-500 w-full sm:w-[340px]">
+                      <div className="w-full h-44 overflow-hidden bg-slate-900 relative">
+                        <img src={imgManagerEval} alt="Manager Evaluation" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/80 dark:from-slate-900/80 to-transparent" />
+                      </div>
+                      <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
+                        <div className="space-y-1.5 text-center">
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ປະເມີນຜູ້ຈັດການ</h3>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manager Evaluation & Rating</p>
+                        </div>
+                        <button onClick={() => setStep('manager-evaluation')}
+                          className="w-full btn-primary mt-1 group py-4 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 shadow-slate-900/20 border-none">
+                          <UserCheck size={18} />
+                          <span>ເລີ່ມປະເມີນ (Review Manager)</span>
                         </button>
                       </div>
                     </div>
@@ -1960,6 +1983,16 @@ function AppContent() {
 
           {step === 'store-closing' && (
             <StoreClosingChecklist onBack={() => setStep('upload')} />
+          )}
+
+          {step === 'manager-evaluation' && (
+            <div className="fixed inset-0 z-[9999] bg-[#EDF1EE] flex flex-col animate-fade-in overflow-y-auto">
+              <ManagerEvaluation
+                onBack={() => setStep('upload')}
+                currentUser={user}
+                isAdmin={isAdmin}
+              />
+            </div>
           )}
 
           {step === 'excel-compressor' && (
