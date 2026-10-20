@@ -42,6 +42,12 @@ const formatDateRangeLao = (start, end) => {
     return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`;
 };
 
+const splitProduct = (productStr) => {
+    if (!productStr) return { barcode: '-', name: '-' };
+    const match = productStr.match(/^\[(.*?)\]\s*(.*)$/);
+    return match ? { barcode: match[1], name: match[2] } : { barcode: '-', name: productStr };
+};
+
 export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const [sales, setSales] = useState([]);
     const [detailedSales, setDetailedSales] = useState([]);
@@ -489,12 +495,6 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         if (!dateString) return '';
         const utcDate = new Date(dateString.replace(' ', 'T') + 'Z');
         return utcDate.toLocaleString('lo-LA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    };
-
-    const splitProduct = (productStr) => {
-        if (!productStr) return { barcode: '-', name: '-' };
-        const match = productStr.match(/^\[(.*?)\]\s*(.*)$/);
-        return match ? { barcode: match[1], name: match[2] } : { barcode: '-', name: productStr };
     };
 
     const handleExport = async () => {

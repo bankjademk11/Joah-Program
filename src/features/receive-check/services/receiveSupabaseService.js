@@ -80,12 +80,25 @@ export async function fetchAllReceiveOrders() {
       }).filter(Boolean)));
 
       if (branches.length > 0 && dates.length > 0) {
-        const { data: scData } = await supabase
-          .from('stock_count_lak8')
-          .select('barcode, qty, branch, count_date, ro_reference')
-          .in('branch', branches)
-          .in('count_date', dates);
-        allStockCounts = scData || [];
+        // Paginate — Supabase caps each select at 1000 rows, which silently dropped counts
+        let scFrom = 0;
+        let scHasMore = true;
+        while (scHasMore) {
+          const { data: scData, error: scErr } = await supabase
+            .from('stock_count_lak8')
+            .select('barcode, qty, branch, count_date, ro_reference')
+            .in('branch', branches)
+            .in('count_date', dates)
+            .range(scFrom, scFrom + PAGE_SIZE - 1);
+          if (scErr) throw scErr;
+          if (scData && scData.length > 0) {
+            allStockCounts = allStockCounts.concat(scData);
+            scFrom += PAGE_SIZE;
+            scHasMore = scData.length === PAGE_SIZE;
+          } else {
+            scHasMore = false;
+          }
+        }
       }
     } catch (e) {
       console.warn('Failed to fetch live counts for receive_orders list:', e);
