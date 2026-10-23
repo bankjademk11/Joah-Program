@@ -371,10 +371,21 @@ export async function fetchOrderLines(lineIds) {
 // All Joah branch company IDs — passed in context so Odoo unlocks multi-company data
 const ALL_JOAH_COMPANY_IDS = [5, 8, 173, 241, 247, 248, 249, 261, 273]; // 5 = Jmart Phonetong, 8 = Jmart Vangxaiy, 173 = Phonsinuan
 
-export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true) {
+// ── POS register scope (Event booth vs. normal store) ────────
+// Event booth sales are rung on a separate POS register (pos.config) named "Joah EVENT"
+// but belong to the same company/branch (PTX). posScope: 'all' | 'event' | 'exclude'
+const EVENT_POS_NAME = 'Joah EVENT';
+
+function posScopeDomain(prefix, posScope) {
+  if (!posScope || posScope === 'all') return [];
+  return [[`${prefix}session_id.config_id.name`, posScope === 'event' ? 'ilike' : 'not ilike', EVENT_POS_NAME]];
+}
+
+export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true, posScope = 'all') {
   const domain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+    ...posScopeDomain('order_id.', posScope),
   ];
 
   if (filterJoahOnly) {
@@ -431,10 +442,11 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filt
  * @param {string} dateEnd - End date (YYYY-MM-DD HH:mm:ss in UTC)
  * @returns {Promise<Object[]>}
  */
-export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true) {
+export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, filterJoahOnly = true, posScope = 'all') {
   const domain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+    ...posScopeDomain('order_id.', posScope),
   ];
 
   if (filterJoahOnly) {
@@ -588,6 +600,39 @@ export async function fetchSyncDeltaSales(branchId, lastProcessedId) {
 }
 
 /**
+ * READ-ONLY: Look up product names by barcode from product.product.
+ * @param {string[]} barcodes
+ * @returns {Promise<Object>} Map of barcode -> product name
+ */
+export async function fetchProductNamesByBarcodes(barcodes) {
+  const unique = [...new Set((barcodes || []).filter(Boolean))];
+  const map = {};
+  const CHUNK = 200;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const res = await fetch(`${BASE}/web/dataset/call_kw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        jsonrpc: '2.0', method: 'call', id: Date.now() + i,
+        params: {
+          model: 'product.product',
+          method: 'search_read',
+          args: [[['barcode', 'in', chunk]]],
+          kwargs: { fields: ['barcode', 'name'], context: { allowed_company_ids: ALL_JOAH_COMPANY_IDS } },
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.data?.message || json.error.message || 'Odoo API error');
+    (json.result || []).forEach(p => { if (p.barcode) map[p.barcode] = p.name; });
+  }
+  return map;
+}
+
+/**
  * Fetch actual EAN13 barcodes for a list of product IDs from product.product.
  * This is needed because pos.order.line only gives us [internal_ref] in the name,
  * but the master data / store inventory uses EAN13 barcodes.
@@ -652,11 +697,12 @@ export async function fetchOrderStateAudit(branchId, dateStart, dateEnd) {
 /**
  * Fetch daily sales summary for the last 14 days using read_group
  */
-export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filterJoahOnly = true) {
+export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filterJoahOnly = true, posScope = 'all') {
   // ── Query 1: Orders (bills) to get their true date_order ─────────────────
   const orderDomain = [
     ['company_id', '=', branchId],
     ['state', 'in', ['paid', 'done', 'invoiced']],
+    ...posScopeDomain('', posScope),
   ];
   if (dateStartStr) orderDomain.push(['date_order', '>=', dateStartStr]);
   if (dateEndStr)   orderDomain.push(['date_order', '<=', dateEndStr]);
@@ -675,6 +721,7 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
   const lineDomain = [
     ['company_id', '=', branchId],
     ['order_id.state', 'in', ['paid', 'done', 'invoiced']],
+    ...posScopeDomain('order_id.', posScope),
   ];
   if (filterJoahOnly) lineDomain.push(['product_id.product_bu_id', '=', 9126]);
   if (dateStartStr) lineDomain.push(['order_id.date_order', '>=', dateStartStr]);

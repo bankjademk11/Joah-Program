@@ -4,6 +4,7 @@ import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetch
 import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart, ChevronDown, ImageIcon, Check } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
+import EventStockView from './EventStockView';
 import JoahLogo from '../../assets/Joah.jpeg';
 import dataImageBG from '../../assets/dataImageBG.png';
 import JoahLoadingGif from '../../assets/joah_web_small.gif';
@@ -94,6 +95,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const currentBranchObj = branches.find(b => b.id === selectedBranchId);
     const selectedBranchName = currentBranchObj ? `${currentBranchObj.name} (${currentBranchObj.short})` : '';
 
+    // POS register scope: 'all' | 'event' (Joah EVENT booth only) | 'exclude' (normal store only)
+    // The Joah EVENT register lives under PTX (company 273), so the filter only applies there.
+    const [posScope, setPosScope] = useState('all');
+    const effectivePosScope = selectedBranchId === 273 ? posScope : 'all';
+    // Suffix used in export file/sheet names and headers so the file shows which scope it contains
+    const posScopeLabel = effectivePosScope === 'event' ? ' - EVENT' : effectivePosScope === 'exclude' ? ' - NoEvent' : '';
+
     const loadSales = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -118,7 +126,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             const endDateTime = toUTC(dateEnd, true);
 
             if (activeTab === 'summary') {
-                const data = await fetchBranchProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly);
+                const data = await fetchBranchProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly, effectivePosScope);
                 const sorted = data.sort((a, b) => b.qty - a.qty);
                 setSales(sorted);
                 const productIds = [...new Set(sorted.map(i => i.product_id?.[0]).filter(Boolean))];
@@ -206,9 +214,9 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     }).catch((err) => console.warn('Barcode fetch error:', err));
                 }
             } else if (activeTab === 'history') {
-                const data = await fetchDetailedProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly);
+                const data = await fetchDetailedProductSales(selectedBranchId, startDateTime, endDateTime, joahOnly, effectivePosScope);
                 setDetailedSales(data);
-                setDetailedSalesKey(`${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`);
+                setDetailedSalesKey(`${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}_${effectivePosScope}`);
                 const productIds = [...new Set(data.map(i => i.product_id?.[0]).filter(Boolean))];
                 if (productIds.length > 0) {
                     fetchProductBarcodes(productIds).then(async (map) => {
@@ -343,13 +351,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         const cEndUTC = toUTC(cEndStr, true);
 
                         if (selectedBranchId === 'ALL') {
-                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly, effectivePosScope));
                             const cResults = await Promise.all(cPromises);
                             const cMapped = {};
                             branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
                             setCompareWeeklySales(cMapped);
                         } else {
-                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly, effectivePosScope);
                             setCompareWeeklySales({ [selectedBranchId]: cData || [] });
                         }
                     } else {
@@ -409,13 +417,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         const cEndUTC = toUTC(cEndStr, true);
 
                         if (selectedBranchId === 'ALL') {
-                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly));
+                            const cPromises = branches.map(b => fetchDailySales(b.id, cStartUTC, cEndUTC, joahOnly, effectivePosScope));
                             const cResults = await Promise.all(cPromises);
                             const cMapped = {};
                             branches.forEach((b, idx) => { cMapped[b.id] = cResults[idx] || []; });
                             setCompareWeeklySales(cMapped);
                         } else {
-                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly);
+                            const cData = await fetchDailySales(selectedBranchId, cStartUTC, cEndUTC, joahOnly, effectivePosScope);
                             setCompareWeeklySales({ [selectedBranchId]: cData || [] });
                         }
                     }
@@ -428,13 +436,13 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 const endUTC = toUTC(endStr, true);
 
                 if (selectedBranchId === 'ALL') {
-                    const promises = branches.map(b => fetchDailySales(b.id, startUTC, endUTC, joahOnly));
+                    const promises = branches.map(b => fetchDailySales(b.id, startUTC, endUTC, joahOnly, effectivePosScope));
                     const results = await Promise.all(promises);
                     const mapped = {};
                     branches.forEach((b, idx) => { mapped[b.id] = results[idx] || []; });
                     setWeeklySales(mapped);
                 } else {
-                    const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly);
+                    const data = await fetchDailySales(selectedBranchId, startUTC, endUTC, joahOnly, effectivePosScope);
                     setWeeklySales({ [selectedBranchId]: data || [] });
                 }
             }
@@ -443,7 +451,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         } finally {
             setLoading(false);
         }
-    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset, calendarMode]);
+    }, [selectedBranchId, dateStart, dateEnd, activeTab, joahOnly, weekOffset, isCompareMode, compareMonthOffset, calendarMode, effectivePosScope]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -500,11 +508,11 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
     const handleExport = async () => {
         setIsExporting(true);
         try {
-            const branchName = selectedBranchName;
+            const branchName = `${selectedBranchName}${posScopeLabel}`;
             const reportDate = `${dateStart.replace('T', ' ')} ຫາ ${dateEnd.replace('T', ' ')}`;
 
             // Ensure we have detailed sales data matching the current branch and dates
-            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`;
+            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}_${effectivePosScope}`;
             let exportItems = (detailedSalesKey === currentKey && detailedSales.length > 0) ? detailedSales : [];
             let currentBarcodes = { ...trueBarcodes };
 
@@ -522,7 +530,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 };
                 const startUTC = toUTC(dateStart, false);
                 const endUTC = toUTC(dateEnd, true);
-                exportItems = await fetchDetailedProductSales(selectedBranchId, startUTC, endUTC, joahOnly);
+                exportItems = await fetchDetailedProductSales(selectedBranchId, startUTC, endUTC, joahOnly, effectivePosScope);
                 setDetailedSales(exportItems);
                 setDetailedSalesKey(currentKey);
 
@@ -626,7 +634,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             }
 
             const workbook = new ExcelJS.Workbook();
-            const ws = workbook.addWorksheet(branchName);
+            const ws = workbook.addWorksheet(branchName.substring(0, 31));
 
             const FONT = { name: 'Phetsarath OT', size: 11 };
             const FONT_BOLD = { name: 'Phetsarath OT', size: 11, bold: true };
@@ -768,7 +776,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
         setIsExporting(true);
         setExportProgress(withImages ? 'ກຳລັງກຽມຂໍ້ມູນການຂາຍ...' : '');
         try {
-            const branchName = selectedBranchName;
+            const branchName = `${selectedBranchName}${posScopeLabel}`;
             const fmtDate = (dt) => {
                 if (!dt) return '';
                 const [datePart] = dt.split('T');
@@ -777,7 +785,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
             };
             const reportDate = `${fmtDate(dateStart)} ຫາ ${fmtDate(dateEnd)}`;
 
-            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}`;
+            const currentKey = `${selectedBranchId}_${dateStart}_${dateEnd}_${joahOnly}_${effectivePosScope}`;
             let exportItems = (detailedSalesKey === currentKey && detailedSales.length > 0) ? detailedSales : [];
             let currentBarcodes = { ...trueBarcodes };
 
@@ -793,7 +801,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                     if (isEnd) d.setSeconds(59);
                     return d.toISOString().replace('T', ' ').substring(0, 19);
                 };
-                exportItems = await fetchDetailedProductSales(selectedBranchId, toUTC(dateStart, false), toUTC(dateEnd, true), joahOnly);
+                exportItems = await fetchDetailedProductSales(selectedBranchId, toUTC(dateStart, false), toUTC(dateEnd, true), joahOnly, effectivePosScope);
                 setDetailedSales(exportItems);
                 setDetailedSalesKey(currentKey);
 
@@ -1161,6 +1169,27 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             </select>
                         </div>
 
+                        {/* POS register filter — only for PTX (Joah EVENT booth shares PTX's company) */}
+                        {selectedBranchId === 273 && activeTab !== 'audit' && (
+                            <div className="flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm">
+                                <ShoppingCart size={14} className="sm:w-4 sm:h-4 text-white/80 mr-1 sm:mr-2" />
+                                <select
+                                    value={posScope}
+                                    onChange={(e) => {
+                                        setPosScope(e.target.value);
+                                        setSales([]);
+                                        setDetailedSales([]);
+                                        setDetailedSalesKey('');
+                                    }}
+                                    className="bg-transparent text-xs sm:text-sm font-bold text-white outline-none cursor-pointer [&>option]:text-slate-800"
+                                >
+                                    <option value="all">ທຸກເຄື່ອງ POS (ລວມ)</option>
+                                    <option value="event">🎪 ສະເພາະ Joah EVENT</option>
+                                    <option value="exclude">ຮ້ານປົກກະຕິ (ບໍ່ລວມ Event)</option>
+                                </select>
+                            </div>
+                        )}
+
                         {/* Export Dropdown */}
                         <div className="relative" ref={exportMenuRef}>
                             <button
@@ -1225,8 +1254,8 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 </div>
 
                 {/* Tabs Moved to Top */}
-                <div className="grid grid-cols-2 sm:flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-2xl mb-6 shadow-lg border border-white/20 gap-1.5">
-                    {['summary', 'history', 'audit', 'weekly', 'dashboard'].map(tab => (
+                <div className="grid grid-cols-2 sm:flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl w-full max-w-3xl mb-6 shadow-lg border border-white/20 gap-1.5">
+                    {['summary', 'history', 'audit', 'weekly', 'dashboard', 'event_stock'].map(tab => (
                         <button key={tab} onClick={() => {
                             setActiveTab(tab);
                             setWeekOffset(0);
@@ -1235,7 +1264,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             }
                         }}
                             className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-joah-orange text-white shadow-lg shadow-orange-500/40 scale-[1.02]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
-                            {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={14} className="sm:w-4 sm:h-4" /> Audit</> : tab === 'weekly' ? <><CalendarDays size={14} className="sm:w-4 sm:h-4" /> 2 ອາທິດ</> : <><PieChart size={14} className="sm:w-4 sm:h-4" /> Dashboard</>}
+                            {tab === 'summary' ? 'ສະຫຼຸບ' : tab === 'history' ? 'ປະຫວັດ' : tab === 'audit' ? <><ShieldAlert size={14} className="sm:w-4 sm:h-4" /> Audit</> : tab === 'weekly' ? <><CalendarDays size={14} className="sm:w-4 sm:h-4" /> 2 ອາທິດ</> : tab === 'dashboard' ? <><PieChart size={14} className="sm:w-4 sm:h-4" /> Dashboard</> : <><Package size={14} className="sm:w-4 sm:h-4" /> 🎪 Event Stock</>}
                         </button>
                     ))}
                 </div>
@@ -1700,6 +1729,11 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                         setCompareMonthOffset={setCompareMonthOffset}
                         compareWeeklySales={compareWeeklySales}
                     />
+                )}
+
+                {/* Event Stock (kolao-sq from Supabase location_inventory) */}
+                {activeTab === 'event_stock' && (
+                    <EventStockView />
                 )}
 
                 {/* Filters Row (Only for Summary/History/Audit) */}
