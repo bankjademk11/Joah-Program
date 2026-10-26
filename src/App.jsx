@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import FileUpload from './components/features/admin/FileUpload';
 import SheetMapper from './components/features/admin/SheetMapper';
 import Dashboard from './components/features/inventory/Dashboard';
@@ -1150,10 +1150,10 @@ function AppContent() {
                             }}
                             title="คลิกเพื่อสลับธีม: Halloween / Sakura / Cubes"
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm ${isHalloween
-                                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20 shadow-purple-500/10'
-                                : isSakura
-                                  ? 'bg-pink-500/10 text-pink-600 dark:text-pink-300 border-pink-500/30 hover:bg-pink-500/20 shadow-pink-500/10'
-                                  : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 hover:bg-slate-500/20'
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20 shadow-purple-500/10'
+                              : isSakura
+                                ? 'bg-pink-500/10 text-pink-600 dark:text-pink-300 border-pink-500/30 hover:bg-pink-500/20 shadow-pink-500/10'
+                                : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 hover:bg-slate-500/20'
                               }`}
                           >
                             <span>{isHalloween ? '🎃 Kawaii Halloween' : isSakura ? '🌸 Sakura Blossom' : '🧊 Rubik Cubes'}</span>
@@ -1304,13 +1304,13 @@ function AppContent() {
                       </div>
                       <div className="px-8 pb-8 pt-5 flex flex-col items-center gap-5 w-full">
                         <div className="space-y-1.5 text-center">
-                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ປະເມີນຜູ້ຈັດການ</h3>
+                          <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ເເບບສອບຖາມໜ້າຮ້ານ</h3>
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Manager Evaluation & Rating</p>
                         </div>
                         <button onClick={() => setStep('manager-evaluation')}
                           className="w-full btn-primary mt-1 group py-4 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 shadow-slate-900/20 border-none">
                           <UserCheck size={18} />
-                          <span>ເລີ່ມປະເມີນ (Review Manager)</span>
+                          <span>ເລີ່ມເຮັດເເບບ ສອບຖາມ</span>
                         </button>
                       </div>
                     </div>

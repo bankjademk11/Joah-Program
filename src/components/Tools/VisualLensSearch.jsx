@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Camera, Upload, X, CheckCircle2,
   Copy, Scan, Layers, ExternalLink, SwitchCamera, RefreshCw, Tag,
-  Code2, Sparkles
+  Code2, Sparkles, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
 const AI_API_URL = 'https://bankjademk11-joah-lens-search.hf.space';
+const PAGE_SIZE = 20;
 
 const formatPrice = (price) => {
   if (price === undefined || price === null) return null;
@@ -29,7 +30,7 @@ async function searchByImageAPI(imageDataUrl, tta = false, topk = 10) {
 }
 
 export default function VisualLensSearch({ onBack, onSelectProduct, branchId = 'ໂພນຕ້ອງ', user }) {
-  const isHQ = user?.role === 'HQ';
+  const isHQ = user?.role === 'HQ' || user?.role === 'admin' || user?.role === 'ADMIN' || user?.branch_id === 'HQ';
 
   const [imagePreview, setImagePreview] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -37,11 +38,26 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const [searchDone, setSearchDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [highAccuracy, setHighAccuracy] = useState(false);
+  const [resultLimit, setResultLimit] = useState(isHQ ? 100 : 10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [serviceOnline, setServiceOnline] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraFacing, setCameraFacing] = useState('environment');
   const [copiedBarcode, setCopiedBarcode] = useState(null);
   const [zoomedImage, setZoomedImage] = useState(null);
+
+  const resultsTopRef = useRef(null);
+
+  const totalPages = Math.ceil(searchResults.length / PAGE_SIZE);
+  const paginatedResults = useMemo(() => {
+    if (searchResults.length <= PAGE_SIZE) return searchResults;
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return searchResults.slice(start, start + PAGE_SIZE);
+  }, [searchResults, currentPage]);
+
+  useEffect(() => {
+    if (isHQ) setResultLimit(100);
+  }, [isHQ]);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -118,14 +134,17 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     reader.readAsDataURL(file);
   };
 
-  const runSearch = async (imgDataUrl) => {
+  const runSearch = async (imgDataUrl, customTopK = null) => {
     setIsSearching(true);
     setSearchResults([]);
     setSearchDone(false);
     setErrorMsg('');
+    setCurrentPage(1);
 
     try {
-      const { results: apiResults } = await searchByImageAPI(imgDataUrl, highAccuracy, 10);
+      // HQ has no limit (defaults to 100 or custom selection), standard branch users capped at 10
+      const topkToFetch = customTopK !== null ? customTopK : (isHQ ? resultLimit : 10);
+      const { results: apiResults } = await searchByImageAPI(imgDataUrl, highAccuracy, topkToFetch);
 
       if (!apiResults || apiResults.length === 0) {
         setSearchDone(true);
@@ -134,25 +153,45 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
       }
 
       const barcodes = apiResults.map(r => r.barcode);
-      const [productsRes, priceRes] = await Promise.all([
-        supabase
-          .from('master_data')
-          .select('barcode, item_name, product_name_la, category_1, category_2')
-          .in('barcode', barcodes),
-        supabase
-          .from('price_checker')
-          .select('barcode, price, product_name')
-          .in('barcode', barcodes)
+
+      // Batch queries in chunks of 60 to safely handle large result sets without PostgREST URL limit issues
+      const chunkSize = 60;
+      const barcodeChunks = [];
+      for (let i = 0; i < barcodes.length; i += chunkSize) {
+        barcodeChunks.push(barcodes.slice(i, i + chunkSize));
+      }
+
+      const [productsResChunks, priceResChunks] = await Promise.all([
+        Promise.all(
+          barcodeChunks.map(chunk =>
+            supabase
+              .from('master_data')
+              .select('barcode, item_name, product_name_la, category_1, category_2')
+              .in('barcode', chunk)
+          )
+        ),
+        Promise.all(
+          barcodeChunks.map(chunk =>
+            supabase
+              .from('price_checker')
+              .select('barcode, price, product_name')
+              .in('barcode', chunk)
+          )
+        )
       ]);
 
       const productMap = {};
-      (productsRes.data || []).forEach(p => { productMap[p.barcode] = p; });
+      productsResChunks.forEach(res => {
+        (res.data || []).forEach(p => { productMap[p.barcode] = p; });
+      });
 
       const priceMap = {};
-      (priceRes.data || []).forEach(p => {
-        if (p.barcode && p.price !== undefined && p.price !== null) {
-          priceMap[p.barcode] = p.price;
-        }
+      priceResChunks.forEach(res => {
+        (res.data || []).forEach(p => {
+          if (p.barcode && p.price !== undefined && p.price !== null) {
+            priceMap[p.barcode] = p.price;
+          }
+        });
       });
 
       const results = apiResults.map(r => {
@@ -192,6 +231,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     setSearchResults([]);
     setSearchDone(false);
     setErrorMsg('');
+    setCurrentPage(1);
   };
 
 
@@ -214,8 +254,17 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
             <Scan size={16} className="text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-white leading-tight truncate">ຄົ້ນຫາດ້ວຍຮູບ</h1>
-            <p className="text-[11px] text-slate-500 truncate">Joah Lens · {branchId}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold text-white leading-tight truncate">ຄົ້ນຫາດ້ວຍຮູບ</h1>
+              {isHQ && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm border border-violet-400/40 tracking-wide">
+                  <Sparkles size={10} /> HQ Unlimited
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 truncate">
+              Joah Lens · {isHQ ? 'ສຳນັກງານໃຫຍ່ (HQ) · ບໍ່ຈຳກັດການເບິ່ງ' : branchId}
+            </p>
           </div>
         </div>
 
@@ -373,16 +422,64 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
               </button>
             </div>
 
+            {/* HQ Unlimited View Controls */}
+            {isHQ && (
+              <div className="bg-gradient-to-br from-violet-950/40 to-slate-900 border border-violet-800/50 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-violet-300 font-bold text-xs">
+                    <Sparkles size={13} className="text-violet-400" />
+                    <span>ໂໝດ HQ (ບໍ່ຈຳກັດການເບິ່ງ)</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/60">
+                    Unlimited Active
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  ສະແດງສິນຄ້າທີ່ກົງກັນໄດ້ສູງສຸດ (ສາຂາທົ່ວໄປຈຳກັດ 10 ອັນ):
+                </p>
+                <div className="grid grid-cols-5 gap-1 pt-1">
+                  {[10, 30, 50, 100, 200].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => {
+                        setResultLimit(n);
+                        if (imagePreview) runSearch(imagePreview, n);
+                      }}
+                      className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
+                        resultLimit === n
+                          ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 scale-[1.02]'
+                          : 'bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                      }`}
+                    >
+                      {n === 100 ? '100★' : n === 200 ? '200' : n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* ── Right: Results ───────────────────────────────────────────── */}
           <div className="md:col-span-7 flex flex-col gap-4">
+            <div ref={resultsTopRef} />
 
             {/* Results header */}
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-300">ຜົນການຄົ້ນຫາ</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-300">ຜົນການຄົ້ນຫາ</h2>
+                {isHQ && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-950/80 text-violet-300 border border-violet-800/60">
+                    HQ: Top {resultLimit}
+                  </span>
+                )}
+              </div>
               {searchResults.length > 0 && (
-                <span className="text-xs font-medium text-slate-500">{searchResults.length} ລາຍການ</span>
+                <span className="text-xs font-medium text-slate-500">
+                  {searchResults.length} ລາຍການ
+                  {totalPages > 1 && ` · ໜ້າ ${currentPage}/${totalPages}`}
+                </span>
               )}
             </div>
 
@@ -418,7 +515,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
             {/* Result cards */}
             {searchResults.length > 0 && (
               <div className="space-y-2">
-                {searchResults.map((item, idx) => (
+                {paginatedResults.map((item, idx) => (
                   <div
                     key={idx}
                     className="group bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-xl p-3.5 flex gap-3.5 transition cursor-pointer"
@@ -518,6 +615,98 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Pagination Controls (when more than 20 items) */}
+            {totalPages > 1 && (
+              <div className="mt-2 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-900 border border-slate-800 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+                <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <span>ສະແດງ</span>
+                  <span className="font-bold text-white bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                    {(currentPage - 1) * PAGE_SIZE + 1} - {Math.min(currentPage * PAGE_SIZE, searchResults.length)}
+                  </span>
+                  <span>ຈາກ</span>
+                  <span className="font-bold text-violet-400">{searchResults.length}</span>
+                  <span>ລາຍການ</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Previous page button */}
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => {
+                      setCurrentPage(prev => Math.max(prev - 1, 1));
+                      resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      currentPage === 1
+                        ? 'opacity-35 cursor-not-allowed bg-slate-800/40 text-slate-500 border border-slate-800'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 active:scale-95 shadow-sm'
+                    }`}
+                  >
+                    <ChevronLeft size={14} />
+                    <span>ກ່ອນໜ້າ</span>
+                  </button>
+
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                      const isNearby =
+                        page === 1 ||
+                        page === totalPages ||
+                        Math.abs(page - currentPage) <= 1;
+
+                      if (!isNearby) {
+                        if (page === currentPage - 2 || page === currentPage + 2) {
+                          return (
+                            <span key={page} className="px-1 text-slate-600 text-xs select-none">
+                              •••
+                            </span>
+                          );
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => {
+                            setCurrentPage(page);
+                            resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className={`min-w-8 h-8 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-violet-600 text-white shadow-md shadow-violet-600/40 ring-1 ring-violet-400/50'
+                              : 'bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/60'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next page button */}
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => {
+                      setCurrentPage(prev => Math.min(prev + 1, totalPages));
+                      resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      currentPage === totalPages
+                        ? 'opacity-35 cursor-not-allowed bg-slate-800/40 text-slate-500 border border-slate-800'
+                        : 'bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-600/30 active:scale-95 border border-violet-500/50'
+                    }`}
+                  >
+                    <span>ຕໍ່ໄປ</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
               </div>
             )}
 

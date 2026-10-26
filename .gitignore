@@ -32,3 +32,9 @@ dist-ssr
 ITproject/program/index_data/
 *.faiss
 *.npy
+
+# Scratch & Work scripts
+.work/
+.work_*
+outputs/
+

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase as defaultSupabase } from "../../utils/supabaseClient";
 
 const DEFAULT_BRANCH = "ໂພນຕ້ອງ";
-const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "ສີວິໄລ", "ວັງຊາຍ", "ຕະຫຼາດລາວ"];
+const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "ໂພນສີນວນ", "ສີວິໄລ", "ວັງຊາຍ", "ຕະຫຼາດລາວ", "ເມກ້າມໍ"];
 const BATCH_SIZE = 500;
 
 const aliases = {
