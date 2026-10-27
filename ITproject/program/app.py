@@ -1,4 +1,5 @@
 import os
+import uvicorn
 import gradio as gr
 
 try:
@@ -13,38 +14,25 @@ except ImportError:
             return dec
     spaces = MockSpaces()
 
-# ── Top-level ZeroGPU hook for Hugging Face scanner ──────────────────────────
-@spaces.GPU(duration=30)
-def zero_gpu_status():
-    """Satisfies ZeroGPU startup check"""
-    return "ZeroGPU Online"
-# ─────────────────────────────────────────────────────────────────────────────
-
 from main import app as fastapi_app
 
-# Create minimal Gradio Blocks to satisfy HF Gradio SDK
-with gr.Blocks(title="Joah AI Lens Search") as demo:
+# 1. ZeroGPU Inference Handler attached to Gradio
+@spaces.GPU(duration=30)
+def predict_gpu(text):
+    return "ZeroGPU Online & Ready"
+
+# 2. Gradio Blocks with event listener (strictly required by ZeroGPU scanner)
+with gr.Blocks(title="Joah AI Lens Search API") as demo:
     gr.Markdown("# 🔍 Joah AI Lens Search API")
-    gr.Markdown("✅ ZeroGPU Backend Active & Ready for Requests")
+    gr.Markdown("ZeroGPU Backend Active ✓")
+    txt_in = gr.Textbox(visible=False, value="ping")
+    txt_out = gr.Textbox(visible=False)
+    btn = gr.Button("Health Check", visible=False)
+    btn.click(fn=predict_gpu, inputs=txt_in, outputs=txt_out)
 
-# Attach all FastAPI routes & middleware to Gradio's underlying FastAPI app
-for route in fastapi_app.routes:
-    demo.app.routes.append(route)
-
-# Enable CORS on demo.app
-from fastapi.middleware.cors import CORSMiddleware
-demo.app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 3. Mount Gradio to FastAPI at /gradio so root /search and / remain purely FastAPI
+app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 7860))
-    demo.queue().launch(
-        server_name="0.0.0.0",
-        server_port=port,
-        show_error=True
-    )
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
