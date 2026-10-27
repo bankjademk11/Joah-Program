@@ -31,7 +31,11 @@ def get_rembg_session():
     if _rembg_session is None:
         try:
             from rembg import new_session
-            _rembg_session = new_session("u2net")
+            # u2netp มีขนาดเพียง 4.7MB โหลดเสร็จใน 1-2 วินาที ไม่กิน RAM และตัดสินค้าได้แม่นยำรวดเร็ว
+            try:
+                _rembg_session = new_session("u2netp")
+            except Exception:
+                _rembg_session = new_session("u2net")
         except Exception as e:
             print(f"Warning: Failed to create rembg new_session: {e}")
             _rembg_session = False
