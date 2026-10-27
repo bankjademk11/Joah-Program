@@ -34,27 +34,28 @@ class ProductSearcher:
         with open(os.path.join(index_dir, "product_labels.json"), "r", encoding="utf-8") as f:
             self.labels = json.load(f)
 
-    def _maybe_remove_bg(self, pil_image):
-        if not self.remove_bg:
+    def _maybe_remove_bg(self, pil_image, remove_bg=None):
+        should_remove = self.remove_bg if remove_bg is None else remove_bg
+        if not should_remove:
             return pil_image
         from preprocess_utils import remove_background
         return remove_background(pil_image)
 
-    def embed(self, pil_image, tta=False):
+    def embed(self, pil_image, tta=False, remove_bg=True):
         """tta=True: เฉลี่ย embedding จากหลายมุม/เวอร์ชันของภาพ -> ทนต่อมุมกล้อง/แสงมากขึ้น"""
-        img = self._maybe_remove_bg(pil_image)
+        img = self._maybe_remove_bg(pil_image, remove_bg=remove_bg)
         if tta:
             from preprocess_utils import augmented_views
             views = augmented_views(img)
             feats = self.bundle.embed_batch(views)   # [num_views, dim]
             feat = feats.mean(axis=0, keepdims=True)
             feat = feat / np.linalg.norm(feat, axis=-1, keepdims=True)
-            return feat
-        return self.bundle.embed_batch([img])
+            return feat, img
+        return self.bundle.embed_batch([img]), img
 
-    def search(self, pil_image, topk=5, tta=False):
+    def search(self, pil_image, topk=5, tta=False, remove_bg=True):
         t0 = time.time()
-        query_vec = self.embed(pil_image, tta=tta)
+        query_vec, processed_img = self.embed(pil_image, tta=tta, remove_bg=remove_bg)
         scores, idxs = self.index.search(query_vec, topk)
         elapsed_ms = (time.time() - t0) * 1000
         results = []
@@ -62,7 +63,7 @@ class ProductSearcher:
             if idx == -1:
                 continue
             results.append({"barcode": self.labels[idx], "similarity": float(score)})
-        return results, elapsed_ms
+        return results, elapsed_ms, processed_img
 
 
 def main():
@@ -71,13 +72,14 @@ def main():
     ap.add_argument("--index_dir", default="./index_data")
     ap.add_argument("--topk", type=int, default=5)
     ap.add_argument("--tta", action="store_true", help="เปิด test-time augmentation (แม่นขึ้น, ช้าลงเล็กน้อย)")
+    ap.add_argument("--no_remove_bg", action="store_true", help="ปิดการตัดพื้นหลัง (default: เปิดเสมอ)")
     args = ap.parse_args()
 
     searcher = ProductSearcher(args.index_dir)
     img = Image.open(args.query)
-    results, elapsed_ms = searcher.search(img, topk=args.topk, tta=args.tta)
+    results, elapsed_ms, _ = searcher.search(img, topk=args.topk, tta=args.tta, remove_bg=not args.no_remove_bg)
 
-    print(f"\nโมเดล: {searcher.meta['model']}  |  remove_bg: {searcher.remove_bg}  |  TTA: {args.tta}")
+    print(f"\nโมเดล: {searcher.meta['model']}  |  remove_bg: {not args.no_remove_bg}  |  TTA: {args.tta}")
     print(f"ค้นหาเสร็จใน {elapsed_ms:.1f} ms\n")
     print(f"{'อันดับ':<6}{'Barcode':<30}{'ความคล้าย':<10}")
     for i, r in enumerate(results, 1):

@@ -16,9 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ก็อปปี้ไฟล์ทั้งหมดในโฟลเดอร์นี้ลงไปใน Docker
 COPY . .
 
-# สร้างโฟลเดอร์สำหรับโหลดโมเดล DINOv2 (ให้สิทธิ์อ่านเขียนเต็มที่)
+# สร้างโฟลเดอร์สำหรับโหลดโมเดล DINOv2 และ RemBG u2net (ให้สิทธิ์อ่านเขียนเต็มที่)
 ENV TORCH_HOME=/app/.cache
-RUN mkdir -p /app/.cache && chmod -R 777 /app/.cache
+ENV U2NET_HOME=/app/.cache/u2net
+RUN mkdir -p /app/.cache/u2net && chmod -R 777 /app/.cache
 
 # Hugging Face Spaces บังคับใช้พอร์ต 7860
 EXPOSE 7860

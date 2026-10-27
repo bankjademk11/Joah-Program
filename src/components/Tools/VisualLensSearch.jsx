@@ -16,11 +16,11 @@ const formatPrice = (price) => {
   return new Intl.NumberFormat('lo-LA', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
 };
 
-async function searchByImageAPI(imageDataUrl, tta = false, topk = 10) {
+async function searchByImageAPI(imageDataUrl, tta = false, topk = 10, removeBg = true) {
   const res = await fetch(`${AI_API_URL}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: imageDataUrl, tta, topk }),
+    body: JSON.stringify({ image: imageDataUrl, tta, topk, remove_bg: removeBg }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -33,6 +33,8 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const isHQ = user?.role === 'HQ' || user?.role === 'admin' || user?.role === 'ADMIN' || user?.branch_id === 'HQ';
 
   const [imagePreview, setImagePreview] = useState(null);
+  const [processedImage, setProcessedImage] = useState(null);
+  const [showCutout, setShowCutout] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchDone, setSearchDone] = useState(false);
@@ -140,11 +142,18 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     setSearchDone(false);
     setErrorMsg('');
     setCurrentPage(1);
+    setProcessedImage(null);
+    setShowCutout(true);
 
     try {
       // HQ has no limit (defaults to 100 or custom selection), standard branch users capped at 10
       const topkToFetch = customTopK !== null ? customTopK : (isHQ ? resultLimit : 10);
-      const { results: apiResults } = await searchByImageAPI(imgDataUrl, highAccuracy, topkToFetch);
+      const apiResponse = await searchByImageAPI(imgDataUrl, highAccuracy, topkToFetch, true);
+      const apiResults = apiResponse?.results || [];
+
+      if (apiResponse?.processed_image) {
+        setProcessedImage(apiResponse.processed_image);
+      }
 
       if (!apiResults || apiResults.length === 0) {
         setSearchDone(true);
@@ -228,6 +237,8 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
 
   const resetSearch = () => {
     setImagePreview(null);
+    setProcessedImage(null);
+    setShowCutout(true);
     setSearchResults([]);
     setSearchDone(false);
     setErrorMsg('');
@@ -345,10 +356,40 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                 /* Preview captured/uploaded image */
                 <div className="relative">
                   <img
-                    src={imagePreview}
+                    src={showCutout && processedImage ? processedImage : imagePreview}
                     alt="ຮູບທີ່ເລືອກ"
-                    className="w-full aspect-[4/3] object-contain bg-slate-950 block"
+                    className="w-full aspect-[4/3] object-contain bg-slate-950 block transition-all"
                   />
+
+                  {/* Cutout / Original switcher */}
+                  {processedImage && (
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => setShowCutout(false)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                          !showCutout
+                            ? 'bg-slate-700 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        ຕົ້ນສະບັບ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCutout(true)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                          showCutout
+                            ? 'bg-violet-600 text-white shadow-md shadow-violet-600/40'
+                            : 'text-violet-400 hover:text-violet-300'
+                        }`}
+                      >
+                        <Sparkles size={11} />
+                        <span>AI ຕັດພື້ນຫຼັງ</span>
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     onClick={resetSearch}
                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 transition"
@@ -420,6 +461,24 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
               >
                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${highAccuracy ? 'translate-x-5' : ''}`} />
               </button>
+            </div>
+
+            {/* Auto background removal status badge */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-200">ຕັດພື້ນຫຼັງອັດຕະໂນມັດ</p>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-950/90 text-emerald-400 border border-emerald-800/60">
+                      Auto ON
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">AI ຕັດພື້ນຫຼັງ ແລະ ໂຟກັສສະເພາະຕົວສິນຄ້າເພື່ອຄວາມແມ່ນຍຳ</p>
+                </div>
+              </div>
             </div>
 
             {/* HQ Unlimited View Controls */}

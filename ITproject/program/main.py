@@ -55,10 +55,20 @@ def startup_event():
     except Exception as e:
         print(f"Startup model load deferred or failed: {e}")
 
+    # Warmup rembg session once at startup to eliminate first-user latency
+    try:
+        from preprocess_utils import remove_background
+        dummy = Image.new("RGB", (64, 64), (230, 230, 230))
+        remove_background(dummy)
+        print("Startup: rembg background removal warmup complete ✓")
+    except Exception as e:
+        print(f"Startup rembg warmup deferred: {e}")
+
 class SearchRequest(BaseModel):
     image: str
     topk: int = 5
     tta: bool = False
+    remove_bg: bool = True
 
 def find_product_image(barcode):
     if not IMAGES_DIR.exists():
@@ -954,9 +964,9 @@ try:
 except ImportError:
     has_spaces = False
 
-def run_search_inference(img, topk, tta):
+def run_search_inference(img, topk, tta, remove_bg=True):
     s = get_searcher()
-    return s.search(img, topk=topk, tta=tta)
+    return s.search(img, topk=topk, tta=tta, remove_bg=remove_bg)
 
 if has_spaces:
     run_search_inference = spaces.GPU(duration=15)(run_search_inference)
@@ -980,7 +990,23 @@ def search(req: SearchRequest):
             
         img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
         
-        results, elapsed_ms = run_search_inference(img, req.topk, req.tta)
+        results, elapsed_ms, processed_img = run_search_inference(
+            img, 
+            topk=req.topk, 
+            tta=req.tta, 
+            remove_bg=req.remove_bg
+        )
+        
+        # Build lightweight base64 preview of the AI cutout product
+        processed_b64 = None
+        try:
+            buf = io.BytesIO()
+            preview = processed_img.copy()
+            preview.thumbnail((384, 384))
+            preview.save(buf, format="JPEG", quality=85)
+            processed_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+        except Exception as e:
+            print(f"Warning: Failed to create processed_image preview: {e}")
         
         SUPABASE_STORAGE = "https://avqdpddpomlapxcqxnmk.supabase.co/storage/v1/object/public/product-images"
         for result in results:
@@ -990,6 +1016,11 @@ def search(req: SearchRequest):
             else:
                 result["image_url"] = f"{SUPABASE_STORAGE}/{bc}.png"
                 
-        return {"results": results, "server_ms": elapsed_ms}
+        return {
+            "results": results, 
+            "server_ms": elapsed_ms,
+            "processed_image": processed_b64,
+            "bg_removed": req.remove_bg
+        }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
