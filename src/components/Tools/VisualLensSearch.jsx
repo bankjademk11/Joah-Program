@@ -8,9 +8,14 @@ import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
-const DEFAULT_AI_API_URL = 'https://renewal-foster-healing-martial.trycloudflare.com';
+const DEFAULT_AI_API_URL = 'https://respondent-poor-mae-charger.trycloudflare.com';
 export function getAiApiUrl() {
-  return localStorage.getItem('joah_lens_api_url') || import.meta.env.VITE_AI_API_URL || DEFAULT_AI_API_URL;
+  const custom = localStorage.getItem('joah_lens_api_url');
+  if (custom && custom.includes('renewal-foster')) {
+    localStorage.removeItem('joah_lens_api_url');
+    return DEFAULT_AI_API_URL;
+  }
+  return custom || import.meta.env.VITE_AI_API_URL || DEFAULT_AI_API_URL;
 }
 const PAGE_SIZE = 20;
 
