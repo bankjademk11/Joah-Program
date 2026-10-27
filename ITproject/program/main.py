@@ -942,23 +942,22 @@ def product_image(barcode: str):
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=mime, headers={"Cache-Control": "max-age=3600"})
 
-# ── ZeroGPU support for inference ───────────────────────────────────────────
-try:
-    import spaces
-except ImportError:
-    class MockSpaces:
-        def GPU(self, *args, **kwargs):
-            if args and callable(args[0]):
-                return args[0]
-            def dec(f):
-                return f
-            return dec
-    spaces = MockSpaces()
+# ── ZeroGPU support for inference (only active on Hugging Face ZeroGPU) ─────
+is_zero_gpu = bool(os.getenv("SPACES_ZERO_GPU"))
+if is_zero_gpu:
+    try:
+        import spaces
+    except ImportError:
+        spaces = None
+else:
+    spaces = None
 
-@spaces.GPU(duration=30)
 def run_search_inference(img, topk, tta):
     s = get_searcher()
     return s.search(img, topk=topk, tta=tta)
+
+if spaces is not None:
+    run_search_inference = spaces.GPU(duration=30)(run_search_inference)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
