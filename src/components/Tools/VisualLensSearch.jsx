@@ -8,7 +8,10 @@ import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
-const AI_API_URL = 'https://bankjademk11-joah-lens-search.hf.space';
+const DEFAULT_AI_API_URL = 'https://renewal-foster-healing-martial.trycloudflare.com';
+export function getAiApiUrl() {
+  return localStorage.getItem('joah_lens_api_url') || import.meta.env.VITE_AI_API_URL || DEFAULT_AI_API_URL;
+}
 const PAGE_SIZE = 20;
 
 const formatPrice = (price) => {
@@ -17,7 +20,8 @@ const formatPrice = (price) => {
 };
 
 async function searchByImageAPI(imageDataUrl, tta = false, topk = 10, removeBg = true) {
-  const res = await fetch(`${AI_API_URL}/search`, {
+  const apiUrl = getAiApiUrl();
+  const res = await fetch(`${apiUrl}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: imageDataUrl, tta, topk, remove_bg: removeBg }),
@@ -74,7 +78,8 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
 
   async function checkService() {
     try {
-      const res = await fetch(`${AI_API_URL}/`, { method: 'GET' });
+      const apiUrl = getAiApiUrl();
+      const res = await fetch(`${apiUrl}/`, { method: 'GET' });
       setServiceOnline(res.ok);
     } catch {
       setServiceOnline(false);
@@ -280,14 +285,31 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
         </div>
 
         {/* Service indicator */}
-        <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border ${serviceOnline === true ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
-            serviceOnline === false ? 'border-red-800 bg-red-950 text-red-400' :
-              'border-slate-700 bg-slate-800 text-slate-500'
+        <button
+          type="button"
+          onClick={() => {
+            const current = getAiApiUrl();
+            const input = window.prompt("ປ່ຽນ Server URL ສຳລັບ AI Lens Search (Colab / HF):\n\nURL ປະຈຸບັນ:", current);
+            if (input !== null) {
+              const trimmed = input.trim();
+              if (trimmed) {
+                localStorage.setItem('joah_lens_api_url', trimmed);
+              } else {
+                localStorage.removeItem('joah_lens_api_url');
+              }
+              setServiceOnline(null);
+              checkService();
+            }
+          }}
+          title="ຄລິກເພື່ອປ່ຽນ Server URL (ເຊັ່ນ URL ຈາກ Google Colab)"
+          className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border cursor-pointer transition hover:opacity-90 active:scale-95 ${serviceOnline === true ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
+          serviceOnline === false ? 'border-red-800 bg-red-950 text-red-400' :
+            'border-slate-700 bg-slate-800 text-slate-500'
           }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${serviceOnline === true ? 'bg-emerald-400' : serviceOnline === false ? 'bg-red-400' : 'bg-slate-500 animate-pulse'
             }`} />
           {serviceOnline === true ? 'ພ້ອມໃຊ້ງານ' : serviceOnline === false ? 'ບໍ່ສາມາດເຊື່ອມຕໍ່ໄດ້' : 'ກຳລັງກວດສອບ...'}
-        </div>
+        </button>
       </header>
 
       {/* Error banner */}
@@ -367,22 +389,20 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                       <button
                         type="button"
                         onClick={() => setShowCutout(false)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                          !showCutout
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${!showCutout
                             ? 'bg-slate-700 text-white shadow-sm'
                             : 'text-slate-400 hover:text-slate-200'
-                        }`}
+                          }`}
                       >
                         ຕົ້ນສະບັບ
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowCutout(true)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
-                          showCutout
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${showCutout
                             ? 'bg-violet-600 text-white shadow-md shadow-violet-600/40'
                             : 'text-violet-400 hover:text-violet-300'
-                        }`}
+                          }`}
                       >
                         <Sparkles size={11} />
                         <span>AI ຕັດພື້ນຫຼັງ</span>
@@ -505,11 +525,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                         setResultLimit(n);
                         if (imagePreview) runSearch(imagePreview, n);
                       }}
-                      className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
-                        resultLimit === n
+                      className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${resultLimit === n
                           ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 scale-[1.02]'
                           : 'bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/60'
-                      }`}
+                        }`}
                     >
                       {n === 100 ? '100★' : n === 200 ? '200' : n}
                     </button>
@@ -606,10 +625,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                         <p className="font-semibold text-white text-sm leading-snug truncate">{item.item_name}</p>
                         {/* Confidence badge */}
                         <span className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md ${item.confidence >= 80
-                            ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
-                            : item.confidence >= 60
-                              ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
-                              : 'bg-slate-800 text-slate-500 border border-slate-700'
+                          ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
+                          : item.confidence >= 60
+                            ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
+                            : 'bg-slate-800 text-slate-500 border border-slate-700'
                           }`}>
                           {item.confidence}%
                         </span>
@@ -699,11 +718,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                       setCurrentPage(prev => Math.max(prev - 1, 1));
                       resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                      currentPage === 1
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${currentPage === 1
                         ? 'opacity-35 cursor-not-allowed bg-slate-800/40 text-slate-500 border border-slate-800'
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 active:scale-95 shadow-sm'
-                    }`}
+                      }`}
                   >
                     <ChevronLeft size={14} />
                     <span>ກ່ອນໜ້າ</span>
@@ -736,11 +754,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                             setCurrentPage(page);
                             resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
                           }}
-                          className={`min-w-8 h-8 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer ${
-                            currentPage === page
+                          className={`min-w-8 h-8 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer ${currentPage === page
                               ? 'bg-violet-600 text-white shadow-md shadow-violet-600/40 ring-1 ring-violet-400/50'
                               : 'bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/60'
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
@@ -756,11 +773,10 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                       setCurrentPage(prev => Math.min(prev + 1, totalPages));
                       resultsTopRef.current?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                      currentPage === totalPages
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${currentPage === totalPages
                         ? 'opacity-35 cursor-not-allowed bg-slate-800/40 text-slate-500 border border-slate-800'
                         : 'bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-600/30 active:scale-95 border border-violet-500/50'
-                    }`}
+                      }`}
                   >
                     <span>ຕໍ່ໄປ</span>
                     <ChevronRight size={14} />
@@ -827,13 +843,12 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                 <h3 className="text-base font-bold text-white leading-snug">
                   {zoomedImage.item_name}
                 </h3>
-                <span className={`shrink-0 text-xs font-bold px-2.5 py-0.5 rounded-md ${
-                  zoomedImage.confidence >= 80
+                <span className={`shrink-0 text-xs font-bold px-2.5 py-0.5 rounded-md ${zoomedImage.confidence >= 80
                     ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-800'
                     : zoomedImage.confidence >= 60
                       ? 'bg-amber-900/60 text-amber-400 border border-amber-800'
                       : 'bg-slate-800 text-slate-400 border border-slate-700'
-                }`}>
+                  }`}>
                   ຄວາມຖືກຕ້ອງ {zoomedImage.confidence}%
                 </span>
               </div>
