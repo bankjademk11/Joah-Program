@@ -5,7 +5,7 @@ import os
 import sys
 
 IMAGE_PATH = r"C:\Users\ideapad sl 3i\.gemini\antigravity-ide\brain\e836a686-a7e9-4cf7-9b14-04bd2f80277e\.tempmediaStorage\media_1793073960994.png"
-API_URL = "https://respondent-poor-mae-charger.trycloudflare.com"
+API_URL = "https://bankjademk11--joah-lens-search-fastapi-app.us-east.modal.run"
 
 def check_status():
     try:

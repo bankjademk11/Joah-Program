@@ -8,10 +8,10 @@ import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
-const DEFAULT_AI_API_URL = 'https://respondent-poor-mae-charger.trycloudflare.com';
+const DEFAULT_AI_API_URL = 'https://bankjademk11--joah-lens-search-fastapi-app.us-east.modal.run';
 export function getAiApiUrl() {
   const custom = localStorage.getItem('joah_lens_api_url');
-  if (custom && custom.includes('renewal-foster')) {
+  if (custom && (custom.includes('trycloudflare') || custom.includes('renewal-foster') || custom.includes('respondent-poor'))) {
     localStorage.removeItem('joah_lens_api_url');
     return DEFAULT_AI_API_URL;
   }
