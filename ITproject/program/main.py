@@ -47,22 +47,7 @@ def get_searcher():
 
 @app.on_event("startup")
 def startup_event():
-    print("Startup: loading model and index...")
-    t0 = time.time()
-    try:
-        s = get_searcher()
-        print(f"Ready in {time.time() - t0:.1f}s (model={s.meta['model']}, products={s.index.ntotal})")
-    except Exception as e:
-        print(f"Startup model load deferred or failed: {e}")
-
-    # Warmup rembg session once at startup to eliminate first-user latency
-    try:
-        from preprocess_utils import remove_background
-        dummy = Image.new("RGB", (64, 64), (230, 230, 230))
-        remove_background(dummy)
-        print("Startup: rembg background removal warmup complete ✓")
-    except Exception as e:
-        print(f"Startup rembg warmup deferred: {e}")
+    print("Startup: FastAPI server started successfully. Models will load on first request.")
 
 class SearchRequest(BaseModel):
     image: str
@@ -960,16 +945,20 @@ def product_image(barcode: str):
 # ── ZeroGPU support for inference ───────────────────────────────────────────
 try:
     import spaces
-    has_spaces = True
 except ImportError:
-    has_spaces = False
+    class MockSpaces:
+        def GPU(self, *args, **kwargs):
+            if args and callable(args[0]):
+                return args[0]
+            def dec(f):
+                return f
+            return dec
+    spaces = MockSpaces()
 
-def run_search_inference(img, topk, tta, remove_bg=True):
+@spaces.GPU(duration=30)
+def run_search_inference(img, topk, tta):
     s = get_searcher()
-    return s.search(img, topk=topk, tta=tta, remove_bg=remove_bg)
-
-if has_spaces:
-    run_search_inference = spaces.GPU(duration=15)(run_search_inference)
+    return s.search(img, topk=topk, tta=tta)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
@@ -990,11 +979,21 @@ def search(req: SearchRequest):
             
         img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
         
-        results, elapsed_ms, processed_img = run_search_inference(
-            img, 
+        # 1. Background removal runs safely on CPU (u2netp 4MB)
+        processed_img = img
+        if req.remove_bg:
+            try:
+                from preprocess_utils import remove_background
+                processed_img = remove_background(img)
+            except Exception as e:
+                print(f"Background removal failed ({e}), using original image")
+                processed_img = img
+
+        # 2. Vector search runs inside ZeroGPU
+        results, elapsed_ms = run_search_inference(
+            processed_img, 
             topk=req.topk, 
-            tta=req.tta, 
-            remove_bg=req.remove_bg
+            tta=req.tta
         )
         
         # Build lightweight base64 preview of the AI cutout product
