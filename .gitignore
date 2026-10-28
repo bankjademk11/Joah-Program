@@ -30,6 +30,7 @@ dist-ssr
 
 # AI Model Data / FAISS Indices (Large files tracked separately on Hugging Face)
 ITproject/program/index_data/
+ITproject/joi-chat-backup/
 *.faiss
 *.npy
 
