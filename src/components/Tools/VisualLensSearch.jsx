@@ -62,6 +62,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   const [searchDone, setSearchDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [highAccuracy, setHighAccuracy] = useState(false);
+  const [autoRemoveBg, setAutoRemoveBg] = useState(true);
   const [resultLimit, setResultLimit] = useState(isHQ ? 100 : 10);
   const [currentPage, setCurrentPage] = useState(1);
   const [serviceOnline, setServiceOnline] = useState(null);
@@ -174,7 +175,7 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     reader.readAsDataURL(file);
   };
 
-  const runSearch = async (imgDataUrl, customTopK = null) => {
+  const runSearch = async (imgDataUrl, customTopK = null, overrideRemoveBg = null) => {
     setIsSearching(true);
     setSearchResults([]);
     setSearchDone(false);
@@ -186,10 +187,11 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
     try {
       // HQ has no limit (defaults to 100 or custom selection), standard branch users capped at 10
       const topkToFetch = customTopK !== null ? customTopK : (isHQ ? resultLimit : 10);
-      const apiResponse = await searchByImageAPI(imgDataUrl, highAccuracy, topkToFetch, true);
+      const shouldRemoveBg = overrideRemoveBg !== null ? overrideRemoveBg : autoRemoveBg;
+      const apiResponse = await searchByImageAPI(imgDataUrl, highAccuracy, topkToFetch, shouldRemoveBg);
       const apiResults = apiResponse?.results || [];
 
-      if (apiResponse?.processed_image) {
+      if (apiResponse?.processed_image && shouldRemoveBg) {
         setProcessedImage(apiResponse.processed_image);
       }
 
@@ -514,22 +516,57 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
               </button>
             </div>
 
-            {/* Auto background removal status badge */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+            {/* Auto background removal toggle */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3 flex items-center justify-between transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+                  autoRemoveBg 
+                    ? 'bg-violet-600/20 border-violet-500/30 text-violet-400' 
+                    : 'bg-slate-800/60 border-slate-700/50 text-slate-500'
+                }`}>
                   <Sparkles size={16} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-200">ຕັດພື້ນຫຼັງອັດຕະໂນມັດ</p>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-950/90 text-emerald-400 border border-emerald-800/60">
-                      Auto ON
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border transition-all ${
+                      autoRemoveBg
+                        ? 'bg-emerald-950/90 text-emerald-400 border-emerald-800/60'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}>
+                      {autoRemoveBg ? 'Auto ON' : 'OFF'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">AI ຕັດພື້ນຫຼັງ ແລະ ໂຟກັສສະເພາະຕົວສິນຄ້າເພື່ອຄວາມແມ່ນຍຳ</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {autoRemoveBg 
+                      ? 'AI ຕັດພື້ນຫຼັງ ແລະ ໂຟກັສສະເພາະຕົວສິນຄ້າເພື່ອຄວາມແມ່ນຍຳ'
+                      : 'ໃຊ້ຮູບຕົ້ນສະບັບເຕັມຮູບແບບບໍ່ຕັດພື້ນຫຼັງ'}
+                  </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoRemoveBg}
+                onClick={() => {
+                  const nextVal = !autoRemoveBg;
+                  setAutoRemoveBg(nextVal);
+                  if (imagePreview) {
+                    runSearch(imagePreview, null, nextVal);
+                  }
+                }}
+                className={`relative w-10 h-5 rounded-full transition-colors duration-200 shrink-0 cursor-pointer ${
+                  autoRemoveBg ? 'bg-violet-600' : 'bg-slate-700'
+                }`}
+                title={autoRemoveBg ? 'ປິດການຕັດພື້ນຫຼັງ' : 'ເປີດການຕັດພື້ນຫຼັງ'}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    autoRemoveBg ? 'translate-x-5' : ''
+                  }`}
+                />
+              </button>
             </div>
 
             {/* HQ Unlimited View Controls */}
