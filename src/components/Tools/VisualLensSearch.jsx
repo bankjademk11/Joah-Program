@@ -94,16 +94,29 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   }, []);
 
 
+  // Modal scales to zero when idle; a cold start takes ~10-35s (see Modal logs),
+  // so retry a few times with a generous timeout before showing "offline".
   async function checkService() {
-    try {
-      const apiUrl = getAiApiUrl();
-      console.log('[VisualLensSearch] Connecting to AI Server:', apiUrl);
-      const res = await fetch(`${apiUrl}/`, { method: 'GET' });
-      setServiceOnline(res.ok);
-    } catch (err) {
-      console.warn('[VisualLensSearch] Health check failed for:', getAiApiUrl(), err);
-      setServiceOnline(false);
+    const apiUrl = getAiApiUrl();
+    setServiceOnline(null);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+      try {
+        const res = await fetch(`${apiUrl}/`, { method: 'GET', cache: 'no-store', signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          setServiceOnline(true);
+          return;
+        }
+      } catch (err) {
+        clearTimeout(timer);
+        console.warn(`[VisualLensSearch] Health check ${attempt}/${MAX_ATTEMPTS} failed for:`, apiUrl, err);
+      }
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 3000));
     }
+    setServiceOnline(false);
   }
 
   const startCamera = async (facing = cameraFacing) => {
@@ -464,7 +477,6 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                 <div className="p-3 border-t border-slate-800 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => startCamera()}
-                    disabled={serviceOnline === false}
                     className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium text-white transition disabled:opacity-40"
                   >
                     <Camera size={16} />
@@ -472,7 +484,6 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={serviceOnline === false}
                     className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium text-white transition disabled:opacity-40"
                   >
                     <Upload size={16} />
