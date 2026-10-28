@@ -9,13 +9,26 @@ import { getProductImageUrl, handleImageError } from '../../utils/productImageUt
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
 const DEFAULT_AI_API_URL = 'https://bankjademk11--joah-lens-search-fastapi-app.us-east.modal.run';
-export function getAiApiUrl() {
-  const custom = localStorage.getItem('joah_lens_api_url');
-  if (custom && (custom.includes('trycloudflare') || custom.includes('renewal-foster') || custom.includes('respondent-poor'))) {
+
+// Aggressively purge any stale legacy tunnel URLs immediately
+try {
+  const saved = typeof window !== 'undefined' ? localStorage.getItem('joah_lens_api_url') : null;
+  if (saved && (!saved.includes('modal.run') && !saved.includes('hf.space'))) {
     localStorage.removeItem('joah_lens_api_url');
+  }
+} catch {}
+
+export function getAiApiUrl() {
+  try {
+    const custom = typeof window !== 'undefined' ? localStorage.getItem('joah_lens_api_url') : null;
+    if (custom && (!custom.includes('modal.run') && !custom.includes('hf.space'))) {
+      localStorage.removeItem('joah_lens_api_url');
+      return DEFAULT_AI_API_URL;
+    }
+    return custom || DEFAULT_AI_API_URL;
+  } catch {
     return DEFAULT_AI_API_URL;
   }
-  return custom || import.meta.env.VITE_AI_API_URL || DEFAULT_AI_API_URL;
 }
 const PAGE_SIZE = 20;
 
@@ -84,9 +97,11 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   async function checkService() {
     try {
       const apiUrl = getAiApiUrl();
+      console.log('[VisualLensSearch] Connecting to AI Server:', apiUrl);
       const res = await fetch(`${apiUrl}/`, { method: 'GET' });
       setServiceOnline(res.ok);
-    } catch {
+    } catch (err) {
+      console.warn('[VisualLensSearch] Health check failed for:', getAiApiUrl(), err);
       setServiceOnline(false);
     }
   }
