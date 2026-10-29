@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Barcode,
   Plus,
@@ -131,6 +131,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [isDeletingBarcode, setIsDeletingBarcode] = useState({});
 
   const inputRef = useRef(null);
+  const manualQtyInputRef = useRef(null);
   const lastScannedBarcodeRef = useRef(null);
   const lastScanTimeRef = useRef(0);
   const itemsRef = useRef(items);
@@ -878,7 +879,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
       if (clearInput) {
         setBarcodeInput('');
-        if (inputRef.current) inputRef.current.focus();
+        setTimeout(() => {
+          if (scanModeRef.current === 'manual' && manualQtyInputRef.current) {
+            manualQtyInputRef.current.focus();
+            manualQtyInputRef.current.select();
+          } else if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, 50);
       }
 
       showToast({
@@ -2476,7 +2484,15 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setScanMode('manual')}
+                  onClick={() => {
+                    setScanMode('manual');
+                    setTimeout(() => {
+                      if (manualQtyInputRef.current) {
+                        manualQtyInputRef.current.focus();
+                        manualQtyInputRef.current.select?.();
+                      }
+                    }, 50);
+                  }}
                   className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'manual'
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg'
                     : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
@@ -2487,7 +2503,14 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 </button>
 
                 <button
-                  onClick={() => setScanMode('count')}
+                  onClick={() => {
+                    setScanMode('count');
+                    setTimeout(() => {
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                      }
+                    }, 50);
+                  }}
                   className={`p-4 rounded-xl border-3 font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative overflow-hidden ${scanMode === 'count'
                     ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-lg'
                     : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
@@ -2502,9 +2525,54 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 <div className="pt-2 flex items-center gap-3 animate-in fade-in duration-200 bg-indigo-50 p-3 rounded-xl border border-indigo-200">
                   <span className="text-sm font-bold text-slate-700 shrink-0">ຕັ້ງຄ່າ QTY:</span>
                   <div className="flex items-center border-2 border-slate-300 rounded-lg overflow-hidden bg-white">
-                    <button onClick={() => setManualQty(Math.max(1, manualQty - 1))} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">−</button>
-                    <input type="number" value={manualQty} onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))} className="w-20 text-center font-black text-lg bg-white border-none focus:outline-none text-slate-900" />
-                    <button onClick={() => setManualQty(manualQty + 1)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors">+</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = Number(manualQty) || 1;
+                        setManualQty(Math.max(1, cur - 1));
+                      }}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors"
+                    >−</button>
+                    <input
+                      ref={manualQtyInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={manualQty}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setManualQty(val);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (manualQty === '' || Number(manualQty) <= 0) {
+                            setManualQty(1);
+                          }
+                          if (inputRef.current) {
+                            inputRef.current.focus();
+                            inputRef.current.select?.();
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (manualQty === '' || Number(manualQty) <= 0) {
+                          setManualQty(1);
+                        }
+                      }}
+                      onFocus={(e) => e.target.select?.()}
+                      className="w-20 text-center font-black text-lg bg-white border-none focus:outline-none text-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = Number(manualQty) || 1;
+                        setManualQty(cur + 1);
+                      }}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition-colors"
+                    >+</button>
                   </div>
                 </div>
               )}
