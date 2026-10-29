@@ -35,6 +35,7 @@ export default function ReceiveCheckV0({ onBack }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [storeFilter, setStoreFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState('ALL');
 
   // Helper for minimum loading display time
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -184,10 +185,54 @@ export default function ReceiveCheckV0({ onBack }) {
     }
   };
 
+  const isDateMatching = (dbDate, filterDate) => {
+    if (!dbDate || !filterDate) return false;
+    if (filterDate === 'ALL') return true;
+    const cleanDb = String(dbDate).trim();
+    const cleanFilter = String(filterDate).trim();
+    if (cleanDb === cleanFilter) return true;
+
+    const toYMD = (str) => {
+      if (!str) return '';
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 3) {
+          const d = parts[0].padStart(2, '0');
+          const m = parts[1].padStart(2, '0');
+          const y = parts[2];
+          return `${y}-${m}-${d}`;
+        }
+      }
+      return str;
+    };
+
+    return toYMD(cleanDb) === toYMD(cleanFilter);
+  };
+
   const availableStores = useMemo(() => {
     const set = new Set();
     roList.forEach(ro => ro.storeName && set.add(ro.storeName));
     return Array.from(set);
+  }, [roList]);
+
+  const availableDates = useMemo(() => {
+    const set = new Set();
+    roList.forEach(ro => {
+      if (ro.deliveryDate && String(ro.deliveryDate).trim()) {
+        set.add(String(ro.deliveryDate).trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => {
+      const parseD = (str) => {
+        if (!str) return 0;
+        if (str.includes('/')) {
+          const [d, m, y] = str.split('/');
+          return new Date(`${y}-${m}-${d}`).getTime() || 0;
+        }
+        return new Date(str).getTime() || 0;
+      };
+      return parseD(b) - parseD(a);
+    });
   }, [roList]);
 
   const roListWithStats = useMemo(() => {
@@ -211,6 +256,10 @@ export default function ReceiveCheckV0({ onBack }) {
         if (ro.storeName !== storeFilter) return false;
       }
 
+      if (dateFilter !== 'ALL') {
+        if (!isDateMatching(ro.deliveryDate, dateFilter)) return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesRo = ro.roNumber.toLowerCase().includes(q);
@@ -227,7 +276,7 @@ export default function ReceiveCheckV0({ onBack }) {
 
       return true;
     });
-  }, [roListWithStats, statusFilter, storeFilter, searchQuery]);
+  }, [roListWithStats, statusFilter, storeFilter, dateFilter, searchQuery]);
 
   const boStats = useMemo(() => {
     let totalReceivedQty = 0;
@@ -441,6 +490,9 @@ export default function ReceiveCheckV0({ onBack }) {
               storeFilter={storeFilter}
               onStoreFilterChange={setStoreFilter}
               availableStores={availableStores}
+              dateFilter={dateFilter}
+              onDateFilterChange={setDateFilter}
+              availableDates={availableDates}
               onOpenImport={() => setIsImportModalOpen(true)}
               onDeleteRO={handleDeleteRO}
               onRefreshOrders={() => loadOrdersFromDb(false)}

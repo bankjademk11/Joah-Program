@@ -11,6 +11,9 @@ export default function ROList({
   storeFilter,
   onStoreFilterChange,
   availableStores,
+  dateFilter = 'ALL',
+  onDateFilterChange,
+  availableDates = [],
   onSelectRO,
   onOpenImport,
   onDeleteRO,
@@ -23,15 +26,29 @@ export default function ROList({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         {/* LEFT: DATE, STORE, STATUS FILTERS */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Date display */}
+          {/* Date filter */}
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-1.5 px-2 text-slate-600">
-              <Calendar size={16} className="text-indigo-600" />
-              <span className="text-sm font-black text-slate-700">Date:</span>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 font-mono">
-              18/09/2026
-            </div>
+            <Calendar size={16} className="text-indigo-600 ml-2 shrink-0" />
+            <select
+              value={dateFilter}
+              onChange={(e) => onDateFilterChange?.(e.target.value)}
+              className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 transition-all cursor-pointer min-w-[150px]"
+            >
+              <option value="ALL">📅 All Dates (ທຸກວັນທີ)</option>
+              {availableDates.map(dt => (
+                <option key={dt} value={dt}>{dt}</option>
+              ))}
+            </select>
+            {dateFilter !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => onDateFilterChange?.('ALL')}
+                className="px-2 py-1 bg-slate-200/80 hover:bg-slate-300 text-slate-600 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                title="Reset to All Dates"
+              >
+                Reset
+              </button>
+            )}
           </div>
 
           {/* Store / Branch filter */}
