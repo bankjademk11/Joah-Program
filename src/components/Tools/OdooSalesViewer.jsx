@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales, fetchProductBarcodes } from '../../services/odooApi';
+import { odooFetch, authenticate, fetchBranchProductSales, fetchDetailedProductSales, fetchOrderStateAudit, fetchAbnormalOrders, fetchDailySales, fetchProductBarcodes } from '../../services/odooApi';
 import { Search, Calendar, MapPin, Package, ArrowLeft, RefreshCw, AlertCircle, Download, TrendingUp, ShoppingCart, ShieldAlert, ClipboardList, CalendarDays, Activity, ChevronLeft, ChevronRight, Users, PieChart, ChevronDown, ImageIcon, Check } from 'lucide-react';
 import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
@@ -143,7 +143,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const tmplIds = [];
                                 for (let c = 0; c < missingProdIds.length; c += CHUNK) {
                                     const slice = missingProdIds.slice(c, c + CHUNK);
-                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                    const res = await odooFetch('/api/web/dataset/call_kw', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                         credentials: 'include',
@@ -175,7 +175,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     const tmplBarcodeMap = {};
                                     for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
                                         const slice = uniqueTmplIds.slice(c, c + CHUNK);
-                                        const res = await fetch(`/api/web/dataset/call_kw`, {
+                                        const res = await odooFetch('/api/web/dataset/call_kw', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                             credentials: 'include',
@@ -229,7 +229,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const tmplIds = [];
                                 for (let c = 0; c < missingProdIds.length; c += CHUNK) {
                                     const slice = missingProdIds.slice(c, c + CHUNK);
-                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                    const res = await odooFetch('/api/web/dataset/call_kw', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                         credentials: 'include',
@@ -261,7 +261,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                     const tmplBarcodeMap = {};
                                     for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
                                         const slice = uniqueTmplIds.slice(c, c + CHUNK);
-                                        const res = await fetch(`/api/web/dataset/call_kw`, {
+                                        const res = await odooFetch('/api/web/dataset/call_kw', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                             credentials: 'include',
@@ -548,7 +548,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             const tmplIds = [];
                             for (let c = 0; c < missingProdIds.length; c += CHUNK) {
                                 const slice = missingProdIds.slice(c, c + CHUNK);
-                                const res = await fetch(`${import.meta.env.VITE_ODOO_BASE_URL || 'https://lod.kokkokm.com'}/web/dataset/call_kw`, {
+                                const res = await odooFetch('/api/web/dataset/call_kw', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                     credentials: 'include',
@@ -579,7 +579,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const tmplBarcodeMap = {};
                                 for (let c = 0; c < uniqueTmplIds.length; c += CHUNK) {
                                     const slice = uniqueTmplIds.slice(c, c + CHUNK);
-                                    const res = await fetch(`/api/web/dataset/call_kw`, {
+                                    const res = await odooFetch('/api/web/dataset/call_kw', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                                         credentials: 'include',
@@ -817,7 +817,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                             const tmplIds = [];
                             for (let c = 0; c < missingIds.length; c += CHUNK) {
                                 const slice = missingIds.slice(c, c + CHUNK);
-                                const r = await fetch('/api/web/dataset/call_kw', {
+                                const r = await odooFetch('/api/web/dataset/call_kw', {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                                     body: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: Date.now() + c, params: { model: 'product.product', method: 'search_read', args: [[['id', 'in', slice]]], kwargs: { fields: ['id', 'product_tmpl_id'] } } })
                                 });
@@ -828,7 +828,7 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                                 const tmplMap = {};
                                 for (let c = 0; c < uniqTmpl.length; c += CHUNK) {
                                     const slice = uniqTmpl.slice(c, c + CHUNK);
-                                    const r = await fetch('/api/web/dataset/call_kw', {
+                                    const r = await odooFetch('/api/web/dataset/call_kw', {
                                         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                                         body: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: Date.now() + c + 999, params: { model: 'product.template', method: 'search_read', args: [[['id', 'in', slice]]], kwargs: { fields: ['id', 'barcode'] } } })
                                     });
@@ -1808,12 +1808,25 @@ export default function OdooSalesViewer({ onBack, userBranch, isAdmin }) {
                 {/* Tabs were moved to top */}
                 {/* Error */}
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl p-4 mb-4 flex items-start gap-3">
-                        <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
-                        <div>
-                            <h4 className="font-bold text-red-800 dark:text-red-400 text-sm">ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ Odoo</h4>
-                            <p className="text-xs text-red-600 mt-1">{error}</p>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                            <div>
+                                <h4 className="font-bold text-red-800 dark:text-red-400 text-sm">ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ Odoo</h4>
+                                <p className="text-xs text-red-600 mt-1">
+                                    {error.includes('522') || error.includes('timeout') || error.includes('Timeout')
+                                        ? 'ການເຊື່ອມຕໍ່ກັບເຊີບເວີ Odoo ໝົດເວລາ (HTTP 522/Timeout) - ເຊີບເວີອາດກຳລັງປະມວນຜົນຂໍ້ມູນໃຫຍ່'
+                                        : error}
+                                </p>
+                            </div>
                         </div>
+                        <button
+                            onClick={loadSales}
+                            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-lg transition-all shadow cursor-pointer flex items-center gap-1.5 shrink-0"
+                        >
+                            <RefreshCw size={13} />
+                            <span>ລອງໃໝ່ອີກຄັ້ງ (Retry)</span>
+                        </button>
                     </div>
                 )}
 

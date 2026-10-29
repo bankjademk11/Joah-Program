@@ -40,7 +40,7 @@ export async function onRequest(context) {
       }
     }
 
-    // 2. ส่งรีเควสต์ไปหา Odoo โดยส่ง Cookie เก่าไปด้วย (ถ้ามี)
+    // 2. ส่งรีเควสต์ไปหา Odoo โดยส่ง Cookie เก่าไปด้วย (ถ้ามี) พร้อม Auto-Retry ป้องกัน HTTP 522 Timeout
     const odooHeaders = new Headers({
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -50,11 +50,32 @@ export async function onRequest(context) {
     const cookie = request.headers.get('Cookie');
     if (cookie) odooHeaders.set('Cookie', cookie);
 
-    const odooResponse = await fetch(targetUrl, {
-      method: request.method,
-      headers: odooHeaders,
-      body: body,
-    });
+    let odooResponse = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        odooResponse = await fetch(targetUrl, {
+          method: request.method,
+          headers: odooHeaders,
+          body: body,
+        });
+
+        // หากเจอ HTTP 520-524, 502, 503, 504 ให้ลองใหม่เบื้องหลังทันที
+        if (odooResponse && [502, 503, 504, 520, 521, 522, 523, 524].includes(odooResponse.status)) {
+          if (attempts < maxAttempts) {
+            await new Promise((r) => setTimeout(r, attempts * 600));
+            continue;
+          }
+        }
+        break;
+      } catch (err) {
+        if (attempts >= maxAttempts) throw err;
+        await new Promise((r) => setTimeout(r, attempts * 600));
+      }
+    }
 
     const responseText = await odooResponse.text();
     
