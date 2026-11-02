@@ -138,7 +138,7 @@ export async function searchProduct(searchTerm) {
     },
   }
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -211,13 +211,13 @@ export async function fetchJoahProducts(offset = 0, limit = 20, search = '', onl
   }
 
   const [recRes, cntRes] = await Promise.all([
-    odooFetch(`${BASE}/web/dataset/call_kw`, {
+    odooFetch(BASE + '/web/dataset/call_kw', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(recordsPayload),
     }),
-    odooFetch(`${BASE}/web/dataset/call_kw`, {
+    odooFetch(BASE + '/web/dataset/call_kw', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
@@ -286,7 +286,7 @@ export async function fetchBranchSales(dateStart, dateEnd) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -300,6 +300,24 @@ export async function fetchBranchSales(dateStart, dateEnd) {
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -349,7 +367,7 @@ export async function fetchBranchOrders(branchId, dateStart, dateEnd, limit = 50
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -363,6 +381,24 @@ export async function fetchBranchOrders(branchId, dateStart, dateEnd, limit = 50
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -395,7 +431,7 @@ export async function fetchOrderLines(lineIds) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -469,7 +505,7 @@ export async function fetchBranchProductSales(branchId, dateStart, dateEnd, filt
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -532,7 +568,7 @@ export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, fi
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -572,7 +608,7 @@ export async function fetchDetailedProductSales(branchId, dateStart, dateEnd, fi
             },
           },
         };
-        const oRes = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+        const oRes = await odooFetch(BASE + '/web/dataset/call_kw', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           credentials: 'include',
@@ -637,7 +673,7 @@ export async function fetchSyncDeltaSales(branchId, lastProcessedId) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -662,7 +698,7 @@ export async function fetchProductNamesByBarcodes(barcodes) {
   const CHUNK = 200;
   for (let i = 0; i < unique.length; i += CHUNK) {
     const chunk = unique.slice(i, i + CHUNK);
-    const res = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+    const res = await odooFetch(BASE + '/web/dataset/call_kw', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
@@ -728,7 +764,7 @@ export async function fetchOrderStateAudit(branchId, dateStart, dateEnd) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -791,13 +827,13 @@ export async function fetchDailySales(branchId, dateStartStr, dateEndStr, filter
 
   // ── Fire both in parallel ───────────────────────────────────────────────
   const [orderRes, lineRes] = await Promise.all([
-    odooFetch(`${BASE}/web/dataset/call_kw`, {
+    odooFetch(BASE + '/web/dataset/call_kw', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(orderPayload),
     }),
-    odooFetch(`${BASE}/web/dataset/call_kw`, {
+    odooFetch(BASE + '/web/dataset/call_kw', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       credentials: 'include',
@@ -918,7 +954,7 @@ export async function fetchAbnormalOrders(branchId, dateStart, dateEnd) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -954,7 +990,7 @@ export async function fetchProductBarcodes(productIds) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -1023,7 +1059,7 @@ export async function fetchInventoryOverview(allowedCompanyIds = null) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -1037,6 +1073,24 @@ export async function fetchInventoryOverview(allowedCompanyIds = null) {
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -1089,7 +1143,7 @@ export async function fetchPickingsByType(pickingTypeId, limit = 80) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -1103,6 +1157,24 @@ export async function fetchPickingsByType(pickingTypeId, limit = 80) {
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -1162,7 +1234,7 @@ export async function fetchPickingDetail(pickingId) {
     }
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -1176,6 +1248,24 @@ export async function fetchPickingDetail(pickingId) {
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -1197,9 +1287,35 @@ export async function fetchPickingDetail(pickingId) {
  * @param {string} searchTerm - Barcode or Default Code (SKU)
  * @returns {Promise<Object|null>}
  */
+/**
+ * Auto-ensures an active Odoo session exists.
+ * If expired or missing, securely re-authenticates using environment credentials.
+ */
+export async function ensureOdooSession() {
+  const now = Date.now();
+  if (cachedSession && (now - lastAuthTime < SESSION_TTL_MS)) {
+    return cachedSession;
+  }
+  const db = import.meta.env.VITE_ODOO_DB;
+  const user = import.meta.env.VITE_ODOO_USER;
+  const pass = import.meta.env.VITE_ODOO_PASSWORD;
+  if (!db || !user || !pass) {
+    return null;
+  }
+  try {
+    return await authenticate(db, user, pass);
+  } catch (err) {
+    console.warn('[Odoo] ensureOdooSession auto-auth failed:', err);
+    return null;
+  }
+}
+
 export async function fetchProductUltimate(searchTerm) {
   if (!searchTerm || !searchTerm.trim()) return null;
   const term = searchTerm.trim();
+
+  // 🛡️ Auto-ensure valid session before calling Odoo
+  await ensureOdooSession();
 
   // Search domain matching barcode, default_code, or exact name
   const domain = [
@@ -1258,7 +1374,7 @@ export async function fetchProductUltimate(searchTerm) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',
@@ -1272,6 +1388,24 @@ export async function fetchProductUltimate(searchTerm) {
   if (json.error) {
     const msg = json.error.data?.message || json.error.message || 'Odoo API error';
     if (json.error.code === 100 || msg.includes('session') || msg.includes('Access Denied')) {
+      cachedSession = null;
+      lastAuthTime = 0;
+      // 🛡️ Auto re-authenticate once and retry
+      const renewed = await ensureOdooSession();
+      if (renewed) {
+        const retryRes = await odooFetch(BASE + '/web/dataset/call_kw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (retryRes.ok) {
+          const retryJson = await retryRes.json();
+          if (retryJson.result && Array.isArray(retryJson.result) && retryJson.result.length > 0) {
+            return retryJson.result[0];
+          }
+        }
+      }
       const err = new Error('SESSION_EXPIRED');
       err.isAuthError = true;
       throw err;
@@ -1327,7 +1461,7 @@ async function fetchProductProductUltimate(term) {
     },
   };
 
-  const response = await odooFetch(`${BASE}/web/dataset/call_kw`, {
+  const response = await odooFetch(BASE + '/web/dataset/call_kw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     credentials: 'include',

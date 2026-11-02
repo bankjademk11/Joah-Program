@@ -1,17 +1,39 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase as defaultSupabase } from "../../utils/supabaseClient";
+import {
+  getPhonthongRackDecision,
+  PHONTHONG_BRANCH,
+  inferCategory1FromCategory2,
+  KOREAN_TO_ENGLISH_CATEGORY_1,
+} from "../../utils/phonthongRackRules";
 
 const DEFAULT_BRANCH = "ໂພນຕ້ອງ";
 const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "ໂພນສີນວນ", "ສີວິໄລ", "ວັງຊາຍ", "ຕະຫຼາດລາວ", "ເມກ້າມໍ"];
 const BATCH_SIZE = 500;
 
 const aliases = {
-  barcode: ["barcode", "bar code", "sku"],
-  item_name: ["description", "item name", "item_name"],
-  product_name_la: ["lao description", "product name la", "product_name_la"],
-  category_1: ["categories 1", "category 1", "category_1"],
-  category_2: ["categories 2", "category 2", "category_2"],
+  barcode: [
+    "barcode", "bar code", "sku", "barcode_no", "barcodeno", "code", "item code",
+    "item_code", "default code", "default_code", "internal reference",
+    "บาร์โค้ด", "ບາໂຄດ", "รหัสบาร์โค้ด", "รหัสสินค้า", "product barcode"
+  ],
+  item_name: [
+    "description", "item name", "item_name", "product name", "product_name",
+    "name", "ชื่อสินค้า", "ຊື່ສິນຄ້າ", "ລາຍການ", "ຊື່"
+  ],
+  product_name_la: [
+    "lao description", "product name la", "product_name_la",
+    "ຊື່ພາສາລາວ", "ຊື່ລາວ"
+  ],
+  category_1: [
+    "categories 1", "category 1", "category_1", "cat1", "cat 1",
+    "หมวดหมู่หลัก", "หมวดหมู่ 1", "ໝວດໝູ່ 1", "ໝວດ 1"
+  ],
+  category_2: [
+    "categories 2", "category 2", "category_2", "cat2", "cat 2",
+    "หมวดหมู่ย่อย", "หมวดหมู่ 2", "ໝວດໝູ່ 2", "ໝວດ 2"
+  ],
 };
 
 const clean = (v) => String(v ?? "").trim();
@@ -56,10 +78,22 @@ export function parseMasterSheet(sheet, branchId, source, updatedBy) {
     throw new Error("ບໍ່ພົບຂໍ້ມູນໃນໄຟລ໌");
   }
 
-  const columns = mapColumns(matrix[0]);
+  let headerRowIndex = 0;
+  let columns = mapColumns(matrix[0]);
 
   if (columns.barcode < 0) {
-    throw new Error("ບໍ່ພົບຖັນ Barcode ໃນໄຟລ໌");
+    for (let r = 1; r < Math.min(matrix.length, 15); r++) {
+      const candidate = mapColumns(matrix[r]);
+      if (candidate.barcode >= 0) {
+        headerRowIndex = r;
+        columns = candidate;
+        break;
+      }
+    }
+  }
+
+  if (columns.barcode < 0) {
+    throw new Error("ບໍ່ພົບຖັນ Barcode ໃນໄຟລ໌ (ກະລຸນາກວດສອບຫົວຕາຕະລາງ Barcode, ບາໂຄດ, บาร์โค้ด ຫຼື SKU)");
   }
 
   const records = new Map();
@@ -67,7 +101,7 @@ export function parseMasterSheet(sheet, branchId, source, updatedBy) {
   let invalidRows = 0;
   let duplicateRows = 0;
 
-  matrix.slice(1).forEach((row) => {
+  matrix.slice(headerRowIndex + 1).forEach((row) => {
     const barcode = text(row[columns.barcode]);
 
     if (!barcode && row.every((v) => !clean(v))) {
@@ -122,10 +156,23 @@ export function parseMasterSheet(sheet, branchId, source, updatedBy) {
 }
 
 const storeAliases = {
-  barcode_no: ["barcode", "bar code", "sku", "barcode_no", "ບາໂຄດ"],
-  item_name: ["description", "item name", "item_name", "product name", "ຊື່ສິນຄ້າ"],
-  store_qty: ["qty", "quantity", "store_qty", "store qty", "ຈຳນວນ"],
-  shelf_location: ["shelf", "location", "shelf_location", "rack", "ตู้", "ຊັ້ນ"],
+  barcode_no: [
+    "barcode", "bar code", "sku", "barcode_no", "barcodeno", "code", "item code",
+    "item_code", "default code", "default_code", "internal reference",
+    "บาร์โค้ด", "ບາໂຄດ", "รหัสบาร์โค้ด", "รหัสสินค้า", "product barcode"
+  ],
+  item_name: [
+    "description", "item name", "item_name", "product name", "product_name",
+    "name", "ชื่อสินค้า", "ຊື່ສິນຄ້າ", "ລາຍການ", "ຊື່"
+  ],
+  store_qty: [
+    "qty", "quantity", "store_qty", "store qty", "on hand", "on_hand",
+    "จำนวน", "ຈຳນວນ", "ยอดคงเหลือ", "stock", "stock qty"
+  ],
+  shelf_location: [
+    "shelf", "location", "shelf_location", "shelf location", "rack", "rack location",
+    "rack_location", "ตู้", "ຊັ້ນ", "ໂລເຄຊັ່ນ", "ຕຳແໜ່ງ", "โล"
+  ],
 };
 
 function mapStoreColumns(headers) {
@@ -149,17 +196,29 @@ export function parseStoreInventorySheet(sheet, branchId, source, updatedBy) {
     throw new Error("ບໍ່ພົບຂໍ້ມູນໃນໄຟລ໌");
   }
 
-  const columns = mapStoreColumns(matrix[0]);
+  let headerRowIndex = 0;
+  let columns = mapStoreColumns(matrix[0]);
 
   if (columns.barcode_no < 0) {
-    throw new Error("ບໍ່ພົບຖັນ Barcode ໃນໄຟລ໌ (ຕ້ອງມີຄໍລຳ Barcode)");
+    for (let r = 1; r < Math.min(matrix.length, 15); r++) {
+      const candidate = mapStoreColumns(matrix[r]);
+      if (candidate.barcode_no >= 0) {
+        headerRowIndex = r;
+        columns = candidate;
+        break;
+      }
+    }
+  }
+
+  if (columns.barcode_no < 0) {
+    throw new Error("ບໍ່ພົບຖັນ Barcode ໃນໄຟລ໌ (ຕ້ອງມີຄໍລຳ Barcode, ບາໂຄດ ຫຼື SKU)");
   }
 
   const records = new Map();
   let invalidRows = 0;
   let duplicateRows = 0;
 
-  matrix.slice(1).forEach((row) => {
+  matrix.slice(headerRowIndex + 1).forEach((row) => {
     const barcode = text(row[columns.barcode_no]);
 
     if (!barcode && row.every((v) => !clean(v))) {
@@ -201,6 +260,173 @@ export function parseStoreInventorySheet(sheet, branchId, source, updatedBy) {
   };
 }
 
+const salesAliases = {
+  barcode_no: [
+    "ບາໂຄດ 13 ຫຼັກ (barcode)", "ບາໂຄດ 13 ຫຼັກ", "barcode", "bar code", "sku", "barcode_no",
+    "barcodeno", "code", "item code", "item_code", "default code",
+    "บาร์โค้ด", "ບາໂຄດ", "รหัสบาร์โค้ด", "รหัสสินค้า", "product barcode"
+  ],
+  item_name: [
+    "ຊື່ສິນຄ້າ (product name)", "description", "item name", "item_name", "product name",
+    "product_name", "name", "ชื่อสินค้า", "ຊື່ສິນຄ້າ", "ລາຍການ", "ຊື່"
+  ],
+  sales_qty: [
+    "ຈຳນວນ (qty)", "qty", "quantity", "sales_qty", "sales qty", "sold qty", "sold_qty",
+    "จำนวน", "ຈຳນວນ", "จำนวนขาย", "ຈຳນວນຂາຍ"
+  ],
+  amount_lak: [
+    "ຍອດ (lak)", "ຍອດຂາຍ", "ຍອດ", "amount", "total", "lak", "price", "ยอดขาย", "จำนวนเงิน"
+  ],
+  order_ref: [
+    "order ref", "order_ref", "order", "receipt", "bill", "ເລກບິນ", "เลขบิล"
+  ],
+  sale_time: [
+    "ເວລາ (time)", "ເວລາ", "time", "date", "datetime", "วันที่", "ວັນທີ"
+  ],
+};
+
+function mapSalesColumns(headers) {
+  const normalized = (headers || []).map(headerKey);
+  return Object.fromEntries(
+    Object.entries(salesAliases).map(([field, names]) => {
+      const normalizedNames = names.map(headerKey);
+      let idx = normalized.findIndex((h) => h && normalizedNames.includes(h));
+      if (idx < 0) {
+        idx = normalized.findIndex(
+          (h) => h && normalizedNames.some((n) => n.length >= 3 && h.includes(n)),
+        );
+      }
+      return [field, idx];
+    }),
+  );
+}
+
+export function isSalesReportSheet(sheet) {
+  const matrix = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+  });
+  for (let r = 0; r < Math.min(matrix.length, 15); r++) {
+    const rowText = (matrix[r] || []).map((c) => clean(c).toLowerCase()).join(" ");
+    if (
+      rowText.includes("ລາຍງານຍອດຂາຍ") ||
+      (rowText.includes("order ref") && rowText.includes("barcode")) ||
+      (rowText.includes("ບາໂຄດ 13 ຫຼັກ") && rowText.includes("ຈຳນວນ"))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function parseSalesSheet(sheet, branchId, source, updatedBy) {
+  const matrix = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+  });
+
+  if (!matrix.length) {
+    throw new Error("ບໍ່ພົບຂໍ້ມູນໃນໄຟລ໌");
+  }
+
+  let headerRowIndex = 0;
+  let columns = mapSalesColumns(matrix[0]);
+
+  if (columns.barcode_no < 0 || columns.sales_qty < 0) {
+    for (let r = 1; r < Math.min(matrix.length, 25); r++) {
+      const candidate = mapSalesColumns(matrix[r]);
+      if (candidate.barcode_no >= 0 && candidate.sales_qty >= 0) {
+        headerRowIndex = r;
+        columns = candidate;
+        break;
+      }
+    }
+  }
+
+  if (columns.barcode_no < 0) {
+    throw new Error(
+      "ບໍ່ພົບຖັນ Barcode ໃນໄຟລ໌ຍອດຂາຍ (ຕ້ອງມີຄໍລຳ ບາໂຄດ 13 ຫຼັກ (Barcode) ຫຼື Barcode)",
+    );
+  }
+
+  if (columns.sales_qty < 0) {
+    throw new Error("ບໍ່ພົບຖັນ ຈຳນວນ (Qty) ໃນໄຟລ໌ຍອດຂາຍ");
+  }
+
+  const records = new Map();
+  let invalidRows = 0;
+  let duplicateRows = 0;
+  let validDataRows = 0;
+  let totalSoldQty = 0;
+
+  matrix.slice(headerRowIndex + 1).forEach((row) => {
+    const barcode = text(row[columns.barcode_no]);
+
+    if (!barcode && row.every((v) => !clean(v))) {
+      return;
+    }
+
+    if (!barcode) {
+      invalidRows += 1;
+      return;
+    }
+
+    const rawQty =
+      columns.sales_qty >= 0 ? clean(row[columns.sales_qty]).replace(/,/g, "") : "0";
+    const qtyVal = parseFloat(rawQty);
+    const sales_qty = isNaN(qtyVal) ? 0 : Math.round(qtyVal);
+
+    if (sales_qty <= 0) {
+      return;
+    }
+
+    const rawLak =
+      columns.amount_lak >= 0
+        ? clean(row[columns.amount_lak]).replace(/[^\d.-]/g, "")
+        : "0";
+    const lakVal = parseFloat(rawLak);
+    const amount_lak = isNaN(lakVal) ? 0 : Math.round(lakVal);
+
+    const itemName =
+      columns.item_name >= 0 ? clean(row[columns.item_name]) || null : null;
+
+    validDataRows += 1;
+    totalSoldQty += sales_qty;
+
+    if (records.has(barcode)) {
+      duplicateRows += 1;
+      const existing = records.get(barcode);
+      existing.sales_qty += sales_qty;
+      existing.tx_count += 1;
+      existing.amount_lak += amount_lak;
+      if (!existing.item_name && itemName) {
+        existing.item_name = itemName;
+      }
+    } else {
+      records.set(barcode, {
+        barcode_no: barcode,
+        item_name: itemName,
+        sales_qty: sales_qty,
+        tx_count: 1,
+        amount_lak: amount_lak,
+        branch_id: branchId,
+        last_updated: new Date().toISOString(),
+        updated_by: updatedBy || "sales-excel-import",
+      });
+    }
+  });
+
+  return {
+    rows: [...records.values()],
+    invalidRows,
+    duplicateRows,
+    totalRows: validDataRows,
+    totalSoldQty,
+  };
+}
+
 export default function MasterDataImport({
   supabase,
   branchOptions = BRANCH_OPTIONS,
@@ -236,6 +462,13 @@ export default function MasterDataImport({
   const [inspectResult, setInspectResult] = useState(null);
   const [syncingStoreDirect, setSyncingStoreDirect] = useState(false);
 
+  // 🆕 Copy Shelf Location & Categories from another branch
+  const [copySourceBranch, setCopySourceBranch] = useState("ໂພນສີນວນ");
+  const [copyInspectResult, setCopyInspectResult] = useState(null);
+  const [isInspectingCopy, setIsInspectingCopy] = useState(false);
+  const [isCopyingShelf, setIsCopyingShelf] = useState(false);
+  const [autoAssignPhonthongAfterCopy, setAutoAssignPhonthongAfterCopy] = useState(true);
+
   const [dragging, setDragging] = useState(false);
 
   const branchId = customBranch.trim() || branch;
@@ -245,7 +478,7 @@ export default function MasterDataImport({
     [parsed],
   );
 
-  const isWorking = busy || inspecting || syncingStoreDirect;
+  const isWorking = busy || inspecting || syncingStoreDirect || isCopyingShelf || isInspectingCopy;
 
   async function inspectBranchStore() {
     if (!client || !branchId) return;
@@ -487,6 +720,382 @@ export default function MasterDataImport({
     }
   }
 
+  
+  // =========================================================================
+  // 🆕 Sync Category from Master Data & Auto-Assign Shelf (English Only)
+  // หลักการ:
+  // 1. ดึงข้อมูล Category 1 & 2 จาก master_data โดยตรง (ไม่ดึงจากสาขาอื่น)
+  // 2. ตรวจสอบอย่างเข้มงวด: ต้องเป็นภาษาอังกฤษเท่านั้น (English Only) ห้ามภาษาอื่นเด็ดขาด
+  // 3. ห้ามก๊อปปี้ shelf_location จากที่อื่น ให้ระบบคำนวณ Auto-Assign ผัง JMPT ของ ໂພນຕ້ອງ เอง
+  // =========================================================================
+  const isEnglishOnly = (text) => {
+    if (!text) return false;
+    const s = String(text).trim();
+    if (!s || s === "0" || s === "—" || s.toLowerCase() === "null") return false;
+    // ตรวจสอบว่าต้องไม่มีภาษาเกาหลี (Hangul: \uAC00-\uD7AF, \u1100-\u11FF, \u3130-\u318F), ภาษาลาว, ภาษาไทย หรือจีน
+    if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u0E00-\u0E7F\u0EB0-\u0EFF]/.test(s)) return false;
+    // ต้องมีเฉพาะตัวอักษรภาษาอังกฤษ ตัวเลข และเครื่องหมายวรรคตอนทั่วไป
+    return /^[A-Za-z0-9\s/&,()._'-]+$/.test(s) && /[A-Za-z]/.test(s);
+  };
+
+  async function inspectSyncMasterDataCategory() {
+    if (!client || !branchId) return;
+    setIsInspectingCopy(true);
+    setCopyInspectResult(null);
+    setNotice(null);
+
+    try {
+      let targetItems = [];
+      let page = 0;
+      while (true) {
+        const { data, error } = await client
+          .from("store_inventory")
+          .select("id, barcode_no, shelf_location, category_1_actual, category_2_actual")
+          .eq("branch_id", branchId)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        targetItems.push(...data);
+        page++;
+      }
+
+      // รายการที่ต้องการประมวลผล: ยังไม่มี Shelf Location หรือยังไม่มี Category หรือ Category เดิมไม่ใช่ภาษาอังกฤษ
+      const needProcessing = targetItems.filter((item) => {
+        const loc = String(item.shelf_location || "").trim();
+        const hasNoShelf = !loc || loc === "—" || loc.toLowerCase() === "null";
+        const hasNoCategory = !item.category_1_actual || !item.category_2_actual;
+        const isNotEnglish = (item.category_1_actual && !isEnglishOnly(item.category_1_actual)) ||
+                             (item.category_2_actual && !isEnglishOnly(item.category_2_actual));
+        return hasNoShelf || hasNoCategory || isNotEnglish;
+      });
+
+      if (needProcessing.length === 0) {
+        setNotice({
+          ok: true,
+          text: `ທຸກລາຍການສິນຄ້າໃນສາຂາ ${branchId} (${formatNumber(targetItems.length)} ລາຍການ) ມີ Category (English) ແລະ Shelf Location ຄົບຖ້ວນແລ້ວ!`,
+        });
+        setIsInspectingCopy(false);
+        return;
+      }
+
+      const barcodes = [...new Set(needProcessing.map((i) => i.barcode_no).filter(Boolean))];
+      let masterCategoryMap = new Map();
+      let rejectedNonEnglishCount = 0;
+      const chunkSize = 200;
+
+      for (let i = 0; i < barcodes.length; i += chunkSize) {
+        const chunk = barcodes.slice(i, i + chunkSize);
+
+        // ดึงจาก master_data โดยตรง
+        const { data: mData } = await client
+          .from("master_data")
+          .select("barcode, item_name, category_1, category_2, branch_id")
+          .in("barcode", chunk);
+
+        if (mData) {
+          mData.forEach((row) => {
+            const bc = String(row.barcode || "").trim();
+            if (!bc) return;
+
+            // ตรวจสอบภาษาอังกฤษ หรือแปล Category 1 เกาหลีเป็นอังกฤษ
+            let rawCat1 = clean(row.category_1);
+            const rawCat2 = clean(row.category_2);
+
+            if (rawCat1 && KOREAN_TO_ENGLISH_CATEGORY_1[rawCat1]) {
+              rawCat1 = KOREAN_TO_ENGLISH_CATEGORY_1[rawCat1];
+            }
+
+            const isCat1English = isEnglishOnly(rawCat1);
+            const isCat2English = isEnglishOnly(rawCat2);
+
+            if ((row.category_1 && !isCat1English) || (row.category_2 && !isCat2English)) {
+              rejectedNonEnglishCount++;
+            }
+
+            let validCat1 = isCat1English ? rawCat1 : null;
+            // ถ้า Cat 1 เป็นอังกฤษ แต่ Cat 2 เป็นเกาหลี/ไม่ใช่ภาษาอังกฤษ ให้ตัด Cat 2 ทิ้งเป็น null (เอาแค่ Cat 1)
+            // แต่ถ้า Cat 2 เป็นอังกฤษ ให้เก็บไว้เสมอ
+            const validCat2 = (isCat1English && !isCat2English) ? null : (isCat2English ? rawCat2 : null);
+
+            // ถ้า Cat 1 ว่างแต่ Cat 2 เป็นอังกฤษ ให้ Infer Cat 1 จาก Cat 2
+            if (!validCat1 && validCat2) {
+              const inferred = inferCategory1FromCategory2(validCat2);
+              if (inferred) validCat1 = inferred;
+            }
+
+            if (validCat1 || validCat2) {
+              const existing = masterCategoryMap.get(bc);
+              // ให้ความสำคัญกับ master_data ของสาขานี้ก่อน หรือแถวที่มีหมวดหมู่สมบูรณ์
+              if (!existing || row.branch_id === branchId || (!existing.category_1 && validCat1)) {
+                masterCategoryMap.set(bc, {
+                  category_1: validCat1 || existing?.category_1 || null,
+                  category_2: validCat2 || existing?.category_2 || null,
+                  item_name: row.item_name || existing?.item_name || null,
+                });
+              }
+            }
+          });
+        }
+      }
+
+      let canAutoAssignCount = 0;
+      let matchedCategoryCount = 0;
+
+      needProcessing.forEach((item) => {
+        const m = masterCategoryMap.get(item.barcode_no);
+        let c1 = (item.category_1_actual && isEnglishOnly(item.category_1_actual)) ? item.category_1_actual : (m?.category_1 || null);
+        const c2 = (item.category_2_actual && isEnglishOnly(item.category_2_actual)) ? item.category_2_actual : (m?.category_2 || null);
+
+        // ถ้า c1 ขาดแต่ c2 มีค่าภาษาอังกฤษ ให้ Infer c1 จาก c2
+        if (!c1 && c2) {
+          const inferred = inferCategory1FromCategory2(c2);
+          if (inferred) c1 = inferred;
+        }
+
+        if (m && (m.category_1 || m.category_2)) {
+          matchedCategoryCount++;
+        }
+
+        if (c1 || c2) {
+          const dec = getPhonthongRackDecision({
+            branchId: PHONTHONG_BRANCH,
+            category1: c1,
+            category2: c2,
+          });
+          if (dec.status === "ASSIGNED") canAutoAssignCount++;
+        }
+      });
+
+      setCopyInspectResult({
+        totalTarget: targetItems.length,
+        unassignedCount: needProcessing.length,
+        matchedCategoryCount,
+        canAutoAssignCount,
+        rejectedNonEnglishCount,
+        source: "master_data",
+      });
+
+      setNotice({
+        ok: true,
+        text: `ກວດສອບ Master Data (English Only): ພົບ ${formatNumber(matchedCategoryCount)} ລາຍການ (ຈັດເຂົ້າຜັງ JMPT ຂອງ ໂພນຕ້ອງ ໄດ້ ${formatNumber(canAutoAssignCount)} ລາຍການ)${rejectedNonEnglishCount > 0 ? `, ຕັດພາສາອື່ນອອກ ${formatNumber(rejectedNonEnglishCount)} ຄ່າ` : ""}`,
+      });
+    } catch (err) {
+      setNotice({
+        ok: false,
+        text: `ກວດສອບບໍ່ສຳເລັດ: ${err.message}`,
+      });
+    } finally {
+      setIsInspectingCopy(false);
+    }
+  }
+
+  async function executeSyncMasterDataCategory() {
+    if (!client || !branchId) return;
+    setIsCopyingShelf(true);
+    setProgress(0);
+    setModalState("uploading");
+    setNotice(null);
+
+    try {
+      let targetItems = [];
+      let page = 0;
+      while (true) {
+        const { data, error } = await client
+          .from("store_inventory")
+          .select("id, barcode_no, shelf_location, category_1_actual, category_2_actual, item_name")
+          .eq("branch_id", branchId)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        targetItems.push(...data);
+        page++;
+      }
+
+      const needProcessing = targetItems.filter((item) => {
+        const loc = String(item.shelf_location || "").trim();
+        const hasNoShelf = !loc || loc === "—" || loc.toLowerCase() === "null";
+        const hasNoCategory = !item.category_1_actual || !item.category_2_actual;
+        const isNotEnglish = (item.category_1_actual && !isEnglishOnly(item.category_1_actual)) ||
+                             (item.category_2_actual && !isEnglishOnly(item.category_2_actual));
+        return hasNoShelf || hasNoCategory || isNotEnglish;
+      });
+
+      if (needProcessing.length === 0) {
+        setModalState("idle");
+        setNotice({
+          ok: true,
+          text: "ທຸກລາຍການມີ Category (English Only) ແລະ Shelf Location ຄົບຖ້ວນແລ້ວ",
+        });
+        return;
+      }
+
+      const barcodes = [...new Set(needProcessing.map((i) => i.barcode_no).filter(Boolean))];
+      let masterCategoryMap = new Map();
+      let rejectedNonEnglishCount = 0;
+      const chunkSize = 200;
+
+      for (let i = 0; i < barcodes.length; i += chunkSize) {
+        const chunk = barcodes.slice(i, i + chunkSize);
+
+        const { data: mData } = await client
+          .from("master_data")
+          .select("barcode, item_name, category_1, category_2, branch_id")
+          .in("barcode", chunk);
+
+        if (mData) {
+          mData.forEach((row) => {
+            const bc = String(row.barcode || "").trim();
+            if (!bc) return;
+
+            // ตรวจสอบภาษาอังกฤษ หรือแปล Category 1 เกาหลีเป็นอังกฤษ
+            let rawCat1 = clean(row.category_1);
+            const rawCat2 = clean(row.category_2);
+
+            if (rawCat1 && KOREAN_TO_ENGLISH_CATEGORY_1[rawCat1]) {
+              rawCat1 = KOREAN_TO_ENGLISH_CATEGORY_1[rawCat1];
+            }
+
+            const isCat1English = isEnglishOnly(rawCat1);
+            const isCat2English = isEnglishOnly(rawCat2);
+
+            if ((row.category_1 && !isCat1English) || (row.category_2 && !isCat2English)) {
+              rejectedNonEnglishCount++;
+            }
+
+            let validCat1 = isCat1English ? rawCat1 : null;
+            // ถ้า Cat 1 เป็นอังกฤษ แต่ Cat 2 เป็นเกาหลี/ไม่ใช่ภาษาอังกฤษ ให้ตัด Cat 2 ทิ้งเป็น null (เอาแค่ Cat 1)
+            // แต่ถ้า Cat 2 เป็นอังกฤษ ให้เก็บไว้เสมอ
+            const validCat2 = (isCat1English && !isCat2English) ? null : (isCat2English ? rawCat2 : null);
+
+            // ถ้า Cat 1 ว่างแต่ Cat 2 เป็นอังกฤษ ให้ Infer Cat 1 จาก Cat 2
+            if (!validCat1 && validCat2) {
+              const inferred = inferCategory1FromCategory2(validCat2);
+              if (inferred) validCat1 = inferred;
+            }
+
+            if (validCat1 || validCat2) {
+              const existing = masterCategoryMap.get(bc);
+              if (!existing || row.branch_id === branchId || (!existing.category_1 && validCat1)) {
+                masterCategoryMap.set(bc, {
+                  category_1: validCat1 || existing?.category_1 || null,
+                  category_2: validCat2 || existing?.category_2 || null,
+                  item_name: row.item_name || existing?.item_name || null,
+                });
+              }
+            }
+          });
+        }
+      }
+
+      const isPhonthong = branchId === PHONTHONG_BRANCH || branchId.includes(PHONTHONG_BRANCH);
+      let phonthongAssignedCount = 0;
+      let categoryOnlyCount = 0;
+      const updates = [];
+
+      needProcessing.forEach((item) => {
+        const m = masterCategoryMap.get(item.barcode_no);
+        const currentCat1Valid = item.category_1_actual && isEnglishOnly(item.category_1_actual);
+        const currentCat2Valid = item.category_2_actual && isEnglishOnly(item.category_2_actual);
+
+        let c1 = currentCat1Valid ? item.category_1_actual : (m?.category_1 || null);
+        let c2 = currentCat2Valid ? item.category_2_actual : (m?.category_2 || null);
+
+        // ถ้า c1 ว่างแต่ c2 มีค่าภาษาอังกฤษ ให้ Infer c1 จาก c2 อัตโนมัติ
+        if (!c1 && c2) {
+          const inferred = inferCategory1FromCategory2(c2);
+          if (inferred) c1 = inferred;
+        }
+
+        const resolvedName = item.item_name || m?.item_name || null;
+
+        let finalShelf = item.shelf_location || null;
+
+        // คำนวณ Auto-Assign Shelf Location สำหรับສາຂາ ໂພນຕ້ອງ (JMPT) โดยเด็ดขาด ห้ามก๊อปปี้ shelf_location จากที่อื่น
+        if (isPhonthong && (c1 || c2)) {
+          const decision = getPhonthongRackDecision({
+            branchId: PHONTHONG_BRANCH,
+            category1: c1,
+            category2: c2,
+          });
+
+          if (decision.status === "ASSIGNED" && decision.rackLocation) {
+            finalShelf = decision.rackLocation; // JMPT. A-1 - G-20
+            phonthongAssignedCount++;
+          }
+        }
+
+        const categoryChanged = (c1 !== item.category_1_actual) || (c2 !== item.category_2_actual);
+        const shelfChanged = finalShelf && finalShelf !== item.shelf_location;
+
+        if (categoryChanged || shelfChanged) {
+          if (!shelfChanged && categoryChanged) {
+            categoryOnlyCount++;
+          }
+
+          updates.push({
+            id: item.id,
+            barcode_no: item.barcode_no,
+            branch_id: branchId,
+            shelf_location: finalShelf,
+            category_1_actual: c1,
+            category_2_actual: c2,
+            item_name: resolvedName,
+            last_updated: new Date().toISOString(),
+            updated_by: updatedBy || "master-data-sync-english-only",
+          });
+        }
+      });
+
+      if (updates.length === 0) {
+        setModalState("idle");
+        setNotice({
+          ok: false,
+          text: "ບໍ່ພົບ Category (English) ທີ່ກົງກັນໃນ Master Data",
+        });
+        return;
+      }
+
+      let saved = 0;
+      for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+        const batch = updates.slice(i, i + BATCH_SIZE);
+        const { error } = await client
+          .from("store_inventory")
+          .upsert(batch, { onConflict: "id" });
+        if (error) throw error;
+
+        saved += batch.length;
+        setProgress(Math.round((saved / updates.length) * 100));
+      }
+
+      setImportSummary({
+        imported: updates.length,
+        syncedStore: updates.length,
+        branchId,
+        fileName: "Sync Category ຈາກ Master Data (English Only)",
+        phonthongAssigned: phonthongAssignedCount,
+        categoryOnlyCount,
+        rejectedNonEnglishCount,
+        isMasterDataCategoryFeature: true,
+      });
+
+      setNotice({
+        ok: true,
+        text: `Sync Category ຈາກ Master Data (English Only) ສຳເລັດ ${formatNumber(updates.length)} ລາຍການ! (ຈັດເຂົ້າຜັງ JMPT ໂພນຕ້ອງ: ${formatNumber(phonthongAssignedCount)} ລາຍການ)`,
+      });
+
+      setCopyInspectResult(null);
+      setModalState("success");
+    } catch (err) {
+      setNotice({
+        ok: false,
+        text: err.message || "ເກີດຂໍ້ຜິດພາດໃນການ Sync Category ຈາກ Master Data",
+      });
+      setModalState("error");
+    } finally {
+      setIsCopyingShelf(false);
+    }
+  }
+
   async function readFile(nextFile) {
     if (!nextFile) return;
 
@@ -503,8 +1112,16 @@ export default function MasterDataImport({
 
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
 
+      let effectiveMode = importMode;
+      if (effectiveMode !== "sales_import" && isSalesReportSheet(firstSheet)) {
+        effectiveMode = "sales_import";
+        setImportMode("sales_import");
+      }
+
       const result =
-        importMode === "store_inventory"
+        effectiveMode === "sales_import"
+          ? parseSalesSheet(firstSheet, branchId, nextFile.name, updatedBy)
+          : effectiveMode === "store_inventory"
           ? parseStoreInventorySheet(firstSheet, branchId, nextFile.name, updatedBy)
           : parseMasterSheet(firstSheet, branchId, nextFile.name, updatedBy);
 
@@ -512,9 +1129,16 @@ export default function MasterDataImport({
 
       setNotice({
         ok: true,
-        text: `ອ່ານໄຟລ໌ສຳເລັດ ${formatNumber(
-          result.rows.length,
-        )} ລາຍການ (${importMode === "store_inventory" ? "Store Inventory" : "Master Data"})`,
+        text:
+          effectiveMode === "sales_import"
+            ? `ອ່ານໄຟລ໌ຍອດຂາຍສຳເລັດ: ລວມບາໂຄດຊ້ຳແລ້ວເຫຼືອ ${formatNumber(
+                result.rows.length,
+              )} ລາຍການ (ຈາກ ${formatNumber(result.totalRows)} ບິນ, ຈຳນວນຂາຍລວມ ${formatNumber(
+                result.totalSoldQty,
+              )} ຊິ້ນ)`
+            : `ອ່ານໄຟລ໌ສຳເລັດ ${formatNumber(
+                result.rows.length,
+              )} ລາຍການ (${effectiveMode === "store_inventory" ? "Store Inventory" : "Master Data"})`,
       });
     } catch (error) {
       setNotice({
@@ -533,6 +1157,162 @@ export default function MasterDataImport({
     setSyncedStoreCount(0);
 
     try {
+      if (importMode === "sales_import") {
+        let storeItems = [];
+        let page = 0;
+        while (true) {
+          const { data, error } = await client
+            .from("store_inventory")
+            .select("id, barcode_no, item_name, store_qty, sales_qty, shelf_location")
+            .eq("branch_id", branchId)
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          storeItems.push(...data);
+          page++;
+        }
+
+        const storeByBarcode = new Map();
+        storeItems.forEach((item) => {
+          const bc = clean(item.barcode_no);
+          if (!bc) return;
+          if (!storeByBarcode.has(bc)) {
+            storeByBarcode.set(bc, []);
+          }
+          storeByBarcode.get(bc).push(item);
+        });
+
+        const updates = [];
+        const salesLogs = [];
+        let matchedBarcodes = 0;
+        let unmatchedBarcodes = 0;
+        let totalDeductedQty = 0;
+        let totalAddedSalesQty = 0;
+        const nowIso = new Date().toISOString();
+
+        parsed.rows.forEach((salesRow) => {
+          const bc = clean(salesRow.barcode_no);
+          const soldQty = Number(salesRow.sales_qty || 0);
+          if (!bc || soldQty <= 0) return;
+
+          const candidates = storeByBarcode.get(bc);
+          if (!candidates || candidates.length === 0) {
+            unmatchedBarcodes += 1;
+            return;
+          }
+
+          matchedBarcodes += 1;
+          totalAddedSalesQty += soldQty;
+
+          let remainingToDeduct = soldQty;
+
+          candidates.forEach((storeRow, idx) => {
+            const currentStoreQty = Number(storeRow.store_qty || 0);
+            const currentSalesQty = Number(storeRow.sales_qty || 0);
+
+            let deductHere = 0;
+            if (remainingToDeduct > 0) {
+              if (idx === candidates.length - 1) {
+                deductHere = Math.min(currentStoreQty, remainingToDeduct);
+                remainingToDeduct = 0;
+              } else if (currentStoreQty > 0) {
+                deductHere = Math.min(currentStoreQty, remainingToDeduct);
+                remainingToDeduct -= deductHere;
+              }
+            }
+
+            totalDeductedQty += deductHere;
+            const newStoreQty = Math.max(0, currentStoreQty - deductHere);
+            const newSalesQty = idx === 0 ? currentSalesQty + soldQty : currentSalesQty;
+
+            if (newStoreQty !== currentStoreQty || newSalesQty !== currentSalesQty) {
+              updates.push({
+                id: storeRow.id,
+                barcode_no: storeRow.barcode_no,
+                branch_id: branchId,
+                item_name: storeRow.item_name || salesRow.item_name || null,
+                shelf_location: storeRow.shelf_location,
+                store_qty: newStoreQty,
+                sales_qty: newSalesQty,
+                last_updated: nowIso,
+                updated_by: updatedBy || "sales-excel-import",
+              });
+            }
+          });
+
+          salesLogs.push({
+            barcode_no: bc,
+            sales_qty: soldQty,
+            import_date: nowIso,
+            branch_id: branchId,
+            imported_by: updatedBy || "sales-excel-import",
+          });
+        });
+
+        if (updates.length === 0) {
+          setModalState("error");
+          setNotice({
+            ok: false,
+            text: `ບໍ່ພົບບາໂຄດທີ່ກົງກັບ Store Inventory ຂອງສາຂາ ${branchId} (ຈາກທັງໝົດ ${formatNumber(
+              parsed.rows.length,
+            )} ບາໂຄດໃນໄຟລ໌)`,
+          });
+          return;
+        }
+
+        let completed = 0;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+          const batch = updates.slice(i, i + BATCH_SIZE);
+          const { error } = await client
+            .from("store_inventory")
+            .upsert(batch, { onConflict: "id" });
+          if (error) throw error;
+
+          completed += batch.length;
+          setProgress(Math.round((completed / updates.length) * 100));
+        }
+
+        try {
+          for (let i = 0; i < salesLogs.length; i += BATCH_SIZE) {
+            const logBatch = salesLogs.slice(i, i + BATCH_SIZE);
+            await client.from("store_sales_log").insert(logBatch);
+          }
+        } catch (logErr) {
+          console.warn("Could not write to store_sales_log:", logErr);
+        }
+
+        setNotice({
+          ok: true,
+          text: `ນຳເຂົ້າຍອດຂາຍສຳເລັດ! ອັບເດດສິນຄ້າ ${formatNumber(
+            matchedBarcodes,
+          )} ລາຍການ (ຫັກ Stock -${formatNumber(totalDeductedQty)} ຊິ້ນ, ເພີ່ມ QTY ຍອດຂາຍ +${formatNumber(
+            totalAddedSalesQty,
+          )} ຊິ້ນ)`,
+        });
+
+        setImportSummary({
+          imported: matchedBarcodes,
+          syncedStore: updates.length,
+          branchId,
+          fileName: file?.name,
+          isSalesImportFeature: true,
+          totalSoldQty: totalAddedSalesQty,
+          totalDeductedQty,
+          unmatchedBarcodes,
+          mergedDuplicateTx: parsed.duplicateRows,
+          totalRawTx: parsed.totalRows,
+        });
+
+        setModalState("success");
+        onComplete?.({
+          imported: matchedBarcodes,
+          syncedStore: updates.length,
+          branchId,
+          fileName: file?.name,
+        });
+        return;
+      }
+
       if (importMode === "store_inventory") {
         let importedCount = 0;
 
@@ -601,16 +1381,39 @@ export default function MasterDataImport({
               }
             }
 
+            let resolvedCat1 = master?.category_1 || existing?.category_1_actual || null;
+            let resolvedCat2 = master?.category_2 || existing?.category_2_actual || null;
+
+            // ถ้า Category 1 ว่าง แต่ Category 2 มีค่า ให้ Infer Category 1
+            if (!resolvedCat1 && resolvedCat2) {
+              const inferred = inferCategory1FromCategory2(resolvedCat2);
+              if (inferred) resolvedCat1 = inferred;
+            }
+
+            let assignedShelf = row.shelf_location || existing?.shelf_location || null;
+
+            // Auto-assign Phonthong layout (JMPT) if shelf is null and categories exist
+            if (!assignedShelf && (branchId === PHONTHONG_BRANCH || branchId.includes(PHONTHONG_BRANCH)) && (resolvedCat1 || resolvedCat2)) {
+              const decision = getPhonthongRackDecision({
+                branchId: PHONTHONG_BRANCH,
+                category1: resolvedCat1,
+                category2: resolvedCat2,
+              });
+              if (decision.status === "ASSIGNED" && decision.rackLocation) {
+                assignedShelf = decision.rackLocation;
+              }
+            }
+
             if (existing?.id) {
               existingUpdates.push({
                 id: existing.id,
                 barcode_no: row.barcode_no,
                 item_name: row.item_name || master?.item_name || existing.item_name || null,
                 store_qty: row.store_qty,
-                shelf_location: row.shelf_location || existing.shelf_location || null,
+                shelf_location: assignedShelf,
                 branch_id: branchId,
-                category_1_actual: master?.category_1 || existing.category_1_actual || null,
-                category_2_actual: master?.category_2 || existing.category_2_actual || null,
+                category_1_actual: resolvedCat1,
+                category_2_actual: resolvedCat2,
                 last_updated: new Date().toISOString(),
                 updated_by: updatedBy || "store-excel-import",
               });
@@ -619,10 +1422,10 @@ export default function MasterDataImport({
                 barcode_no: row.barcode_no,
                 item_name: row.item_name || master?.item_name || null,
                 store_qty: row.store_qty,
-                shelf_location: row.shelf_location || null,
+                shelf_location: assignedShelf,
                 branch_id: branchId,
-                category_1_actual: master?.category_1 || null,
-                category_2_actual: master?.category_2 || null,
+                category_1_actual: resolvedCat1,
+                category_2_actual: resolvedCat2,
                 last_updated: new Date().toISOString(),
                 updated_by: updatedBy || "store-excel-import",
               });
@@ -896,18 +1699,88 @@ export default function MasterDataImport({
                     ນຳເຂົ້າຂໍ້ມູນສຳເລັດ
                   </h3>
 
-                  <p className="mt-3 text-sm leading-7 text-slate-500">
-                    ນຳເຂົ້າ{" "}
-                    <span className="font-extrabold text-slate-900">
-                      {formatNumber(importSummary.imported)}
-                    </span>{" "}
-                    ລາຍການ
-                    <br />
-                    ເຂົ້າສາຂາ{" "}
-                    <span className="font-extrabold text-emerald-700">
-                      {importSummary.branchId}
-                    </span>
-                  </p>
+                  {importSummary.isMasterDataCategoryFeature ? (
+                    <div className="mt-3 text-sm leading-6 text-slate-600">
+                      <p>
+                        Sync Category ຈາກ Master Data (English Only) ສຳເລັດ{" "}
+                        <span className="font-extrabold text-slate-900">
+                          {formatNumber(importSummary.imported)}
+                        </span>{" "}
+                        ລາຍການ
+                      </p>
+                      <p className="mt-1">
+                        ເຂົ້າສາຂາ{" "}
+                        <span className="font-extrabold text-emerald-700">
+                          {importSummary.branchId}
+                        </span>
+                      </p>
+                      {importSummary.phonthongAssigned > 0 && (
+                        <div className="mt-3 text-xs font-bold text-amber-800 bg-amber-50 p-3 rounded-2xl border border-amber-200">
+                          ✨ ຈັດເຂົ້າຜັງ JMPT ຂອງ ໂພນຕ້ອງ ອັດຕະໂນມັດ: <strong className="text-amber-900 font-extrabold text-sm">{formatNumber(importSummary.phonthongAssigned)}</strong> ລາຍການ
+                        </div>
+                      )}
+                      {importSummary.categoryOnlyCount > 0 && (
+                        <div className="mt-2 text-xs font-semibold text-slate-500 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                          📦 ອັບເດດ Category (English) ຄົບຖ້ວນ: {formatNumber(importSummary.categoryOnlyCount)} ລາຍการ
+                        </div>
+                      )}
+                      {importSummary.rejectedNonEnglishCount > 0 && (
+                        <div className="mt-2 text-[11px] font-bold text-rose-600 bg-rose-50 p-2 rounded-xl border border-rose-100">
+                          🛡️ ຕັດຄ່າພາສາອື່ນທີ່ບໍ່ແມ່ນພາສາອັງກິດອອກ: {formatNumber(importSummary.rejectedNonEnglishCount)} ຄ່າ
+                        </div>
+                      )}
+                    </div>
+                  ) : importSummary.isSalesImportFeature ? (
+                    <div className="mt-3 text-sm leading-6 text-slate-600 space-y-2">
+                      <p>
+                        ນຳເຂົ້າຍອດຂາຍ ແລະອັບເດດສິນຄ້າ{" "}
+                        <span className="font-extrabold text-slate-900">
+                          {formatNumber(importSummary.imported)}
+                        </span>{" "}
+                        ບາໂຄດ ເຂົ້າສາຂາ{" "}
+                        <span className="font-extrabold text-emerald-700">
+                          {importSummary.branchId}
+                        </span>
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-bold pt-1">
+                        <div className="rounded-2xl bg-orange-50 border border-orange-200 p-3 text-orange-800">
+                          <div>📈 ເພີ່ມ QTY ຍອດຂາຍ (Sales)</div>
+                          <div className="text-lg font-extrabold text-orange-600 mt-0.5">
+                            +{formatNumber(importSummary.totalSoldQty)} ຊິ້ນ
+                          </div>
+                        </div>
+                        <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-rose-800">
+                          <div>📉 ຫັກ Stock ໜ້າຮ້ານ</div>
+                          <div className="text-lg font-extrabold text-rose-600 mt-0.5">
+                            -{formatNumber(importSummary.totalDeductedQty)} ຊິ້ນ
+                          </div>
+                        </div>
+                      </div>
+                      {importSummary.mergedDuplicateTx > 0 && (
+                        <div className="text-xs font-semibold text-amber-800 bg-amber-50 p-2.5 rounded-2xl border border-amber-200">
+                          🔄 ລວມບາໂຄດທີ່ຂາຍຊ້ຳຫຼາຍຄັ້ງ: ຍຸບລວມ {formatNumber(importSummary.mergedDuplicateTx)} ບິນຊ້ຳ ຈາກທັງໝົດ {formatNumber(importSummary.totalRawTx)} ລາຍການຂາຍ
+                        </div>
+                      )}
+                      {importSummary.unmatchedBarcodes > 0 && (
+                        <div className="text-[11px] font-semibold text-slate-500 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                          ℹ️ ບາໂຄດໃນໄຟລ໌ຂາຍທີ່ບໍ່ພົບໃນ Store Inventory ຂອງສາຂານີ້: {formatNumber(importSummary.unmatchedBarcodes)} ລາຍການ
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm leading-7 text-slate-500">
+                      ນຳເຂົ້າ{" "}
+                      <span className="font-extrabold text-slate-900">
+                        {formatNumber(importSummary.imported)}
+                      </span>{" "}
+                      ລາຍການ
+                      <br />
+                      ເຂົ້າສາຂາ{" "}
+                      <span className="font-extrabold text-emerald-700">
+                        {importSummary.branchId}
+                      </span>
+                    </p>
+                  )}
 
                   {importSummary.syncedStore > 0 && (
                     <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left">
@@ -1051,6 +1924,21 @@ export default function MasterDataImport({
                       }`}
                   >
                     🏬 2. ອັບໂຫລດ Store Inventory ({branchId}) · shelf_location ✓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportMode("sales_import");
+                      setFile(null);
+                      setParsed(null);
+                      setNotice(null);
+                    }}
+                    className={`rounded-2xl px-4 py-2.5 text-xs font-extrabold transition shadow-sm border ${importMode === "sales_import"
+                      ? "border-orange-500 bg-orange-500 text-white"
+                      : "border-orange-200 bg-orange-50/70 text-orange-800 hover:bg-orange-100"
+                      }`}
+                  >
+                    🛒 3. ອັບໂຫລດຍອດຂາຍ (Sales Import) · ຫັກ Stock + ເພີ່ມ QTY ຍອດຂາຍ
                   </button>
                 </div>
               </div>
@@ -1455,6 +2343,92 @@ export default function MasterDataImport({
               )}
             </div>
 
+            
+            {/* 🆕 5. Sync Category from Master Data (English Only) & Auto Shelf */}
+            <div className="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50/70 to-white p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-xl text-white shadow-sm">
+                  🔤
+                </div>
+
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900">
+                    Master Data Category
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    ດຶງ Category ຈາກ Master Data (ພາສາອັງກິດເທົ່ານັ້ນ) ແລ້ວຈັດຜັງ Shelf ໂພນຕ້ອງ ให้อัตโนมัติ
+                  </p>
+                </div>
+              </div>
+
+              {/* Source info */}
+              <div className="mt-4 rounded-2xl bg-sky-100/60 p-3 text-xs space-y-1.5 text-sky-900">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold">ແຫຼ່ງຂໍ້ມູນ:</span>
+                  <span className="font-extrabold text-sky-800">📦 ตาราง master_data</span>
+                </div>
+                <div className="flex justify-between items-center border-t border-sky-200/60 pt-1.5">
+                  <span className="font-bold">ສາຂາປາຍທາງ:</span>
+                  <span className="font-extrabold text-slate-900">{branchId}</span>
+                </div>
+              </div>
+
+              {/* Security Rule Badge */}
+              <div className="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] leading-5 text-emerald-800 flex items-start gap-2">
+                <span className="text-emerald-600 font-bold text-sm">✓</span>
+                <div>
+                  <strong>ກວດສອບພາສາອັງກິດ (English Only):</strong> ຮອງຮັບສະເພາະພາສາອັງກິດເທົ່ານັ້ນ ຫ້າມພາສາອື່ນປົນເດັດຂາດ. ຕຳແໜ່ງ Shelf Location ຈະຖືກຈັດເຂົ້າຜັງ <strong>JMPT</strong> ຂອງ ໂພນຕ້ອງ ให้อัตโนมัติ (ບໍ່ດຶງໂລເຄຊັ່ນຈາກບ່ອນອື່ນ)
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={inspectSyncMasterDataCategory}
+                  disabled={isWorking || !branchId}
+                  className="rounded-2xl border border-sky-300 bg-white px-3 py-3 text-xs font-bold text-sky-800 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isInspectingCopy ? "ກຳລັງກວດ..." : "🔍 ກວດສອບ"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={executeSyncMasterDataCategory}
+                  disabled={isWorking || !branchId}
+                  className="rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 px-3 py-3 text-xs font-bold text-white shadow-sm transition hover:from-sky-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isCopyingShelf ? "ກຳລັງ Sync..." : "🚀 ເລີ່ມ Sync & Auto Shelf"}
+                </button>
+              </div>
+
+              {/* Inspect Result */}
+              {copyInspectResult && (
+                <div className="mt-4 overflow-hidden rounded-2xl border border-sky-200 bg-white p-3 text-xs space-y-2">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>ລາຍການທີ່ຍັງຂາດ Category/Shelf:</span>
+                    <span className="font-extrabold text-slate-900">{formatNumber(copyInspectResult.unassignedCount)} ລາຍການ</span>
+                  </div>
+                  <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-slate-100 pt-1.5">
+                    <span>ພົບ Category ພາສາອັງກິດໃນ Master:</span>
+                    <span className="font-extrabold text-emerald-600">+{formatNumber(copyInspectResult.matchedCategoryCount)} ລາຍການ</span>
+                  </div>
+                  {copyInspectResult.canAutoAssignCount > 0 && (
+                    <div className="flex justify-between items-center text-amber-700 font-bold border-t border-slate-100 pt-1.5">
+                      <span>ຈັດເຂົ້າຜັງ JMPT ໂພນຕ້ອງ:</span>
+                      <span className="font-extrabold text-amber-600">{formatNumber(copyInspectResult.canAutoAssignCount)} ລາຍການ</span>
+                    </div>
+                  )}
+                  {copyInspectResult.rejectedNonEnglishCount > 0 && (
+                    <div className="flex justify-between items-center text-rose-600 font-bold border-t border-slate-100 pt-1.5">
+                      <span>ຕັດຄ່າທີ່ບໍ່ແມ່ນພາສາອັງກິດອອກ:</span>
+                      <span className="font-extrabold text-rose-600">-{formatNumber(copyInspectResult.rejectedNonEnglishCount)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Rules */}
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="text-sm font-extrabold text-slate-900">
@@ -1487,6 +2461,44 @@ export default function MasterDataImport({
           {/* ============================= */}
 
           <main className="space-y-5">
+            
+            {/* 💡 Column Guide Banner */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-xs leading-5">
+              <div className="flex items-center gap-2 font-extrabold text-slate-800 text-sm">
+                <span>💡</span>
+                <span>ຮູບແບບຫົວຖັນ Excel ທີ່ລະບົບຮອງຮັບ (Column Format Guide):</span>
+              </div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-600">
+                <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                  <div className="font-bold text-emerald-700">📦 Master Data:</div>
+                  <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                    <li><strong className="text-slate-800">Barcode:</strong> Barcode, บาร์โค้ด, ບາໂຄດ, SKU, Code <span className="text-rose-500 font-bold">*ຈຳເປັນ</span></li>
+                    <li><strong className="text-slate-800">Item Name:</strong> Description, Item Name, ຊື່ສິນຄ້າ, ຊື່</li>
+                    <li><strong className="text-slate-800">Category 1:</strong> Category 1, ໝວດໝູ່ 1, หมวดหลัก</li>
+                    <li><strong className="text-slate-800">Category 2:</strong> Category 2, ໝວດໝູ່ 2, หมวดย่อย</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                  <div className="font-bold text-sky-700">🏬 Store Inventory:</div>
+                  <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                    <li><strong className="text-slate-800">Barcode:</strong> Barcode, Barcode_No, บาร์โค้ด, ບາໂຄດ <span className="text-rose-500 font-bold">*ຈຳເປັນ</span></li>
+                    <li><strong className="text-slate-800">Item Name:</strong> Item Name, Description, ຊື່ສິນຄ້າ</li>
+                    <li><strong className="text-slate-800">Store Qty:</strong> Qty, Quantity, จำนวน, ຈຳນວນ</li>
+                    <li><strong className="text-slate-800">Shelf Location:</strong> Shelf, Location, Rack, ตู้, ຊັ້ນ</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-orange-50/60 p-3 border border-orange-200/70">
+                  <div className="font-bold text-orange-700">🛒 ລາຍງານຍອດຂາຍ (Sales Report):</div>
+                  <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                    <li><strong className="text-slate-800">Barcode:</strong> ບາໂຄດ 13 ຫຼັກ (Barcode) <span className="text-rose-500 font-bold">*ຈຳເປັນ</span></li>
+                    <li><strong className="text-slate-800">Product Name:</strong> ຊື່ສິນຄ້າ (Product Name)</li>
+                    <li><strong className="text-slate-800">Qty:</strong> ຈຳນວນ (Qty) <span className="text-rose-500 font-bold">*ຈຳເປັນ</span></li>
+                    <li><strong className="text-orange-800">ບາໂຄດຊ້ຳ:</strong> ລະບົບບວກລວມຈຳນວນຂາຍໃຫ້ອັດຕະໂນມັດ ແລ້ວນຳໄປຫັກ Stock + ເພີ່ມ QTY ຍອດຂາຍ</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
             {/* Upload */}
             <div
               onDragEnter={(e) => {
@@ -1773,7 +2785,19 @@ export default function MasterDataImport({
                           ຊື່ສິນຄ້າ (Description)
                         </th>
 
-                        {importMode === "store_inventory" ? (
+                        {importMode === "sales_import" ? (
+                          <>
+                            <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+                              ຈຳນວນຄັ້ງຂາຍ (Bills)
+                            </th>
+                            <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-wide text-orange-600">
+                              ຈຳນວນຂາຍລວມ (-Stock / +Sales)
+                            </th>
+                            <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+                              ຍອດລວມ (LAK)
+                            </th>
+                          </>
+                        ) : importMode === "store_inventory" ? (
                           <th className="px-5 py-4 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
                             จำนวน (QTY)
                           </th>
@@ -1831,7 +2855,25 @@ export default function MasterDataImport({
                             </div>
                           </td>
 
-                          {importMode === "store_inventory" ? (
+                          {importMode === "sales_import" ? (
+                            <>
+                              <td className="px-5 py-4">
+                                <span className="inline-flex rounded-lg bg-amber-100 px-2.5 py-1 font-mono text-xs font-bold text-amber-800">
+                                  {formatNumber(row.tx_count)} ຄັ້ງ
+                                </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className="inline-flex rounded-lg bg-orange-100 px-3 py-1 font-mono text-xs font-black text-orange-800">
+                                  {formatNumber(row.sales_qty)} ຊິ້ນ
+                                </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className="font-mono text-xs font-bold text-slate-600">
+                                  ₭ {formatNumber(row.amount_lak)}
+                                </span>
+                              </td>
+                            </>
+                          ) : importMode === "store_inventory" ? (
                             <td className="px-5 py-4">
                               <span className="inline-flex rounded-lg bg-emerald-100 px-3 py-1 font-mono text-xs font-black text-emerald-800">
                                 {formatNumber(row.store_qty)}

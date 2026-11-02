@@ -71,36 +71,72 @@ const CheckPriceUltimate = ({ onBack, isOdooLoggedIn = false }) => {
         setImageError(false);
 
         try {
-            // 1. Fetch live Odoo rich data
-            const odooData = await fetchProductUltimate(cleanCode);
+            let odooData = null;
 
-            // 2. Fetch Lao Name from Supabase price_checker or master_products table as priority for 100% accurate Lao translation
-            let laoName = odooData?.product_name_la || '';
-            
+            // 1. Try Fetching live Odoo rich data with graceful error handling
             try {
-                const { data: supaData } = await supabase
+                odooData = await fetchProductUltimate(cleanCode);
+            } catch (err) {
+                console.warn('[CheckPriceUltimate] Odoo fetch warning:', err);
+            }
+
+            // 2. Query Supabase (price_checker or master_data) for Lao name & fallback price/info
+            let supaData = null;
+            let laoName = odooData?.product_name_la || '';
+
+            try {
+                const { data } = await supabase
                     .from('price_checker')
-                    .select('product_name, barcode')
-                    .or(`barcode.eq.${cleanCode},barcode.eq.${odooData?.barcode || cleanCode}`)
+                    .select('barcode, product_name, price, image_url')
+                    .or('barcode.eq.' + cleanCode + ',barcode.eq.' + (odooData?.barcode || cleanCode))
                     .limit(1)
                     .maybeSingle();
 
-                if (supaData && supaData.product_name) {
-                    laoName = supaData.product_name;
+                if (data) {
+                    supaData = data;
+                    if (data.product_name) laoName = data.product_name;
                 }
             } catch (supaErr) {
-                console.warn('Supabase lao name lookup error:', supaErr);
+                console.warn('[CheckPriceUltimate] Supabase lookup warning:', supaErr);
             }
 
-            if (!odooData && !laoName) {
-                throw new Error('ບໍ່ພົບສິນຄ້ານີ້ໃນລະບົບ Odoo / Product Not Found');
+            // Fallback to master_data table if not in price_checker
+            if (!odooData && !supaData) {
+                try {
+                    const { data: masterRow } = await supabase
+                        .from('master_data')
+                        .select('barcode, product_name_la, item_name')
+                        .eq('barcode', cleanCode)
+                        .limit(1)
+                        .maybeSingle();
+                    if (masterRow) {
+                        supaData = {
+                            barcode: masterRow.barcode,
+                            product_name: masterRow.product_name_la || masterRow.item_name,
+                            price: 0
+                        };
+                        laoName = supaData.product_name;
+                    }
+                } catch (mErr) {
+                    console.warn('[CheckPriceUltimate] Master data fallback lookup warning:', mErr);
+                }
             }
 
+            // If neither Odoo nor Supabase has anything, throw not found
+            if (!odooData && !supaData) {
+                throw new Error('ບໍ່ພົບສິນຄ້ານີ້ໃນລະບົບ / Product Not Found');
+            }
+
+            // Construct combined resilient data
             const combinedData = {
                 ...(odooData || {}),
-                barcode: odooData?.barcode || cleanCode,
-                displayLaoName: laoName || odooData?.product_name_la || odooData?.name || 'ສິນຄ້າບໍ່ມີຊື່ພາສາລາວ',
-                englishName: odooData?.name || odooData?.product_name_eng || ''
+                barcode: odooData?.barcode || supaData?.barcode || cleanCode,
+                name: odooData?.name || supaData?.product_name || cleanCode,
+                displayLaoName: laoName || odooData?.product_name_la || odooData?.name || supaData?.product_name || 'ສິນຄ້າບໍ່ມີຊື່ພາສາລາວ',
+                englishName: odooData?.name || odooData?.product_name_eng || '',
+                list_price: odooData?.list_price ?? (supaData?.price || 0),
+                image_url: odooData?.image_url || supaData?.image_url || null,
+                isOfflineFallback: !odooData && !!supaData
             };
 
             setProductData(combinedData);

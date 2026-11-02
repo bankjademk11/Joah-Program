@@ -11,6 +11,7 @@ const BRANCHES: { odoo_id: number; branch_id: string }[] = [
     { odoo_id: 273, branch_id: 'ເມກ້າມໍ' },
     { odoo_id: 173, branch_id: 'ໂພນສີນວນ' },
     { odoo_id: 8, branch_id: 'ວັງຊາຍ' },
+    { odoo_id: 5, branch_id: 'ໂພນຕ້ອງ' },
 ];
 
 // ── Shared helpers ────────────────────────────────────────────

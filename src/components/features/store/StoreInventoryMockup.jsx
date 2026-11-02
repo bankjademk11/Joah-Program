@@ -436,7 +436,8 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
             supabase
               .from('store_inventory')
               .update({
-                shelf_location: decision.rackLocation, // ชื่อคอลัมน์จริงใน DB store_inventory คือ shelf_location
+                shelf_location: decision.rackLocation,
+                ...( (!item.category1 && !item.category_1 && decision.normalizedCategory1) ? { category_1_actual: decision.normalizedCategory1 } : {} ),
                 updated_by: currentUser?.name || 'Auto-Assign Bot',
                 last_updated: new Date().toISOString()
               })

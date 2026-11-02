@@ -22,6 +22,7 @@ export default function OdooSyncEngine({ onBack, userBranch, isAdmin }) {
         { id: 249, name: 'ຕະຫຼາດລາວ', short: 'TLL' },
         { id: 8, name: 'ວັງຊາຍ', short: 'VX' },
         { id: 273, name: 'ເມກ້າມໍ', short: 'MGM' },
+        { id: 5, name: 'ໂພນຕ້ອງ', short: 'JMT' },
     ];
 
     const [selectedBranchId, setSelectedBranchId] = useState(

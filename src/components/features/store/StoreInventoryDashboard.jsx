@@ -58,7 +58,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
   };
 
   // Map store_inventory row → StoreResultTable row shape
-  const mapRow = (row, idx, warehouseMap = {}, dcMap = {}, warehouseRackMap = {}) => {
+  const mapRow = (row, idx, warehouseMap = {}, dcMap = {}, warehouseRackMap = {}, sivilayMap = {}) => {
     const qty = row.store_qty ?? 0;
     const rack = row.shelf_location || '';
     const bc = String(row.barcode_no || '').trim();
@@ -125,6 +125,9 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
       category2: resolvedCategory2,
       status: status,
       branch_id: row.branch_id,
+      sivilayTotalQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].total : 0,
+      sivilayStoreQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].storeQty : 0,
+      sivilayWarehouseQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].warehouseQty : 0,
     };
   };
 
@@ -180,11 +183,15 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
 
       let whData = [];
       let dcData = [];
+      let sivilayStoreData = [];
+      let sivilayWhData = [];
 
       if (relevantBarcodes.length > 0) {
         const chunkSize = 200;
         const whPromises = [];
         const dcPromises = [];
+        const sivilayStorePromises = [];
+        const sivilayWhPromises = [];
 
         for (let i = 0; i < relevantBarcodes.length; i += chunkSize) {
           const chunk = relevantBarcodes.slice(i, i + chunkSize);
@@ -206,12 +213,32 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
               .eq('branch_id', selectedBranch)
               .in('barcode', chunk)
           );
+
+          // 🆕 Sivilay stock (Read-only reference for Phonthong)
+          if (isPhonthong) {
+            sivilayStorePromises.push(
+              supabase
+                .from('store_inventory')
+                .select('barcode_no, store_qty')
+                .eq('branch_id', 'ສີວິໄລ')
+                .in('barcode_no', chunk)
+            );
+            sivilayWhPromises.push(
+              supabase
+                .from('location_inventory')
+                .select('barcode_no, qty')
+                .eq('branch_id', 'ສີວິໄລ')
+                .in('barcode_no', chunk)
+            );
+          }
         }
 
         // Execute queries in parallel
-        const [whResponses, dcResponses] = await Promise.all([
+        const [whResponses, dcResponses, svStoreResponses, svWhResponses] = await Promise.all([
           Promise.all(whPromises),
-          Promise.all(dcPromises)
+          Promise.all(dcPromises),
+          isPhonthong ? Promise.all(sivilayStorePromises) : Promise.resolve([]),
+          isPhonthong ? Promise.all(sivilayWhPromises) : Promise.resolve([])
         ]);
 
         // Merge warehouse results
@@ -225,6 +252,18 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
         dcResponses.forEach(res => {
           if (!res.error && res.data) {
             dcData.push(...res.data);
+          }
+        });
+
+        // Merge Sivilay results (read-only for Phonthong reference)
+        svStoreResponses.forEach(res => {
+          if (!res.error && res.data) {
+            sivilayStoreData.push(...res.data);
+          }
+        });
+        svWhResponses.forEach(res => {
+          if (!res.error && res.data) {
+            sivilayWhData.push(...res.data);
           }
         });
       }
@@ -271,11 +310,36 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
       });
 
       // ==========================================================
+      // Build sivilayMap (Sivilay store_qty + warehouse qty)
+      // ==========================================================
+      const sivilayMap = {};
+      if (isPhonthong) {
+        sivilayStoreData.forEach(row => {
+          const bc = String(row.barcode_no || '').trim();
+          if (bc) {
+            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0 };
+            const q = Number(row.store_qty || 0);
+            sivilayMap[bc].storeQty += q;
+            sivilayMap[bc].total += q;
+          }
+        });
+        sivilayWhData.forEach(row => {
+          const bc = String(row.barcode_no || '').trim();
+          if (bc) {
+            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0 };
+            const q = Number(row.qty || 0);
+            sivilayMap[bc].warehouseQty += q;
+            sivilayMap[bc].total += q;
+          }
+        });
+      }
+
+      // ==========================================================
       // Map final results
       // ==========================================================
       setResults(
         (storeData || []).map(
-          (row, idx) => mapRow(row, idx, warehouseMap, dcMap, warehouseRackMap)
+          (row, idx) => mapRow(row, idx, warehouseMap, dcMap, warehouseRackMap, sivilayMap)
         )
       );
 
@@ -345,7 +409,8 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
             supabase
               .from('store_inventory')
               .update({
-                shelf_location: decision.rackLocation, // ชื่อคอลัมน์จริงใน DB store_inventory คือ shelf_location
+                shelf_location: decision.rackLocation,
+                ...( (!item.category1 && !item.category_1 && decision.normalizedCategory1) ? { category_1_actual: decision.normalizedCategory1 } : {} ),
                 updated_by: currentUser?.name || 'Auto-Assign Bot',
                 last_updated: new Date().toISOString()
               })

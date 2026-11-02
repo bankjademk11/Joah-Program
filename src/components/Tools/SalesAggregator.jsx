@@ -29,7 +29,7 @@ export default function SalesAggregator({ onBack }) {
 
   // --- Import to Store Inventory ---
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importBranch, setImportBranch] = useState('ໂພນສີນວນ');
+  const [importBranch, setImportBranch] = useState('ໂພນຕ້ອງ');
   const [importMode, setImportMode] = useState('deduct'); // deduct | history_only
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -60,7 +60,21 @@ export default function SalesAggregator({ onBack }) {
           const data = new Uint8Array(e.target.result);
           const wb = XLSX.read(data, { type: "array" });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const parsed = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+          // ຄົ້ນຫາແຖວ Header ອັດຕະໂນມັດ (ຮອງຮັບໄຟລ໌ JOAH - ລາຍງານຍອດຂາຍ ທີ່ຫົວຕາຕະລາງຢູ່ແຖວທີ 6)
+          const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          let headerRowIdx = 0;
+          for (let r = 0; r < Math.min(rawMatrix.length, 25); r++) {
+            const rowCells = (rawMatrix[r] || []).map((c) => String(c || "").toLowerCase());
+            const hasBarcode = rowCells.some((c) => c.includes("barcode") || c.includes("ບາໂຄດ") || c.includes("บาร์โค้ด"));
+            const hasQty = rowCells.some((c) => c.includes("qty") || c.includes("quantity") || c.includes("ຈຳນວນ") || c.includes("จำนวน"));
+            if (hasBarcode && hasQty) {
+              headerRowIdx = r;
+              break;
+            }
+          }
+
+          const parsed = XLSX.utils.sheet_to_json(ws, { range: headerRowIdx, defval: "" });
 
           if (!parsed.length) {
             alert("ໄຟລ໌ນີ້ບໍ່ມີຂໍ້ມູນ");
@@ -71,9 +85,15 @@ export default function SalesAggregator({ onBack }) {
           const cols = Object.keys(parsed[0]);
           setRows(parsed);
           setHeaders(cols);
-          const bIdx = cols.findIndex((c) => c.toLowerCase().includes("barcode"));
+          const bIdx = cols.findIndex(
+            (c) => c.toLowerCase().includes("barcode") || c.includes("ບາໂຄດ") || c.includes("บาร์โค้ด")
+          );
           const qIdx = cols.findIndex(
-            (c) => c.toLowerCase().includes("quantity") || c.toLowerCase().includes("qty")
+            (c) =>
+              c.toLowerCase().includes("quantity") ||
+              c.toLowerCase().includes("qty") ||
+              c.includes("ຈຳນວນ") ||
+              c.includes("จำนวน")
           );
           setBarcodeCol(cols[bIdx >= 0 ? bIdx : 0]);
           setQtyCol(cols[qIdx >= 0 ? qIdx : 0]);
@@ -297,12 +317,19 @@ export default function SalesAggregator({ onBack }) {
           );
         }
 
-        // Step 6: Log to store_sales_log for history tracking
+        // Step 6: Log to store_sales_log for history tracking (Non-blocking if RLS restricts insert)
         console.log(`🚀 [SalesAggregator] Step 6: Logging to store_sales_log (${logPayload.length} items)...`);
-        for (let i = 0; i < logPayload.length; i += UPDATE_CHUNK) {
-          const chunk = logPayload.slice(i, i + UPDATE_CHUNK);
-          const { error } = await supabase.from('store_sales_log').insert(chunk);
-          if (error) throw error;
+        try {
+          for (let i = 0; i < logPayload.length; i += UPDATE_CHUNK) {
+            const chunk = logPayload.slice(i, i + UPDATE_CHUNK);
+            const { error: logErr } = await supabase.from('store_sales_log').insert(chunk);
+            if (logErr) {
+              console.warn('⚠️ [SalesAggregator] store_sales_log insert skipped (RLS):', logErr.message);
+              break;
+            }
+          }
+        } catch (logEx) {
+          console.warn('⚠️ [SalesAggregator] store_sales_log exception:', logEx);
         }
 
         setImportResult({ 
@@ -384,10 +411,17 @@ export default function SalesAggregator({ onBack }) {
           branch_id: importBranch,
           imported_by: importedBy
         }));
-        for (let i = 0; i < logPayload.length; i += CHUNK) {
-          const chunk = logPayload.slice(i, i + CHUNK);
-          const { error } = await supabase.from('store_sales_log').insert(chunk);
-          if (error) throw error;
+        try {
+          for (let i = 0; i < logPayload.length; i += CHUNK) {
+            const chunk = logPayload.slice(i, i + CHUNK);
+            const { error: logErr } = await supabase.from('store_sales_log').insert(chunk);
+            if (logErr) {
+              console.warn('⚠️ [SalesAggregator/HistoryOnly] store_sales_log insert skipped (RLS):', logErr.message);
+              break;
+            }
+          }
+        } catch (logEx) {
+          console.warn('⚠️ [SalesAggregator/HistoryOnly] store_sales_log exception:', logEx);
         }
 
         setImportResult({ 
@@ -1099,7 +1133,7 @@ export default function SalesAggregator({ onBack }) {
                   onChange={(e) => setImportBranch(e.target.value)}
                   className="w-full h-14 pl-5 pr-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-black text-sm outline-none focus:border-emerald-500 transition-all appearance-none cursor-pointer"
                 >
-                  {['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'].map(b => (
+                  {['ໂພນຕ້ອງ', 'ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ໂພນສີນວນ', 'ວັງຊາຍ', 'ເມກ້າມໍ'].map(b => (
                     <option key={b} value={b}>{b}</option>
                   ))}
                 </select>

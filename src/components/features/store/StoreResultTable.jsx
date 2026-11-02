@@ -35,6 +35,7 @@ const StoreResultTable = ({
     onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, currentBranch, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
+    const isPhonthong = currentBranch === 'ໂພນຕ້ອງ' || (currentBranch && currentBranch.includes('ໂພນຕ້ອງ')) || (locationSheetName === 'ໂພນຕ້ອງ' || (locationSheetName && locationSheetName.includes('ໂພນຕ້ອງ')));
     const { success, error: showError } = useToast();
     const { updateLowStock } = useLowStock();
     const [currentPage, setCurrentPage] = useState(1);
@@ -373,6 +374,9 @@ const StoreResultTable = ({
             if (sortConfig.key === 'qty') {
                 valA = barcodeTotals[a.barcode] || 0;
                 valB = barcodeTotals[b.barcode] || 0;
+            } else if (sortConfig.key === 'sivilayTotalQty') {
+                valA = Number(a.sivilayTotalQty || 0);
+                valB = Number(b.sivilayTotalQty || 0);
             } else {
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
@@ -1840,18 +1844,44 @@ const StoreResultTable = ({
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.actualQty')}<br /><span className="text-[10px] opacity-80 font-bold">{t('results.masterQty')}</span>
-                                    </th>
-                                    <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.dcQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
-                                    </th>
+                                    {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ) */}
+                                    {isPhonthong && (
+                                        <th
+                                            onClick={() => handleSort('sivilayTotalQty')}
+                                            className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-sky-50/50 dark:bg-sky-950/20 cursor-pointer hover:bg-sky-100/50 dark:hover:bg-sky-900/30 transition-colors group/sivilayhead tracking-wider"
+                                            title="ຄລິກເພື່ອລຽງລຳດັບ: ຈຳນວນທັງໝົດຂອງສາຂາ ສີວິໄລ"
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ຈຳນວນ ສີວິໄລ</span>
+                                                    <span className="text-[9px] text-sky-500/70 dark:text-sky-400/70 font-bold lowercase">(ໜ້າຮ້ານ + ສາງ)</span>
+                                                </div>
+                                                <div className={`transition-all duration-300 ${sortConfig.key === 'sivilayTotalQty' ? 'text-sky-500 scale-110' : 'text-sky-300 group-hover/sivilayhead:text-sky-500'}`}>
+                                                    {sortConfig.key === 'sivilayTotalQty' ? (
+                                                        sortConfig.direction === 'asc' ? <ChevronDown size={16} strokeWidth={3} /> : <ChevronDown size={16} className="rotate-180" strokeWidth={3} />
+                                                    ) : <ArrowUpDown size={16} strokeWidth={3} />}
+                                                </div>
+                                            </div>
+                                        </th>
+                                    )}
+                                    {!isPhonthong && (
+                                        <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
+                                            {t('results.actualQty')}<br /><span className="text-[10px] opacity-80 font-bold">{t('results.masterQty')}</span>
+                                        </th>
+                                    )}
+                                    {!isPhonthong && (
+                                        <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
+                                            {t('results.dcQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.dcQtySub')}</span>
+                                        </th>
+                                    )}
                                     <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
                                         {t('results.salesQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.salesQtySub')}</span>
                                     </th>
-                                    <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
-                                        {t('results.scrapQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.scrapQtySub')}</span>
-                                    </th>
+                                    {!isPhonthong && (
+                                        <th className="px-6 py-6 text-center text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
+                                            {t('results.scrapQty')}<br /><span className="text-[10px] opacity-70 font-bold">{t('results.scrapQtySub')}</span>
+                                        </th>
+                                    )}
                                     <th className="px-6 py-6 text-center text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.status')}</th>
                                     <th className="px-8 py-6 text-right text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.actions')}</th>
                                 </tr>
@@ -1860,7 +1890,7 @@ const StoreResultTable = ({
                                 {isRefreshing ? (
                                     [...Array(5)].map((_, i) => (
                                         <tr key={`skeleton-${i}`} className="animate-pulse bg-white/5">
-                                            <td colSpan="12" className="px-8 py-6 h-20 bg-slate-100/50"></td>
+                                            <td colSpan={isPhonthong ? "11" : "13"} className="px-8 py-6 h-20 bg-slate-100/50"></td>
                                         </tr>
                                     ))
                                 ) : currentResults.length > 0 ? (
@@ -1868,7 +1898,7 @@ const StoreResultTable = ({
                                         {/* INJECT PARTIAL MATCH WARNING ROW */}
                                         {searchTerm.length > 0 && !filteredResults.some(r => r.barcode === searchTerm) && (
                                             <tr className="bg-amber-50/50 dark:bg-amber-900/10 border-b-2 border-amber-200 dark:border-amber-800/50 relative z-20">
-                                                <td colSpan="12" className="px-8 py-4">
+                                                <td colSpan={isPhonthong ? "11" : "13"} className="px-8 py-4">
                                                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                                                         <div className="flex items-center gap-3 text-amber-700 dark:text-amber-400">
                                                             <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full">
@@ -2002,24 +2032,57 @@ const StoreResultTable = ({
                                                         </div>
                                                     </div>
                                                 </td>
+                                                {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ) */}
+                                                {isPhonthong && (
+                                                    <td className="px-6 py-6 text-center bg-sky-50/20 dark:bg-sky-950/10 group/sivilay">
+                                                        <div className="flex flex-col items-center relative">
+                                                            <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border min-w-[70px] ${(row.sivilayTotalQty || 0) > 0 ? 'bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}>
+                                                                <span className="text-2xl font-black leading-none">
+                                                                    {row.sivilayTotalQty || 0}
+                                                                </span>
+                                                                <div className="text-[9px] font-black uppercase tracking-widest mt-1 opacity-80">
+                                                                    ສີວິໄລ
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Hover Tooltip Breakdown: Sivilay Store + Warehouse */}
+                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/sivilay:opacity-100 transition-opacity pointer-events-none z-30">
+                                                                <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <div className="font-bold text-sky-300 border-b border-slate-700 pb-1">📍 ສາຂາ ສີວິໄລ (Sivilay)</div>
+                                                                        <div className="flex justify-between gap-4"><span>ໜ້າຮ້ານ (Store):</span> <span className="font-mono text-emerald-400">{row.sivilayStoreQty || 0}</span></div>
+                                                                        <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (Warehouse):</span> <span className="font-mono text-sky-400">{row.sivilayWarehouseQty || 0}</span></div>
+                                                                        <div className="border-t border-white/20 my-0.5"></div>
+                                                                        <div className="flex justify-between gap-4 font-bold text-amber-300"><span>ລວມສີວິໄລ:</span> <span className="font-mono">{row.sivilayTotalQty || 0}</span></div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                )}
                                                 {/* ຈຳນວນ ຫຼັງສາງ */}
-                                                <td className="px-6 py-6 text-center">
-                                                    <div className="flex flex-col items-center">
-                                                        <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                            {row.warehouseQty ?? 0}
-                                                        </span>
-                                                        <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
-                                                    </div>
-                                                </td>
+                                                {!isPhonthong && (
+                                                    <td className="px-6 py-6 text-center">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-2xl font-black leading-none ${row.warehouseQty > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                                {row.warehouseQty ?? 0}
+                                                            </span>
+                                                            <div className="text-[9px] font-black text-sky-400 uppercase tracking-widest mt-1">{t('results.masterQty')}</div>
+                                                        </div>
+                                                    </td>
+                                                )}
                                                 {/* QTY DC (Warehouse) */}
-                                                <td className="px-6 py-6 text-center">
-                                                    <div className="flex flex-col items-center">
-                                                        <span className={`text-2xl font-black leading-none ${(row.dcQty ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                            {row.dcQty ?? 0}
-                                                        </span>
-                                                        <div className="text-[9px] font-black text-violet-400 uppercase tracking-widest mt-1">DC</div>
-                                                    </div>
-                                                </td>
+                                                {!isPhonthong && (
+                                                    <td className="px-6 py-6 text-center">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-2xl font-black leading-none ${(row.dcQty ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                                {row.dcQty ?? 0}
+                                                            </span>
+                                                            <div className="text-[9px] font-black text-violet-400 uppercase tracking-widest mt-1">DC</div>
+                                                        </div>
+                                                    </td>
+                                                )}
                                                 <td className="px-6 py-6 text-center">
                                                     <div className="flex flex-col items-center">
                                                         {row.salesQty != null ? (
@@ -2030,7 +2093,9 @@ const StoreResultTable = ({
                                                         <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mt-1">Sales</div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                                {!isPhonthong && (
+                                                    <td className="px-6 py-6 text-center"><span className="text-xl font-bold text-slate-300 dark:text-slate-600">-</span></td>
+                                                )}
                                                 <td className="px-6 py-6 text-center">
                                                     <button className={`status-badge hover:scale-105 transition-transform ${row.status === 'passed' ? 'badge-success' : row.status === 'mismatch' ? 'badge-error' : 'badge-warning'}`}>
                                                         {row.status === 'passed' ? 'Matched' : row.status === 'mismatch' ? 'Mismatch' : 'Missing'}
@@ -2068,7 +2133,7 @@ const StoreResultTable = ({
                                     </>
                                 ) : (
                                     <tr>
-                                        <td colSpan="12" className="py-24 text-center">
+                                        <td colSpan={isPhonthong ? "11" : "13"} className="py-24 text-center">
                                             <div className="flex flex-col items-center gap-6 text-slate-300 dark:text-slate-700 animate-fade-in">
                                                 <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center text-slate-300 shadow-inner">
                                                     <Package size={40} strokeWidth={1.5} />
@@ -2213,7 +2278,7 @@ const StoreResultTable = ({
                                         </div>
 
                                         {/* Row 3: QTY breakdown */}
-                                        <div className="grid grid-cols-4 gap-2">
+                                        <div className={`grid ${isPhonthong ? 'grid-cols-3' : 'grid-cols-4'} gap-2`}>
                                             <div className="flex flex-col items-center py-2 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/20">
                                                 <span className="text-lg font-black text-amber-600 dark:text-amber-400 leading-none">{totalQty}</span>
                                                 <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider mt-0.5">Total</span>
@@ -2222,14 +2287,24 @@ const StoreResultTable = ({
                                                 <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">{barcodeTotals[row.barcode] || 0}</span>
                                                 <span className="text-[8px] font-black text-emerald-500 uppercase tracking-wider mt-0.5">ໜ້າຮ້ານລວມ</span>
                                             </div>
-                                            <div className="flex flex-col items-center py-2 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/20">
-                                                <span className={`text-lg font-black leading-none ${(row.warehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.warehouseQty ?? 0}</span>
-                                                <span className="text-[9px] font-black text-sky-400 uppercase tracking-wider mt-0.5">ສາງ</span>
-                                            </div>
-                                            <div className="flex flex-col items-center py-2 rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/20">
-                                                <span className={`text-lg font-black leading-none ${(row.dcQty || 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.dcQty ?? 0}</span>
-                                                <span className="text-[9px] font-black text-violet-400 uppercase tracking-wider mt-0.5">DC</span>
-                                            </div>
+                                            {isPhonthong && (
+                                                <div className="flex flex-col items-center py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-800/30">
+                                                    <span className={`text-lg font-black leading-none ${(row.sivilayTotalQty || 0) > 0 ? 'text-sky-600 dark:text-sky-300' : 'text-slate-300 dark:text-slate-600'}`}>{row.sivilayTotalQty || 0}</span>
+                                                    <span className="text-[8px] font-black text-sky-500 uppercase tracking-wider mt-0.5">ສີວິໄລ</span>
+                                                </div>
+                                            )}
+                                            {!isPhonthong && (
+                                                <div className="flex flex-col items-center py-2 rounded-xl bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/20">
+                                                    <span className={`text-lg font-black leading-none ${(row.warehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.warehouseQty ?? 0}</span>
+                                                    <span className="text-[9px] font-black text-sky-400 uppercase tracking-wider mt-0.5">ສາງ</span>
+                                                </div>
+                                            )}
+                                            {!isPhonthong && (
+                                                <div className="flex flex-col items-center py-2 rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/20">
+                                                    <span className={`text-lg font-black leading-none ${(row.dcQty || 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-300 dark:text-slate-600'}`}>{row.dcQty ?? 0}</span>
+                                                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-wider mt-0.5">DC</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Row 4: Multiple Racks & Edit buttons */}
