@@ -6,7 +6,7 @@ import DayDetailViewer from './DayDetailViewer';
 import SalesChartDashboard from './SalesChartDashboard';
 import EventStockView from './EventStockView';
 import JoahLogo from '../../assets/Joah.jpeg';
-import dataImageBG from '../../assets/dataImageBG.png';
+import dataImageBG from '../../assets/dataImageBG.webp';
 import JoahLoadingGif from '../../assets/joah_web_small.gif';
 import ExcelJS from 'exceljs';
 import { getProductImageFallbacks } from '../../utils/productImageUtils';

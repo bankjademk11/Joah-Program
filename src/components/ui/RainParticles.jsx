@@ -28,6 +28,10 @@ import { fetchKm8Weather, subscribeWeather } from '../../utils/weatherService';
 
 const SEASONS = [
 
+    // Early Winter / Frost & Starry Night : 1 Nov → 31 Dec (every year)
+
+    { theme: 'winter', month: 10, day: 1, endMonth: 11, endDay: 32 },
+
     // Halloween  : 1 Oct → 1 Nov (every year)
 
     { theme: 'halloween', month: 9, day: 1, endMonth: 10, endDay: 1 },
@@ -114,6 +118,8 @@ export const getActiveTheme = () => {
 
         }
 
+        if (manual === 'winter') return 'winter';
+
         if (manual === 'sakura') return 'sakura';
 
         if (manual === 'cubes') return 'cubes';
@@ -131,6 +137,8 @@ export const getActiveTheme = () => {
 export const isHalloweenSeason = () => getActiveTheme() === 'halloween';
 
 export const isSakuraSeason = () => getActiveTheme() === 'sakura';
+
+export const isWinterSeason = () => getActiveTheme() === 'winter';
 
 // Developer / User manual theme switch helper
 
@@ -226,10 +234,14 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
     const ghostsRef = useRef([]);
 
-    // Floating emoji reactions emitted when a ghost is tapped.
+    // Floating emoji reactions emitted when a ghost/snowflake is tapped.
     const ghostEmojisRef = useRef([]);
 
     const embersRef = useRef([]);
+
+    const snowflakesRef = useRef([]);
+
+    const starlightRef = useRef([]);
 
     const dropCountRef = useRef(30);
 
@@ -246,6 +258,10 @@ const SmartWeatherParticles = ({ className = '' }) => {
     const GHOST_COUNT = 20; // Kawaii floating ghosts (perf-friendly)
 
     const EMBER_COUNT = 18; // Atmospheric glow embers
+
+    const SNOWFLAKE_COUNT = 42; // 6-pointed ice crystals & soft snow puffs
+
+    const STARLIGHT_COUNT = 22; // Twinkling aurora & warm lantern sparks
 
     const CONNECTION_DIST = 180;
 
@@ -482,6 +498,54 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
     }, []);
 
+    // ❄️ Early Winter Ice Crystal / Snowflake Generator
+    const createSnowflake = useCallback((w, h, randomY = true) => {
+        const isCrystal = Math.random() > 0.35; // 65% geometric 6-branch ice crystals, 35% soft snow puffs
+        const size = isCrystal ? (Math.random() * 6 + 6.5) : (Math.random() * 2.8 + 1.8);
+        const tints = [
+            [224, 242, 254], // Ice White-Blue (#e0f2fe)
+            [186, 230, 253], // Frost Sky (#bae6fd)
+            [125, 211, 252], // Aurora Cyan (#7dd3fc)
+            [255, 255, 255], // Pure Snow White
+        ];
+        return {
+            x: Math.random() * (w + 80) - 40,
+            y: randomY ? Math.random() * h : -25 - Math.random() * 40,
+            size,
+            isCrystal,
+            speedY: isCrystal ? (Math.random() * 0.65 + 0.45) : (Math.random() * 0.45 + 0.25),
+            speedX: (Math.random() - 0.35) * 0.35,
+            swayAngle: Math.random() * Math.PI * 2,
+            swaySpeed: Math.random() * 0.018 + 0.01,
+            swayRadius: Math.random() * 0.9 + 0.4,
+            angle: Math.random() * Math.PI * 2,
+            spinSpeed: (Math.random() - 0.5) * 0.016,
+            rgb: tints[Math.floor(Math.random() * tints.length)],
+            opacity: isCrystal ? (Math.random() * 0.35 + 0.5) : (Math.random() * 0.4 + 0.35),
+            boostSpin: 0,
+        };
+    }, []);
+
+    // ✨ Early Winter Starlight & Warm Lantern Mote Generator
+    const createStarlight = useCallback((w, h, randomY = true) => {
+        // 70% icy aurora cyan/blue, 30% warm amber lantern glow (matching winter_bg_01.webp)
+        const isWarm = Math.random() > 0.7;
+        const rgb = isWarm
+            ? [251, 191, 36]  // Warm Lantern Gold (#fbbf24)
+            : (Math.random() > 0.5 ? [56, 189, 248] : [165, 243, 252]); // Aurora Cyan
+        return {
+            x: Math.random() * w,
+            y: randomY ? Math.random() * h : h + 15,
+            size: Math.random() * 2.2 + 1.2,
+            speedY: -(Math.random() * 0.3 + 0.12), // gently drifts upward like lantern warmth / starlight
+            speedX: (Math.random() - 0.5) * 0.25,
+            phase: Math.random() * Math.PI * 2,
+            pulseSpeed: Math.random() * 0.035 + 0.02,
+            rgb,
+            opacity: Math.random() * 0.45 + 0.35,
+        };
+    }, []);
+
     // 🧊 Cube Generator (Preserved fallback)
 
     const createCube = useCallback((w, h) => {
@@ -582,6 +646,10 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
         embersRef.current = Array.from({ length: EMBER_COUNT }, () => createHalloweenEmber(w, h, true));
 
+        snowflakesRef.current = Array.from({ length: SNOWFLAKE_COUNT }, () => createSnowflake(w, h, true));
+
+        starlightRef.current = Array.from({ length: STARLIGHT_COUNT }, () => createStarlight(w, h, true));
+
         const handleMouseMove = (e) => {
 
             const rect = canvas.getBoundingClientRect();
@@ -597,10 +665,49 @@ const SmartWeatherParticles = ({ className = '' }) => {
             mouseRef.current.y = -1000;
         };
 
-        // Tap/click a visible ghost to play a random animation and emit emoji.
+        // Tap/click a visible ghost or winter crystal to play an animation and emit emoji.
         const handleGhostPointerDown = (event) => {
-            // Ghosts are only rendered in Halloween mode and are hidden while raining.
-            if (weatherData.isRaining || getActiveTheme() !== 'halloween') return;
+            if (weatherData.isRaining) return;
+            const activeTheme = getActiveTheme();
+
+            if (activeTheme === 'winter') {
+                const rect = canvas.getBoundingClientRect();
+                const px = event.clientX - rect.left;
+                const py = event.clientY - rect.top;
+                let hitFlake = null;
+                let bestDist = Infinity;
+
+                snowflakesRef.current.forEach((f) => {
+                    if (!f.isCrystal) return;
+                    const dx = px - f.x;
+                    const dy = py - f.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+                    if (d <= f.size * 1.8 && d < bestDist) {
+                        hitFlake = f;
+                        bestDist = d;
+                    }
+                });
+
+                if (hitFlake) {
+                    hitFlake.boostSpin = 0.22;
+                    const winterEmojis = ['❄️', '✨', '⛄', '🦉', '💙', '🌟', '🧣'];
+                    ghostEmojisRef.current.push({
+                        x: hitFlake.x,
+                        y: hitFlake.y - hitFlake.size,
+                        emoji: winterEmojis[Math.floor(Math.random() * winterEmojis.length)],
+                        size: 16 + Math.random() * 10,
+                        vx: (Math.random() - 0.5) * 1.1,
+                        vy: -1.2 - Math.random() * 1.0,
+                        rotation: (Math.random() - 0.5) * 0.3,
+                        spin: (Math.random() - 0.5) * 0.02,
+                        life: 1,
+                        decay: 0.02 + Math.random() * 0.01,
+                    });
+                }
+                return;
+            }
+
+            if (activeTheme !== 'halloween') return;
 
             const rect = canvas.getBoundingClientRect();
             const px = event.clientX - rect.left;
@@ -951,6 +1058,57 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
             ctx.restore();
 
+        };
+
+        // ❄️ Early Winter Ice Crystal & Soft Snow Renderer (zero shadowBlur = 60fps)
+        const drawSnowflake = (f) => {
+            const { x, y, size, isCrystal, angle, rgb, opacity } = f;
+            const [r, g, b] = rgb;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.globalAlpha = opacity;
+
+            if (!isCrystal) {
+                // Soft snow puff with gentle radial falloff
+                const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 1.6);
+                grd.addColorStop(0, `rgba(${r},${g},${b},0.95)`);
+                grd.addColorStop(0.55, `rgba(${r},${g},${b},0.45)`);
+                grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
+                ctx.fillStyle = grd;
+                ctx.beginPath();
+                ctx.arc(0, 0, size * 1.6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            // 6-pointed geometric ice crystal
+            ctx.rotate(angle);
+            ctx.strokeStyle = `rgba(${r},${g},${b},0.92)`;
+            ctx.lineWidth = Math.max(0.9, size * 0.11);
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < 6; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -size);
+                // Little crystal chevron near tip
+                const bY = -size * 0.62;
+                const bSpread = size * 0.26;
+                ctx.moveTo(0, bY);
+                ctx.lineTo(-bSpread, bY - bSpread * 0.75);
+                ctx.moveTo(0, bY);
+                ctx.lineTo(bSpread, bY - bSpread * 0.75);
+                ctx.stroke();
+                ctx.rotate(Math.PI / 3);
+            }
+
+            // Crisp glowing center dot
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         };
 
         // 🧊 Cube Renderer (Preserved)
@@ -1450,6 +1608,104 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
                 });
 
+            } else if (currentTheme === 'winter') {
+
+                // ==========================================
+                // ❄️ MODE 3.5: EARLY WINTER FROST & STARLIGHT
+                // ==========================================
+
+                // 1. Twinkling Aurora & Warm Lantern Glow Motes
+                starlightRef.current.forEach((s) => {
+                    s.phase += s.pulseSpeed;
+                    s.y += s.speedY;
+                    s.x += s.speedX + Math.sin(s.phase) * 0.22;
+
+                    if (s.y < -15) {
+                        s.y = height + 15;
+                        s.x = Math.random() * width;
+                    }
+                    if (s.x > width + 15) s.x = -15;
+                    if (s.x < -15) s.x = width + 15;
+
+                    const pulseOp = s.opacity * (0.5 + 0.5 * Math.sin(s.phase));
+                    const [r, g, b] = s.rgb;
+
+                    ctx.save();
+                    const sGrd = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size * 2.4);
+                    sGrd.addColorStop(0, `rgba(${r},${g},${b},${pulseOp})`);
+                    sGrd.addColorStop(0.5, `rgba(${r},${g},${b},${pulseOp * 0.45})`);
+                    sGrd.addColorStop(1, `rgba(${r},${g},${b},0)`);
+                    ctx.fillStyle = sGrd;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.size * 2.4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.globalAlpha = pulseOp * 0.9;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.size * 0.65, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                // 2. Drifting 6-Pointed Ice Crystals & Soft Snowflakes
+                snowflakesRef.current.forEach((flake) => {
+                    flake.swayAngle += flake.swaySpeed;
+                    flake.x += flake.speedX + Math.sin(flake.swayAngle) * flake.swayRadius;
+                    flake.y += flake.speedY;
+                    flake.angle += flake.spinSpeed + flake.boostSpin;
+                    if (flake.boostSpin > 0.001) {
+                        flake.boostSpin *= 0.94;
+                    } else {
+                        flake.boostSpin = 0;
+                    }
+
+                    // Gentle mouse breeze interaction
+                    const dx = mx - flake.x;
+                    const dy = my - flake.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < MOUSE_RADIUS && dist > 0) {
+                        const force = (MOUSE_RADIUS - dist) / MOUSE_RADIUS;
+                        flake.x -= (dx / dist) * force * 2.2;
+                        flake.y -= (dy / dist) * force * 2.2;
+                        flake.angle += force * 0.05;
+                    }
+
+                    if (flake.y > height + 25) {
+                        flake.y = -25 - Math.random() * 30;
+                        flake.x = Math.random() * (width + 80) - 40;
+                    }
+                    if (flake.x > width + 45) flake.x = -35;
+                    if (flake.x < -45) flake.x = width + 35;
+
+                    drawSnowflake(flake);
+                });
+
+                // 3. Floating emoji reactions when a crystal is tapped
+                for (let i = ghostEmojisRef.current.length - 1; i >= 0; i--) {
+                    const emoji = ghostEmojisRef.current[i];
+                    emoji.x += emoji.vx;
+                    emoji.y += emoji.vy;
+                    emoji.vy -= 0.01;
+                    emoji.rotation += emoji.spin;
+                    emoji.life -= emoji.decay;
+
+                    if (emoji.life <= 0) {
+                        ghostEmojisRef.current.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, emoji.life);
+                    ctx.translate(emoji.x, emoji.y);
+                    ctx.rotate(emoji.rotation);
+                    ctx.font = `${emoji.size}px sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(emoji.emoji, 0, 0);
+                    ctx.restore();
+                }
+
             } else {
 
                 // ==========================================
@@ -1587,7 +1843,7 @@ const SmartWeatherParticles = ({ className = '' }) => {
 
         };
 
-    }, [createDrop, createCube, createPetal, createPollen, createHalloweenEmber, weatherData.isRaining]);
+    }, [createDrop, createCube, createPetal, createPollen, createHalloweenEmber, createSnowflake, createStarlight, weatherData.isRaining]);
 
     return (
 

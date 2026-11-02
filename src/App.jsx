@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import FileUpload from './components/features/admin/FileUpload';
 import SheetMapper from './components/features/admin/SheetMapper';
 import Dashboard from './components/features/inventory/Dashboard';
@@ -40,32 +40,15 @@ import StoreQuickAddPanel from './components/features/store/StoreQuickAddPanel';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { LowStockProvider } from './contexts/LowStockContext';
-import MasterAudit from './components/features/admin/MasterAudit';
-import ProductManager from './components/features/admin/ProductManager';
-import HQCommandCenter from './components/features/admin/HQCommandCenter';
 import Footer from './components/layout/Footer';
 import LandingPage from './components/layout/LandingPage';
 import AppLauncher from './components/layout/AppLauncher';
 import RainParticles, { getActiveTheme } from './components/ui/RainParticles';
 import SakuraCanopy from './components/ui/SakuraCanopy';
 import HalloweenCanopy from './components/ui/HalloweenCanopy';
+import WinterCanopy from './components/ui/WinterCanopy';
 import SeasonalBackground from './components/ui/SeasonalBackground';
 import LoadingOverlay from './components/ui/LoadingOverlay';
-import StoreClosingChecklist from './components/features/store/StoreClosingChecklist';
-import ManagerEvaluation from './components/features/store/ManagerEvaluation';
-import ExcelCompressor from './components/Tools/excel-compressor';
-import SalesAggregator from './components/Tools/SalesAggregator';
-import DcStockImporter from './components/Tools/DcStockImporter';
-import OdooSalesViewer from './components/Tools/OdooSalesViewer';
-import OdooStockAdjustmentView from './components/Tools/OdooStockAdjustmentView';
-import TestTaladlaoImporter from './components/Tools/TestTaladlaoImporter';
-import OdooSyncEngine from './components/Tools/OdooSyncEngine';
-import OdooTransferViewer from './components/features/odoo/OdooTransferViewer';
-import StockCountLak8 from './components/features/inventory/StockCountLak8';
-import CheckPrice from './components/Tools/CheckPrice';
-import CheckPriceUltimate from './components/Tools/CheckPriceUltimate';
-import ImageBulkUploader from './components/Tools/ImageBulkUploader';
-import InventoryOverviewDashboard from './components/features/odoo/InventoryOverviewDashboard';
 import ReloadPrompt from './components/ui/ReloadPrompt';
 import {
   CloudDatabaseIcon,
@@ -74,22 +57,40 @@ import {
   SyncOdooIcon,
   StoreRequestIcon
 } from './components/ui/AnimatedIcons';
-import DemoPlan from './components/Sanbox/DemoPlan';
-
-
-import AIChatBotFull from './components/ui/AIChatBotFull';
 import JoiWidget from './components/ui/JoiWidget';
 import BigDigitalClock from './components/ui/BigDigitalClock';
 import RefillAlertModal from './components/ui/RefillAlertModal';
-import JoahBotRoom from './components/Fun/JoahBotRoom';
-import ITToolsDashboard from './components/Tools/ITToolsDashboard';
-import BarcodeIntegrityInspector from './components/Tools/BarcodeIntegrityInspector';
-import HQCommandCenterV2 from './components/features/admin/HQCommandCenterV2';
-import MasterDataImport from './components/Tools/MasterDataImport';
-import WeatherPage from './components/features/weather/WeatherPage';
-import VisualLensSearch from './components/Tools/VisualLensSearch';
-import ReceiveCheckMockup from './components/Tools/ReceiveCheckMockup';
-import ReceiveCheckV0 from './features/receive-check/versions/ReceiveCheckV0';
+
+// ── ⚡ LAZY-LOADED TOOLS & HEAVY PAGES (Code-Splitting for Lightning Fast Home Load) ──
+const MasterAudit = lazy(() => import('./components/features/admin/MasterAudit'));
+const ProductManager = lazy(() => import('./components/features/admin/ProductManager'));
+const HQCommandCenter = lazy(() => import('./components/features/admin/HQCommandCenter'));
+const StoreClosingChecklist = lazy(() => import('./components/features/store/StoreClosingChecklist'));
+const ManagerEvaluation = lazy(() => import('./components/features/store/ManagerEvaluation'));
+const ExcelCompressor = lazy(() => import('./components/Tools/excel-compressor'));
+const SalesAggregator = lazy(() => import('./components/Tools/SalesAggregator'));
+const DcStockImporter = lazy(() => import('./components/Tools/DcStockImporter'));
+const OdooSalesViewer = lazy(() => import('./components/Tools/OdooSalesViewer'));
+const OdooStockAdjustmentView = lazy(() => import('./components/Tools/OdooStockAdjustmentView'));
+const TestTaladlaoImporter = lazy(() => import('./components/Tools/TestTaladlaoImporter'));
+const OdooSyncEngine = lazy(() => import('./components/Tools/OdooSyncEngine'));
+const OdooTransferViewer = lazy(() => import('./components/features/odoo/OdooTransferViewer'));
+const StockCountLak8 = lazy(() => import('./components/features/inventory/StockCountLak8'));
+const CheckPrice = lazy(() => import('./components/Tools/CheckPrice'));
+const CheckPriceUltimate = lazy(() => import('./components/Tools/CheckPriceUltimate'));
+const ImageBulkUploader = lazy(() => import('./components/Tools/ImageBulkUploader'));
+const InventoryOverviewDashboard = lazy(() => import('./components/features/odoo/InventoryOverviewDashboard'));
+const DemoPlan = lazy(() => import('./components/Sanbox/DemoPlan'));
+const AIChatBotFull = lazy(() => import('./components/ui/AIChatBotFull'));
+const JoahBotRoom = lazy(() => import('./components/Fun/JoahBotRoom'));
+const ITToolsDashboard = lazy(() => import('./components/Tools/ITToolsDashboard'));
+const BarcodeIntegrityInspector = lazy(() => import('./components/Tools/BarcodeIntegrityInspector'));
+const HQCommandCenterV2 = lazy(() => import('./components/features/admin/HQCommandCenterV2'));
+const MasterDataImport = lazy(() => import('./components/Tools/MasterDataImport'));
+const WeatherPage = lazy(() => import('./components/features/weather/WeatherPage'));
+const VisualLensSearch = lazy(() => import('./components/Tools/VisualLensSearch'));
+const ReceiveCheckMockup = lazy(() => import('./components/Tools/ReceiveCheckMockup'));
+const ReceiveCheckV0 = lazy(() => import('./features/receive-check/versions/ReceiveCheckV0'));
 import ITOperationsHubImg from './assets/Icons_AppJoah/ITOperationsHub.avif';
 import VisualLensCardImg from './assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 import DcStoreCardImg from './assets/Icons_AppJoah/dc-store-card.webp';
@@ -1075,6 +1076,7 @@ function AppContent() {
             <RainParticles />
             <HalloweenCanopy />
             <SakuraCanopy />
+            <WinterCanopy />
           </div>
         )}
 
@@ -1140,23 +1142,24 @@ function AppContent() {
                       {/* 🎃 Seasonal Theme Toggle Badge */}
                       {(() => {
                         const theme = getActiveTheme();
+                        const isWinter = theme === 'winter';
                         const isHalloween = theme === 'halloween';
                         const isSakura = theme === 'sakura';
                         return (
                           <button
                             onClick={() => {
-                              const next = isHalloween ? 'sakura' : isSakura ? 'cubes' : 'halloween';
+                              const next = isWinter ? 'sakura' : isSakura ? 'halloween' : isHalloween ? 'cubes' : 'winter';
                               window.__setParticleTheme(next);
                             }}
-                            title="คลิกเพื่อสลับธีม: Halloween / Sakura / Cubes"
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm ${isHalloween
+                            title="คลิกเพื่อสลับธีม: Early Winter / Sakura / Halloween / Cubes"
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm ${isWinter ? 'bg-sky-500/10 text-sky-600 dark:text-sky-300 border-sky-400/30 hover:bg-sky-500/20 shadow-sky-500/10' : isHalloween
                               ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20 shadow-purple-500/10'
                               : isSakura
                                 ? 'bg-pink-500/10 text-pink-600 dark:text-pink-300 border-pink-500/30 hover:bg-pink-500/20 shadow-pink-500/10'
                                 : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 hover:bg-slate-500/20'
                               }`}
                           >
-                            <span>{isHalloween ? '🎃 Kawaii Halloween' : isSakura ? '🌸 Sakura Blossom' : '🧊 Rubik Cubes'}</span>
+                            <span>{isWinter ? '❄️ Early Winter' : isHalloween ? '🎃 Kawaii Halloween' : isSakura ? '🌸 Sakura Blossom' : '🧊 Rubik Cubes'}</span>
                             <span className="text-[8px] opacity-75 border border-current rounded px-1 font-mono">ປ່ຽນທີມ</span>
                           </button>
                         );
@@ -2520,7 +2523,16 @@ function App() {
   return (
     <LanguageProvider>
       <LowStockProvider>
-        <AppContent />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-4 border-joah-orange border-t-transparent rounded-full animate-spin" />
+              <span className="text-white font-bold text-sm tracking-wide">ກຳລັງໂຫຼດ...</span>
+            </div>
+          </div>
+        }>
+          <AppContent />
+        </Suspense>
       </LowStockProvider>
     </LanguageProvider>
   );
