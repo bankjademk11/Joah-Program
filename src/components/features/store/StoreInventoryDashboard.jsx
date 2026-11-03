@@ -129,6 +129,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
       sivilayStoreQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].storeQty : 0,
       sivilayWarehouseQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].warehouseQty : 0,
       sivilayShelfLocation: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].shelfLocation : "",
+      sivilayWhLocations: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].whLocations : [],
     };
   };
 
@@ -227,7 +228,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
             sivilayWhPromises.push(
               supabase
                 .from('location_inventory')
-                .select('barcode_no, qty')
+                .select('barcode_no, qty, rack_location')
                 .eq('branch_id', 'ສີວິໄລ')
                 .in('barcode_no', chunk)
             );
@@ -318,7 +319,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
         sivilayStoreData.forEach(row => {
           const bc = String(row.barcode_no || '').trim();
           if (bc) {
-            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0, shelfLocation: "" };
+            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0, shelfLocation: "", whLocations: [] };
             if (row.shelf_location) sivilayMap[bc].shelfLocation = row.shelf_location;
             const q = Number(row.store_qty || 0);
             sivilayMap[bc].storeQty += q;
@@ -328,10 +329,16 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
         sivilayWhData.forEach(row => {
           const bc = String(row.barcode_no || '').trim();
           if (bc) {
-            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0 };
+            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0, shelfLocation: "", whLocations: [] };
             const q = Number(row.qty || 0);
             sivilayMap[bc].warehouseQty += q;
             sivilayMap[bc].total += q;
+            if (row.rack_location) {
+              sivilayMap[bc].whLocations.push({
+                rack: row.rack_location,
+                qty: q
+              });
+            }
           }
         });
       }

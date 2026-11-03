@@ -80,6 +80,127 @@ const StoreResultTable = ({
     const [editingOrderBarcode, setEditingOrderBarcode] = useState(null);
     const [orderCounts, setOrderCounts] = useState({}); // { [barcode]: number }
 
+    // ── 🆕 Load persistent store_ro_counts from Supabase for Phonthong ──
+    const targetBranch = currentBranch || locationSheetName || 'ໂພນຕ້ອງ';
+
+    useEffect(() => {
+        if (!isPhonthong) return;
+
+        const loadRoCounts = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('store_ro_counts')
+                    .select('barcode_no, physical_count, order_qty')
+                    .eq('branch_id', 'ໂພນຕ້ອງ');
+
+                if (error) {
+                    console.error('Error fetching store_ro_counts:', error);
+                    return;
+                }
+
+                if (data && data.length > 0) {
+                    const physMap = {};
+                    const orderMap = {};
+                    data.forEach(item => {
+                        const bc = String(item.barcode_no || '').trim();
+                        if (bc) {
+                            if (item.physical_count !== null && item.physical_count !== undefined) {
+                                physMap[bc] = Number(item.physical_count);
+                            }
+                            if (item.order_qty !== null && item.order_qty !== undefined) {
+                                orderMap[bc] = Number(item.order_qty);
+                            }
+                        }
+                    });
+                    setPhysicalCounts(physMap);
+                    setOrderCounts(orderMap);
+                }
+            } catch (err) {
+                console.error('loadRoCounts error:', err);
+            }
+        };
+
+        loadRoCounts();
+    }, [isPhonthong, refreshTrigger]);
+
+    // ── 🆕 Upsert Physical Count into Supabase (null if blank/empty) ──
+    const handleSavePhysicalCount = async (barcode, valStr) => {
+        const trimmed = valStr !== undefined && valStr !== null ? String(valStr).trim() : '';
+        const countVal = trimmed === '' ? null : Number(trimmed);
+
+        // Update local state immediately
+        setPhysicalCounts(prev => {
+            const next = { ...prev };
+            if (countVal === null) {
+                delete next[barcode];
+            } else {
+                next[barcode] = countVal;
+            }
+            return next;
+        });
+
+        // Persist to Supabase
+        try {
+            const payload = {
+                branch_id: 'ໂພນຕ້ອງ',
+                barcode_no: barcode,
+                physical_count: countVal,
+                updated_by: employeeName || currentUser || 'Phonthong Staff',
+                last_updated: new Date().toISOString()
+            };
+
+            const { error } = await supabase
+                .from('store_ro_counts')
+                .upsert(payload, { onConflict: 'branch_id, barcode_no' });
+
+            if (error) {
+                console.error('Failed to upsert physical_count:', error);
+                showError('ບັນທຶກຄ່ານັບຕົວຈິງບໍ່ສຳເລັດ');
+            }
+        } catch (err) {
+            console.error('Upsert physical_count error:', err);
+        }
+    };
+
+    // ── 🆕 Upsert Order Qty into Supabase (null if blank/empty) ──
+    const handleSaveOrderCount = async (barcode, valStr) => {
+        const trimmed = valStr !== undefined && valStr !== null ? String(valStr).trim() : '';
+        const orderVal = trimmed === '' ? null : Number(trimmed);
+
+        // Update local state immediately
+        setOrderCounts(prev => {
+            const next = { ...prev };
+            if (orderVal === null) {
+                delete next[barcode];
+            } else {
+                next[barcode] = orderVal;
+            }
+            return next;
+        });
+
+        // Persist to Supabase
+        try {
+            const payload = {
+                branch_id: 'ໂພນຕ້ອງ',
+                barcode_no: barcode,
+                order_qty: orderVal,
+                updated_by: employeeName || currentUser || 'Phonthong Staff',
+                last_updated: new Date().toISOString()
+            };
+
+            const { error } = await supabase
+                .from('store_ro_counts')
+                .upsert(payload, { onConflict: 'branch_id, barcode_no' });
+
+            if (error) {
+                console.error('Failed to upsert order_qty:', error);
+                showError('ບັນທຶກຈຳນວນສັ່ງບໍ່ສຳເລັດ');
+            }
+        } catch (err) {
+            console.error('Upsert order_qty error:', err);
+        }
+    };
+
     // --- Quick Price & Product Inspector ---
     const handleOpenQuickPrice = async (row) => {
         if (!row || !row.barcode) return;
@@ -382,9 +503,9 @@ const StoreResultTable = ({
             if (sortConfig.key === 'qty') {
                 valA = barcodeTotals[a.barcode] || 0;
                 valB = barcodeTotals[b.barcode] || 0;
-            } else if (sortConfig.key === 'sivilayTotalQty') {
-                valA = Number(a.sivilayTotalQty || 0);
-                valB = Number(b.sivilayTotalQty || 0);
+            } else if (sortConfig.key === 'sivilayWarehouseQty') {
+                valA = Number(a.sivilayWarehouseQty || 0);
+                valB = Number(b.sivilayWarehouseQty || 0);
             } else {
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
@@ -1415,7 +1536,147 @@ const StoreResultTable = ({
                         }
                     };
 
-                    if (template === 'simple') {
+                    if (template === 'ro-svl') {
+                        // --- RO SVL ORDER BILL: เอาเฉพาะสถานะ "ອາໂອ done" (สาง SVL มีพอสั่ง) ---
+                        const roSheet = workbook.addWorksheet('RO SVL Bill');
+                        addLogoToSheet(roSheet, 'ໃບບິນສັ່ງສິນຄ້າ RO ຈາກສາຂາ SVL (ສະເພາະສິນຄ້າທີ່ ອາໂອ done)');
+
+                        const roHeaders = [
+                            '#',
+                            'ບາໂຄ້ດ (Barcode)',
+                            'ຊື່ສິນຄ້າ (Product Name)',
+                            'ຈຳນວນສັ່ງ (Order Qty)',
+                            'ໂລເຄຊັ່ນ ສາງ SVL (SVL Warehouse Rack)',
+                            'ຍອດສາງ SVL (SVL WH Qty)',
+                            'ສະຖານະ RO (Status)'
+                        ];
+
+                        const hRow = roSheet.addRow(roHeaders);
+                        hRow.eachCell((cell) => {
+                            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Phetsarath OT', size: 11 };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } }; // Emerald-600
+                            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        });
+
+                        // กรองเฉพาะแถวที่สั่ง > 0 และสาง SVL พอ (svlWhQty >= orderVal -> "ອາໂອ done")
+                        const roFiltered = results.filter(res => {
+                            const val = orderCounts[res.barcode];
+                            if (val === undefined || val === null || val === '' || Number(val) <= 0) return false;
+                            const orderVal = Number(val);
+                            const svlWhQty = Number(res.sivilayWarehouseQty || 0);
+                            return svlWhQty >= orderVal;
+                        });
+
+                        roFiltered.forEach((res, i) => {
+                            const orderVal = Number(orderCounts[res.barcode]);
+                            const svlWhQty = Number(res.sivilayWarehouseQty || 0);
+                            
+                            const whRacks = res.sivilayWhLocations && res.sivilayWhLocations.length > 0
+                                ? res.sivilayWhLocations.map(l => `${l.rack}  📦${l.qty}`).join(', ')
+                                : (svlWhQty > 0 ? `ບໍ່ມີໂລສາງ  📦${svlWhQty}` : '—');
+
+                            const rowData = [
+                                i + 1,
+                                sanitize(res.barcode),
+                                sanitize(res.masterItemName || res.itemName || ''),
+                                orderVal,
+                                whRacks,
+                                svlWhQty,
+                                'ອາໂອ done'
+                            ];
+
+                            const excelRow = roSheet.addRow(rowData);
+                            excelRow.getCell(1).alignment = { horizontal: 'center' };
+                            excelRow.getCell(2).alignment = { horizontal: 'center' };
+                            excelRow.getCell(4).alignment = { horizontal: 'center' };
+                            excelRow.getCell(4).font = { bold: true, color: { argb: 'FF047857' } }; // Emerald-700
+                            excelRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+                            excelRow.getCell(6).alignment = { horizontal: 'center' };
+                            excelRow.getCell(7).alignment = { horizontal: 'center' };
+                            excelRow.getCell(7).font = { bold: true, color: { argb: 'FF059669' } };
+                            excelRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+                        });
+
+                        roSheet.columns = [
+                            { width: 6 },
+                            { width: 18 },
+                            { width: 38 },
+                            { width: 18 },
+                            { width: 30 },
+                            { width: 18 },
+                            { width: 20 }
+                        ];
+
+                    } else if (template === 'ro-dc') {
+                        // --- RO DC ORDER BILL: เอาเฉพาะสถานะ "ຕ້ອງການ ອາໂອ DC" (สาง SVL ไม่พอสั่ง) ---
+                        const dcSheet = workbook.addWorksheet('RO DC Bill');
+                        addLogoToSheet(dcSheet, 'ໃບບິນສັ່ງສິນຄ້າ RO ຈາກສາງໃຫຍ່ DC (ສະເພາະ ຕ້ອງການ ອາໂອ DC)');
+
+                        const dcHeaders = [
+                            '#',
+                            'ບາໂຄ້ດ (Barcode)',
+                            'ຊື່ສິນຄ້າ (Product Name)',
+                            'ຈຳນວນສັ່ງ DC (Order Qty From DC)',
+                            'ຍອດສັ່ງລວມ (Total Order)',
+                            'ສາງ SVL ມີ (SVL WH)',
+                            'ສະຖານະ (Status)'
+                        ];
+
+                        const hRow = dcSheet.addRow(dcHeaders);
+                        hRow.eachCell((cell) => {
+                            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Phetsarath OT', size: 11 };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } }; // Violet-600
+                            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        });
+
+                        // กรองเฉพาะแถวที่สั่ง > 0 และสาง SVL ไม่พอ (svlWhQty < orderVal -> "ຕ້ອງການ ອາໂອ DC")
+                        const roFiltered = results.filter(res => {
+                            const val = orderCounts[res.barcode];
+                            if (val === undefined || val === null || val === '' || Number(val) <= 0) return false;
+                            const orderVal = Number(val);
+                            const svlWhQty = Number(res.sivilayWarehouseQty || 0);
+                            return svlWhQty < orderVal;
+                        });
+
+                        roFiltered.forEach((res, i) => {
+                            const totalOrder = Number(orderCounts[res.barcode]);
+                            const svlWhQty = Number(res.sivilayWarehouseQty || 0);
+                            const orderFromDc = totalOrder - svlWhQty; // ส่วนต่างที่ต้องสั่งจาก DC
+
+                            const rowData = [
+                                i + 1,
+                                sanitize(res.barcode),
+                                sanitize(res.masterItemName || res.itemName || ''),
+                                orderFromDc,
+                                totalOrder,
+                                svlWhQty,
+                                'ຕ້ອງການ ອາໂອ DC'
+                            ];
+
+                            const excelRow = dcSheet.addRow(rowData);
+                            excelRow.getCell(1).alignment = { horizontal: 'center' };
+                            excelRow.getCell(2).alignment = { horizontal: 'center' };
+                            excelRow.getCell(4).alignment = { horizontal: 'center' };
+                            excelRow.getCell(4).font = { bold: true, color: { argb: 'FF6D28D9' } };
+                            excelRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } }; // Violet-100 bg
+                            excelRow.getCell(5).alignment = { horizontal: 'center' };
+                            excelRow.getCell(6).alignment = { horizontal: 'center' };
+                            excelRow.getCell(7).alignment = { horizontal: 'center' };
+                            excelRow.getCell(7).font = { bold: true, color: { argb: 'FFE11D48' } };
+                            excelRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
+                        });
+
+                        dcSheet.columns = [
+                            { width: 6 },
+                            { width: 20 },
+                            { width: 42 },
+                            { width: 24 },
+                            { width: 18 },
+                            { width: 16 },
+                            { width: 22 }
+                        ];
+
+                    } else if (template === 'simple') {
                         // SIMPLE mode only has one sheet
                         const simpleSheet = workbook.addWorksheet('Inventory Summary');
                         populateSheet(simpleSheet, dataToExport, 'ລາຍງານ Inventory Summary');
@@ -1726,6 +1987,40 @@ const StoreResultTable = ({
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('results.exportTemplate')}</p>
                                     </div>
                                     <div className="p-2">
+                                        {/* RO SVL Option */}
+                                        <button
+                                            onClick={() => handleExportWithColor('ro-svl')}
+                                            className="w-full p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/50 border border-indigo-200/70 dark:border-indigo-800/70 transition-all flex items-center gap-3.5 group text-left mb-2"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform shrink-0">
+                                                <FileSpreadsheet size={18} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="text-xs font-black text-indigo-950 dark:text-indigo-100 uppercase truncate">ອອກບິນ RO ຈາກສາຂາ SVL</p>
+                                                    <span className="text-[8px] px-1.5 py-0.5 rounded font-black bg-indigo-600 text-white shrink-0">SVL</span>
+                                                </div>
+                                                <p className="text-[9px] font-bold text-indigo-600/80 dark:text-indigo-400/80 mt-0.5 truncate">ກອງສະເພາະສິນຄ້າທີ່ "ອາໂອ done" (ສາງ SVL ພໍສັ່ງ)</p>
+                                            </div>
+                                        </button>
+
+                                        {/* RO DC Option */}
+                                        <button
+                                            onClick={() => handleExportWithColor('ro-dc')}
+                                            className="w-full p-3.5 rounded-2xl bg-violet-50/70 dark:bg-violet-950/40 hover:bg-violet-100/80 dark:hover:bg-violet-900/50 border border-violet-200/70 dark:border-violet-800/70 transition-all flex items-center gap-3.5 group text-left mb-2"
+                                        >
+                                            <div className="p-2.5 rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform shrink-0">
+                                                <FileSpreadsheet size={18} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="text-xs font-black text-violet-950 dark:text-violet-100 uppercase truncate">ອອກບິນ RO ຈາກ DC</p>
+                                                    <span className="text-[8px] px-1.5 py-0.5 rounded font-black bg-violet-600 text-white shrink-0">DC</span>
+                                                </div>
+                                                <p className="text-[9px] font-bold text-violet-600/80 dark:text-violet-400/80 mt-0.5 truncate">ກອງສະເພາະສິນຄ້າທີ່ "ຕ້ອງການ ອາໂອ DC" (ສາງ SVL ບໍ່ພໍ)</p>
+                                            </div>
+                                        </button>
+
                                         <button
                                             onClick={() => handleExportWithColor('store')}
                                             className="w-full p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center gap-4 group text-left"
@@ -1836,11 +2131,11 @@ const StoreResultTable = ({
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.category1')} & {t('results.category2')}</th>
                                     <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.productTagCol')}</th>
                                     {/* ລວມທັງໝົດ = ໜ້າຮ້ານ + ຫຼັງສາງ */}
-{!isPhonthong && (
-                                    <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
-                                        <span>ລວມທັງໝົດຂອງສາຂາ</span>
-                                    </th>
-)}
+                                    {!isPhonthong && (
+                                        <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
+                                            <span>ລວມທັງໝົດຂອງສາຂາ</span>
+                                        </th>
+                                    )}
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
@@ -1854,20 +2149,20 @@ const StoreResultTable = ({
                                             </div>
                                         </div>
                                     </th>
-                                    {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ) */}
+                                    {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ - ສະເພາະສາງ SVL) */}
                                     {isPhonthong && (
                                         <th
-                                            onClick={() => handleSort('sivilayTotalQty')}
+                                            onClick={() => handleSort('sivilayWarehouseQty')}
                                             className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-sky-50/50 dark:bg-sky-950/20 cursor-pointer hover:bg-sky-100/50 dark:hover:bg-sky-900/30 transition-colors group/sivilayhead tracking-wider"
-                                            title="ຄລິກເພື່ອລຽງລຳດັບ: ຈຳນວນທັງໝົດຂອງສາຂາ ສີວິໄລ"
+                                            title="ຄລິກເພື່ອລຽງລຳດັບ: ຈຳນວນສາງ ສີວິໄລ"
                                         >
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <div className="flex flex-col items-center">
                                                     <span>ຈຳນວນ ສີວິໄລ</span>
-                                                    <span className="text-[9px] text-sky-500/70 dark:text-sky-400/70 font-bold lowercase">(ໜ້າຮ້ານ + ສາງ)</span>
+                                                    <span className="text-[9px] text-sky-500/70 dark:text-sky-400/70 font-bold lowercase">(ສະເພາະສາງ)</span>
                                                 </div>
-                                                <div className={`transition-all duration-300 ${sortConfig.key === 'sivilayTotalQty' ? 'text-sky-500 scale-110' : 'text-sky-300 group-hover/sivilayhead:text-sky-500'}`}>
-                                                    {sortConfig.key === 'sivilayTotalQty' ? (
+                                                <div className={`transition-all duration-300 ${sortConfig.key === 'sivilayWarehouseQty' ? 'text-sky-500 scale-110' : 'text-sky-300 group-hover/sivilayhead:text-sky-500'}`}>
+                                                    {sortConfig.key === 'sivilayWarehouseQty' ? (
                                                         sortConfig.direction === 'asc' ? <ChevronDown size={16} strokeWidth={3} /> : <ChevronDown size={16} className="rotate-180" strokeWidth={3} />
                                                     ) : <ArrowUpDown size={16} strokeWidth={3} />}
                                                 </div>
@@ -1880,8 +2175,8 @@ const StoreResultTable = ({
                                             {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ */}
                                             <th className="px-6 py-6 text-center text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-950/20" title="Double click ເພື່ອໃສ່ຄ່ານັບຕົວຈິງ">
                                                 <div className="flex flex-col items-center">
-                                                    <span>ຈຳນວນຍັງເຫຼືອ</span>
-                                                    <span className="text-[9px] text-emerald-500 font-bold lowercase">ຕົວຈິງ (Double-click)</span>
+                                                    <span>ຈຳນວນຍັງເຫຼືອຕົວຈິງ</span>
+                                                    <span className="text-[9px] text-emerald-500 font-bold lowercase"> (Double-click)</span>
                                                 </div>
                                             </th>
 
@@ -1901,11 +2196,11 @@ const StoreResultTable = ({
                                                 </div>
                                             </th>
 
-                                            {/* 3. ໂລເຄຊັ່ນ svl */}
-                                            <th className="px-6 py-6 text-center text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-indigo-50/30 dark:bg-indigo-950/20">
-                                                <div className="flex flex-col items-center">
+                                            {/* 3. ໂລເຄຊັ່ນ SVL (ສະເພາະສາງ) */}
+                                            <th className="px-5 py-6 text-center text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-indigo-50/30 dark:bg-indigo-950/20 min-w-[200px]">
+                                                <div className="flex flex-col items-center gap-0.5">
                                                     <span>ໂລເຄຊັ່ນ SVL</span>
-                                                    <span className="text-[9px] text-indigo-500/80 font-bold lowercase">(SVL Rack)</span>
+                                                    <span className="text-[9px] text-indigo-500/80 font-bold lowercase">(ສະເພາະສາງ SVL)</span>
                                                 </div>
                                             </th>
 
@@ -1913,15 +2208,15 @@ const StoreResultTable = ({
                                             <th className="px-6 py-6 text-center text-xs font-black text-violet-600 dark:text-violet-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-violet-50/30 dark:bg-violet-950/20">
                                                 <div className="flex flex-col items-center">
                                                     <span>ສັ່ງຈາກ DC</span>
-                                                    <span className="text-[9px] text-violet-500/80 font-bold lowercase">(From DC)</span>
+                                                    <span className="text-[9px] text-violet-500/80 font-bold lowercase">(Order - SVL)</span>
                                                 </div>
                                             </th>
 
-                                            {/* 5. ຍອມຮັບ / ປະຕິດເສດ / ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ */}
-                                            <th className="px-6 py-6 text-center text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-rose-50/30 dark:bg-rose-950/20 min-w-[200px]">
+                                            {/* 5. ສະຖານະ RO (Status) */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-950/20 min-w-[160px]">
                                                 <div className="flex flex-col items-center">
-                                                    <span>ຍອມຮັບ / ປະຕິດເສດ</span>
-                                                    <span className="text-[9px] text-rose-500 font-bold lowercase">ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ</span>
+                                                    <span>ສະຖານະ RO</span>
+                                                    <span className="text-[9px] text-emerald-500 font-bold lowercase">(Status)</span>
                                                 </div>
                                             </th>
                                         </>
@@ -2059,35 +2354,35 @@ const StoreResultTable = ({
                                                     </div>
                                                 </td>
                                                 {/* ລວມທັງໝົດ = ໜ້າຮ້ານ(รวมทุกชั้น) + ຫຼັງສາງ + DC */}
-{!isPhonthong && (
-                                                <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
-                                                    <div className="flex flex-col items-center relative">
-                                                        <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
-                                                            {(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
-                                                        </span>
+                                                {!isPhonthong && (
+                                                    <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
+                                                        <div className="flex flex-col items-center relative">
+                                                            <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                                {(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}
+                                                            </span>
 
-                                                        {/* Hover Tooltip Breakdown: Q = F + T + D */}
-                                                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
-                                                            <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="flex justify-between gap-4"><span className="text-emerald-300">ຊັ້ນນີ້ (Rack Qty):</span> <span className="font-mono text-emerald-300">{row.qty || 0}</span></div>
-                                                                    <div className="border-t border-white/20 my-0.5"></div>
-                                                                    <div className="flex justify-between gap-4"><span>ທັງສາຂາ (All Racks F):</span> <span className="font-mono">{barcodeTotals[row.barcode] || 0}</span></div>
-                                                                    <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (T):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
-                                                                    <div className="flex justify-between gap-4"><span>DC (D):</span> <span className="font-mono">{row.dcQty || 0}</span></div>
-                                                                    <div className="border-t border-white/20 my-0.5"></div>
-                                                                    <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F(All)+T+D:</span> <span className="font-mono">{(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
+                                                            {/* Hover Tooltip Breakdown: Q = F + T + D */}
+                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/total:opacity-100 transition-opacity pointer-events-none z-20">
+                                                                <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <div className="flex justify-between gap-4"><span className="text-emerald-300">ຊັ້ນນີ້ (Rack Qty):</span> <span className="font-mono text-emerald-300">{row.qty || 0}</span></div>
+                                                                        <div className="border-t border-white/20 my-0.5"></div>
+                                                                        <div className="flex justify-between gap-4"><span>ທັງສາຂາ (All Racks F):</span> <span className="font-mono">{barcodeTotals[row.barcode] || 0}</span></div>
+                                                                        <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (T):</span> <span className="font-mono">{row.warehouseQty || 0}</span></div>
+                                                                        <div className="flex justify-between gap-4"><span>DC (D):</span> <span className="font-mono">{row.dcQty || 0}</span></div>
+                                                                        <div className="border-t border-white/20 my-0.5"></div>
+                                                                        <div className="flex justify-between gap-4 text-amber-300 font-bold"><span>Q = F(All)+T+D:</span> <span className="font-mono">{(barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)}</span></div>
+                                                                    </div>
                                                                 </div>
+                                                                <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
                                                             </div>
-                                                            <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
-                                                        </div>
 
-                                                        <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mt-1">
-                                                            Q (TOTAL)
+                                                            <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mt-1">
+                                                                Q (TOTAL)
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-)}
+                                                    </td>
+                                                )}
                                                 <td className="px-6 py-6">
                                                     <div className="flex flex-col items-center gap-1">
                                                         <div className="flex flex-col items-center px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
@@ -2096,31 +2391,17 @@ const StoreResultTable = ({
                                                         </div>
                                                     </div>
                                                 </td>
-                                                {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ) */}
+                                                {/* 🆕 สต็อกสาขา ສີວິໄລ (ສະເພາະສາຂາ ໂພນຕ້ອງ - ສະເພາະສາງ SVL) */}
                                                 {isPhonthong && (
-                                                    <td className="px-6 py-6 text-center bg-sky-50/20 dark:bg-sky-950/10 group/sivilay">
-                                                        <div className="flex flex-col items-center relative">
-                                                            <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border min-w-[70px] ${(row.sivilayTotalQty || 0) > 0 ? 'bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}>
+                                                    <td className="px-6 py-6 text-center bg-sky-50/20 dark:bg-sky-950/10">
+                                                        <div className="flex flex-col items-center">
+                                                            <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border min-w-[70px] ${(row.sivilayWarehouseQty || 0) > 0 ? 'bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}>
                                                                 <span className="text-2xl font-black leading-none">
-                                                                    {row.sivilayTotalQty || 0}
+                                                                    {row.sivilayWarehouseQty || 0}
                                                                 </span>
                                                                 <div className="text-[9px] font-black uppercase tracking-widest mt-1 opacity-80">
-                                                                    ສີວິໄລ
+                                                                    ສາງ SVL
                                                                 </div>
-                                                            </div>
-
-                                                            {/* Hover Tooltip Breakdown: Sivilay Store + Warehouse */}
-                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/sivilay:opacity-100 transition-opacity pointer-events-none z-30">
-                                                                <div className="bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-700">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <div className="font-bold text-sky-300 border-b border-slate-700 pb-1">📍 ສາຂາ ສີວິໄລ (Sivilay)</div>
-                                                                        <div className="flex justify-between gap-4"><span>ໜ້າຮ້ານ (Store):</span> <span className="font-mono text-emerald-400">{row.sivilayStoreQty || 0}</span></div>
-                                                                        <div className="flex justify-between gap-4"><span>ຫຼັງສາງ (Warehouse):</span> <span className="font-mono text-sky-400">{row.sivilayWarehouseQty || 0}</span></div>
-                                                                        <div className="border-t border-white/20 my-0.5"></div>
-                                                                        <div className="flex justify-between gap-4 font-bold text-amber-300"><span>ລວມສີວິໄລ:</span> <span className="font-mono">{row.sivilayTotalQty || 0}</span></div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 border-r border-b border-slate-700"></div>
                                                             </div>
                                                         </div>
                                                     </td>
@@ -2130,10 +2411,10 @@ const StoreResultTable = ({
                                                     <>
                                                         {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ (Double-click to edit, default null) */}
                                                         {(() => {
-                                                            const systemRemaining = Math.max(0, (barcodeTotals[row.barcode] || 0) - (row.salesQty || 0));
+                                                            const storeTotal = barcodeTotals[row.barcode] || 0;
                                                             const hasCustomCount = physicalCounts[row.barcode] !== undefined && physicalCounts[row.barcode] !== null && physicalCounts[row.barcode] !== '';
                                                             const physicalValue = hasCustomCount ? Number(physicalCounts[row.barcode]) : null;
-                                                            const diff = hasCustomCount ? (physicalValue - systemRemaining) : null;
+                                                            const diff = hasCustomCount ? (physicalValue - storeTotal) : null;
                                                             const isEditing = editingPhysicalBarcode === row.barcode;
 
                                                             return (
@@ -2154,25 +2435,20 @@ const StoreResultTable = ({
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                     onKeyDown={(e) => {
                                                                                         if (e.key === 'Enter') {
-                                                                                            const val = e.target.value.trim();
-                                                                                            setPhysicalCounts(prev => ({ ...prev, [row.barcode]: val === '' ? null : Number(val) }));
+                                                                                            handleSavePhysicalCount(row.barcode, e.target.value);
                                                                                             setEditingPhysicalBarcode(null);
                                                                                         } else if (e.key === 'Escape') {
                                                                                             setEditingPhysicalBarcode(null);
                                                                                         }
                                                                                     }}
                                                                                     onBlur={(e) => {
-                                                                                        const val = e.target.value.trim();
-                                                                                        if (val !== '') {
-                                                                                            setPhysicalCounts(prev => ({ ...prev, [row.barcode]: Number(val) }));
-                                                                                        }
+                                                                                        handleSavePhysicalCount(row.barcode, e.target.value);
                                                                                         setEditingPhysicalBarcode(null);
                                                                                     }}
                                                                                 />
                                                                             ) : (
-                                                                                <span className={`text-2xl font-black leading-none group-hover/phys:scale-110 transition-transform ${
-                                                                                    hasCustomCount ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'
-                                                                                }`}>
+                                                                                <span className={`text-2xl font-black leading-none group-hover/phys:scale-110 transition-transform ${hasCustomCount ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'
+                                                                                    }`}>
                                                                                     {hasCustomCount ? physicalValue : '—'}
                                                                                 </span>
                                                                             )}
@@ -2187,18 +2463,16 @@ const StoreResultTable = ({
                                                                         <div className="flex flex-col items-center">
                                                                             {diff !== null ? (
                                                                                 <>
-                                                                                    <span className={`text-2xl font-black leading-none ${
-                                                                                        diff < 0 
-                                                                                            ? 'text-rose-600 dark:text-rose-400' 
-                                                                                            : diff > 0 
-                                                                                            ? 'text-sky-600 dark:text-sky-400' 
+                                                                                    <span className={`text-2xl font-black leading-none ${diff < 0
+                                                                                        ? 'text-rose-600 dark:text-rose-400'
+                                                                                        : diff > 0
+                                                                                            ? 'text-sky-600 dark:text-sky-400'
                                                                                             : 'text-slate-400 dark:text-slate-500'
-                                                                                    }`}>
+                                                                                        }`}>
                                                                                         {diff > 0 ? `+${diff}` : diff}
                                                                                     </span>
-                                                                                    <div className={`text-[9px] font-black uppercase tracking-widest mt-1 ${
-                                                                                        diff < 0 ? 'text-rose-500' : diff > 0 ? 'text-sky-500' : 'text-slate-400'
-                                                                                    }`}>
+                                                                                    <div className={`text-[9px] font-black uppercase tracking-widest mt-1 ${diff < 0 ? 'text-rose-500' : diff > 0 ? 'text-sky-500' : 'text-slate-400'
+                                                                                        }`}>
                                                                                         {diff < 0 ? 'ຂາດ' : diff > 0 ? 'ເກີນ' : 'ພໍດີ'}
                                                                                     </div>
                                                                                 </>
@@ -2241,25 +2515,20 @@ const StoreResultTable = ({
                                                                                 onClick={(e) => e.stopPropagation()}
                                                                                 onKeyDown={(e) => {
                                                                                     if (e.key === 'Enter') {
-                                                                                        const val = e.target.value.trim();
-                                                                                        setOrderCounts(prev => ({ ...prev, [row.barcode]: val === '' ? null : Number(val) }));
+                                                                                        handleSaveOrderCount(row.barcode, e.target.value);
                                                                                         setEditingOrderBarcode(null);
                                                                                     } else if (e.key === 'Escape') {
                                                                                         setEditingOrderBarcode(null);
                                                                                     }
                                                                                 }}
                                                                                 onBlur={(e) => {
-                                                                                    const val = e.target.value.trim();
-                                                                                    if (val !== '') {
-                                                                                        setOrderCounts(prev => ({ ...prev, [row.barcode]: Number(val) }));
-                                                                                    }
+                                                                                    handleSaveOrderCount(row.barcode, e.target.value);
                                                                                     setEditingOrderBarcode(null);
                                                                                 }}
                                                                             />
                                                                         ) : (
-                                                                            <span className={`text-2xl font-black leading-none group-hover/order:scale-110 transition-transform ${
-                                                                                hasCustomOrder ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'
-                                                                            }`}>
+                                                                            <span className={`text-2xl font-black leading-none group-hover/order:scale-110 transition-transform ${hasCustomOrder ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'
+                                                                                }`}>
                                                                                 {hasCustomOrder ? orderValue : '—'}
                                                                             </span>
                                                                         )}
@@ -2271,56 +2540,100 @@ const StoreResultTable = ({
                                                             );
                                                         })()}
 
-                                                        {/* 3. ໂລເຄຊັ່ນ svl */}
-                                                        <td className="px-6 py-6 text-center bg-indigo-50/10 dark:bg-indigo-950/5">
-                                                            <div className="flex flex-col items-center">
-                                                                {row.sivilayShelfLocation ? (
-                                                                    <span className="px-2.5 py-1 text-xs font-black font-mono bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg shadow-sm">
-                                                                        {row.sivilayShelfLocation}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-sm font-bold text-slate-300 dark:text-slate-600">—</span>
-                                                                )}
-                                                                <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">
-                                                                    SVL RACK
+                                                        {/* 3. ໂລເຄຊັ່ນ SVL (ສະເພາະສາງ SVL) */}
+                                                        <td className="px-4 py-4 text-center bg-indigo-50/10 dark:bg-indigo-950/5 min-w-[200px]">
+                                                            <div className="flex flex-col gap-2 text-left">
+                                                                {/* ສະເພາະສາງ SVL (Warehouse Only) */}
+                                                                <div className="bg-white/80 dark:bg-slate-900/70 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 shadow-xs">
+                                                                    <div className="flex items-center justify-between text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-1.5">
+                                                                        <span className="flex items-center gap-1">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                                            ສາງ SVL
+                                                                        </span>
+                                                                        <span className="font-mono text-slate-700 dark:text-slate-200 font-extrabold text-[12px]">
+                                                                            {Number(row.sivilayWarehouseQty || 0).toLocaleString()} <span className="text-[9px] font-normal text-slate-400">ອັນ</span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-1.5 items-center">
+                                                                        {row.sivilayWhLocations && row.sivilayWhLocations.length > 0 ? (
+                                                                            row.sivilayWhLocations.map((loc, lIdx) => (
+                                                                                <span key={lIdx} className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-black font-mono bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-md shadow-2xs">
+                                                                                    <span>{loc.rack}</span>
+                                                                                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">📦{loc.qty}</span>
+                                                                                </span>
+                                                                            ))
+                                                                        ) : (
+                                                                            <span className="text-[11px] text-slate-400 italic">ບໍ່ມີໂລສາງ</span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </td>
 
-                                                        {/* 4. ສັ່ງຈາກ Dc */}
-                                                        <td className="px-6 py-6 text-center bg-violet-50/10 dark:bg-violet-950/5">
-                                                            <div className="flex flex-col items-center gap-1">
-                                                                <span className="text-lg font-black text-violet-600 dark:text-violet-400 leading-none">
-                                                                    {row.dcQty || 0}
-                                                                </span>
-                                                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-bold">
-                                                                    DC Stock
-                                                                </span>
-                                                            </div>
-                                                        </td>
+                                                        {/* 4. ສັ່ງຈາກ DC & 5. ສະຖານະ RO (Status) คำนวณแบบ Dynamic */}
+                                                        {(() => {
+                                                            const hasCustomOrder = orderCounts[row.barcode] !== undefined && orderCounts[row.barcode] !== null && orderCounts[row.barcode] !== '';
+                                                            const orderQty = hasCustomOrder ? Number(orderCounts[row.barcode]) : null;
+                                                            const svlWhQty = Number(row.sivilayWarehouseQty || 0);
 
-                                                        {/* 5. ຍອມຮັບ / ປະຕິດເສດ / ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ */}
-                                                        <td className="px-6 py-6 text-center bg-rose-50/10 dark:bg-rose-950/5">
-                                                            <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[210px] mx-auto">
-                                                                <button
-                                                                    type="button"
-                                                                    className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-500 text-white shadow-sm"
-                                                                >
-                                                                    ຍອມຮັບ
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className="px-2 py-1 text-[11px] font-bold rounded-lg bg-rose-500 text-white shadow-sm"
-                                                                >
-                                                                    ປະຕິເສດ
-                                                                </button>
-                                                                {(barcodeTotals[row.barcode] || 0) <= 0 && (
-                                                                    <span className="px-2 py-0.5 text-[9px] font-black rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                                                                        ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
+                                                            // คำนวณยอดที่ต้องสั่งจาก DC: จํานงสั่ง - สต็อกสาง SVL
+                                                            let orderFromDc = 0;
+                                                            if (orderQty !== null && orderQty > 0) {
+                                                                orderFromDc = Math.max(0, orderQty - svlWhQty);
+                                                            }
+
+                                                            // คำนวณสถานะ RO: แสดงผลเฉพาะเมื่อผู้ใช้มีการสั่ง/คำนวณ (orderQty > 0)
+                                                            let statusBadge = null;
+                                                            if (orderQty !== null && orderQty > 0) {
+                                                                if (svlWhQty >= orderQty) {
+                                                                    // สต็อกสาง SVL มีพอ
+                                                                    statusBadge = (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-sm animate-pulse">
+                                                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                                            ອາໂອ done
+                                                                        </span>
+                                                                    );
+                                                                } else {
+                                                                    // สต็อกสาง SVL ไม่พอ -> ต้องสั่ง DC
+                                                                    statusBadge = (
+                                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-black rounded-full bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 shadow-sm">
+                                                                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                                                            ຕ້ອງການ ອາໂອ DC
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                            } else {
+                                                                statusBadge = (
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className="text-lg font-bold text-slate-300 dark:text-slate-600 leading-none">—</span>
+                                                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600 mt-1 uppercase tracking-widest">ລໍຖ້າຄຳນວນ</span>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <>
+                                                                    {/* 4. ສັ່ງຈາກ DC */}
+                                                                    <td className="px-6 py-6 text-center bg-violet-50/10 dark:bg-violet-950/5">
+                                                                        <div className="flex flex-col items-center gap-1">
+                                                                            <span className={`text-2xl font-black leading-none ${orderFromDc > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                                                {hasCustomOrder ? orderFromDc : 0}
+                                                                            </span>
+                                                                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-bold">
+                                                                                DC Stock
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* 5. ສະຖານະ RO (Status) */}
+                                                                    <td className="px-6 py-6 text-center bg-emerald-50/10 dark:bg-emerald-950/5 min-w-[160px]">
+                                                                        <div className="flex flex-col items-center justify-center gap-1.5">
+                                                                            {statusBadge}
+                                                                        </div>
+                                                                    </td>
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </>
                                                 )}
                                                 {/* ຈຳນວນ ຫຼັງສາງ */}
@@ -2551,8 +2864,8 @@ const StoreResultTable = ({
                                             </div>
                                             {isPhonthong && (
                                                 <div className="flex flex-col items-center py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-800/30">
-                                                    <span className={`text-lg font-black leading-none ${(row.sivilayTotalQty || 0) > 0 ? 'text-sky-600 dark:text-sky-300' : 'text-slate-300 dark:text-slate-600'}`}>{row.sivilayTotalQty || 0}</span>
-                                                    <span className="text-[8px] font-black text-sky-500 uppercase tracking-wider mt-0.5">ສີວິໄລ</span>
+                                                    <span className={`text-lg font-black leading-none ${(row.sivilayWarehouseQty || 0) > 0 ? 'text-sky-600 dark:text-sky-300' : 'text-slate-300 dark:text-slate-600'}`}>{row.sivilayWarehouseQty || 0}</span>
+                                                    <span className="text-[8px] font-black text-sky-500 uppercase tracking-wider mt-0.5">ສາງ SVL</span>
                                                 </div>
                                             )}
                                             {!isPhonthong && (
@@ -2720,17 +3033,17 @@ const StoreResultTable = ({
 
             {/* 🔍 Mini CheckPrice Quick Inspector Modal (Rendered via Portal to avoid scrolling bugs) */}
             {quickPriceProduct && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in font-lao select-none overflow-y-auto"
                     onClick={() => setQuickPriceProduct(null)}
                 >
-                    <div 
+                    <div
                         className="w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-900/95 border border-white/20 rounded-3xl shadow-2xl animate-fade-in-up flex flex-col relative my-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Top Gradient Stripe */}
                         <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500" />
-                        
+
                         {/* Close Button */}
                         <button
                             onClick={() => setQuickPriceProduct(null)}
@@ -2740,9 +3053,9 @@ const StoreResultTable = ({
                         </button>
 
                         <div className="p-5 sm:p-6 flex flex-col items-center text-center gap-3.5">
-                            
+
                             {/* Product Image Frame (Click to Zoom) */}
-                            <div 
+                            <div
                                 onClick={() => setZoomImage(true)}
                                 className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl bg-slate-950/90 border-2 border-white/15 p-2.5 overflow-hidden flex items-center justify-center shadow-inner group cursor-zoom-in hover:border-emerald-400/60 transition-all duration-300"
                                 title="ຄລິກເພື່ອເບິ່ງຮູບຂະໜາດເຕັມ (Click to view full image)"
@@ -2841,23 +3154,23 @@ const StoreResultTable = ({
 
             {/* 🔍 Full-Size Image Lightbox Modal */}
             {zoomImage && quickPriceProduct && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[100000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in select-none"
                     onClick={() => setZoomImage(false)}
                 >
-                    <button 
+                    <button
                         onClick={() => setZoomImage(false)}
                         className="absolute top-6 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20 shadow-2xl z-30"
                         title="ປິດຮູບຂະໜາດເຕັມ (Close Full View)"
                     >
                         <X size={24} />
                     </button>
-                    <div 
+                    <div
                         className="relative max-w-[90vw] max-h-[85vh] flex flex-col items-center gap-3 animate-fade-in-up"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <img 
-                            src={quickPriceProduct.image_url} 
+                        <img
+                            src={quickPriceProduct.image_url}
                             alt={quickPriceProduct.product_name}
                             className="max-w-[90vw] max-h-[80vh] object-contain rounded-3xl border-2 border-white/20 shadow-[0_0_80px_rgba(0,0,0,0.8)] bg-slate-950/60 p-4"
                         />
