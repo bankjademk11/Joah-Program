@@ -2124,12 +2124,12 @@ const StoreResultTable = ({
                                                 {/* 🆕 ສາຂາ ໂພນຕ້ອງ: ເພີ່ມ 5 ຫ້ອງໃໝ່ (Placeholder) */}
                                                 {isPhonthong && (
                                                     <>
-                                                        {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ (Double-click to edit) */}
+                                                        {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ (Double-click to edit, default null) */}
                                                         {(() => {
                                                             const systemRemaining = Math.max(0, (barcodeTotals[row.barcode] || 0) - (row.salesQty || 0));
-                                                            const hasCustomCount = physicalCounts[row.barcode] !== undefined && physicalCounts[row.barcode] !== '';
-                                                            const physicalValue = hasCustomCount ? Number(physicalCounts[row.barcode]) : systemRemaining;
-                                                            const diff = physicalValue - systemRemaining;
+                                                            const hasCustomCount = physicalCounts[row.barcode] !== undefined && physicalCounts[row.barcode] !== null && physicalCounts[row.barcode] !== '';
+                                                            const physicalValue = hasCustomCount ? Number(physicalCounts[row.barcode]) : null;
+                                                            const diff = hasCustomCount ? (physicalValue - systemRemaining) : null;
                                                             const isEditing = editingPhysicalBarcode === row.barcode;
 
                                                             return (
@@ -2137,20 +2137,21 @@ const StoreResultTable = ({
                                                                     <td
                                                                         onDoubleClick={() => setEditingPhysicalBarcode(row.barcode)}
                                                                         className="px-6 py-6 text-center bg-emerald-50/10 dark:bg-emerald-950/5 cursor-pointer hover:bg-emerald-100/30 dark:hover:bg-emerald-900/20 transition-colors group/phys"
-                                                                        title="Double click ເພື່ອແກ້ໄຂຄ່ານັບຕົວຈິງ"
+                                                                        title="Double click ເພື່ອກອກຄ່ານັບຕົວຈິງ"
                                                                     >
                                                                         <div className="flex flex-col items-center">
                                                                             {isEditing ? (
                                                                                 <input
                                                                                     type="number"
                                                                                     autoFocus
-                                                                                    defaultValue={physicalValue}
+                                                                                    defaultValue={hasCustomCount ? physicalValue : ''}
+                                                                                    placeholder="0"
                                                                                     className="w-20 px-2 py-1 text-center font-black text-xl text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border-2 border-emerald-500 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                     onKeyDown={(e) => {
                                                                                         if (e.key === 'Enter') {
                                                                                             const val = e.target.value.trim();
-                                                                                            setPhysicalCounts(prev => ({ ...prev, [row.barcode]: val === '' ? systemRemaining : Number(val) }));
+                                                                                            setPhysicalCounts(prev => ({ ...prev, [row.barcode]: val === '' ? null : Number(val) }));
                                                                                             setEditingPhysicalBarcode(null);
                                                                                         } else if (e.key === 'Escape') {
                                                                                             setEditingPhysicalBarcode(null);
@@ -2165,12 +2166,14 @@ const StoreResultTable = ({
                                                                                     }}
                                                                                 />
                                                                             ) : (
-                                                                                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none group-hover/phys:scale-110 transition-transform">
-                                                                                    {physicalValue}
+                                                                                <span className={`text-2xl font-black leading-none group-hover/phys:scale-110 transition-transform ${
+                                                                                    hasCustomCount ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'
+                                                                                }`}>
+                                                                                    {hasCustomCount ? physicalValue : '—'}
                                                                                 </span>
                                                                             )}
                                                                             <div className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-widest mt-1">
-                                                                                {hasCustomCount ? 'ນັບຕົວຈິງ' : 'ຕົວຈິງ'}
+                                                                                {hasCustomCount ? 'ນັບຕົວຈິງ' : 'ຍັງບໍ່ໄດ້ນັບ'}
                                                                             </div>
                                                                         </div>
                                                                     </td>
@@ -2178,20 +2181,33 @@ const StoreResultTable = ({
                                                                     {/* 🆕 1.1 ສ່ວນຕ່າງ (Diff) */}
                                                                     <td className="px-6 py-6 text-center bg-rose-50/10 dark:bg-rose-950/5">
                                                                         <div className="flex flex-col items-center">
-                                                                            <span className={`text-2xl font-black leading-none ${
-                                                                                diff < 0 
-                                                                                    ? 'text-rose-600 dark:text-rose-400' 
-                                                                                    : diff > 0 
-                                                                                    ? 'text-sky-600 dark:text-sky-400' 
-                                                                                    : 'text-slate-400 dark:text-slate-500'
-                                                                            }`}>
-                                                                                {diff > 0 ? `+${diff}` : diff}
-                                                                            </span>
-                                                                            <div className={`text-[9px] font-black uppercase tracking-widest mt-1 ${
-                                                                                diff < 0 ? 'text-rose-500' : diff > 0 ? 'text-sky-500' : 'text-slate-400'
-                                                                            }`}>
-                                                                                {diff < 0 ? 'ຂາດ' : diff > 0 ? 'ເກີນ' : 'ພໍດີ'}
-                                                                            </div>
+                                                                            {diff !== null ? (
+                                                                                <>
+                                                                                    <span className={`text-2xl font-black leading-none ${
+                                                                                        diff < 0 
+                                                                                            ? 'text-rose-600 dark:text-rose-400' 
+                                                                                            : diff > 0 
+                                                                                            ? 'text-sky-600 dark:text-sky-400' 
+                                                                                            : 'text-slate-400 dark:text-slate-500'
+                                                                                    }`}>
+                                                                                        {diff > 0 ? `+${diff}` : diff}
+                                                                                    </span>
+                                                                                    <div className={`text-[9px] font-black uppercase tracking-widest mt-1 ${
+                                                                                        diff < 0 ? 'text-rose-500' : diff > 0 ? 'text-sky-500' : 'text-slate-400'
+                                                                                    }`}>
+                                                                                        {diff < 0 ? 'ຂາດ' : diff > 0 ? 'ເກີນ' : 'ພໍດີ'}
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <span className="text-xl font-bold text-slate-300 dark:text-slate-600 leading-none">
+                                                                                        —
+                                                                                    </span>
+                                                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                                                        ລໍຖ້າຄ່ານັບ
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
                                                                         </div>
                                                                     </td>
                                                                 </>
