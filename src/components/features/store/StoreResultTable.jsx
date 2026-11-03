@@ -76,6 +76,10 @@ const StoreResultTable = ({
     const [editingPhysicalBarcode, setEditingPhysicalBarcode] = useState(null);
     const [physicalCounts, setPhysicalCounts] = useState({}); // { [barcode]: number }
 
+    // 🆕 State for Order Qty (ຈຳນວນສັ່ງ Double-click)
+    const [editingOrderBarcode, setEditingOrderBarcode] = useState(null);
+    const [orderCounts, setOrderCounts] = useState({}); // { [barcode]: number }
+
     // --- Quick Price & Product Inspector ---
     const handleOpenQuickPrice = async (row) => {
         if (!row || !row.barcode) return;
@@ -1890,10 +1894,10 @@ const StoreResultTable = ({
                                             </th>
 
                                             {/* 2. ຈຳນວນສັ່ງ */}
-                                            <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-950/20">
+                                            <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-950/20" title="Double click ເພື່ອກອກຈຳນວນສັ່ງ">
                                                 <div className="flex flex-col items-center">
                                                     <span>ຈຳນວນສັ່ງ</span>
-                                                    <span className="text-[9px] text-amber-500/80 font-bold lowercase">(Order)</span>
+                                                    <span className="text-[9px] text-amber-500/80 font-bold lowercase">(Double-click)</span>
                                                 </div>
                                             </th>
 
@@ -2214,20 +2218,58 @@ const StoreResultTable = ({
                                                             );
                                                         })()}
 
-                                                        {/* 2. ຈຳນວນສັ່ງ */}
-                                                        <td className="px-6 py-6 text-center bg-amber-50/10 dark:bg-amber-950/5">
-                                                            <div className="flex flex-col items-center">
-                                                                <input
-                                                                    type="number"
-                                                                    placeholder="0"
-                                                                    className="w-20 px-2 py-1.5 text-center font-black text-amber-600 dark:text-amber-400 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-700/60 rounded-xl shadow-sm focus:outline-none"
-                                                                    readOnly
-                                                                />
-                                                                <div className="text-[9px] font-bold text-amber-500/70 uppercase tracking-widest mt-1">
-                                                                    ສັ່ງ
-                                                                </div>
-                                                            </div>
-                                                        </td>
+                                                        {/* 2. ຈຳນວນສັ່ງ (Double-click to edit, default null) */}
+                                                        {(() => {
+                                                            const hasCustomOrder = orderCounts[row.barcode] !== undefined && orderCounts[row.barcode] !== null && orderCounts[row.barcode] !== '';
+                                                            const orderValue = hasCustomOrder ? Number(orderCounts[row.barcode]) : null;
+                                                            const isEditingOrder = editingOrderBarcode === row.barcode;
+
+                                                            return (
+                                                                <td
+                                                                    onDoubleClick={() => setEditingOrderBarcode(row.barcode)}
+                                                                    className="px-6 py-6 text-center bg-amber-50/10 dark:bg-amber-950/5 cursor-pointer hover:bg-amber-100/30 dark:hover:bg-amber-900/20 transition-colors group/order"
+                                                                    title="Double click ເພື່ອກອກຈຳນວນສັ່ງ"
+                                                                >
+                                                                    <div className="flex flex-col items-center">
+                                                                        {isEditingOrder ? (
+                                                                            <input
+                                                                                type="number"
+                                                                                autoFocus
+                                                                                defaultValue={hasCustomOrder ? orderValue : ''}
+                                                                                placeholder="0"
+                                                                                className="w-20 px-2 py-1 text-center font-black text-xl text-amber-600 dark:text-amber-400 bg-white dark:bg-slate-800 border-2 border-amber-500 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') {
+                                                                                        const val = e.target.value.trim();
+                                                                                        setOrderCounts(prev => ({ ...prev, [row.barcode]: val === '' ? null : Number(val) }));
+                                                                                        setEditingOrderBarcode(null);
+                                                                                    } else if (e.key === 'Escape') {
+                                                                                        setEditingOrderBarcode(null);
+                                                                                    }
+                                                                                }}
+                                                                                onBlur={(e) => {
+                                                                                    const val = e.target.value.trim();
+                                                                                    if (val !== '') {
+                                                                                        setOrderCounts(prev => ({ ...prev, [row.barcode]: Number(val) }));
+                                                                                    }
+                                                                                    setEditingOrderBarcode(null);
+                                                                                }}
+                                                                            />
+                                                                        ) : (
+                                                                            <span className={`text-2xl font-black leading-none group-hover/order:scale-110 transition-transform ${
+                                                                                hasCustomOrder ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'
+                                                                            }`}>
+                                                                                {hasCustomOrder ? orderValue : '—'}
+                                                                            </span>
+                                                                        )}
+                                                                        <div className="text-[9px] font-bold text-amber-500/70 uppercase tracking-widest mt-1">
+                                                                            {hasCustomOrder ? 'ຈຳນວນສັ່ງ' : 'ຍັງບໍ່ໄດ້ສັ່ງ'}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })()}
 
                                                         {/* 3. ໂລເຄຊັ່ນ svl */}
                                                         <td className="px-6 py-6 text-center bg-indigo-50/10 dark:bg-indigo-950/5">
