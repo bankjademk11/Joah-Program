@@ -128,6 +128,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
       sivilayTotalQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].total : 0,
       sivilayStoreQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].storeQty : 0,
       sivilayWarehouseQty: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].warehouseQty : 0,
+      sivilayShelfLocation: (sivilayMap && sivilayMap[bc]) ? sivilayMap[bc].shelfLocation : "",
     };
   };
 
@@ -219,7 +220,7 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
             sivilayStorePromises.push(
               supabase
                 .from('store_inventory')
-                .select('barcode_no, store_qty')
+                .select('barcode_no, store_qty, shelf_location')
                 .eq('branch_id', 'ສີວິໄລ')
                 .in('barcode_no', chunk)
             );
@@ -317,7 +318,8 @@ const StoreInventoryDashboard = ({ onBack, currentUser, isAdmin, initialBranch }
         sivilayStoreData.forEach(row => {
           const bc = String(row.barcode_no || '').trim();
           if (bc) {
-            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0 };
+            if (!sivilayMap[bc]) sivilayMap[bc] = { total: 0, storeQty: 0, warehouseQty: 0, shelfLocation: "" };
+            if (row.shelf_location) sivilayMap[bc].shelfLocation = row.shelf_location;
             const q = Number(row.store_qty || 0);
             sivilayMap[bc].storeQty += q;
             sivilayMap[bc].total += q;

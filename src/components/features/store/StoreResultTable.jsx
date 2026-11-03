@@ -1828,9 +1828,11 @@ const StoreResultTable = ({
                                     <th className="px-6 py-6 text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.category1')} & {t('results.category2')}</th>
                                     <th className="px-6 py-6 text-left text-sm font-black text-slate-800 dark:text-slate-200 border-b-2 border-slate-200 dark:border-slate-700 tracking-wider">{t('results.productTagCol')}</th>
                                     {/* ລວມທັງໝົດ = ໜ້າຮ້ານ + ຫຼັງສາງ */}
+{!isPhonthong && (
                                     <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
                                         <span>ລວມທັງໝົດຂອງສາຂາ</span>
                                     </th>
+)}
                                     <th
                                         onClick={() => handleSort('qty')}
                                         className="px-6 py-6 text-center text-sm font-black text-emerald-600 dark:text-emerald-400 border-b-2 border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group/head tracking-wider"
@@ -1863,6 +1865,50 @@ const StoreResultTable = ({
                                                 </div>
                                             </div>
                                         </th>
+                                    )}
+                                    {/* 🆕 ສາຂາ ໂພນຕ້ອງ: ເພີ່ມ 5 ຫ້ອງໃໝ່ (Placeholder) */}
+                                    {isPhonthong && (
+                                        <>
+                                            {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-950/20">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ຈຳນວນຍັງເຫຼືອ</span>
+                                                    <span className="text-[9px] text-emerald-500 font-bold lowercase">ຕົວຈິງ</span>
+                                                </div>
+                                            </th>
+
+                                            {/* 2. ຈຳນວນສັ່ງ */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-amber-50/30 dark:bg-amber-950/20">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ຈຳນວນສັ່ງ</span>
+                                                    <span className="text-[9px] text-amber-500/80 font-bold lowercase">(Order)</span>
+                                                </div>
+                                            </th>
+
+                                            {/* 3. ໂລເຄຊັ່ນ svl */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-indigo-50/30 dark:bg-indigo-950/20">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ໂລເຄຊັ່ນ SVL</span>
+                                                    <span className="text-[9px] text-indigo-500/80 font-bold lowercase">(SVL Rack)</span>
+                                                </div>
+                                            </th>
+
+                                            {/* 4. ສັ່ງຈາກ Dc */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-violet-600 dark:text-violet-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-violet-50/30 dark:bg-violet-950/20">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ສັ່ງຈາກ DC</span>
+                                                    <span className="text-[9px] text-violet-500/80 font-bold lowercase">(From DC)</span>
+                                                </div>
+                                            </th>
+
+                                            {/* 5. ຍອມຮັບ / ປະຕິດເສດ / ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ */}
+                                            <th className="px-6 py-6 text-center text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700 bg-rose-50/30 dark:bg-rose-950/20 min-w-[200px]">
+                                                <div className="flex flex-col items-center">
+                                                    <span>ຍອມຮັບ / ປະຕິດເສດ</span>
+                                                    <span className="text-[9px] text-rose-500 font-bold lowercase">ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ</span>
+                                                </div>
+                                            </th>
+                                        </>
                                     )}
                                     {!isPhonthong && (
                                         <th className="px-6 py-6 text-center text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-700">
@@ -1997,6 +2043,7 @@ const StoreResultTable = ({
                                                     </div>
                                                 </td>
                                                 {/* ລວມທັງໝົດ = ໜ້າຮ້ານ(รวมทุกชั้น) + ຫຼັງສາງ + DC */}
+{!isPhonthong && (
                                                 <td className="px-6 py-6 text-center bg-amber-50/30 dark:bg-amber-900/10 group/total">
                                                     <div className="flex flex-col items-center relative">
                                                         <span className={`text-2xl font-black leading-none ${((barcodeTotals[row.barcode] || 0) + (row.warehouseQty || 0) + (row.dcQty || 0)) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}>
@@ -2024,6 +2071,7 @@ const StoreResultTable = ({
                                                         </div>
                                                     </div>
                                                 </td>
+)}
                                                 <td className="px-6 py-6">
                                                     <div className="flex flex-col items-center gap-1">
                                                         <div className="flex flex-col items-center px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50 min-w-[70px]">
@@ -2060,6 +2108,88 @@ const StoreResultTable = ({
                                                             </div>
                                                         </div>
                                                     </td>
+                                                )}
+                                                {/* 🆕 ສາຂາ ໂພນຕ້ອງ: ເພີ່ມ 5 ຫ້ອງໃໝ່ (Placeholder) */}
+                                                {isPhonthong && (
+                                                    <>
+                                                        {/* 1. ຈຳນວນຍັງເຫຼືອ ຕົວຈິງ */}
+                                                        <td className="px-6 py-6 text-center bg-emerald-50/10 dark:bg-emerald-950/5">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                                                                    {Math.max(0, (barcodeTotals[row.barcode] || 0) - (row.salesQty || 0))}
+                                                                </span>
+                                                                <div className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-widest mt-1">
+                                                                    ຕົວຈິງ
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* 2. ຈຳນວນສັ່ງ */}
+                                                        <td className="px-6 py-6 text-center bg-amber-50/10 dark:bg-amber-950/5">
+                                                            <div className="flex flex-col items-center">
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="0"
+                                                                    className="w-20 px-2 py-1.5 text-center font-black text-amber-600 dark:text-amber-400 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-700/60 rounded-xl shadow-sm focus:outline-none"
+                                                                    readOnly
+                                                                />
+                                                                <div className="text-[9px] font-bold text-amber-500/70 uppercase tracking-widest mt-1">
+                                                                    ສັ່ງ
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* 3. ໂລເຄຊັ່ນ svl */}
+                                                        <td className="px-6 py-6 text-center bg-indigo-50/10 dark:bg-indigo-950/5">
+                                                            <div className="flex flex-col items-center">
+                                                                {row.sivilayShelfLocation ? (
+                                                                    <span className="px-2.5 py-1 text-xs font-black font-mono bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg shadow-sm">
+                                                                        {row.sivilayShelfLocation}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-sm font-bold text-slate-300 dark:text-slate-600">—</span>
+                                                                )}
+                                                                <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">
+                                                                    SVL RACK
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* 4. ສັ່ງຈາກ Dc */}
+                                                        <td className="px-6 py-6 text-center bg-violet-50/10 dark:bg-violet-950/5">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <span className="text-lg font-black text-violet-600 dark:text-violet-400 leading-none">
+                                                                    {row.dcQty || 0}
+                                                                </span>
+                                                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-bold">
+                                                                    DC Stock
+                                                                </span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* 5. ຍອມຮັບ / ປະຕິດເສດ / ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ */}
+                                                        <td className="px-6 py-6 text-center bg-rose-50/10 dark:bg-rose-950/5">
+                                                            <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[210px] mx-auto">
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-500 text-white shadow-sm"
+                                                                >
+                                                                    ຍອມຮັບ
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-2 py-1 text-[11px] font-bold rounded-lg bg-rose-500 text-white shadow-sm"
+                                                                >
+                                                                    ປະຕິເສດ
+                                                                </button>
+                                                                {(barcodeTotals[row.barcode] || 0) <= 0 && (
+                                                                    <span className="px-2 py-0.5 text-[9px] font-black rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                                                        ສິນຄ້າ 0 ຕ້ອງການ ອາໂອ
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </>
                                                 )}
                                                 {/* ຈຳນວນ ຫຼັງສາງ */}
                                                 {!isPhonthong && (
