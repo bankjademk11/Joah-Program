@@ -10,21 +10,9 @@ import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_
 
 const DEFAULT_AI_API_URL = 'https://bankjademk11-joah-lens-search.hf.space';
 
-// Aggressively purge any stale legacy tunnel URLs immediately
-try {
-  const saved = typeof window !== 'undefined' ? localStorage.getItem('joah_lens_api_url') : null;
-  if (saved && (!saved.includes('modal.run') && !saved.includes('hf.space'))) {
-    localStorage.removeItem('joah_lens_api_url');
-  }
-} catch {}
-
 export function getAiApiUrl() {
   try {
     const custom = typeof window !== 'undefined' ? localStorage.getItem('joah_lens_api_url') : null;
-    if (custom && (!custom.includes('modal.run') && !custom.includes('hf.space'))) {
-      localStorage.removeItem('joah_lens_api_url');
-      return DEFAULT_AI_API_URL;
-    }
     return custom || DEFAULT_AI_API_URL;
   } catch {
     return DEFAULT_AI_API_URL;
@@ -95,27 +83,20 @@ export default function VisualLensSearch({ onBack, onSelectProduct, branchId = '
   }, []);
 
 
-  // Modal scales to zero when idle; a cold start takes ~10-35s (see Modal logs),
-  // so retry a few times with a generous timeout before showing "offline".
   async function checkService() {
     const apiUrl = getAiApiUrl();
     setServiceOnline(null);
-    const MAX_ATTEMPTS = 3;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45000);
-      try {
-        const res = await fetch(`${apiUrl}/`, { method: 'GET', cache: 'no-store', signal: controller.signal });
-        clearTimeout(timer);
-        if (res.ok) {
-          setServiceOnline(true);
-          return;
-        }
-      } catch (err) {
-        clearTimeout(timer);
-        console.warn(`[VisualLensSearch] Health check ${attempt}/${MAX_ATTEMPTS} failed for:`, apiUrl, err);
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${apiUrl}/`, { method: 'GET', cache: 'no-store', signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        setServiceOnline(true);
+        return;
       }
-      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 3000));
+    } catch (err) {
+      console.warn('[VisualLensSearch] API Health check notice:', err.message);
     }
     setServiceOnline(false);
   }

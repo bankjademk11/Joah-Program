@@ -15,7 +15,7 @@ import {
 import { supabase } from './utils/supabaseClient';
 import { fetchMasterFromSupabase, syncMasterDataToSupabase, syncLocationResultsToSupabase, fetchLocationFromSupabase, fetchOdooFromSupabase, logStoreInventoryHistory, fetchDcFromSupabase, fetchStoreInventoryFromSupabase } from './utils/supabaseSync';
 import HistoryLog from './components/features/inventory/HistoryLog';
-import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box, Tag, Terminal, Wrench, UserCheck, Star } from 'lucide-react';
+import { RefreshCw, Database, UploadCloud, Upload, LayoutDashboard, Database as DBIcon, Play, Moon, Sun, X, RotateCw, Sparkles, ShieldCheck, History, Trash2, CheckCircle, Wifi, WifiOff, Bell, ClipboardCheck, FileArchive, BarChart3, ChevronDown, TrendingUp, TrendingDown, Bot, Box, Tag, Terminal, Wrench, UserCheck, Star, AlertTriangle } from 'lucide-react';
 import joahLogo from './assets/Joah.jpeg';
 import databaseUrl from './assets/DataBaseJoah.xlsx';
 import imgImportFile from './assets/ImportFile.png';
@@ -1642,37 +1642,67 @@ function AppContent() {
                     </div>
                   )}
 
-                  {/* Joah Lens - Visual Product Search Card */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-sm hover:shadow-xl hover:border-violet-500/30 transition-all group">
-                    <div className="w-full h-36 bg-slate-900 relative overflow-hidden">
+                  {/* Joah Lens - Visual Product Search Card (Crime Scene / Under Maintenance) */}
+                  <div className="relative bg-white dark:bg-slate-900 border-2 border-amber-500/60 dark:border-amber-500/50 rounded-2xl overflow-hidden flex flex-col w-full sm:w-[340px] shadow-xl select-none group">
+                    {/* Hazard warning stripe header */}
+                    <div className="w-full h-2 z-30 shrink-0" style={{ background: 'repeating-linear-gradient(45deg, #facc15, #facc15 12px, #000 12px, #000 24px)' }} />
+
+                    {/* Police Tape / Crime Scene diagonal overlays across the card */}
+                    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+                      {/* Top Diagonal Police Tape */}
+                      <div className="absolute -left-12 top-9 w-[140%] -rotate-12 bg-yellow-400 text-black font-black text-[11px] tracking-widest uppercase py-1 px-4 shadow-[0_4px_12px_rgba(0,0,0,0.8)] border-y-2 border-black flex items-center justify-around">
+                        <span>⚠️ POLICE LINE</span>
+                        <span>DO NOT CROSS</span>
+                        <span>CRIME SCENE ⚠️</span>
+                      </div>
+                      {/* Bottom Diagonal Caution Tape */}
+                      <div className="absolute -left-12 bottom-16 w-[140%] rotate-8 bg-amber-400 text-black font-black text-[10px] tracking-widest uppercase py-1 px-4 shadow-[0_4px_12px_rgba(0,0,0,0.8)] border-y-2 border-black flex items-center justify-around">
+                        <span>🚧 CAUTION</span>
+                        <span>ຫ້າມຜ່ານ</span>
+                        <span>ປິດປັບປຸງຊົ່ວຄາວ 🚧</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-36 bg-slate-950 relative overflow-hidden">
                       <img
                         src={VisualLensCardImg}
                         alt="Joah Lens Visual Search"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-cover filter grayscale contrast-125 brightness-50"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-violet-600/90 text-white shadow-lg backdrop-blur-md border border-violet-400/30">
-                        AI LENS
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent pointer-events-none" />
+                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-400 text-black shadow-lg border border-black flex items-center gap-1.5 z-20">
+                        <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                        🚨 CRIME SCENE
                       </span>
                     </div>
 
-                    <div className="p-6 flex flex-col gap-4 w-full">
+                    <div className="p-6 flex flex-col gap-4 w-full relative z-10 bg-slate-900/50">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Joah Lens Search</h3>
-                          <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
+                          <h3 className="text-lg font-bold text-slate-400 dark:text-slate-400 line-through decoration-amber-500 decoration-2">
+                            Joah Lens Search
+                          </h3>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                            🚧 ປິດຊົ່ວຄາວ
+                          </span>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">ຄົ້ນຫາສິນຄ້າດ້ວຍຮູບພາບອັດສະລິຍະ (AI Visual Match)</p>
+                        <p className="text-xs text-amber-400/90 font-medium">
+                          🚨 ພື້ນທີ່ເກີດເຫດ: ປິດກັ້ນພື້ນທີ່ປັບປຸງລະບົບຊົ່ວຄາວ (Under Investigation)
+                        </p>
                       </div>
 
                       <button
-                        onClick={() => setStep('visual-lens-search')}
-                        className="w-full py-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-600/25 cursor-pointer active:scale-[0.98]"
+                        type="button"
+                        disabled
+                        className="w-full py-2.5 bg-slate-800/90 text-amber-300 text-sm font-bold rounded-xl flex items-center justify-center gap-2 border border-amber-500/40 cursor-not-allowed shadow-inner"
                       >
-                        <Sparkles size={16} />
-                        <span>ເປີດ Joah Lens (ຄົ້ນຫາດ້ວຍຮູບ)</span>
+                        <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+                        <span>🚧 ພື້ນທີ່ເກີດເຫດ (ປິດໃຊ້ງານຊົ່ວຄາວ)</span>
                       </button>
                     </div>
+
+                    {/* Hazard warning stripe footer */}
+                    <div className="w-full h-1.5 z-30 shrink-0 mt-auto" style={{ background: 'repeating-linear-gradient(-45deg, #facc15, #facc15 12px, #000 12px, #000 24px)' }} />
                   </div>
 
                   {/* Admin only: Joi AI Chat Full-page (Restored) */}
