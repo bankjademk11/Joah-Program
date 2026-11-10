@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Camera, Upload, X, CheckCircle2,
   Copy, Scan, Layers, ExternalLink, SwitchCamera, RefreshCw, Tag,
-  Code2, Sparkles, ChevronLeft, ChevronRight
+  Code2, Sparkles, ChevronLeft, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { getProductImageUrl, handleImageError } from '../../utils/productImageUtils';
 import VisualLensHeroImg from '../../assets/Icons_AppJoah/VisualLensSearch_card_image.webp';
 
-const DEFAULT_AI_API_URL = 'https://bankjademk11--joah-lens-search-fastapi-app.us-east.modal.run';
+const DEFAULT_AI_API_URL = 'https://bankjademk11-joah-lens-search.hf.space';
 
 // Aggressively purge any stale legacy tunnel URLs immediately
 try {

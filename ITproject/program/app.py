@@ -14,21 +14,21 @@ except ImportError:
             return dec
     spaces = MockSpaces()
 
-from main import app as fastapi_app
+from main import app as fastapi_app, run_search_inference
 
 # 1. ZeroGPU Inference Handler attached to Gradio
-@spaces.GPU(duration=30)
-def predict_gpu(text):
+@spaces.GPU(duration=60)
+def predict_gpu(image):
     return "ZeroGPU Online & Ready"
 
-# 2. Gradio Blocks with event listener (strictly required by ZeroGPU scanner)
+# 2. Gradio Blocks with visible input/output component (strictly required by ZeroGPU startup scan)
 with gr.Blocks(title="Joah AI Lens Search API") as demo:
     gr.Markdown("# 🔍 Joah AI Lens Search API")
     gr.Markdown("ZeroGPU Backend Active ✓")
-    txt_in = gr.Textbox(visible=False, value="ping")
-    txt_out = gr.Textbox(visible=False)
-    btn = gr.Button("Health Check", visible=False)
-    btn.click(fn=predict_gpu, inputs=txt_in, outputs=txt_out)
+    img_in = gr.Image(type="pil", label="Input Image")
+    btn = gr.Button("Test Prediction")
+    txt_out = gr.Textbox(label="Status")
+    btn.click(fn=predict_gpu, inputs=img_in, outputs=txt_out)
 
 # 3. Mount Gradio to FastAPI at /gradio so root /search and / remain purely FastAPI
 app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
