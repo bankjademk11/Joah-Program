@@ -13,6 +13,10 @@ export default function StatusBadge({ status, label, size = 'md' }) {
       bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       icon: <CheckCircle2 className={isSm ? "w-3 h-3" : "w-3.5 h-3.5"} />
     },
+    COUNT_COMPLETED: {
+      bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: <CheckCircle2 className={isSm ? "w-3 h-3" : "w-3.5 h-3.5"} />
+    },
     SHORT: {
       bg: 'bg-rose-50 text-rose-700 border-rose-200',
       icon: <AlertCircle className={isSm ? "w-3 h-3" : "w-3.5 h-3.5"} />

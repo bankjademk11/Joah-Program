@@ -36,6 +36,7 @@ import {
   FileText
 } from 'lucide-react';
 import { supabase } from '../../../utils/supabaseClient';
+import { getProductImageUrl, handleImageError } from '../../../utils/productImageUtils';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -129,6 +130,10 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [isSubmittingBarcode, setIsSubmittingBarcode] = useState(false);
   const [isUpdatingQty, setIsUpdatingQty] = useState({});
   const [isDeletingBarcode, setIsDeletingBarcode] = useState({});
+
+  // ─── Duplicate Warning Modal State (for Manual Qty Mode) ──────
+  const [duplicateAlertData, setDuplicateAlertData] = useState(null);
+  const [isLoadingDuplicateInfo, setIsLoadingDuplicateInfo] = useState(false);
 
   const inputRef = useRef(null);
   const manualQtyInputRef = useRef(null);
@@ -312,6 +317,28 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const targetOwner = isFilterMode ? null : (selectedBranch === 'LAK8' ? lak8OwnerBranch : null);
       if (!targetBranch || !targetDate) return;
 
+      // 1. Primary: Check receive_orders status in Supabase
+      const { data: roOrders, error: roErr } = await supabase
+        .from('receive_orders')
+        .select('id, ro_number, full_reference, delivery_date, status')
+        .ilike('store_code', targetBranch.trim());
+
+      if (!roErr && roOrders && roOrders.length > 0) {
+        let matched = roOrders.filter(order => isDateMatching(order.delivery_date, targetDate));
+        if (!isFilterMode && selectedRoRef && selectedRoRef !== 'NONE') {
+          const exactRo = matched.filter(
+            order => (order.full_reference || order.ro_number || order.id) === selectedRoRef
+          );
+          if (exactRo.length > 0) matched = exactRo;
+        }
+        if (matched.length > 0) {
+          const isCompleted = matched.some(order => order.status === 'COUNT_COMPLETED');
+          setSessionStatus(isCompleted ? 'completed' : 'in_progress');
+          return;
+        }
+      }
+
+      // 2. Fallback: Check stock_count_lak8_status table
       let query = supabase.from('stock_count_lak8_status').select('status');
       query = query.eq('branch', targetBranch).eq('count_date', targetDate);
       if (targetBranch === 'LAK8' && targetOwner) {
@@ -399,7 +426,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       fetchLak8Events();
       fetchLak8Status();
     }
-  }, [selectedBranch, selectedDate, lak8OwnerBranch, isFilterMode, filterBranch, filterDate]);
+  }, [selectedBranch, selectedDate, lak8OwnerBranch, selectedRoRef, isFilterMode, filterBranch, filterDate]);
 
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('\u0e97\u0ec8\u0eb2\u0e99\u0e95\u0ec9\u0ead\u0e87\u0e81\u0eb2\u0e99\u0ea5\u0eb6\u0e9a\u0ec0\u0eab\u0e94\u0e81\u0eb2\u0e99\u0e99\u0eb5\u0ec9\u0ec1\u0e97\u0ec9\u0e9a\u0ecd?')) return;
@@ -507,6 +534,27 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
             }
           }
         )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'receive_orders' },
+          (payload) => {
+            const updated = payload.new;
+            if (
+              updated &&
+              String(updated.store_code || '').trim().toUpperCase() === String(targetBranch || '').trim().toUpperCase() &&
+              isDateMatching(updated.delivery_date, targetDate)
+            ) {
+              if (!isFilterMode && selectedRoRef && selectedRoRef !== 'NONE') {
+                const ref = updated.full_reference || updated.ro_number || updated.id;
+                if (ref !== selectedRoRef) return;
+              }
+              setSessionStatus(updated.status === 'COUNT_COMPLETED' ? 'completed' : 'in_progress');
+              setAvailableRos(prev =>
+                prev.map(r => (r.id === updated.id ? { ...r, status: updated.status } : r))
+              );
+            }
+          }
+        )
         .subscribe();
     } catch (err) {
       console.warn('[Realtime] Status channel skipped:', err.message);
@@ -528,19 +576,65 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     if (!isConfirm) return;
 
     const nextStatus = sessionStatus === 'completed' ? 'in_progress' : 'completed';
+    const nextRoStatus = nextStatus === 'completed' ? 'COUNT_COMPLETED' : 'CHECKING';
+    const targetBranch = isFilterMode ? filterBranch : selectedBranch;
+    const targetDate = isFilterMode ? filterDate : selectedDate;
+
     setSessionStatus(nextStatus);
-    const statusKey = `lak8_status_${selectedBranch}_${selectedDate}_${lak8OwnerBranch}`;
+    const statusKey = `lak8_status_${targetBranch}_${targetDate}_${lak8OwnerBranch}`;
     localStorage.setItem(statusKey, nextStatus);
 
+    // 1. Update receive_orders status in Supabase so ReceiveCheckV0 shows COUNT_COMPLETED
+    try {
+      if (targetBranch && targetDate) {
+        const { data: roOrders, error: fetchErr } = await supabase
+          .from('receive_orders')
+          .select('id, ro_number, full_reference, delivery_date, status')
+          .ilike('store_code', targetBranch.trim());
+
+        if (!fetchErr && roOrders && roOrders.length > 0) {
+          let matched = roOrders.filter(order => isDateMatching(order.delivery_date, targetDate));
+          if (!isFilterMode && selectedRoRef && selectedRoRef !== 'NONE') {
+            const exactRo = matched.filter(
+              order => (order.full_reference || order.ro_number || order.id) === selectedRoRef
+            );
+            if (exactRo.length > 0) matched = exactRo;
+          }
+
+          if (matched.length > 0) {
+            const matchedIds = matched.map(o => o.id);
+            const { error: updateErr } = await supabase
+              .from('receive_orders')
+              .update({
+                status: nextRoStatus,
+                updated_at: new Date().toISOString()
+              })
+              .in('id', matchedIds);
+
+            if (updateErr) {
+              console.warn('receive_orders status update notice:', updateErr.message);
+            } else {
+              setAvailableRos(prev =>
+                prev.map(r => (matchedIds.includes(r.id) ? { ...r, status: nextRoStatus } : r))
+              );
+            }
+          }
+        }
+      }
+    } catch (roErr) {
+      console.warn('RO status sync notice:', roErr.message);
+    }
+
+    // 2. Fallback: Upsert into stock_count_lak8_status (non-blocking)
     try {
       await supabase
         .from('stock_count_lak8_status')
         .upsert(
           [
             {
-              branch: selectedBranch,
-              owner_branch: selectedBranch === 'LAK8' ? lak8OwnerBranch : null,
-              count_date: selectedDate,
+              branch: targetBranch,
+              owner_branch: targetBranch === 'LAK8' ? lak8OwnerBranch : null,
+              count_date: targetDate,
               status: nextStatus,
               updated_at: new Date().toISOString()
             }
@@ -554,7 +648,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
     showToast({
       type: nextStatus === 'completed' ? 'success' : 'info',
       title: nextStatus === 'completed' ? 'ສຳເລັດແລ້ວ! 🎉' : 'ກຳລັງນັບ... ⏳',
-      message: `ສະຖານະຖືກປ່ຽນເປັນ ${nextStatus === 'completed' ? 'ນັບສຳເລັດແລ້ວ' : 'ກຳລັງດຳເນີນການນັບ'}`
+      message: `ສະຖານະຖືກປ່ຽນເປັນ ${nextStatus === 'completed' ? 'ນັບສຳເລັດແລ້ວ (COUNT_COMPLETED)' : 'ກຳລັງດຳເນີນການນັບ'}`
     });
   };
 
@@ -836,7 +930,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   };
 
   // ─── 2. PROCESS SCAN & UPSERT ─────────────────────────────────────
-  const processScanCode = async (codeToScan, clearInput = true) => {
+  const processScanCode = async (codeToScan, clearInput = true, forceConfirmDuplicate = false) => {
     const code = codeToScan.trim();
     if (!code) return;
 
@@ -851,8 +945,61 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       return;
     }
 
-    setIsSubmittingBarcode(true);
     const addAmount = scanModeRef.current === 'count' ? 1 : Math.max(1, Number(manualQtyRef.current) || 1);
+
+    // ⚠️ In Manual Mode (✏️ ພິມຈຳນວນ), check if barcode was already counted in this session
+    if (scanModeRef.current === 'manual' && !forceConfirmDuplicate) {
+      const existingMatches = (itemsRef.current || []).filter(item => String(item.barcode || '').trim() === code);
+      const existingTotalQty = existingMatches.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+
+      if (existingMatches.length > 0 && existingTotalQty > 0) {
+        // Play warning beep
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          osc.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.22);
+        } catch (e) { }
+
+        setIsLoadingDuplicateInfo(true);
+        setDuplicateAlertData({
+          barcode: code,
+          existingQty: existingTotalQty,
+          addAmount,
+          clearInput,
+          productName: null,
+          price: null,
+          customImageUrl: null
+        });
+
+        try {
+          const { data: pcData, error: pcError } = await supabase
+            .from('price_checker')
+            .select('barcode, product_name, price, image_url')
+            .eq('barcode', code)
+            .maybeSingle();
+
+          if (!pcError && pcData) {
+            setDuplicateAlertData(prev => prev ? ({
+              ...prev,
+              productName: pcData.product_name || null,
+              price: pcData.price !== null && pcData.price !== undefined ? Number(pcData.price) : null,
+              customImageUrl: pcData.image_url || null
+            }) : null);
+          }
+        } catch (err) {
+          console.warn('[Price checker lookup notice]', err.message);
+        } finally {
+          setIsLoadingDuplicateInfo(false);
+        }
+        return;
+      }
+    }
+
+    setIsSubmittingBarcode(true);
     const empId = currentUser?.employee_id || currentUser?.name || 'Staff';
 
     try {
@@ -3065,6 +3212,129 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
               alt="Event Full"
               className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl"
             />
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ DUPLICATE BARCODE CONFIRMATION MODAL (FOR MANUAL QTY MODE) */}
+      {duplicateAlertData && (
+        <div className="fixed inset-0 z-[350] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border-2 border-amber-300 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={24} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg leading-tight">ພົບສິນຄ້າຊ້ຳ! (ເຄີຍຍິງໄປແລ້ວ)</h3>
+                  <p className="text-xs text-amber-100 font-medium">ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການເພີ່ມຈຳນວນສິນຄ້ານີ້?</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDuplicateAlertData(null)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/25 text-white transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {/* Product Image from Supabase product-images bucket */}
+              <div className="flex flex-col items-center justify-center bg-slate-50 rounded-2xl p-4 border border-slate-200 relative min-h-[160px]">
+                <img
+                  src={duplicateAlertData.customImageUrl || getProductImageUrl(duplicateAlertData.barcode)}
+                  alt={duplicateAlertData.barcode}
+                  onError={(e) => handleImageError(e, duplicateAlertData.barcode)}
+                  className="max-h-44 w-auto object-contain rounded-xl drop-shadow-md"
+                />
+                <div
+                  style={{ display: 'none' }}
+                  className="flex-col items-center justify-center text-slate-400 py-6 gap-2"
+                >
+                  <Package size={40} className="text-slate-300" />
+                  <span className="text-xs font-bold text-slate-400">ບໍ່ພົບຮູບພາບສິນຄ້າໃນລະບົບ</span>
+                </div>
+
+                <span className="mt-3 px-3 py-1 bg-slate-200/80 text-slate-700 rounded-lg font-mono text-xs font-black tracking-wider">
+                  {duplicateAlertData.barcode}
+                </span>
+              </div>
+
+              {/* Product Name & Price from price_checker (only shown if found in price_checker) */}
+              {isLoadingDuplicateInfo ? (
+                <div className="flex items-center justify-center gap-2 py-2 text-xs font-bold text-slate-400">
+                  <Loader size={14} className="animate-spin text-indigo-500" />
+                  <span>ກຳລັງດຶງຂໍ້ມູນສິນຄ້າ...</span>
+                </div>
+              ) : (duplicateAlertData.productName || duplicateAlertData.price !== null) ? (
+                <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3.5 text-center space-y-1">
+                  {duplicateAlertData.productName && (
+                    <div className="font-black text-slate-800 text-sm sm:text-base leading-snug">
+                      {duplicateAlertData.productName}
+                    </div>
+                  )}
+                  {duplicateAlertData.price !== null && (
+                    <div className="text-base sm:text-lg font-black text-indigo-600 font-mono">
+                      ລາຄາ: {new Intl.NumberFormat('lo-LA').format(duplicateAlertData.price)} ກີບ
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Count Comparison Summary */}
+              <div className="grid grid-cols-3 gap-2 bg-amber-50/80 border border-amber-200 rounded-2xl p-3 text-center">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase">ເຄີຍນັບແລ້ວ</div>
+                  <div className="text-lg font-black text-slate-800 font-mono">
+                    {duplicateAlertData.existingQty.toLocaleString()}
+                  </div>
+                </div>
+                <div className="border-x border-amber-200/80">
+                  <div className="text-[10px] font-bold text-amber-700 uppercase">ກຳລັງເພີ່ມອີກ</div>
+                  <div className="text-lg font-black text-amber-600 font-mono">
+                    +{duplicateAlertData.addAmount.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-emerald-700 uppercase">ລວມເປັນ</div>
+                  <div className="text-lg font-black text-emerald-600 font-mono">
+                    {(duplicateAlertData.existingQty + duplicateAlertData.addAmount).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDuplicateAlertData(null);
+                    setBarcodeInput('');
+                    setTimeout(() => {
+                      if (inputRef.current) inputRef.current.focus();
+                    }, 50);
+                  }}
+                  className="py-3 px-4 rounded-2xl border-2 border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm transition cursor-pointer active:scale-95"
+                >
+                  ❌ ຍົກເລີກ (ບໍ່ເພີ່ມ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { barcode, clearInput } = duplicateAlertData;
+                    setDuplicateAlertData(null);
+                    processScanCode(barcode, clearInput, true);
+                  }}
+                  className="py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-sm shadow-lg shadow-emerald-200 transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  <Check size={18} />
+                  <span>ຢືນຢັນເພີ່ມ (+{duplicateAlertData.addAmount})</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

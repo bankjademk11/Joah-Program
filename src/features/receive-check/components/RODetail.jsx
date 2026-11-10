@@ -77,11 +77,13 @@ export default function RODetail({
 
   if (!ro) return null;
 
+  const isForceCompleted = ro.status === 'COUNT_COMPLETED';
+
   // Build items with real received count from stock_count_lak8 (or manual override)
   const itemsWithState = ro.items.map(item => {
     const override = receivingData[item.id];
     
-    // Priority: 1. Manual user override if exists, 2. Live count from stock_count_lak8, 3. item.received, 4. null
+    // Priority: 1. Manual user override if exists, 2. Live count from stock_count_lak8, 3. item.received, 4. 0 if COUNT_COMPLETED else null
     let received = null;
     if (override !== undefined && override.received !== undefined && override.received !== null) {
       received = override.received;
@@ -89,6 +91,8 @@ export default function RODetail({
       received = stockCountMap.get(item.barcode);
     } else if (item.received !== undefined && item.received !== null && item.received !== '') {
       received = item.received;
+    } else if (isForceCompleted) {
+      received = 0;
     }
 
     const remark = (override !== undefined && override.remark) ? override.remark : (item.remark || '');
@@ -123,7 +127,10 @@ export default function RODetail({
 
   let overallStatus = 'WAITING';
   let overallLabel = 'Waiting';
-  if (waitingCount === 0) {
+  if (isForceCompleted) {
+    overallStatus = 'COUNT_COMPLETED';
+    overallLabel = 'COUNT_COMPLETED';
+  } else if (waitingCount === 0) {
     if (shortCount === 0 && overCount === 0) {
       overallStatus = 'COMPLETED';
       overallLabel = 'Completed (OK)';

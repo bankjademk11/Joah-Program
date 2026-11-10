@@ -57,12 +57,16 @@ export function getReceiveItemStatus(roQty, received) {
 /**
  * Calculate overall status of the RO
  */
-export function getROOverallStatus(items = []) {
+export function getROOverallStatus(items = [], orderStatus = null) {
+  const isForceCompleted = orderStatus === 'COUNT_COMPLETED';
+
   if (!items || items.length === 0) {
     return {
-      status: 'WAITING',
-      label: 'Waiting',
-      badgeClass: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      status: isForceCompleted ? 'COUNT_COMPLETED' : 'WAITING',
+      label: isForceCompleted ? 'COUNT_COMPLETED' : 'Waiting',
+      badgeClass: isForceCompleted
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+        : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
       totalRoQty: 0,
       totalReceived: 0,
       okCount: 0,
@@ -94,6 +98,13 @@ export function getROOverallStatus(items = []) {
       if (diff === 0) okCount++;
       else if (diff < 0) shortCount++;
       else overCount++;
+    } else if (isForceCompleted) {
+      // When counting is marked completed by branch, unscanned items count as 0 (Short if roQty > 0)
+      hasAnyInput = true;
+      const diff = 0 - roQty;
+      if (diff === 0) okCount++;
+      else if (diff < 0) shortCount++;
+      else overCount++;
     } else {
       waitingCount++;
     }
@@ -103,7 +114,11 @@ export function getROOverallStatus(items = []) {
   let label = 'Waiting';
   let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
 
-  if (!hasAnyInput) {
+  if (isForceCompleted) {
+    status = 'COUNT_COMPLETED';
+    label = 'COUNT_COMPLETED';
+    badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800';
+  } else if (!hasAnyInput) {
     status = 'WAITING';
     label = 'Waiting';
     badgeClass = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';

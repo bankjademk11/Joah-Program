@@ -13,6 +13,7 @@ import {
   deleteReceiveOrder,
   clearAllReceiveOrders
 } from '../services/receiveSupabaseService';
+import { supabase } from '../../../utils/supabaseClient';
 import joahLogo from '../../../assets/Joah.jpeg';
 import gardenBg from '../../../assets/BackGroundIM/website-background-light-blue.jpg';
 import dcStoreCardImg from '../../../assets/Icons_AppJoah/dc-store-card.webp';
@@ -72,6 +73,27 @@ export default function ReceiveCheckV0({ onBack }) {
 
   useEffect(() => {
     loadOrdersFromDb(true);
+
+    // Realtime subscription for receive_orders status updates (e.g. COUNT_COMPLETED from StockCountLak8)
+    const channel = supabase
+      .channel(`receive_orders_rt_${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'receive_orders' },
+        (payload) => {
+          const updated = payload.new;
+          if (updated && updated.id) {
+            setRoList(prev =>
+              prev.map(ro => (ro.id === updated.id ? { ...ro, status: updated.status } : ro))
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleImportSuccess = async (newRO) => {
@@ -139,6 +161,19 @@ export default function ReceiveCheckV0({ onBack }) {
       await updateReceiveOrderItem(itemId, { remark: newRemark });
     } catch (err) {
       console.error('Failed to update remark in Supabase:', err);
+    }
+  };
+
+  // Handle updating RO status manually (e.g. COUNT_COMPLETED / CHECKING)
+  const handleToggleROStatus = async (roId, nextStatus) => {
+    try {
+      setRoList(prev =>
+        prev.map(ro => (ro.id === roId ? { ...ro, status: nextStatus } : ro))
+      );
+      await updateReceiveOrderStatus(roId, nextStatus);
+    } catch (err) {
+      console.error('Failed to update RO status in Supabase:', err);
+      alert('Failed to update status: ' + err.message);
     }
   };
 
@@ -237,7 +272,7 @@ export default function ReceiveCheckV0({ onBack }) {
 
   const roListWithStats = useMemo(() => {
     return roList.map(ro => {
-      const stats = getROOverallStatus(ro.items || []);
+      const stats = getROOverallStatus(ro.items || [], ro.status);
       return {
         ...ro,
         stats,
@@ -495,6 +530,7 @@ export default function ReceiveCheckV0({ onBack }) {
               availableDates={availableDates}
               onOpenImport={() => setIsImportModalOpen(true)}
               onDeleteRO={handleDeleteRO}
+              onToggleROStatus={handleToggleROStatus}
               onRefreshOrders={() => loadOrdersFromDb(false)}
               isRefreshing={isRefreshing}
               onSelectRO={(ro) => {

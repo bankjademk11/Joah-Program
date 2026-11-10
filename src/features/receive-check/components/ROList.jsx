@@ -1,5 +1,5 @@
-import React from 'react';
-import { Search, Filter, Calendar, Building2, ArrowRight, Package, UploadCloud, Trash2, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Calendar, Building2, ArrowRight, Package, UploadCloud, Trash2, RefreshCw, MoreHorizontal, CheckCircle2, RotateCcw } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export default function ROList({
@@ -17,9 +17,19 @@ export default function ROList({
   onSelectRO,
   onOpenImport,
   onDeleteRO,
+  onToggleROStatus,
   onRefreshOrders,
   isRefreshing
 }) {
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    if (openMenuId) {
+      window.addEventListener('click', handleClickOutside);
+    }
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [openMenuId]);
   return (
     <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 xl:p-6 shadow-lg border border-blue-50 space-y-4">
       {/* FILTER ROW + ACTION BUTTONS */}
@@ -77,6 +87,7 @@ export default function ROList({
               <option value="ALL">All Status</option>
               <option value="WAITING">⏳ Waiting</option>
               <option value="CHECKING">🔄 Checking</option>
+              <option value="COUNT_COMPLETED">✅ COUNT_COMPLETED</option>
               <option value="COMPLETED">✅ Completed (OK)</option>
               <option value="SHORT">❌ Short</option>
               <option value="OVER">⚠️ Over</option>
@@ -196,7 +207,60 @@ export default function ROList({
                     </span>
                   </td>
                   <td className="py-3.5 px-4 text-center">
-                    <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
+                    <div className="inline-flex items-center justify-center gap-1.5 relative">
+                      <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
+                      {onToggleROStatus && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === ro.id ? null : ro.id);
+                            }}
+                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                            title="Change Status (ປ່ຽນສະຖານະ)"
+                          >
+                            <MoreHorizontal size={15} />
+                          </button>
+
+                          {openMenuId === ro.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 mt-1.5 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50 text-left animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <div className="px-3 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-50 mb-1">
+                                Manual Submit Status
+                              </div>
+                              {ro.status !== 'COUNT_COMPLETED' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    onToggleROStatus(ro.id, 'COUNT_COMPLETED');
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                                  <span>Submit COUNT_COMPLETED</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    onToggleROStatus(ro.id, 'CHECKING');
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <RotateCcw size={14} className="text-amber-600 shrink-0" />
+                                  <span>Revert to CHECKING</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
@@ -256,6 +320,20 @@ export default function ROList({
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <StatusBadge status={ro.stats.status} label={ro.stats.label} size="sm" />
+                  {onToggleROStatus && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = ro.status === 'COUNT_COMPLETED' ? 'CHECKING' : 'COUNT_COMPLETED';
+                        onToggleROStatus(ro.id, next);
+                      }}
+                      className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition"
+                      title="Toggle COUNT_COMPLETED"
+                    >
+                      <MoreHorizontal size={13} />
+                    </button>
+                  )}
                   {onDeleteRO && (
                     <button
                       onClick={(e) => {
