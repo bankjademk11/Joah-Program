@@ -543,6 +543,7 @@ export default function ReceiveCheckV0({ onBack }) {
         ) : activeRO ? (
           <RODetail
             ro={activeRO}
+            roList={roList}
             receivingData={{}}
             onBack={() => {
               setCurrentView('list');
@@ -550,6 +551,7 @@ export default function ReceiveCheckV0({ onBack }) {
             }}
             onUpdateReceived={(itemId, qty) => handleUpdateItemReceived(activeRO.id, itemId, qty)}
             onUpdateRemark={(itemId, remark) => handleUpdateItemRemark(activeRO.id, itemId, remark)}
+            onRefreshOrders={() => loadOrdersFromDb(false)}
           />
         ) : (
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-12 text-center border border-blue-50 shadow-lg space-y-4">

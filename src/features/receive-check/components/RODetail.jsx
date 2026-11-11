@@ -7,10 +7,12 @@ import { fetchStockCountForBranchDate } from '../services/reconcileService';
 
 export default function RODetail({
   ro,
+  roList = [],
   receivingData = {},
   onBack,
   onUpdateReceived,
-  onUpdateRemark
+  onUpdateRemark,
+  onRefreshOrders
 }) {
   const [activeTab, setActiveTab] = useState('items'); // Default to 'items' tab now that it shows live counts!
   const [stockCounts, setStockCounts] = useState([]);
@@ -246,7 +248,14 @@ export default function RODetail({
 
       {/* RECONCILE TAB */}
       {activeTab === 'reconcile' && (
-        <ROReconcileView ro={overrideDate ? { ...ro, deliveryDate: overrideDate } : ro} />
+        <ROReconcileView
+          ro={overrideDate ? { ...ro, deliveryDate: overrideDate } : ro}
+          roList={roList}
+          onTransferComplete={() => {
+            loadStockData();
+            onRefreshOrders?.();
+          }}
+        />
       )}
 
       {/* ITEMS TABLE TAB */}
