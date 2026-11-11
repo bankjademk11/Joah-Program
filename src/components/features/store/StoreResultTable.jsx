@@ -19,6 +19,7 @@ import AuditLogModal from '../../ui/AuditLogModal';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import LanguageWarningModal from '../../ui/LanguageWarningModal';
 import { CATEGORY_RACK_RULES, getRackSuggestions, BRANCH_RACK_RULES, getBranchCategories, resolveBranchId } from '../../../utils/rackUtils';
+import { isPhonthongStyleBranch } from '../../../utils/phonthongRackRules';
 import barcodeNotCorrectSound from '../../../assets/Sound/Barcodenotcorrect.wav';
 import { useLowStock } from '../../../contexts/LowStockContext';
 import { buildImageUrl } from '../../../utils/productImageUtils';
@@ -35,7 +36,7 @@ const StoreResultTable = ({
     onFilterChange, dbSource, onRefresh, onUpdateRowQty, currentUser, currentBranch, onAddNewProduct, refreshTrigger
 }) => {
     const { t } = useLanguage();
-    const isPhonthong = currentBranch === 'ໂພນຕ້ອງ' || (currentBranch && currentBranch.includes('ໂພນຕ້ອງ')) || (locationSheetName === 'ໂພນຕ້ອງ' || (locationSheetName && locationSheetName.includes('ໂພນຕ້ອງ')));
+    const isPhonthong = isPhonthongStyleBranch(currentBranch) || isPhonthongStyleBranch(locationSheetName);
     const { success, error: showError } = useToast();
     const { updateLowStock } = useLowStock();
     const [currentPage, setCurrentPage] = useState(1);
@@ -91,7 +92,7 @@ const StoreResultTable = ({
                 const { data, error } = await supabase
                     .from('store_ro_counts')
                     .select('barcode_no, physical_count, order_qty')
-                    .eq('branch_id', 'ໂພນຕ້ອງ');
+                    .eq('branch_id', targetBranch);
 
                 if (error) {
                     console.error('Error fetching store_ro_counts:', error);
@@ -121,7 +122,7 @@ const StoreResultTable = ({
         };
 
         loadRoCounts();
-    }, [isPhonthong, refreshTrigger]);
+    }, [isPhonthong, targetBranch, refreshTrigger]);
 
     // ── 🆕 Upsert Physical Count into Supabase (null if blank/empty) ──
     const handleSavePhysicalCount = async (barcode, valStr) => {
@@ -142,10 +143,10 @@ const StoreResultTable = ({
         // Persist to Supabase
         try {
             const payload = {
-                branch_id: 'ໂພນຕ້ອງ',
+                branch_id: targetBranch,
                 barcode_no: barcode,
                 physical_count: countVal,
-                updated_by: employeeName || currentUser || 'Phonthong Staff',
+                updated_by: employeeName || currentUser || `${targetBranch} Staff`,
                 last_updated: new Date().toISOString()
             };
 
@@ -181,10 +182,10 @@ const StoreResultTable = ({
         // Persist to Supabase
         try {
             const payload = {
-                branch_id: 'ໂພນຕ້ອງ',
+                branch_id: targetBranch,
                 barcode_no: barcode,
                 order_qty: orderVal,
-                updated_by: employeeName || currentUser || 'Phonthong Staff',
+                updated_by: employeeName || currentUser || `${targetBranch} Staff`,
                 last_updated: new Date().toISOString()
             };
 

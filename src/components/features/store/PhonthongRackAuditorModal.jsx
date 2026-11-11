@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import BarcodeScannerModal from '../../ui/BarcodeScannerModal';
 import { getProductImageUrl, handleImageError } from '../../../utils/productImageUtils';
+import { getPhonthongStyleRackPrefix } from '../../../utils/phonthongRackRules';
 
 /**
  * PhonthongRackAuditorModal
@@ -322,7 +323,7 @@ const PhonthongRackAuditorModal = ({
                       autoCorrect="off"
                       value={rackInput}
                       onChange={(e) => setRackInput(e.target.value)}
-                      placeholder="ເຊັ່ນ JMPT. A-1"
+                      placeholder={`ເຊັ່ນ ${getPhonthongStyleRackPrefix(branchName)}. A-1`}
                       className="min-h-14 w-full rounded-2xl border-2 border-slate-200 bg-slate-50 pl-11 pr-4 text-base font-black outline-none transition focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-900"
                     />
                   </div>

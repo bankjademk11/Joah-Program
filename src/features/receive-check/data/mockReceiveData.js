@@ -18,7 +18,8 @@ export const allBranches = [
   { tag: 'SVL', name: 'SVL (ສີວິໄລ)' },
   { tag: 'TLL', name: 'TLL (ຕະຫຼາດລາວ)' },
   { tag: 'PTX', name: 'PTX (ປະຕູໄຊ)' },
-  { tag: 'JMPT', name: 'JMPT (ໂພນຕ້ອງ)' }
+  { tag: 'JMPT', name: 'JMPT (ໂພນຕ້ອງ)' },
+  { tag: 'JmartDD', name: 'JmartDD' }
 ];
 
 export const metadata = {

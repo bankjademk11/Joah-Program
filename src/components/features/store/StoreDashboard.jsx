@@ -1,7 +1,7 @@
 import { TrendingUp, CheckCircle, XCircle, AlertCircle, Sparkles, AlertTriangle, RefreshCw, PackageOpen, Eye, EyeOff, Layers, ListChecks } from 'lucide-react';
 import { useState } from 'react';
 
-const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHideZeroQtyChange, onOpenRackAuditor }) => {
+const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHideZeroQtyChange, onOpenRackAuditor, branchName }) => {
     const [isZeroMode, setIsZeroMode] = useState(true);
 
     const cards = [
@@ -92,7 +92,7 @@ const StoreDashboard = ({ stats, activeFilter, onFilterChange, hideZeroQty, onHi
                         <button
                             onClick={onOpenRackAuditor}
                             className="flex items-center gap-1.5 sm:gap-3 px-3 sm:px-6 py-1.5 sm:py-4 rounded-xl sm:rounded-[1.75rem] border transition-all duration-300 hover:scale-105 active:scale-95 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md sm:shadow-xl sm:shadow-violet-500/20 border-violet-400/40"
-                            title="ກວດສອບສິນຄ້າໃນໂລ (ໂພນຕ້ອງ)"
+                            title={branchName ? `ກວດສອບສິນຄ້າໃນໂລ (${branchName})` : 'ກວດສອບສິນຄ້າໃນໂລ'}
                         >
                             <div className="p-1 sm:p-2 rounded-md sm:rounded-xl bg-white/20 text-white">
                                 <ListChecks size={12} className="sm:w-[18px] sm:h-[18px] animate-pulse" />

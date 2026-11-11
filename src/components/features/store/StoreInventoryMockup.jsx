@@ -7,9 +7,9 @@ import { supabase } from '../../../utils/supabaseClient';
 import { useToast } from '../../ui/ToastProvider';
 import { getStoreRackSuggestions, validateStoreRack, mapPhonthongRackLocation } from '../../../utils/storeRackUtils';
 import { logStoreInventoryHistory } from '../../../utils/supabaseSync';
-import { PHONTHONG_BRANCH, getPhonthongRackDecision } from '../../../utils/phonthongRackRules';
+import { PHONTHONG_BRANCH, getPhonthongRackDecision, isPhonthongStyleBranch } from '../../../utils/phonthongRackRules';
 
-const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'ເທຣນນິ້ງ (Training)'];
+const BRANCHES = ['ຕະຫຼາດລາວ', 'ສີວິໄລ', 'ວັງຊາຍ', 'ໂພນສີນວນ', 'ເມກ້າມໍ', 'ໂພນຕ້ອງ', 'JmartDD', 'ເທຣນນິ້ງ (Training)'];
 const MEGAMALL = 'ເມກ້າມໍ';
 
 const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) => {
@@ -28,8 +28,8 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showRackAuditor, setShowRackAuditor] = useState(false);
 
-  // Check if branch is Phonthong (ໂພນຕ້ອງ)
-  const isPhonthong = selectedBranch === 'ໂພນຕ້ອງ' || (selectedBranch && selectedBranch.includes('ໂພນຕ້ອງ'));
+  // Check if branch uses Phonthong layout (ໂພນຕ້ອງ / JmartDD)
+  const isPhonthong = isPhonthongStyleBranch(selectedBranch);
 
   // Helper to find category from masterDataList
   const getCategoryFromMaster = (barcode) => {
@@ -387,11 +387,11 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
   }, [fetchData]);
 
   // ============================================================
-  // Auto Auto-Assign Rack Location (เฉพาะสาขา ໂພນຕ້ອງ)
+  // Auto Auto-Assign Rack Location (สาขา ໂພນຕ້ອງ & JmartDD)
   // ============================================================
   const handleAutoAssignPhonthongRacks = async () => {
-    if (selectedBranch !== PHONTHONG_BRANCH) {
-      toast.error('ຟັງຊັ່ນນີ້ຮອງຮັບສະເພາະສາຂາ ໂພນຕ້ອງ ເທົ່ານັ້ນ');
+    if (!isPhonthongStyleBranch(selectedBranch)) {
+      toast.error('ຟັງຊັ່ນນີ້ຮອງຮັບສະເພາະສາຂາ ໂພນຕ້ອງ / JmartDD ເທົ່ານັ້ນ');
       return;
     }
 
@@ -400,17 +400,17 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
     let skippedCount = 0;
 
     try {
-      // คัดเลือกรายการของสาขา ໂພນຕ້ອງ ที่ยังไม่มี shelf_location (หรือเป็นค่าว่าง/—/null)
+      // คัดเลือกรายการของสาขาที่ยังไม่มี shelf_location (หรือเป็นค่าว่าง/—/null)
       const unassignedItems = results.filter(r => {
         const itemBranch = r.branch_id || selectedBranch;
-        if (itemBranch !== PHONTHONG_BRANCH) return false;
+        if (!isPhonthongStyleBranch(itemBranch)) return false;
 
         const loc = r.shelf_location ?? r.rackLocation ?? r.rack_location ?? '';
         return !loc || loc === '—' || loc.toLowerCase() === 'null' || loc.trim() === '';
       });
 
       if (unassignedItems.length === 0) {
-        toast.info('ສິນຄ້າທັງໝົດໃນສາຂາ ໂພນຕ້ອງ ມີຕຳແໜ່ງ Rack ຮຽບຮ້ອຍແລ້ວ');
+        toast.info(`ສິນຄ້າທັງໝົດໃນສາຂາ ${selectedBranch} ມີຕຳແໜ່ງ Rack ຮຽບຮ້ອຍແລ້ວ`);
         setIsAutoAssigning(false);
         return;
       }
@@ -419,13 +419,13 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
 
       for (const item of unassignedItems) {
         const branchId = item.branch_id || selectedBranch;
-        if (branchId !== PHONTHONG_BRANCH) {
+        if (!isPhonthongStyleBranch(branchId)) {
           skippedCount++;
           continue;
         }
 
         const decision = getPhonthongRackDecision({
-          branchId: PHONTHONG_BRANCH,
+          branchId: selectedBranch,
           category1: item.category1 ?? item.category_1,
           category2: item.category2 ?? item.category_2,
         });
@@ -442,7 +442,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
                 last_updated: new Date().toISOString()
               })
               .eq('id', item.id)
-              .eq('branch_id', PHONTHONG_BRANCH)
+              .eq('branch_id', selectedBranch)
           );
         } else {
           skippedCount++;
@@ -1057,10 +1057,10 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
             onClick={handleAutoAssignPhonthongRacks}
             disabled={isAutoAssigning}
             className="flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50"
-            title="Auto-Assign Rack Location (ໂພນຕ້ອງ)"
+            title={`Auto-Assign Rack Location (${selectedBranch})`}
           >
             <Wand2 className={`w-4 h-4 ${isAutoAssigning ? 'animate-spin' : ''}`} />
-            <span>{isAutoAssigning ? 'ກຳລັງ Auto Assign...' : 'Auto-Assign Racks (ໂພນຕ້ອງ)'}</span>
+            <span>{isAutoAssigning ? 'ກຳລັງ Auto Assign...' : `Auto-Assign Racks (${selectedBranch})`}</span>
           </button>
         )}
 
@@ -1073,6 +1073,7 @@ const StoreInventoryMockup = ({ onBack, currentUser, isAdmin, initialBranch }) =
         onFilterChange={setFilterStatus}
         hideZeroQty={hideZeroQty}
         onHideZeroQtyChange={setHideZeroQty}
+        branchName={selectedBranch}
         onOpenRackAuditor={
           isPhonthong
             ? () => setShowRackAuditor(true)

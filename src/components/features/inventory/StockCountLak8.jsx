@@ -104,7 +104,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
   const [boPageSize, setBoPageSize] = useState(50); // ทีละ 50 รายการ
   const [boLoadProgress, setBoLoadProgress] = useState({ loaded: 0, isChunking: false });
 
-  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8', 'JMPT'];
+  const branches = ['VX', 'SVL', 'TLL', 'PTX', 'PSN', 'LAK8', 'JMPT', 'JmartDD'];
 
   // Floating Toast Notification State
   const [toast, setToast] = useState(null);
@@ -1797,7 +1797,7 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                       <button
                         key={b}
                         onClick={() => setSelectedBranch(b)}
-                        className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedBranch === b
+                        className={`py-3 px-2 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all truncate ${selectedBranch === b
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
                           : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}
                       >

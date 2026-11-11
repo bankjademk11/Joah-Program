@@ -4,12 +4,14 @@ import { supabase as defaultSupabase } from "../../utils/supabaseClient";
 import {
   getPhonthongRackDecision,
   PHONTHONG_BRANCH,
+  isPhonthongStyleBranch,
+  getPhonthongStyleRackPrefix,
   inferCategory1FromCategory2,
   KOREAN_TO_ENGLISH_CATEGORY_1,
 } from "../../utils/phonthongRackRules";
 
 const DEFAULT_BRANCH = "ໂພນຕ້ອງ";
-const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "ໂພນສີນວນ", "ສີວິໄລ", "ວັງຊາຍ", "ຕະຫຼາດລາວ", "ເມກ້າມໍ"];
+const BRANCH_OPTIONS = ["ໂພນຕ້ອງ", "JmartDD", "ໂພນສີນວນ", "ສີວິໄລ", "ວັງຊາຍ", "ຕະຫຼາດລາວ", "ເມກ້າມໍ"];
 const BATCH_SIZE = 500;
 
 const aliases = {
@@ -856,9 +858,9 @@ export default function MasterDataImport({
           matchedCategoryCount++;
         }
 
-        if (c1 || c2) {
+        if (isPhonthongStyleBranch(branchId) && (c1 || c2)) {
           const dec = getPhonthongRackDecision({
-            branchId: PHONTHONG_BRANCH,
+            branchId,
             category1: c1,
             category2: c2,
           });
@@ -875,9 +877,10 @@ export default function MasterDataImport({
         source: "master_data",
       });
 
+      const rackPrefix = getPhonthongStyleRackPrefix(branchId);
       setNotice({
         ok: true,
-        text: `ກວດສອບ Master Data (English Only): ພົບ ${formatNumber(matchedCategoryCount)} ລາຍການ (ຈັດເຂົ້າຜັງ JMPT ຂອງ ໂພນຕ້ອງ ໄດ້ ${formatNumber(canAutoAssignCount)} ລາຍການ)${rejectedNonEnglishCount > 0 ? `, ຕັດພາສາອື່ນອອກ ${formatNumber(rejectedNonEnglishCount)} ຄ່າ` : ""}`,
+        text: `ກວດສອບ Master Data (English Only): ພົບ ${formatNumber(matchedCategoryCount)} ລາຍການ${isPhonthongStyleBranch(branchId) ? ` (ຈັດເຂົ້າຜັງ ${rackPrefix} ຂອງ ${branchId} ໄດ້ ${formatNumber(canAutoAssignCount)} ລາຍການ)` : ""}${rejectedNonEnglishCount > 0 ? `, ຕັດພາສາອື່ນອອກ ${formatNumber(rejectedNonEnglishCount)} ຄ່າ` : ""}`,
       });
     } catch (err) {
       setNotice({
@@ -987,7 +990,8 @@ export default function MasterDataImport({
         }
       }
 
-      const isPhonthong = branchId === PHONTHONG_BRANCH || branchId.includes(PHONTHONG_BRANCH);
+      const isPhonthong = isPhonthongStyleBranch(branchId);
+      const rackPrefix = getPhonthongStyleRackPrefix(branchId);
       let phonthongAssignedCount = 0;
       let categoryOnlyCount = 0;
       const updates = [];
@@ -1010,16 +1014,16 @@ export default function MasterDataImport({
 
         let finalShelf = item.shelf_location || null;
 
-        // คำนวณ Auto-Assign Shelf Location สำหรับສາຂາ ໂພນຕ້ອງ (JMPT) โดยเด็ดขาด ห้ามก๊อปปี้ shelf_location จากที่อื่น
+        // คำนวณ Auto-Assign Shelf Location สำหรับสาขา ໂພນຕ້ອງ (JMPT) / JmartDD (JMDD) โดยเด็ดขาด ห้ามก๊อปปี้ shelf_location จากที่อื่น
         if (isPhonthong && (c1 || c2)) {
           const decision = getPhonthongRackDecision({
-            branchId: PHONTHONG_BRANCH,
+            branchId,
             category1: c1,
             category2: c2,
           });
 
           if (decision.status === "ASSIGNED" && decision.rackLocation) {
-            finalShelf = decision.rackLocation; // JMPT. A-1 - G-20
+            finalShelf = decision.rackLocation; // JMPT./JMDD. A-1 - G-20
             phonthongAssignedCount++;
           }
         }
@@ -1080,7 +1084,7 @@ export default function MasterDataImport({
 
       setNotice({
         ok: true,
-        text: `Sync Category ຈາກ Master Data (English Only) ສຳເລັດ ${formatNumber(updates.length)} ລາຍການ! (ຈັດເຂົ້າຜັງ JMPT ໂພນຕ້ອງ: ${formatNumber(phonthongAssignedCount)} ລາຍການ)`,
+        text: `Sync Category ຈາກ Master Data (English Only) ສຳເລັດ ${formatNumber(updates.length)} ລາຍການ!${isPhonthong ? ` (ຈັດເຂົ້າຜັງ ${rackPrefix} ${branchId}: ${formatNumber(phonthongAssignedCount)} ລາຍການ)` : ""}`,
       });
 
       setCopyInspectResult(null);
@@ -1392,10 +1396,10 @@ export default function MasterDataImport({
 
             let assignedShelf = row.shelf_location || existing?.shelf_location || null;
 
-            // Auto-assign Phonthong layout (JMPT) if shelf is null and categories exist
-            if (!assignedShelf && (branchId === PHONTHONG_BRANCH || branchId.includes(PHONTHONG_BRANCH)) && (resolvedCat1 || resolvedCat2)) {
+            // Auto-assign Phonthong / JmartDD layout (JMPT / JMDD) if shelf is null and categories exist
+            if (!assignedShelf && isPhonthongStyleBranch(branchId) && (resolvedCat1 || resolvedCat2)) {
               const decision = getPhonthongRackDecision({
-                branchId: PHONTHONG_BRANCH,
+                branchId,
                 category1: resolvedCat1,
                 category2: resolvedCat2,
               });
@@ -1716,7 +1720,7 @@ export default function MasterDataImport({
                       </p>
                       {importSummary.phonthongAssigned > 0 && (
                         <div className="mt-3 text-xs font-bold text-amber-800 bg-amber-50 p-3 rounded-2xl border border-amber-200">
-                          ✨ ຈັດເຂົ້າຜັງ JMPT ຂອງ ໂພນຕ້ອງ ອັດຕະໂນມັດ: <strong className="text-amber-900 font-extrabold text-sm">{formatNumber(importSummary.phonthongAssigned)}</strong> ລາຍການ
+                          ✨ ຈັດເຂົ້າຜັງ {getPhonthongStyleRackPrefix(importSummary.branchId)} ຂອງ {importSummary.branchId} ອັດຕະໂນມັດ: <strong className="text-amber-900 font-extrabold text-sm">{formatNumber(importSummary.phonthongAssigned)}</strong> ລາຍການ
                         </div>
                       )}
                       {importSummary.categoryOnlyCount > 0 && (
@@ -2377,7 +2381,7 @@ export default function MasterDataImport({
               <div className="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] leading-5 text-emerald-800 flex items-start gap-2">
                 <span className="text-emerald-600 font-bold text-sm">✓</span>
                 <div>
-                  <strong>ກວດສອບພາສາອັງກິດ (English Only):</strong> ຮອງຮັບສະເພາະພາສາອັງກິດເທົ່ານັ້ນ ຫ້າມພາສາອື່ນປົນເດັດຂາດ. ຕຳແໜ່ງ Shelf Location ຈະຖືກຈັດເຂົ້າຜັງ <strong>JMPT</strong> ຂອງ ໂພນຕ້ອງ ให้อัตโนมัติ (ບໍ່ດຶງໂລເຄຊັ່ນຈາກບ່ອນອື່ນ)
+                  <strong>ກວດສອບພາສາອັງກິດ (English Only):</strong> ຮອງຮັບສະເພາະພາສາອັງກິດເທົ່ານັ້ນ ຫ້າມພາສາອື່ນປົນເດັດຂາດ. ຕຳແໜ່ງ Shelf Location ຈະຖືກຈັດເຂົ້າຜັງ <strong>{getPhonthongStyleRackPrefix(branchId)}</strong> ຂອງ {branchId || "ໂພນຕ້ອງ"} ให้อัตโนมัติ (ບໍ່ດຶງໂລເຄຊັ່ນຈາກບ່ອນອື່ນ)
                 </div>
               </div>
 
@@ -2415,7 +2419,7 @@ export default function MasterDataImport({
                   </div>
                   {copyInspectResult.canAutoAssignCount > 0 && (
                     <div className="flex justify-between items-center text-amber-700 font-bold border-t border-slate-100 pt-1.5">
-                      <span>ຈັດເຂົ້າຜັງ JMPT ໂພນຕ້ອງ:</span>
+                      <span>ຈັດເຂົ້າຜັງ {getPhonthongStyleRackPrefix(branchId)} {branchId}:</span>
                       <span className="font-extrabold text-amber-600">{formatNumber(copyInspectResult.canAutoAssignCount)} ລາຍການ</span>
                     </div>
                   )}

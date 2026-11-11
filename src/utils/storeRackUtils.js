@@ -22,6 +22,9 @@ export const PSN_FLOOR_STORAGE_RACKS = [
     "PSN041", "PSN042", "PSN043", "PSN044", "PSN045"
 ];
 
+const replacePhonthongPrefix = (rack, prefix = 'JMPT') =>
+    prefix === 'JMPT' ? rack : String(rack).replace(/^JMPT\b/, prefix);
+
 // ໂລໜ້າຮ້ານ JMPT ສຳລັບສາຂາ ໂພນຕ້ອງ (JMPT. A-1 ຮອດ F-8 ແລະ G-1 ຮອດ G-20)
 export const PHONTHONG_ALL_RACKS = [
     // โซน A-F (โซนละ 8 ล็อค: JMPT. A-1 ถึง F-8)
@@ -31,6 +34,9 @@ export const PHONTHONG_ALL_RACKS = [
     // โซน G (20 ล็อค: JMPT. G-1 ถึง JMPT. G-20)
     ...Array.from({ length: 20 }, (_, i) => `JMPT. G-${i + 1}`)
 ];
+
+// ໂລໜ້າຮ້ານ JMDD ສຳລັບສາຂາ JmartDD (JMDD. A-1 ຮອດ F-8 ແລະ G-1 ຮອດ G-20)
+export const JMARTDD_ALL_RACKS = PHONTHONG_ALL_RACKS.map(r => replacePhonthongPrefix(r, 'JMDD'));
 
 export const STORE_BRANCH_RACK_RULES = {
     'ຕະຫຼາດລາວ': {
@@ -238,6 +244,27 @@ export const PHONTHONG_RACKS_BY_CATEGORY = {
     ]
 };
 
+export const JMARTDD_RACKS_BY_CATEGORY = Object.fromEntries(
+    Object.entries(PHONTHONG_RACKS_BY_CATEGORY).map(([cat, racks]) => [
+        cat,
+        racks.map(r => replacePhonthongPrefix(r, 'JMDD'))
+    ])
+);
+
+STORE_BRANCH_RACK_RULES['JmartDD'] = {
+    'KITCHEN': [{ zones: JMARTDD_RACKS_BY_CATEGORY['KITCHEN'], maxLevel: 0, format: 'store_exact' }],
+    'STATIONERY': [{ zones: JMARTDD_RACKS_BY_CATEGORY['STATIONERY'], maxLevel: 0, format: 'store_exact' }],
+    'STORAGE': [{ zones: JMARTDD_RACKS_BY_CATEGORY['STORAGE'], maxLevel: 0, format: 'store_exact' }],
+    'INTERIOR': [{ zones: JMARTDD_RACKS_BY_CATEGORY['INTERIOR'], maxLevel: 0, format: 'store_exact' }],
+    'TOYS': [{ zones: JMARTDD_RACKS_BY_CATEGORY['TOYS'], maxLevel: 0, format: 'store_exact' }],
+    'FASHION': [{ zones: JMARTDD_RACKS_BY_CATEGORY['FASHION'], maxLevel: 0, format: 'store_exact' }],
+    'BEAUTY': [{ zones: JMARTDD_RACKS_BY_CATEGORY['BEAUTY'], maxLevel: 0, format: 'store_exact' }],
+    'SPORTS': [{ zones: JMARTDD_RACKS_BY_CATEGORY['SPORTS'], maxLevel: 0, format: 'store_exact' }],
+    'CLEANING': [{ zones: JMARTDD_RACKS_BY_CATEGORY['CLEANING'], maxLevel: 0, format: 'store_exact' }],
+    'TOOL/DIGITAL': [{ zones: JMARTDD_RACKS_BY_CATEGORY['TOOL/DIGITAL'], maxLevel: 0, format: 'store_exact' }],
+    'EVENT': [{ zones: JMARTDD_RACKS_BY_CATEGORY['EVENT'], maxLevel: 0, format: 'store_exact' }]
+};
+
 // เติมกฎ Phonthong ลงใน STORE_BRANCH_RACK_RULES
 STORE_BRANCH_RACK_RULES['ໂພນຕ້ອງ'] = {
     'KITCHEN': [{ zones: PHONTHONG_RACKS_BY_CATEGORY['KITCHEN'], maxLevel: 0, format: 'store_exact' }],
@@ -268,6 +295,7 @@ const resolveStoreBranchId = (branchId) => {
     if (normalizedId === 'VX' || normalizedId.includes('ວັງຊາຍ')) return 'ວັງຊາຍ';
     if (normalizedId === 'TLL' || normalizedId.includes('ຕະຫຼາດລາວ')) return 'ຕະຫຼາດລາວ';
     if (normalizedId === 'PTX' || normalizedId.includes('ປະຕູໄຊ')) return 'ປະຕູໄຊ';
+    if (normalizedId === 'JMARTDD' || normalizedId.includes('JMARTDD') || normalizedId === 'JMDD') return 'JmartDD';
     if (normalizedId === 'JMPT' || normalizedId === 'PT' || normalizedId.includes('ໂພນຕ້ອງ') || normalizedId.includes('PHONTHONG')) return 'ໂພນຕ້ອງ';
     if (normalizedId.includes('ເທຣນ') || normalizedId.includes('ເທຮນ') || normalizedId.includes('TRAINING')) return 'ເທຣນນິ້ງ (Training)';
 
@@ -351,6 +379,13 @@ export const validateStoreRack = (rack, category, branchId) => {
  * Based strictly on rules defined in phonthong_rack_category_rules.md
  */
 export const mapPhonthongRackLocation = ({ category1, category2, branchId = 'ໂພນຕ້ອງ' }) => {
+    const resolved = resolveStoreBranchId(branchId);
+    if (resolved !== 'ໂພນຕ້ອງ' && resolved !== 'JmartDD') return null;
+    const baseRack = mapPhonthongRackBase({ category1, category2, branchId: 'ໂພນຕ້ອງ' });
+    return baseRack ? replacePhonthongPrefix(baseRack, resolved === 'JmartDD' ? 'JMDD' : 'JMPT') : null;
+};
+
+const mapPhonthongRackBase = ({ category1, category2, branchId = 'ໂພນຕ້ອງ' }) => {
     const resolved = resolveStoreBranchId(branchId);
     if (resolved !== 'ໂພນຕ້ອງ') return null;
     if (!category1 || !category2 || String(category2).trim() === "0") return null;

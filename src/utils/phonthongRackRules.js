@@ -3,6 +3,31 @@
 // หลักการ: category_1 + category_2 ต้องเหลือ Rack เดียวเท่านั้นจึง assign
 
 export const PHONTHONG_BRANCH = "ໂພນຕ້ອງ";
+export const JMARTDD_BRANCH = "JmartDD";
+
+export const isJmartDDBranch = (branchId) => {
+  const s = String(branchId ?? "").trim().toLowerCase();
+  return s === "jmartdd" || s.includes("jmartdd") || s === "jmdd";
+};
+
+export const getPhonthongStyleRackPrefix = (branchId) =>
+  isJmartDDBranch(branchId) ? "JMDD" : "JMPT";
+
+export const formatPhonthongStyleRack = (rackLocation, branchId) => {
+  if (!rackLocation) return rackLocation;
+  const prefix = getPhonthongStyleRackPrefix(branchId);
+  if (prefix === "JMPT") return rackLocation;
+  return String(rackLocation).replace(/^JMPT\b/, prefix);
+};
+
+export const isPhonthongStyleBranch = (branchId) => {
+  const s = String(branchId ?? "").trim().toLowerCase();
+  return (
+    s === PHONTHONG_BRANCH ||
+    s.includes(PHONTHONG_BRANCH) ||
+    isJmartDDBranch(branchId)
+  );
+};
 
 const clean = (value) => String(value ?? "").trim();
 const key = (value) => clean(value).toUpperCase().replace(/\s+/g, " ");
@@ -511,7 +536,7 @@ function getCandidates(category1, category2) {
  * When multiple candidates exist, pick the first candidate as default rack!
  */
 export function getPhonthongRackDecision({ branchId, category1, category2 }) {
-  if (branchId !== PHONTHONG_BRANCH) {
+  if (!isPhonthongStyleBranch(branchId)) {
     return { rackLocation: null, candidates: [], status: "SKIP_BRANCH", reason: "branch_not_phonthong" };
   }
 
@@ -540,12 +565,14 @@ export function getPhonthongRackDecision({ branchId, category1, category2 }) {
     };
   }
 
+  const formattedCandidates = candidates.map((loc) => formatPhonthongStyleRack(loc, branchId));
+
   // เลือก Candidate แรกเสมอ (First Candidate Default)
   return {
-    rackLocation: candidates[0],
-    candidates,
+    rackLocation: formattedCandidates[0],
+    candidates: formattedCandidates,
     status: "ASSIGNED",
-    reason: candidates.length === 1 ? "single_confirmed_rack" : "default_first_candidate_rack",
+    reason: formattedCandidates.length === 1 ? "single_confirmed_rack" : "default_first_candidate_rack",
     normalizedCategory1,
     normalizedCategory2,
   };
