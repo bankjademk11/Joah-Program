@@ -195,9 +195,9 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
       // Image rules:
       // - Less (SHORT): Always attach images (unlimited)
       // - Over Items (OVER): Always attach images (unlimited)
-      // - Uncounted (NOT_COUNTED): Attach images ONLY if <= 20 items; otherwise normal
+      // - Uncounted (NOT_COUNTED): Attach images ONLY if <= 100 items; otherwise normal
       // - Not PO (EXTRA): Always attach images (unlimited)
-      const includeUncountedImages = uncountedItems.length > 0 && uncountedItems.length <= 20;
+      const includeUncountedImages = uncountedItems.length > 0 && uncountedItems.length <= 100;
 
       // ── Batch Fetch Unique Product Images ──
       const barcodesToFetch = new Set();
@@ -620,7 +620,7 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
         includeImages: true
       });
 
-      // 4. Uncounted Items -> Attach images only if <= 20 items, otherwise normal
+      // 4. Uncounted Items -> Attach images only if <= 100 items, otherwise normal
       addReconcileSheet({
         sheetName: `Uncounted (${uncountedItems.length})`,
         tabColor: 'FF64748B',
