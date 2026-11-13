@@ -1,5 +1,56 @@
 import { supabase } from '../../../utils/supabaseClient';
 
+const PAGE_SIZE = 1000;
+const CONCURRENCY = 6;
+
+function normalizeDateYMD(rawDate) {
+  if (!rawDate) return '';
+  const clean = String(rawDate).trim();
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return clean;
+}
+
+/**
+ * Fetch all pages of a Supabase query in parallel batches after page 0 returns exact count.
+ */
+async function fetchAllPagesParallel(buildQuery) {
+  const { data: firstPage, count, error: firstErr } = await buildQuery({ withCount: true })
+    .range(0, PAGE_SIZE - 1);
+
+  if (firstErr) throw firstErr;
+  if (!firstPage || firstPage.length === 0) return [];
+
+  const total = typeof count === 'number' ? count : firstPage.length;
+  if (firstPage.length < PAGE_SIZE || total <= PAGE_SIZE) {
+    return firstPage;
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const allRows = [...firstPage];
+
+  for (let startPage = 1; startPage < totalPages; startPage += CONCURRENCY) {
+    const endPage = Math.min(startPage + CONCURRENCY, totalPages);
+    const batchPromises = [];
+    for (let p = startPage; p < endPage; p++) {
+      const from = p * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      batchPromises.push(buildQuery({ withCount: false }).range(from, to));
+    }
+    const results = await Promise.all(batchPromises);
+    for (const res of results) {
+      if (res.error) throw res.error;
+      if (res.data?.length) allRows.push(...res.data);
+    }
+  }
+
+  return allRows;
+}
+
 /**
  * Fetch all receive orders with their items from Supabase
  */
@@ -21,34 +72,44 @@ export async function fetchAllReceiveOrders() {
     if (!orders || orders.length === 0) return [];
 
     const orderIds = orders.map(o => o.id);
-    
-    // Supabase limits each select to 1000 rows by default — paginate to fetch ALL items
-    const PAGE_SIZE = 1000;
-    let items = [];
-    let from = 0;
-    let hasMore = true;
+    const branches = Array.from(new Set(orders.map(o => o.store_code).filter(Boolean)));
+    const dates = Array.from(new Set(orders.map(o => normalizeDateYMD(o.delivery_date)).filter(Boolean)));
 
-    while (hasMore) {
-      const { data: chunk, error: itemsErr } = await supabase
+    // Fetch receive_order_items AND stock_count_lak8 in parallel using concurrent page batches
+    const itemsPromise = fetchAllPagesParallel(({ withCount }) =>
+      supabase
         .from('receive_order_items')
-        .select('*')
+        .select(
+          'id, receive_order_id, location, barcode, product_name, ro_qty, received_qty, remark, unit',
+          withCount ? { count: 'exact' } : undefined
+        )
         .in('receive_order_id', orderIds)
-        .range(from, from + PAGE_SIZE - 1);
+        .order('id', { ascending: true })
+    );
 
-      if (itemsErr) throw itemsErr;
+    const stockCountsPromise =
+      branches.length > 0 && dates.length > 0
+        ? fetchAllPagesParallel(({ withCount }) =>
+            supabase
+              .from('stock_count_lak8')
+              .select(
+                'id, barcode, qty, branch, count_date, ro_reference',
+                withCount ? { count: 'exact' } : undefined
+              )
+              .in('branch', branches)
+              .in('count_date', dates)
+              .order('id', { ascending: true })
+          ).catch((e) => {
+            console.warn('Failed to fetch live counts for receive_orders list:', e);
+            return [];
+          })
+        : Promise.resolve([]);
 
-      if (chunk && chunk.length > 0) {
-        items = items.concat(chunk);
-        from += PAGE_SIZE;
-        hasMore = chunk.length === PAGE_SIZE;
-      } else {
-        hasMore = false;
-      }
-    }
+    const [items, allStockCounts] = await Promise.all([itemsPromise, stockCountsPromise]);
 
     // Group items by receive_order_id
     const itemsByOrder = {};
-    (items || []).forEach(it => {
+    for (const it of items) {
       if (!itemsByOrder[it.receive_order_id]) {
         itemsByOrder[it.receive_order_id] = [];
       }
@@ -63,75 +124,49 @@ export async function fetchAllReceiveOrders() {
         remark: it.remark || '',
         unit: it.unit || 'Unit'
       });
-    });
-
-    // Fetch stock_count_lak8 to compute real live received quantities per RO
-    let allStockCounts = [];
-    try {
-      const branches = Array.from(new Set(orders.map(o => o.store_code).filter(Boolean)));
-      const dates = Array.from(new Set(orders.map(o => {
-        const rawDate = o.delivery_date;
-        if (!rawDate) return null;
-        if (rawDate.includes('/')) {
-          const parts = rawDate.split('/');
-          if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-        return rawDate;
-      }).filter(Boolean)));
-
-      if (branches.length > 0 && dates.length > 0) {
-        // Paginate — Supabase caps each select at 1000 rows, which silently dropped counts
-        let scFrom = 0;
-        let scHasMore = true;
-        while (scHasMore) {
-          const { data: scData, error: scErr } = await supabase
-            .from('stock_count_lak8')
-            .select('barcode, qty, branch, count_date, ro_reference')
-            .in('branch', branches)
-            .in('count_date', dates)
-            .range(scFrom, scFrom + PAGE_SIZE - 1);
-          if (scErr) throw scErr;
-          if (scData && scData.length > 0) {
-            allStockCounts = allStockCounts.concat(scData);
-            scFrom += PAGE_SIZE;
-            scHasMore = scData.length === PAGE_SIZE;
-          } else {
-            scHasMore = false;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch live counts for receive_orders list:', e);
     }
 
+    // O(M) single-pass indexing of stock counts into Hash Maps
+    const countsByBranchDateRo = new Map();
+    const countsByBranchDateAll = new Map();
+
+    for (const sc of allStockCounts) {
+      const scBranch = (sc.branch || '').trim().toLowerCase();
+      const scDate = sc.count_date || '';
+      const scRoRef = (sc.ro_reference || '').trim().toLowerCase();
+      const qty = Number(sc.qty) || 0;
+
+      const roKey = `${scBranch}||${scDate}||${scRoRef}`;
+      let roMap = countsByBranchDateRo.get(roKey);
+      if (!roMap) {
+        roMap = new Map();
+        countsByBranchDateRo.set(roKey, roMap);
+      }
+      roMap.set(sc.barcode, (roMap.get(sc.barcode) || 0) + qty);
+
+      const allKey = `${scBranch}||${scDate}`;
+      let allMap = countsByBranchDateAll.get(allKey);
+      if (!allMap) {
+        allMap = new Map();
+        countsByBranchDateAll.set(allKey, allMap);
+      }
+      allMap.set(sc.barcode, (allMap.get(sc.barcode) || 0) + qty);
+    }
+
+    // O(N) mapping of orders
     return orders.map(o => {
       const roRef = (o.full_reference || o.ro_number || '').trim().toLowerCase();
-      let formattedOrderDate = o.delivery_date || '';
-      if (formattedOrderDate.includes('/')) {
-        const parts = formattedOrderDate.split('/');
-        if (parts.length === 3) formattedOrderDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      }
+      const branchLower = (o.store_code || '').trim().toLowerCase();
+      const formattedOrderDate = normalizeDateYMD(o.delivery_date);
 
-      // Map barcodes to counted qty specifically for this order
-      const countedMap = new Map();
-      allStockCounts.forEach(sc => {
-        const scBranch = (sc.branch || '').trim();
-        const scDate = sc.count_date;
-        const scRoRef = (sc.ro_reference || '').trim().toLowerCase();
-
-        if (scBranch.toLowerCase() === (o.store_code || '').trim().toLowerCase() && scDate === formattedOrderDate) {
-          if (!roRef || scRoRef === roRef) {
-            const prev = countedMap.get(sc.barcode) || 0;
-            countedMap.set(sc.barcode, prev + (Number(sc.qty) || 0));
-          }
-        }
-      });
+      const countedMap = roRef
+        ? countsByBranchDateRo.get(`${branchLower}||${formattedOrderDate}||${roRef}`)
+        : countsByBranchDateAll.get(`${branchLower}||${formattedOrderDate}`);
 
       const orderItems = (itemsByOrder[o.id] || []).map(it => {
-        let liveReceived = it.received;
-        if (countedMap.has(it.barcode)) {
-          liveReceived = countedMap.get(it.barcode);
-        }
+        const liveReceived = countedMap?.has(it.barcode)
+          ? countedMap.get(it.barcode)
+          : it.received;
         return {
           ...it,
           received: liveReceived
@@ -200,15 +235,39 @@ export async function insertReceiveOrder(orderData, itemsData) {
     }));
 
     const chunkSize = 200;
+    const insertPromises = [];
     for (let i = 0; i < itemsToInsert.length; i += chunkSize) {
       const chunk = itemsToInsert.slice(i, i + chunkSize);
-      const { error: chunkErr } = await supabase
-        .from('receive_order_items')
-        .insert(chunk);
-      if (chunkErr) throw chunkErr;
+      insertPromises.push(
+        supabase
+          .from('receive_order_items')
+          .insert(chunk)
+          .select('id, receive_order_id, location, barcode, product_name, ro_qty, received_qty, remark, unit')
+      );
     }
 
-    return insertedOrder;
+    const chunkResults = await Promise.all(insertPromises);
+    const insertedItems = [];
+    for (const { data: chunkRows, error: chunkErr } of chunkResults) {
+      if (chunkErr) throw chunkErr;
+      if (chunkRows?.length) {
+        for (const it of chunkRows) {
+          insertedItems.push({
+            id: it.id,
+            receiveOrderId: it.receive_order_id,
+            location: it.location || '',
+            barcode: it.barcode,
+            productName: it.product_name,
+            roQty: Number(it.ro_qty) || 0,
+            received: it.received_qty !== null ? Number(it.received_qty) : null,
+            remark: it.remark || '',
+            unit: it.unit || 'Unit'
+          });
+        }
+      }
+    }
+
+    return { ...insertedOrder, insertedItems };
   } catch (err) {
     console.error('Error inserting receive order to Supabase:', err);
     throw err;
