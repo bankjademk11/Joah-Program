@@ -5,14 +5,16 @@ import {
   Loader2, RefreshCw, Filter, Search, BarChart3, Building2, Calendar,
   ChevronLeft, ChevronRight, Download, FileSpreadsheet,
   ArrowRightLeft, RotateCcw, Check, X, Sparkles, History,
-  Lock, ShieldCheck, Delete, MoreVertical
+  Lock, ShieldCheck, Delete, MoreVertical, Inbox
 } from 'lucide-react';
 import joahLogo from '../../../assets/favicon-full-transparent.png';
 import { getProductImageFallbacks } from '../../../utils/productImageUtils';
 import {
   fetchStockCountForBranchDate,
+  fetchUnassignedStockCountsForBranchDate,
   buildReconciliationRows,
   transferExtraItemsToRO,
+  transferUnassignedCountsToRO,
   rollbackROTransfer,
   getTransferHistory,
   normalizeRoDate
@@ -41,6 +43,7 @@ function StatusBadge({ status }) {
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function ROReconcileView({ ro, roList = [], onTransferComplete }) {
   const [rows, setRows] = useState([]);
+  const [unassignedCounts, setUnassignedCounts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -92,12 +95,16 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
     setIsLoading(true);
     setError('');
     try {
-      const stockCounts = await fetchStockCountForBranchDate(branch, date, roReference);
+      const [stockCounts, outsideCounts] = await Promise.all([
+        fetchStockCountForBranchDate(branch, date, roReference),
+        fetchUnassignedStockCountsForBranchDate(branch, date)
+      ]);
       const reconciled = buildReconciliationRows(ro.items, stockCounts).map(r => ({
         ...r,
         productName: r.productName || globalCatalog.nameMap.get(r.barcode) || null
       }));
       setRows(reconciled);
+      setUnassignedCounts(outsideCounts || []);
       setLastFetched(new Date());
     } catch (err) {
       console.error(err);
@@ -699,6 +706,14 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
   const [lastCompletedTransfer, setLastCompletedTransfer] = useState(null);
   const [rollingBackId, setRollingBackId] = useState(null);
 
+  // Pull Outside-RO Counts (same branch + same date + no ro_reference)
+  const [isPullModalOpen, setIsPullModalOpen] = useState(false);
+  const [pullMode, setPullMode] = useState('matched'); // 'matched' | 'selected' | 'all'
+  const [selectedPullBarcodes, setSelectedPullBarcodes] = useState(() => new Set());
+  const [pullSearchTerm, setPullSearchTerm] = useState('');
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullProgress, setPullProgress] = useState('');
+
   // PIN Protection Gate (PIN: 248) for Move Not in RO & Rollback / History
   const TRANSFER_ACCESS_PIN = '248';
   const [isPinUnlocked, setIsPinUnlocked] = useState(false);
@@ -923,6 +938,141 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
     [transferHistory]
   );
 
+  // ─── Pull Outside-RO Counts (Same Branch + Same Date + No ro_reference) ──
+  const unassignedGroups = useMemo(() => {
+    if (!unassignedCounts.length) return [];
+
+    const roItemMap = new Map();
+    for (const item of (ro?.items || [])) {
+      roItemMap.set(item.barcode, item);
+    }
+
+    const currentCountMap = new Map();
+    for (const r of rows) {
+      if (r.barcode) {
+        currentCountMap.set(r.barcode, r.countedQty ?? 0);
+      }
+    }
+
+    const grouped = new Map();
+    for (const rec of unassignedCounts) {
+      const bc = String(rec.barcode || '').trim();
+      if (!bc) continue;
+      if (!grouped.has(bc)) {
+        const roItem = roItemMap.get(bc);
+        grouped.set(bc, {
+          barcode: bc,
+          productName: roItem?.productName || globalCatalog.nameMap.get(bc) || null,
+          inThisRo: Boolean(roItem),
+          roQty: roItem ? (Number(roItem.roQty) || 0) : 0,
+          currentRoCountedQty: currentCountMap.get(bc) ?? 0,
+          unassignedQty: 0,
+          createdBy: rec.created_by || 'Staff',
+          updatedAt: rec.updated_at || rec.created_at || null,
+          stockRecords: []
+        });
+      }
+      const entry = grouped.get(bc);
+      entry.unassignedQty += Number(rec.qty) || 0;
+      entry.stockRecords.push(rec);
+    }
+
+    // Sort: items matching this RO first, then by barcode
+    return Array.from(grouped.values()).sort((a, b) => {
+      if (a.inThisRo !== b.inThisRo) return a.inThisRo ? -1 : 1;
+      return a.barcode.localeCompare(b.barcode);
+    });
+  }, [unassignedCounts, ro?.items, rows, globalCatalog.nameMap]);
+
+  const unassignedMatchedCount = useMemo(
+    () => unassignedGroups.filter(g => g.inThisRo).length,
+    [unassignedGroups]
+  );
+
+  const unassignedTotalQty = useMemo(
+    () => unassignedGroups.reduce((sum, g) => sum + g.unassignedQty, 0),
+    [unassignedGroups]
+  );
+
+  const filteredUnassignedGroups = useMemo(() => {
+    const q = pullSearchTerm.trim().toLowerCase();
+    if (!q) return unassignedGroups;
+    return unassignedGroups.filter(
+      g => g.barcode.toLowerCase().includes(q) || (g.productName || '').toLowerCase().includes(q)
+    );
+  }, [unassignedGroups, pullSearchTerm]);
+
+  const rowsToPullPreview = useMemo(() => {
+    if (pullMode === 'matched') {
+      return unassignedGroups.filter(g => g.inThisRo);
+    }
+    if (pullMode === 'selected') {
+      return unassignedGroups.filter(g => selectedPullBarcodes.has(g.barcode));
+    }
+    return unassignedGroups;
+  }, [pullMode, unassignedGroups, selectedPullBarcodes]);
+
+  const totalPullPreviewQty = useMemo(
+    () => rowsToPullPreview.reduce((sum, g) => sum + g.unassignedQty, 0),
+    [rowsToPullPreview]
+  );
+
+  const openPullModal = () => {
+    setPullSearchTerm('');
+    if (unassignedMatchedCount > 0) {
+      setPullMode('matched');
+      setSelectedPullBarcodes(new Set(unassignedGroups.filter(g => g.inThisRo).map(g => g.barcode)));
+    } else {
+      setPullMode('selected');
+      setSelectedPullBarcodes(new Set());
+    }
+    setIsPullModalOpen(true);
+  };
+
+  const toggleSelectPullBarcode = (barcode) => {
+    setSelectedPullBarcodes(prev => {
+      const next = new Set(prev);
+      if (next.has(barcode)) next.delete(barcode);
+      else next.add(barcode);
+      return next;
+    });
+  };
+
+  const toggleSelectAllPull = () => {
+    if (selectedPullBarcodes.size === unassignedGroups.length) {
+      setSelectedPullBarcodes(new Set());
+    } else {
+      setSelectedPullBarcodes(new Set(unassignedGroups.map(g => g.barcode)));
+    }
+  };
+
+  const handleConfirmPull = async () => {
+    if (rowsToPullPreview.length === 0) return;
+    setIsPulling(true);
+    setPullProgress('Starting transfer into RO...');
+    try {
+      const record = await transferUnassignedCountsToRO({
+        unassignedRowsToMove: rowsToPullPreview,
+        targetRo: ro,
+        sourceBranch: branch,
+        sourceDate: date,
+        onProgress: setPullProgress
+      });
+      setLastCompletedTransfer(record);
+      setTransferHistory(getTransferHistory());
+      setSelectedPullBarcodes(new Set());
+      setIsPullModalOpen(false);
+      await loadReconcile();
+      onTransferComplete?.();
+    } catch (err) {
+      console.error('Failed to transfer outside-RO counts:', err);
+      alert('Failed to transfer outside-RO counts: ' + (err.message || ''));
+    } finally {
+      setIsPulling(false);
+      setPullProgress('');
+    }
+  };
+
   // ─── Filtered rows ──────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
     setCurrentPage(1); // reset to page 1 when filter changes
@@ -986,7 +1136,7 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
               Refresh
             </button>
 
-            {(stats.EXTRA > 0 || transferHistory.length > 0) && (
+            {(stats.EXTRA > 0 || unassignedGroups.length > 0 || transferHistory.length > 0) && (
               <div className="relative" ref={actionsMenuRef}>
                 <button
                   type="button"
@@ -999,7 +1149,28 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
                 </button>
 
                 {isActionsMenuOpen && (
-                  <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in">
+                  <div className="absolute right-0 mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in">
+                    {unassignedGroups.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={isPulling}
+                        onClick={() => {
+                          setIsActionsMenuOpen(false);
+                          requestPinThen(openPullModal, 'Pull Outside-RO Counts');
+                        }}
+                        className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between gap-2 transition cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Inbox size={14} className="text-sky-500" />
+                          <span>Pull Outside-RO Counts</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[11px] font-mono text-sky-600 font-black">
+                          {unassignedGroups.length}
+                          {!isPinUnlocked && <Lock size={11} className="text-slate-400" />}
+                        </span>
+                      </button>
+                    )}
+
                     {stats.EXTRA > 0 && (
                       <button
                         type="button"
@@ -1050,6 +1221,35 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
           </div>
         </div>
       </div>
+
+      {/* Outside-RO Counts Detection Banner (Same Branch + Same Date + No ro_reference) */}
+      {unassignedGroups.length > 0 && (
+        <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-2.5 text-xs text-sky-900">
+            <Inbox size={18} className="text-sky-600 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <span className="font-black">ພົບຂໍ້ມູນການນັບນອກ RO / SO Reference:</span>{' '}
+              ສາຂາ <strong className="font-mono">{branch}</strong> ວັນທີ <strong className="font-mono">{date}</strong>{' '}
+              ມີ <strong className="font-mono">{unassignedGroups.length} SKUs ({unassignedTotalQty.toLocaleString()} pcs)</strong>
+              {unassignedMatchedCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black text-[11px]">
+                  ຕົງກັບ RO ນີ້ {unassignedMatchedCount} SKUs
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isPulling}
+            onClick={() => requestPinThen(openPullModal, 'Pull Outside-RO Counts')}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black shadow-sm transition cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+          >
+            <Inbox size={14} />
+            <span>ກວດເບິ່ງ &amp; ຍ້າຍເຂົ້າ RO ນີ້</span>
+            {!isPinUnlocked && <Lock size={12} />}
+          </button>
+        </div>
+      )}
 
       {/* Recent Transfer Success + Instant Rollback Banner */}
       {lastCompletedTransfer && !lastCompletedTransfer.rolledBack && (
@@ -1690,6 +1890,228 @@ export default function ROReconcileView({ ro, roList = [], onTransferComplete })
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── PULL OUTSIDE-RO COUNTS MODAL ────────────────────────────────────────── */}
+      {isPullModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-sky-600 to-indigo-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Inbox size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">ຖ່າຍໂອນຂໍ້ມູນນັບນອກ RO / SO Reference</h3>
+                  <p className="text-xs text-sky-100">
+                    ສາຂາ <strong>{branch}</strong> · ວັນທີ <strong>{date}</strong> → ຍ້າຍເຂົ້າ RO <strong>{ro?.roNumber || roReference}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isPulling && setIsPullModalOpen(false)}
+                className="p-2 rounded-xl hover:bg-white/20 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {/* Source -> Target Summary Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="text-[10px] font-black uppercase text-slate-400">ຕົ້ນທາງ (Outside RO)</div>
+                  <div className="font-black text-slate-800 mt-0.5">ບໍ່ມີເລກ RO / SO Reference</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 font-mono">{branch} · {date}</div>
+                </div>
+                <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200">
+                  <div className="text-[10px] font-black uppercase text-sky-600">ປາຍທາງ (Target RO)</div>
+                  <div className="font-black text-sky-900 mt-0.5 truncate">{roReference || ro?.roNumber}</div>
+                  <div className="text-[11px] text-sky-700 mt-0.5 font-mono">{branch} · {date}</div>
+                </div>
+              </div>
+
+              {/* Mode Selector + Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPullMode('matched')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                      pullMode === 'matched'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    ຕົງກັບ RO ນີ້ ({unassignedMatchedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPullMode('selected')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                      pullMode === 'selected'
+                        ? 'bg-sky-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    ເລືອກເອງ ({selectedPullBarcodes.size})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPullMode('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                      pullMode === 'all'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    ທັງໝົດ ({unassignedGroups.length})
+                  </button>
+                </div>
+
+                <div className="relative sm:w-56">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={pullSearchTerm}
+                    onChange={(e) => setPullSearchTerm(e.target.value)}
+                    placeholder="Search barcode / name..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-sky-400"
+                  />
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="max-h-72 overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                      <tr className="text-[10px] font-black uppercase text-slate-500">
+                        {pullMode === 'selected' && (
+                          <th className="py-2.5 px-3 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={unassignedGroups.length > 0 && selectedPullBarcodes.size === unassignedGroups.length}
+                              onChange={toggleSelectAllPull}
+                              className="rounded cursor-pointer"
+                            />
+                          </th>
+                        )}
+                        <th className="py-2.5 px-3">Barcode / Product</th>
+                        <th className="py-2.5 px-3 text-center">In RO?</th>
+                        <th className="py-2.5 px-3 text-right">RO Qty</th>
+                        <th className="py-2.5 px-3 text-right">Counted</th>
+                        <th className="py-2.5 px-3 text-right">Outside RO</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredUnassignedGroups.map((g) => {
+                        const willMove =
+                          pullMode === 'all' ||
+                          (pullMode === 'matched' && g.inThisRo) ||
+                          (pullMode === 'selected' && selectedPullBarcodes.has(g.barcode));
+                        return (
+                          <tr
+                            key={g.barcode}
+                            onClick={() => pullMode === 'selected' && toggleSelectPullBarcode(g.barcode)}
+                            className={`transition ${
+                              pullMode === 'selected' ? 'cursor-pointer hover:bg-sky-50/50' : ''
+                            } ${willMove ? 'bg-white' : 'bg-slate-50/50 opacity-50'}`}
+                          >
+                            {pullMode === 'selected' && (
+                              <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPullBarcodes.has(g.barcode)}
+                                  onChange={() => toggleSelectPullBarcode(g.barcode)}
+                                  className="rounded cursor-pointer"
+                                />
+                              </td>
+                            )}
+                            <td className="py-2 px-3">
+                              <div className="font-mono font-black text-slate-800">{g.barcode}</div>
+                              <div className="text-[11px] text-slate-500 truncate max-w-[240px]">
+                                {g.productName || 'Unknown Product'}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                ຍິງໂດຍ: {g.createdBy}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {g.inThisRo ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">
+                                  In This RO
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">
+                                  Not in RO
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-600">
+                              {g.inThisRo ? g.roQty.toLocaleString() : '-'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-600">
+                              {g.currentRoCountedQty > 0 ? g.currentRoCountedQty.toLocaleString() : '0'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-black text-sky-600">
+                              +{g.unassignedQty.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredUnassignedGroups.length === 0 && (
+                        <tr>
+                          <td colSpan={pullMode === 'selected' ? 6 : 5} className="py-8 text-center text-slate-400 font-bold">
+                            No matching items found
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-xs font-bold text-slate-600">
+                {isPulling ? (
+                  <span className="flex items-center gap-2 text-sky-700">
+                    <Loader2 size={14} className="animate-spin" />
+                    {pullProgress || 'Transferring...'}
+                  </span>
+                ) : (
+                  <span>
+                    ຈະຍ້າຍ <strong className="text-sky-700 font-mono">{rowsToPullPreview.length} SKUs ({totalPullPreviewQty.toLocaleString()} pcs)</strong> ເຂົ້າ RO ນີ້
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isPulling}
+                  onClick={() => setIsPullModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isPulling || rowsToPullPreview.length === 0}
+                  onClick={handleConfirmPull}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                >
+                  {isPulling ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  <span>ຢືນຢັນຍ້າຍເຂົ້າ RO ({rowsToPullPreview.length})</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

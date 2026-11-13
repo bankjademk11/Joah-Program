@@ -44,6 +44,54 @@ import joahLogo from '../../../assets/Joah.jpeg';
 import technoHubLogo from '../../../assets/technohublogo.png';
 import gardenBg from '../../../assets/BackGroundIM/website-background-light-blue.jpg';
 
+const formatScanTimestamp = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+
+    const timeStr = d.toLocaleTimeString('lo-LA', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    if (isToday) {
+      return `ມື້ນີ້ ${timeStr}`;
+    }
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year} ${timeStr}`;
+  } catch {
+    return String(dateStr);
+  }
+};
+
+const getRelativeScanTime = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs < 0) return '';
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return `(${diffSec} ວິນາທີກ່ອນ)`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `(${diffMin} ນາທີກ່ອນ)`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `(${diffHr} ຊົ່ວໂມງກ່ອນ)`;
+    const diffDay = Math.floor(diffHr / 24);
+    return `(${diffDay} ມື້ກ່ອນ)`;
+  } catch {
+    return '';
+  }
+};
+
 export default function StockCountLak8({ onBack, masterData = [], currentUser }) {
   // ─── States ────────────────────────────────────────────────────────
   const [scanMode, setScanMode] = useState('count'); // 'manual' | 'count' | 'search'
@@ -272,7 +320,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           owner_branch: item.owner_branch,
           doc_nos: item.doc_nos,
           countDate: item.count_date,
-          timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA')
+          timestamp: new Date(item.updated_at || item.created_at).toLocaleTimeString('lo-LA'),
+          rawUpdatedAt: item.updated_at || item.created_at
         }));
         setItems(formatted);
         itemsRef.current = formatted;
@@ -491,7 +540,8 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                 owner_branch: newData.owner_branch,
                 doc_nos: newData.doc_nos,
                 countDate: newData.count_date,
-                timestamp: new Date(newData.updated_at || newData.created_at).toLocaleTimeString('lo-LA')
+                timestamp: new Date(newData.updated_at || newData.created_at).toLocaleTimeString('lo-LA'),
+                rawUpdatedAt: newData.updated_at || newData.created_at
               };
               return [formattedItem, ...filtered];
             });
@@ -953,6 +1003,13 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
       const existingTotalQty = existingMatches.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
 
       if (existingMatches.length > 0 && existingTotalQty > 0) {
+        // Find most recent matching item in current session
+        const mostRecent = [...existingMatches].sort((a, b) => {
+          const timeA = new Date(a.rawUpdatedAt || a.timestamp || 0).getTime();
+          const timeB = new Date(b.rawUpdatedAt || b.timestamp || 0).getTime();
+          return timeB - timeA;
+        })[0] || existingMatches[0];
+
         // Play warning beep
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -972,26 +1029,49 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
           clearInput,
           productName: null,
           price: null,
-          customImageUrl: null
+          customImageUrl: null,
+          lastScannedBy: mostRecent?.createdBy || null,
+          lastScannedAt: mostRecent?.rawUpdatedAt || null
         });
 
         try {
-          const { data: pcData, error: pcError } = await supabase
-            .from('price_checker')
-            .select('barcode, product_name, price, image_url')
-            .eq('barcode', code)
-            .maybeSingle();
+          let dbStockQuery = supabase
+            .from('stock_count_lak8')
+            .select('created_by, updated_at, created_at')
+            .eq('barcode', code);
 
-          if (!pcError && pcData) {
-            setDuplicateAlertData(prev => prev ? ({
-              ...prev,
-              productName: pcData.product_name || null,
-              price: pcData.price !== null && pcData.price !== undefined ? Number(pcData.price) : null,
-              customImageUrl: pcData.image_url || null
-            }) : null);
+          if (selectedBranch) dbStockQuery = dbStockQuery.eq('branch', selectedBranch);
+          if (selectedDate) dbStockQuery = dbStockQuery.eq('count_date', selectedDate);
+          if (selectedBranch === 'LAK8' && lak8OwnerBranch) dbStockQuery = dbStockQuery.eq('owner_branch', lak8OwnerBranch);
+          if (selectedRoRef && selectedRoRef !== 'NONE' && selectedRoRef.trim() !== '') {
+            dbStockQuery = dbStockQuery.ilike('ro_reference', selectedRoRef.trim());
           }
+
+          const [pcRes, stockRes] = await Promise.all([
+            supabase
+              .from('price_checker')
+              .select('barcode, product_name, price, image_url')
+              .eq('barcode', code)
+              .maybeSingle(),
+            dbStockQuery
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          ]);
+
+          const pcData = pcRes?.data;
+          const latestStockRow = stockRes?.data;
+
+          setDuplicateAlertData(prev => prev ? ({
+            ...prev,
+            productName: pcData?.product_name || prev.productName,
+            price: (pcData?.price !== null && pcData?.price !== undefined) ? Number(pcData.price) : prev.price,
+            customImageUrl: pcData?.image_url || prev.customImageUrl,
+            lastScannedBy: latestStockRow?.created_by || prev.lastScannedBy,
+            lastScannedAt: latestStockRow?.updated_at || latestStockRow?.created_at || prev.lastScannedAt
+          }) : null);
         } catch (err) {
-          console.warn('[Price checker lookup notice]', err.message);
+          console.warn('[Price checker / Stock lookup notice]', err.message);
         } finally {
           setIsLoadingDuplicateInfo(false);
         }
@@ -3283,6 +3363,44 @@ export default function StockCountLak8({ onBack, masterData = [], currentUser })
                   )}
                 </div>
               ) : null}
+
+              {/* 👤 ຂໍ້ມູນການຍິງລ່າສຸດ (Who scanned last & When) */}
+              {(duplicateAlertData.lastScannedBy || duplicateAlertData.lastScannedAt) && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl p-3 shadow-xs">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0">
+                        <User size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">
+                          ຜູ້ຍິງລ່າສຸດ
+                        </div>
+                        <div className="font-black text-slate-800 truncate text-sm">
+                          {duplicateAlertData.lastScannedBy || 'ບໍ່ລະບຸ (Staff)'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {duplicateAlertData.lastScannedAt && (
+                      <div className="text-right shrink-0">
+                        <div className="flex items-center gap-1 justify-end text-[10px] font-bold text-amber-800 uppercase tracking-wide">
+                          <Clock size={11} />
+                          <span>ເວລາຍິງລ່າສຸດ</span>
+                        </div>
+                        <div className="font-black text-slate-800 font-mono text-xs">
+                          {formatScanTimestamp(duplicateAlertData.lastScannedAt)}
+                        </div>
+                        {getRelativeScanTime(duplicateAlertData.lastScannedAt) && (
+                          <div className="text-[10px] font-bold text-amber-600">
+                            {getRelativeScanTime(duplicateAlertData.lastScannedAt)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Count Comparison Summary */}
               <div className="grid grid-cols-3 gap-2 bg-amber-50/80 border border-amber-200 rounded-2xl p-3 text-center">

@@ -68,6 +68,41 @@ export async function fetchStockCountForBranchDate(branch, date, roReference = n
 }
 
 /**
+ * Fetch stock count records from stock_count_lak8 that are OUTSIDE any RO / SO Reference
+ * (ro_reference is null, empty, or 'NONE') for the exact same branch and count_date.
+ */
+export async function fetchUnassignedStockCountsForBranchDate(branch, date) {
+  if (!branch || !date) return [];
+
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('stock_count_lak8')
+      .select('id, barcode, qty, branch, owner_branch, doc_nos, brand, created_by, count_date, ro_reference, created_at, updated_at')
+      .eq('branch', branch)
+      .eq('count_date', date)
+      .or('ro_reference.is.null,ro_reference.eq.,ro_reference.ilike.NONE')
+      .order('updated_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+      from += PAGE_SIZE;
+      hasMore = data.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+}
+
+/**
  * Build reconciliation rows by joining RO items with stock count data.
  * @param {Array} roItems      - receive_order_items: { barcode, productName, roQty }
  * @param {Array} stockCounts  - from fetchStockCountForBranchDate: { id, barcode, qty, ... }
@@ -158,22 +193,19 @@ function saveTransferHistory(list) {
 }
 
 /**
- * Transfer selected (Not in RO) rows from current RO to target RO, recording full snapshot for Rollback.
- * @param {Object} params
- * @param {Array}  params.extraRowsToMove - Reconciliation rows (status === 'EXTRA') to transfer
- * @param {Object} params.sourceRo        - Current RO object
- * @param {string} params.sourceDate      - Current RO YYYY-MM-DD date used in reconciliation
- * @param {Object} params.targetRo        - Target RO object
- * @param {Function} [params.onProgress]  - Progress callback (msg)
+ * Shared transfer engine: moves `recordsToMove` (from stock_count_lak8) into `targetRo`,
+ * merging quantities when the barcode already exists in the target RO, and saving a full
+ * rollback snapshot in localStorage.
  */
-export async function transferExtraItemsToRO({
-  extraRowsToMove,
-  sourceRo,
-  sourceDate,
+async function executeStockCountTransfer({
+  recordsToMove,
+  sourceMeta,
   targetRo,
   onProgress
 }) {
-  if (!extraRowsToMove?.length) throw new Error('No items selected to transfer');
+  if (!recordsToMove?.length) {
+    throw new Error('No matching source records found in stock_count_lak8');
+  }
   if (!targetRo) throw new Error('Please select a target RO bill');
 
   const targetBranch = (targetRo.storeCode || '').trim();
@@ -182,18 +214,6 @@ export async function transferExtraItemsToRO({
 
   if (!targetBranch || !targetDate || !targetRoRef) {
     throw new Error('Incomplete target RO information (Branch / Date / RO Reference)');
-  }
-
-  // Flatten all stock_count_lak8 records from selected EXTRA rows
-  const recordsToMove = [];
-  for (const r of extraRowsToMove) {
-    if (Array.isArray(r.stockRecords) && r.stockRecords.length > 0) {
-      recordsToMove.push(...r.stockRecords);
-    }
-  }
-
-  if (recordsToMove.length === 0) {
-    throw new Error('No matching source records found in stock_count_lak8');
   }
 
   onProgress?.('Checking existing items in target RO...');
@@ -353,11 +373,11 @@ export async function transferExtraItemsToRO({
   const transferRecord = {
     transferId: `TRF-${Date.now()}`,
     createdAt: new Date().toISOString(),
-    sourceRoId: sourceRo?.id || null,
-    sourceRoNumber: sourceRo?.roNumber || sourceRo?.fullReference || '-',
-    sourceFullRef: sourceRo?.fullReference || sourceRo?.roNumber || '-',
-    sourceBranch: sourceRo?.storeCode || '-',
-    sourceDate: sourceDate || normalizeRoDate(sourceRo?.deliveryDate),
+    sourceRoId: sourceMeta?.sourceRoId ?? null,
+    sourceRoNumber: sourceMeta?.sourceRoNumber || '-',
+    sourceFullRef: sourceMeta?.sourceFullRef || '-',
+    sourceBranch: sourceMeta?.sourceBranch || '-',
+    sourceDate: sourceMeta?.sourceDate || targetDate,
     targetRoId: targetRo?.id || null,
     targetRoNumber: targetRo?.roNumber || targetRo?.fullReference || '-',
     targetFullRef: targetRo?.fullReference || targetRo?.roNumber || '-',
@@ -375,6 +395,73 @@ export async function transferExtraItemsToRO({
   saveTransferHistory([transferRecord, ...currentHistory]);
 
   return transferRecord;
+}
+
+/**
+ * Transfer selected (Not in RO) rows from current RO to target RO, recording full snapshot for Rollback.
+ */
+export async function transferExtraItemsToRO({
+  extraRowsToMove,
+  sourceRo,
+  sourceDate,
+  targetRo,
+  onProgress
+}) {
+  if (!extraRowsToMove?.length) throw new Error('No items selected to transfer');
+
+  const recordsToMove = [];
+  for (const r of extraRowsToMove) {
+    if (Array.isArray(r.stockRecords) && r.stockRecords.length > 0) {
+      recordsToMove.push(...r.stockRecords);
+    }
+  }
+
+  return executeStockCountTransfer({
+    recordsToMove,
+    sourceMeta: {
+      sourceRoId: sourceRo?.id || null,
+      sourceRoNumber: sourceRo?.roNumber || sourceRo?.fullReference || '-',
+      sourceFullRef: sourceRo?.fullReference || sourceRo?.roNumber || '-',
+      sourceBranch: sourceRo?.storeCode || '-',
+      sourceDate: sourceDate || normalizeRoDate(sourceRo?.deliveryDate)
+    },
+    targetRo,
+    onProgress
+  });
+}
+
+/**
+ * Transfer selected counts that were scanned OUTSIDE any RO / SO Reference
+ * (on the same branch & date) into the target RO.
+ */
+export async function transferUnassignedCountsToRO({
+  unassignedRowsToMove,
+  targetRo,
+  sourceBranch,
+  sourceDate,
+  onProgress
+}) {
+  if (!unassignedRowsToMove?.length) throw new Error('No outside-RO counts selected to transfer');
+
+  const recordsToMove = [];
+  for (const r of unassignedRowsToMove) {
+    if (Array.isArray(r.stockRecords) && r.stockRecords.length > 0) {
+      recordsToMove.push(...r.stockRecords);
+    }
+  }
+
+  return executeStockCountTransfer({
+    recordsToMove,
+    sourceMeta: {
+      sourceRoId: null,
+      sourceRoNumber: 'Outside RO (No Ref)',
+      sourceFullRef: 'Outside RO (No Reference)',
+      sourceBranch: sourceBranch || targetRo?.storeCode || '-',
+      sourceDate: sourceDate || normalizeRoDate(targetRo?.deliveryDate)
+    },
+    targetRo,
+    onProgress
+  });
 }
 
 /**
